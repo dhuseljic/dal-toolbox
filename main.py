@@ -68,6 +68,9 @@ def build_dataset(args):
         indices_ood = (test_ds.targets >= 5).nonzero().flatten()
         test_ds_ood = Subset(test_ds, indices=indices_ood)
         train_ds.n_classes = 5
+    elif args.dataset == 'CIFAR':
+        # TODO: CIFAR 10 vs CIFAR 100
+        raise NotImplementedError
     else:
         raise NotImplementedError
 
