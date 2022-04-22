@@ -4,10 +4,8 @@ import copy
 import torch
 import torch.nn as nn
 
-import utils
-
-from metrics import generalization
-from metrics import ood
+from utils import MetricLogger
+from metrics import ood, generalization
 
 
 class SNGPWrapper(nn.Module):
@@ -83,7 +81,7 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None,
     model.train()
     model.to(device)
 
-    metric_logger = utils.MetricLogger(delimiter=" ")
+    metric_logger = MetricLogger(delimiter=" ")
     header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
     # Train the epoch
@@ -91,7 +89,6 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None,
         inputs, targets = inputs.to(device), targets.to(device)
 
         outputs = model(inputs)
-
         loss = criterion(outputs, targets)
 
         optimizer.zero_grad()
@@ -104,7 +101,7 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None,
         metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
         metric_logger.meters["acc5"].update(acc5.item(), n=batch_size)
 
-    train_stats = {k: meter.global_avg for k, meter, in metric_logger.meters.items()}
+    train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
     return train_stats
 
 

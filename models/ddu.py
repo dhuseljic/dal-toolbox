@@ -4,7 +4,8 @@ import numpy as np
 
 from torch.distributions import MultivariateNormal
 
-from metrics.ood import ood_auroc
+from utils import MetricLogger
+from metrics import ood, generalization
 
 
 class DDUWrapper(nn.Module):
@@ -16,10 +17,8 @@ class DDUWrapper(nn.Module):
         self.covs = None
         self.pis = None
 
-    def forward(self, x):
-        out = self.model(x)
-        self.feature = self.model.feature
-        return out
+    def forward(self, x, return_features=False):
+        return self.model(x, return_features=return_features)
 
     def predict_gmm_log_prob(self, features):
         if self.means is None or self.covs is None or self.pis is None:
@@ -30,17 +29,18 @@ class DDUWrapper(nn.Module):
         return log_probs
 
 
-def train_one_epoch(model, dataloader, criterion, optimizer, device):
+def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
     model.train()
     model.to(device)
 
+    metric_logger = MetricLogger(delimiter=" ")
+    header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
+
     # Train the epoch
-    running_loss, running_corrects, n_samples = 0, 0, 0
-    for inputs, targets in dataloader:
+    for inputs, targets in metric_logger.log_every(dataloader, print_freq, header):
         inputs, targets = inputs.to(device), targets.to(device)
 
         outputs = model(inputs)
-
         loss = criterion(outputs, targets)
 
         optimizer.zero_grad()
@@ -48,17 +48,18 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device):
         optimizer.step()
 
         batch_size = inputs.shape[0]
-        n_samples += batch_size
-        running_loss += loss.item()*batch_size
-        running_corrects += (outputs.argmax(-1) == targets).sum().item()
-    train_stats = {'train_acc': running_corrects/n_samples, 'train_loss': running_loss/n_samples}
+        acc1, acc5 = generalization.accuracy(outputs, targets, topk=(1, 5))
+        metric_logger.update(loss=loss.item())
+        metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
+        metric_logger.meters["acc5"].update(acc5.item(), n=batch_size)
+    train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
 
     # Fit for OOD
     features_accumulated, targets_accumulated = [], []
     for inputs, targets in dataloader:
         with torch.no_grad():
-            outputs = model(inputs.to(device))
-        features_accumulated.append(model.feature.cpu())
+            outputs, features = model(inputs.to(device), return_features=True)
+        features_accumulated.append(features.cpu())
         targets_accumulated.append(targets)
     features = torch.cat(features_accumulated)
     targets = torch.cat(targets_accumulated)
@@ -86,23 +87,28 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     logits_id, targets_id, features_id = [], [], []
     for inputs, targets in dataloader_id:
         inputs, targets = inputs.to(device), targets.to(device)
-        logits_id.append(model(inputs))
+        outputs, features = model(inputs, return_features=True)
+        logits_id.append(outputs)
         targets_id.append(targets)
-        features_id.append(model.feature)
+        features_id.append(features)
     logits_id = torch.cat(logits_id, dim=0).cpu()
     targets_id = torch.cat(targets_id, dim=0).cpu()
     features_id = torch.cat(features_id, dim=0).cpu()
 
     # Update test stats
-    test_stats.update({'test_loss': criterion(logits_id, targets_id).item()})
-    test_stats.update({'test_acc': (logits_id.argmax(-1) == targets_id).float().mean().item()})
+    loss = criterion(logits_id, targets_id)
+    acc1, acc5 = generalization.accuracy(logits_id, targets_id, (1, 5))
+    test_stats.update({'test_loss': loss.item()})
+    test_stats.update({'test_acc1': acc1.item()})
+    test_stats.update({'test_acc5': acc5.item()})
 
     # Forward prop out of distribution
     logits_ood, features_ood = [], []
     for inputs, targets in dataloader_ood:
         inputs, targets = inputs.to(device), targets.to(device)
-        logits_ood.append(model(inputs))
-        features_ood.append(model.feature)
+        outputs, features = model(inputs, return_features=True)
+        logits_ood.append(outputs)
+        features_ood.append(features)
     logits_ood = torch.cat(logits_ood, dim=0).cpu()
     features_ood = torch.cat(features_ood, dim=0).cpu()
 
@@ -110,19 +116,19 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     # GMM fitted on train features
     scores_id = -model.predict_gmm_log_prob(features_id)
     scores_ood = -model.predict_gmm_log_prob(features_ood)
-    test_stats.update({'auroc': ood_auroc(scores_id, scores_ood)})
+    test_stats.update({'auroc': ood.ood_auroc(scores_id, scores_ood)})
 
     # net auroc 1 - max prob
     probas_id = logits_id.softmax(-1)
     probas_ood = logits_ood.softmax(-1)
     conf_id, _ = probas_id.max(-1)
     conf_ood, _ = probas_ood.max(-1)
-    test_stats.update({'auroc_net_conf': ood_auroc(1-conf_id, 1-conf_ood)})
+    test_stats.update({'auroc_net_conf': ood.ood_auroc(1-conf_id, 1-conf_ood)})
     # net auroc 1 - max prob
     probas_id = logits_id.softmax(-1)
     probas_ood = logits_ood.softmax(-1)
-    entropy_id = - torch.sum(probas_id * probas_id.log(), dim=-1)
-    entropy_ood = - torch.sum(probas_ood * probas_ood.log(), dim=-1)
-    test_stats.update({'auroc_net_entropy': ood_auroc(entropy_id, entropy_ood)})
+    entropy_id = ood.entropy_fn(probas_id)
+    entropy_ood = ood.entropy_fn(probas_ood)
+    test_stats.update({'auroc_net_entropy': ood.ood_auroc(entropy_id, entropy_ood)})
 
     return test_stats
