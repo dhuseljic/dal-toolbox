@@ -10,7 +10,8 @@ import torchvision
 from torch.utils.data import DataLoader, Subset
 from torchvision.transforms import ToTensor, Resize, Compose
 
-from models.simple import ResNet, train_one_epoch, evaluate
+from models import ddu, vanilla, sngp
+from models.resnet_spectral_norm import resnet18
 from utils import plot_grids
 
 
@@ -31,24 +32,71 @@ def main(args):
     test_loader_id = DataLoader(test_ds_id, batch_size=64*4)
     test_loader_ood = DataLoader(test_ds_ood, batch_size=64*4)
 
-    model = ResNet(
-        n_classes=train_ds.n_classes,
-        coeff=args.coeff,
-        n_residuals=args.n_residual,
-        spectral_norm=args.coeff != 0
-    )
-    optimizer = torch.optim.Adam(model.parameters(), weight_decay=args.weight_decay)
-    criterion = nn.CrossEntropyLoss()
+    model_dict = build_model(args, train_ds.n_classes)
+    model, train_one_epoch, evaluate = model_dict['model'], model_dict['train_one_epoch'], model_dict['evaluate']
 
     history_train, history_test = [], []
-    for i in range(args.n_epochs):
-        train_stats = train_one_epoch(model, train_loader, criterion, optimizer, args.device)
+    for i_epoch in range(args.n_epochs):
+        train_stats = train_one_epoch(model, train_loader, **model_dict['train_params'], epoch=i_epoch)
         history_train.append(train_stats)
-        test_stats = evaluate(model, test_loader_id, test_loader_ood, criterion, args.device)
+        test_stats = evaluate(model, test_loader_id, test_loader_ood, **model_dict['eval_params'])
         history_test.append(test_stats)
-        print(f"[Ep {i}]", train_stats, test_stats)
-        experiment.log_metrics(train_stats, step=i)
-        experiment.log_metrics(test_stats, step=i)
+        print(f"Epoch [{i_epoch}]", train_stats, test_stats)
+        experiment.log_metrics(train_stats, step=i_epoch)
+        experiment.log_metrics(test_stats, step=i_epoch)
+
+def build_model(args, n_classes):
+    if args.model == 'vanilla':
+        model = torchvision.models.resnet18(True)
+        optimizer = torch.optim.Adam(model.parameters(), weight_decay=args.weight_decay)
+        criterion = nn.CrossEntropyLoss()
+        model_dict = {
+            'model': model,
+            'optimizer': optimizer,
+            'train_one_epoch': vanilla.train_one_epoch,
+            'train_params': dict(optimizer=optimizer, criterion=criterion, device=args.device),
+            'evaluate': vanilla.evaluate,
+            'eval_params': dict(criterion=criterion, device=args.device),
+        }
+    if args.model == 'DDU':
+        model = resnet18(
+            spectral_normalization=(args.coeff != 0),
+            num_classes=n_classes,
+            coeff=args.coeff,
+        )
+        model = ddu.DDUWrapper(model)
+        model.n_classes = n_classes
+        optimizer = torch.optim.Adam(model.parameters(), weight_decay=args.weight_decay)
+        criterion = nn.CrossEntropyLoss()
+        model_dict = {
+            'model': model,
+            'optimizer': optimizer,
+            'train_one_epoch': ddu.train_one_epoch,
+            'train_params': dict(optimizer=optimizer, criterion=criterion, device=args.device),
+            'evaluate': ddu.evaluate,
+            'eval_params': dict(criterion=criterion, device=args.device),
+        }
+    elif args.model == 'SNGP':
+        model = resnet18(
+            spectral_normalization=(args.coeff != 0),
+            num_classes=n_classes,
+            coeff=args.coeff,
+        )
+        model = sngp.SNGPWrapper(model, in_features=512, num_inducing=1024, num_classes=n_classes)
+        optimizer = torch.optim.Adam(model.parameters(), weight_decay=args.weight_decay)
+        criterion = nn.CrossEntropyLoss()
+        model_dict = {
+            'model': model,
+            'optimizer': optimizer,
+            'train_one_epoch': sngp.train_one_epoch,
+            'train_params': dict(optimizer=optimizer, criterion=criterion, device=args.device),
+            'evaluate': sngp.evaluate,
+            'eval_params': dict(criterion=criterion, device=args.device),
+        }
+    else:
+        NotImplementedError(f'Model {args.model} not implemented.')
+
+    return model_dict
 
 
 def build_dataset(args):
@@ -68,9 +116,12 @@ def build_dataset(args):
         indices_ood = (test_ds.targets >= 5).nonzero().flatten()
         test_ds_ood = Subset(test_ds, indices=indices_ood)
         train_ds.n_classes = 5
-    elif args.dataset == 'CIFAR':
-        # TODO: CIFAR 10 vs CIFAR 100
-        raise NotImplementedError
+    elif args.dataset == 'CIFAR10_vs_CIFAR100':
+        transform = Compose([Resize((32, 32)), ToTensor()])
+        train_ds = torchvision.datasets.CIFAR10('data/', train=True, download=True, transform=transform)
+        test_ds_id = torchvision.datasets.CIFAR10('data/', train=False, download=True, transform=transform)
+        test_ds_ood = torchvision.datasets.CIFAR100('data/', train=False, download=True, transform=transform)
+        train_ds.n_classes = 10
     else:
         raise NotImplementedError
 
@@ -80,6 +131,7 @@ def build_dataset(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, default='MNIST')
+    parser.add_argument('--model', type=str, default='vanilla', choices=['vanilla', 'DDU', 'SNGP'])
     parser.add_argument('--n_samples', type=int, default=None)
     parser.add_argument('--n_epochs', type=int, default=10)
     parser.add_argument('--coeff', type=float, default=1)

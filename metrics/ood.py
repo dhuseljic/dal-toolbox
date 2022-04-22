@@ -2,6 +2,11 @@ import torch
 from sklearn.metrics import roc_auc_score
 
 
+def entropy_fn(probas, delta=1e-9):
+    probas = probas.clone()
+    probas = probas.clamp(min=delta, max=(1-delta))
+    return - torch.sum(probas * probas.log(), -1)
+
 def ood_auroc(score_id: torch.Tensor, score_ood: torch.Tensor):
     """Computes the AUROC and assumes that a higher score is OOD.
 

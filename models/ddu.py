@@ -2,44 +2,23 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from .spectral_norm import spectral_norm_fc
-from sklearn.metrics import roc_auc_score
 from torch.distributions import MultivariateNormal
 
 from metrics.ood import ood_auroc
 
 
-class ResNet(nn.Module):
-    def __init__(self, n_classes, coeff, n_residuals, spectral_norm=True, n_power_iterations=1):
+class DDUWrapper(nn.Module):
+    def __init__(self, model):
         super().__init__()
-        self.first = nn.Conv2d(1, 32, kernel_size=5, padding=0, stride=2)
-        self.residuals = nn.ModuleList([nn.Conv2d(32, 32, kernel_size=5, padding=2) for _ in range(n_residuals)])
-        self.last = nn.Linear(288, n_classes)
+        self.model = model
 
-        self.n_classes = n_classes
-        self.avg_pool = nn.AvgPool2d(kernel_size=2, stride=2)
-        self.act = nn.ELU()
-
-        if spectral_norm:
-            for residual in self.residuals:
-                spectral_norm_fc(
-                    residual,
-                    coeff=coeff,
-                    n_power_iterations=n_power_iterations
-                    # input_dim=[16, 6, 6],
-                )
-        self.means, self.covs, self.pis = None, None, None
+        self.means = None
+        self.covs = None
+        self.pis = None
 
     def forward(self, x):
-        out = self.act(self.first(x))
-        out = self.avg_pool(out)
-
-        for residual in self.residuals:
-            out = self.act(residual(out)) + out
-        out = self.avg_pool(out).flatten(1)
-        self.features = out
-
-        out = self.last(out)
+        out = self.model(x)
+        self.feature = self.model.feature
         return out
 
     def predict_gmm_log_prob(self, features):
@@ -79,7 +58,7 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device):
     for inputs, targets in dataloader:
         with torch.no_grad():
             outputs = model(inputs.to(device))
-        features_accumulated.append(model.features.cpu())
+        features_accumulated.append(model.feature.cpu())
         targets_accumulated.append(targets)
     features = torch.cat(features_accumulated)
     targets = torch.cat(targets_accumulated)
@@ -109,7 +88,7 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
         inputs, targets = inputs.to(device), targets.to(device)
         logits_id.append(model(inputs))
         targets_id.append(targets)
-        features_id.append(model.features)
+        features_id.append(model.feature)
     logits_id = torch.cat(logits_id, dim=0).cpu()
     targets_id = torch.cat(targets_id, dim=0).cpu()
     features_id = torch.cat(features_id, dim=0).cpu()
@@ -123,7 +102,7 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     for inputs, targets in dataloader_ood:
         inputs, targets = inputs.to(device), targets.to(device)
         logits_ood.append(model(inputs))
-        features_ood.append(model.features)
+        features_ood.append(model.feature)
     logits_ood = torch.cat(logits_ood, dim=0).cpu()
     features_ood = torch.cat(features_ood, dim=0).cpu()
 
