@@ -8,7 +8,7 @@ import torch.nn as nn
 import torchvision
 
 from torch.utils.data import DataLoader, Subset
-from torchvision.transforms import ToTensor, Resize, Compose
+from torchvision.transforms import ToTensor, Resize, Compose, Grayscale
 
 from models import ddu, vanilla, sngp
 from models.resnet_spectral_norm import resnet18
@@ -82,7 +82,7 @@ def build_model(args, n_classes):
             num_classes=n_classes,
             coeff=args.coeff,
         )
-        model = sngp.SNGPWrapper(model, in_features=512, num_inducing=1024, num_classes=n_classes)
+        model = sngp.SNGP(model, in_features=512, num_inducing=1024, num_classes=n_classes)
         optimizer = torch.optim.Adam(model.parameters(), weight_decay=args.weight_decay)
         criterion = nn.CrossEntropyLoss()
         model_dict = {
@@ -100,15 +100,14 @@ def build_model(args, n_classes):
 
 
 def build_dataset(args):
-    if args.dataset == 'MNIST':
-        transform = Compose([Resize((32, 32)), ToTensor()])
+    if args.dataset == 'MNIST_vs_MNIST':
+        # mnist 0 to 4 vs 5 to 9
+        transform = Compose([Resize(size=(32, 32)), Grayscale(num_output_channels=3), ToTensor()])
         train_ds = torchvision.datasets.MNIST('data/', train=True, download=True, transform=transform)
         test_ds = torchvision.datasets.MNIST('data/', train=False, download=True, transform=transform)
 
         # Prepare train
         indices_id = (train_ds.targets < 5).nonzero().flatten()
-        if args.n_samples:
-            indices_id = indices_id[torch.randperm(len(indices_id))[:args.n_samples]]
         train_ds = Subset(train_ds, indices=indices_id)
 
         indices_id = (test_ds.targets < 5).nonzero().flatten()
@@ -122,15 +121,51 @@ def build_dataset(args):
         test_ds_id = torchvision.datasets.CIFAR10('data/', train=False, download=True, transform=transform)
         test_ds_ood = torchvision.datasets.CIFAR100('data/', train=False, download=True, transform=transform)
         train_ds.n_classes = 10
+    elif args.dataset == 'CIFAR10_vs_SVHN':
+        transform = Compose([Resize((32, 32)), ToTensor()])
+        train_ds = torchvision.datasets.CIFAR10('data/', train=True, download=True, transform=transform)
+        test_ds_id = torchvision.datasets.CIFAR10('data/', train=False, download=True, transform=transform)
+        test_ds_ood = torchvision.datasets.SVHN('data/', split='test', download=True, transform=transform)
+
+        # make id and ood the same size
+        rnd_indices = torch.randperm(len(test_ds_ood))[:len(test_ds_id)]
+        test_ds_ood = Subset(test_ds_ood, indices=rnd_indices)
+        train_ds.n_classes = 10
+    elif args.dataset == 'CIFAR100_vs_CIFAR10':
+        transform = Compose([Resize((32, 32)), ToTensor()])
+        train_ds = torchvision.datasets.CIFAR100('data/', train=True, download=True, transform=transform)
+        test_ds_id = torchvision.datasets.CIFAR100('data/', train=False, download=True, transform=transform)
+        test_ds_ood = torchvision.datasets.CIFAR10('data/', train=False, download=True, transform=transform)
+        train_ds.n_classes = 100
+    elif args.dataset == 'CIFAR100_vs_SVHN':
+        transform = Compose([Resize((32, 32)), ToTensor()])
+        train_ds = torchvision.datasets.CIFAR100('data/', train=True, download=True, transform=transform)
+        test_ds_id = torchvision.datasets.CIFAR100('data/', train=False, download=True, transform=transform)
+        test_ds_ood = torchvision.datasets.SVHN('data/', split='test', download=True, transform=transform)
+
+        # make id and ood the same size
+        rnd_indices = torch.randperm(len(test_ds_ood))[:len(test_ds_id)]
+        test_ds_ood = Subset(test_ds_ood, indices=rnd_indices)
+        train_ds.n_classes = 100
     else:
         raise NotImplementedError
+
+    if args.n_samples:
+        indices_id = torch.randperm(len(train_ds))[:args.n_samples]
+        train_ds = Subset(train_ds, indices=indices_id)
 
     return train_ds, test_ds_id, test_ds_ood
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='MNIST')
+    parser.add_argument('--dataset', type=str, default='MNIST_vs_MNIST', choices=[
+        'MNIST_vs_MNIST',
+        'CIFAR10_vs_CIFAR100',
+        'CIFAR10_vs_SVHN',
+        'CIFAR100_vs_CIFAR10',
+        'CIFAR100_vs_SVHN',
+    ])
     parser.add_argument('--model', type=str, default='vanilla', choices=['vanilla', 'DDU', 'SNGP'])
     parser.add_argument('--n_samples', type=int, default=None)
     parser.add_argument('--n_epochs', type=int, default=10)
