@@ -152,7 +152,9 @@ def build_dataset(args):
 
     if args.n_samples:
         indices_id = torch.randperm(len(train_ds))[:args.n_samples]
-        train_ds = Subset(train_ds, indices=indices_id)
+        train_ds_subset = Subset(train_ds, indices=indices_id)
+        train_ds_subset.n_classes = train_ds.n_classes
+        train_ds = train_ds_subset
 
     return train_ds, test_ds_id, test_ds_ood
 
@@ -170,7 +172,6 @@ if __name__ == '__main__':
     parser.add_argument('--n_samples', type=int, default=None)
     parser.add_argument('--n_epochs', type=int, default=10)
     parser.add_argument('--coeff', type=float, default=1)
-    parser.add_argument('--n_residual', type=int, default=5)
     parser.add_argument('--weight_decay', type=float, default=.01)
     parser.add_argument('--device', type=str, default='cuda')
     args = parser.parse_args()

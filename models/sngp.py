@@ -135,7 +135,7 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     logits_id, targets_id = [], []
     for inputs, targets in dataloader_id:
         inputs, targets = inputs.to(device), targets.to(device)
-        logits, cov = model(inputs, return_cov=True)
+        logits, cov = model(inputs, return_cov=True, update_precision=False)
         logits_id.append(scale_logits(logits, cov))
         targets_id.append(targets)
     logits_id = torch.cat(logits_id, dim=0).cpu()
@@ -152,7 +152,7 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     logits_ood = []
     for inputs, targets in dataloader_ood:
         inputs, targets = inputs.to(device), targets.to(device)
-        logits, cov = model(inputs, return_cov=True)
+        logits, cov = model(inputs, return_cov=True, update_precision=False)
         logits_ood.append(scale_logits(logits, cov))
     logits_ood = torch.cat(logits_ood, dim=0).cpu()
 
