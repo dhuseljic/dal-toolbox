@@ -4,7 +4,7 @@ import numpy as np
 
 from torch.distributions import MultivariateNormal
 
-from utils import MetricLogger
+from utils import MetricLogger, SmoothedValue
 from metrics import ood, generalization
 
 
@@ -23,8 +23,13 @@ class DDUWrapper(nn.Module):
     def predict_gmm_log_prob(self, features):
         if self.means is None or self.covs is None or self.pis is None:
             raise ValueError
-        log_probs = torch.stack([MultivariateNormal(mean, covariance_matrix=cov).log_prob(features)
-                                 for mean, cov in zip(self.means, self.covs)], dim=1)
+        log_probs = torch.empty(len(features), len(self.pis))
+        for i, (mean, cov) in enumerate(zip(self.means, self.covs)):
+            dist = MultivariateNormal(mean, cov)
+            log_prob = dist.log_prob(features)
+            log_probs[:, i] = log_prob
+        # log_probs1 = torch.stack([MultivariateNormal(mean, covariance_matrix=cov).log_prob(features)
+        #                          for mean, cov in zip(self.means, self.covs)], dim=1)
         log_probs = torch.logsumexp(torch.stack(self.pis).log() + log_probs, -1)
         return log_probs
 
@@ -34,6 +39,7 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None,
     model.to(device)
 
     metric_logger = MetricLogger(delimiter=" ")
+    metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
     header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
     # Train the epoch
@@ -49,7 +55,7 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None,
 
         batch_size = inputs.shape[0]
         acc1, acc5 = generalization.accuracy(outputs, targets, topk=(1, 5))
-        metric_logger.update(loss=loss.item())
+        metric_logger.update(loss=loss.item(), lr=optimizer.param_groups[0]["lr"])
         metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
         metric_logger.meters["acc5"].update(acc5.item(), n=batch_size)
     train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
