@@ -11,28 +11,23 @@ from models import build_model
 from utils import plot_grids, write_scalar_dict, seed_everything
 
 
-def build_model_params(args):
-    # TODO
-    model_params = {}
-    return model_params
-
-
 def main(args):
     seed_everything(args.random_seed)
     writer = SummaryWriter(log_dir=args.output_dir)
-
     print(args)
+
+    # Load data
     train_ds, test_ds_id, test_ds_ood, n_classes = build_dataset(args)
     fig = plot_grids(train_ds, test_ds_id, test_ds_ood)
     writer.add_figure('Data Example', fig)
 
-    train_loader = DataLoader(train_ds, batch_size=args.batch_size)
+    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True)
     test_loader_id = DataLoader(test_ds_id, batch_size=args.batch_size*4)
     test_loader_ood = DataLoader(test_ds_ood, batch_size=args.batch_size*4)
 
-    model_params = build_model_params(args)
+    # Load model
+    model_params = {} # TODO
     model_params.update({'n_samples': len(train_ds), 'n_classes': n_classes})
-
     model_dict = build_model(args, model_params)
     model, train_one_epoch, evaluate = model_dict['model'], model_dict['train_one_epoch'], model_dict['evaluate']
     lr_scheduler = model_dict.get('lr_scheduler')
@@ -41,9 +36,9 @@ def main(args):
     for i_epoch in range(args.n_epochs):
         # Train
         train_stats = train_one_epoch(model, train_loader, **model_dict['train_kwargs'], epoch=i_epoch)
-        history_train.append(train_stats)
         if lr_scheduler:
             lr_scheduler.step()
+        history_train.append(train_stats)
         write_scalar_dict(writer, prefix='train', dict=train_stats, global_step=i_epoch)
 
         # Eval
@@ -85,9 +80,9 @@ if __name__ == '__main__':
     parser.add_argument('--n_samples', type=int, default=None)
     parser.add_argument('--n_epochs', type=int, default=10)
     parser.add_argument('--coeff', type=float, default=1)
-    parser.add_argument('--eval_every', type=int, default=10)
+    parser.add_argument('--eval_every', type=int, default=1)
     parser.add_argument('--batch_size', type=int, default=32)
-    parser.add_argument('--weight_decay', type=float, default=.01)
+    parser.add_argument('--weight_decay', type=float, default=.0)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--momentum', type=float, default=.9)
     parser.add_argument('--lr_step_size', type=int, default=10)

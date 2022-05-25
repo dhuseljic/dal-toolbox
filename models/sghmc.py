@@ -6,7 +6,6 @@ import torch.nn.functional as F
 
 from utils import MetricLogger, SmoothedValue
 from metrics import generalization, ood
-from . import vanilla
 
 
 class HMCModel(nn.Module):
