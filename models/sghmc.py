@@ -2,11 +2,11 @@ import copy
 import math
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from utils import MetricLogger, SmoothedValue
 from metrics import generalization, ood
-
-# TODO:  Snapshots after seen batches
+from . import vanilla
 
 
 class HMCModel(nn.Module):
@@ -29,8 +29,9 @@ class HMCModel(nn.Module):
         return self.model.forward(x)
 
     def save_snapshot_step(self):
+        # Save snapshots after it has seen batch batches for training
         self.update_step += 1
-        if ((self.update_step-self.warm_up_batches+1) % self.snapshot_interval) == 0 and (self.update_step) >= self.warm_up_batches:
+        if ((self.update_step-self.warm_up_batches+1) % self.snapshot_interval) == 0 and self.update_step >= self.warm_up_batches:
             weights = copy.deepcopy(self.model.state_dict())
             self.snapshots.append(weights)
 
@@ -63,23 +64,22 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None,
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-
         model.save_snapshot_step()
 
         batch_size = inputs.shape[0]
         acc1, acc5 = generalization.accuracy(outputs, targets, topk=(1, 5))
-        metric_logger.update(loss=loss.item(), lr=optimizer.param_groups[0]["epsilon"])  # TODO: learning_rate?
+        metric_logger.update(loss=loss.item(), lr=optimizer.param_groups[0]["epsilon"])
         metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
         metric_logger.meters["acc5"].update(acc5.item(), n=batch_size)
-    train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
 
+    train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
     return train_stats
 
 
 @torch.no_grad()
 def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     if len(model.snapshots) <= 1:
-        return {}
+        return {}  # vanilla.evaluate(model, dataloader_id, dataloader_ood, criterion, device)
     model.eval()
     model.to(device)
     test_stats = {}
@@ -95,7 +95,9 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     # Ensemble accuracy
     probas = logits_id.softmax(-1)
     acc1, acc5 = generalization.accuracy(probas.mean(0), targets_id, topk=(1, 5))
-    test_stats.update({'acc1': acc1.item(), 'acc5': acc5.item()})
+    loss = F.nll_loss(probas.mean(0).log(), targets_id)
+    test_stats.update({'acc1': acc1.item(), 'acc5': acc5.item(), 'loss': loss.item()})
+    
 
     # Snapshot accuracies
     for i_snapshot, logits in enumerate(logits_id):
@@ -115,7 +117,7 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     logits_ood = torch.cat(logits_ood, dim=1).cpu()
     targets_ood = torch.cat(targets_ood, dim=0).cpu()
 
-    # Compute 
+    # Compute
     probas_id = logits_id.softmax(-1).mean(0)
     probas_ood = logits_ood.softmax(-1).mean(0)
     entropy_id = ood.entropy_fn(probas_id)

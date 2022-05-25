@@ -8,7 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from datasets import build_dataset
 from models import build_model
-from utils import plot_grids, write_scalar_dict
+from utils import plot_grids, write_scalar_dict, seed_everything
 
 
 def build_model_params(args):
@@ -18,6 +18,7 @@ def build_model_params(args):
 
 
 def main(args):
+    seed_everything(args.random_seed)
     writer = SummaryWriter(log_dir=args.output_dir)
 
     print(args)
@@ -93,5 +94,6 @@ if __name__ == '__main__':
     parser.add_argument('--lr_gamma', type=float, default=.1)
     parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--output_dir', type=str, default='./output')
+    parser.add_argument('--random_seed', type=int, default=42)
     args = parser.parse_args()
     main(args)

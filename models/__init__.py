@@ -29,13 +29,17 @@ def build_model(args, model_params: dict):
             'optimizer': optimizer,
             'train_one_epoch': vanilla.train_one_epoch,
             'evaluate': vanilla.evaluate,
-            'lr_scheduler': lr_scheduler,
+            'lr_scheduler': None, # lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
         }
     elif args.model == 'sghmc':
         n_samples = model_params['n_samples']
-        model = torchvision.models.resnet18(True)
+        epsilon = 0.1/math.sqrt(n_samples)
+        C = .1 / epsilon
+        B_estim = .9*C
+        resample_each = int(1e10)
+        model = torchvision.models.resnet18(pretrained=True)
         model.fc = nn.Linear(512, n_classes)
         model = sghmc.HMCModel(
             model,
@@ -44,12 +48,10 @@ def build_model(args, model_params: dict):
         optimizer = sghmc.SGHMC(
             model.parameters(),
             n_samples=n_samples,
-            epsilon=0.1/math.sqrt(n_samples),
-            prior_precision=1,
-            C=10, # TODO
-            B_estim=0, # TODO
-            M=1,
-            resample_each=int(1e10),
+            epsilon=epsilon,
+            C=C,
+            B_estim=B_estim,
+            resample_each=resample_each,
         )
         criterion = nn.CrossEntropyLoss()
         model_dict = {

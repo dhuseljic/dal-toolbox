@@ -4,9 +4,12 @@ import time
 import errno
 import hashlib
 import datetime
+import random
 
 import torch
 import torch.distributed as dist
+
+import numpy as np
 
 from typing import List, Optional, Tuple
 from collections import defaultdict, deque, OrderedDict
@@ -14,9 +17,20 @@ from torch.utils.data import DataLoader
 from torchvision.utils import make_grid
 
 
+def seed_everything(seed: int):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = True
+
+
 def write_scalar_dict(writer, prefix, dict, global_step=None):
     for key, val in dict.items():
         writer.add_scalar(f'{prefix}/{key}', val, global_step=global_step)
+
 
 def unnormalize(img_normalized, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
     device = img_normalized.device
@@ -27,8 +41,7 @@ def unnormalize(img_normalized, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0
 
 def plot_grids(train_ds, test_ds_id, test_ds_ood):
     import pylab as plt
-        
-        
+
     def get_batch(dataset): return next(iter(DataLoader(dataset, batch_size=32)))
 
     fig = plt.figure(figsize=(20, 5))
@@ -37,16 +50,19 @@ def plot_grids(train_ds, test_ds_id, test_ds_ood):
     img_batch = get_batch(train_ds)[0]
     grid = make_grid(unnormalize(img_batch))
     plt.imshow(grid.permute(1, 2, 0))
+    plt.axis('off')
     plt.subplot(132)
     plt.title('Test Samples ID')
     img_batch = get_batch(test_ds_id)[0]
     grid = make_grid(unnormalize(img_batch))
     plt.imshow(grid.permute(1, 2, 0))
+    plt.axis('off')
     plt.subplot(133)
     plt.title('Test Samples OOD')
     img_batch = get_batch(test_ds_ood)[0]
     grid = make_grid(unnormalize(img_batch))
     plt.imshow(grid.permute(1, 2, 0))
+    plt.axis('off')
     return fig
 
 
