@@ -52,9 +52,9 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     # Update test stats
     loss = criterion(logits_id, targets_id)
     acc1, acc5 = generalization.accuracy(logits_id, targets_id, (1, 5))
-    test_stats.update({'test_loss': loss.item()})
-    test_stats.update({'test_acc1': acc1.item()})
-    test_stats.update({'test_acc5': acc5.item()})
+    test_stats.update({'loss': loss.item()})
+    test_stats.update({'acc1': acc1.item()})
+    test_stats.update({'acc5': acc5.item()})
 
     # Forward prop out of distribution
     logits_ood = []
@@ -78,4 +78,5 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     conf_ood, _ = probas_ood.max(-1)
     test_stats.update({'auroc_net_conf': ood.ood_auroc(1-conf_id, 1-conf_ood)})
 
+    test_stats = {f"test_{k}": v for k, v in test_stats.items()}
     return test_stats

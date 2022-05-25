@@ -14,6 +14,10 @@ from torch.utils.data import DataLoader
 from torchvision.utils import make_grid
 
 
+def write_scalar_dict(writer, prefix, dict, global_step=None):
+    for key, val in dict.items():
+        writer.add_scalar(f'{prefix}/{key}', val, global_step=global_step)
+
 def unnormalize(img_normalized, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
     device = img_normalized.device
     mean = torch.Tensor(mean).view(-1, 1, 1).to(device)

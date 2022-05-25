@@ -74,7 +74,7 @@ class SNGP(nn.Module):
         self.precision_matrix = nn.Parameter(precision_matrix_new, requires_grad=False)
 
     def compute_predictive_covariance(self, phi):
-        covariance_matrix_feature = torch.linalg.inv(self.precision_matrix)
+        covariance_matrix_feature = torch.linalg.pinv(self.precision_matrix)
         out = torch.matmul(covariance_matrix_feature, phi.T) * self.ridge_penalty
         covariance_matrix_gp = torch.matmul(phi, out)
         return covariance_matrix_gp
