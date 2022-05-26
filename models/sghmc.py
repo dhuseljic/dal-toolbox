@@ -12,6 +12,7 @@ class HMCModel(nn.Module):
 
     def __init__(self, model, n_total_batches, n_snaphots=10, warm_up_batches=100):
         super().__init__()
+        assert warm_up_batches < n_total_batches, f'Warm up ({warm_up_batches}) needs to be smaller than total batch size ({n_total_batches}).'
         self.model = model
 
         self.n_snapshots = n_snaphots
@@ -66,10 +67,9 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None,
         model.save_snapshot_step()
 
         batch_size = inputs.shape[0]
-        acc1, acc5 = generalization.accuracy(outputs, targets, topk=(1, 5))
+        acc1, = generalization.accuracy(outputs, targets, topk=(1,))
         metric_logger.update(loss=loss.item(), lr=optimizer.param_groups[0]["epsilon"])
         metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
-        metric_logger.meters["acc5"].update(acc5.item(), n=batch_size)
 
     train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
     return train_stats
@@ -93,19 +93,18 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
 
     # Ensemble accuracy
     probas = logits_id.softmax(-1)
-    acc1, acc5 = generalization.accuracy(probas.mean(0), targets_id, topk=(1, 5))
+    acc1, = generalization.accuracy(probas.mean(0), targets_id, topk=(1,))
     loss = F.nll_loss(probas.mean(0).log(), targets_id)
-    test_stats.update({'acc1': acc1.item(), 'acc5': acc5.item(), 'loss': loss.item()})
+    test_stats.update({'acc1': acc1.item(), 'loss': loss.item()})
     
 
     # Snapshot accuracies
     for i_snapshot, logits in enumerate(logits_id):
         loss = criterion(logits, targets_id)
-        acc1, acc5 = generalization.accuracy(logits, targets_id, topk=(1, 5))
+        acc1, = generalization.accuracy(logits, targets_id, topk=(1,))
         test_stats.update({
             f'snapshot{i_snapshot}_loss': loss.item(),
             f'snapshot{i_snapshot}_acc1': acc1.item(),
-            f'snapshot{i_snapshot}_acc5': acc5.item(),
         })
 
     logits_ood, targets_ood = [], []

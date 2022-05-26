@@ -1,6 +1,7 @@
 import os
 import argparse
 
+import hydra
 import torch
 
 from torch.utils.data import DataLoader
@@ -11,6 +12,7 @@ from models import build_model
 from utils import plot_grids, write_scalar_dict, seed_everything
 
 
+@hydra.main(version_base=None, config_path="./configs", config_name="default")
 def main(args):
     seed_everything(args.random_seed)
     writer = SummaryWriter(log_dir=args.output_dir)
@@ -26,7 +28,7 @@ def main(args):
     test_loader_ood = DataLoader(test_ds_ood, batch_size=args.batch_size*4)
 
     # Load model
-    model_params = {} # TODO
+    model_params = {}  # TODO
     model_params.update({'n_samples': len(train_ds), 'n_classes': n_classes})
     model_dict = build_model(args, model_params)
     model, train_one_epoch, evaluate = model_dict['model'], model_dict['train_one_epoch'], model_dict['evaluate']
@@ -68,27 +70,4 @@ def main(args):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='MNIST_vs_MNIST', choices=[
-        'MNIST_vs_MNIST',
-        'CIFAR10_vs_CIFAR100',
-        'CIFAR10_vs_SVHN',
-        'CIFAR100_vs_CIFAR10',
-        'CIFAR100_vs_SVHN',
-    ])
-    parser.add_argument('--model', type=str, default='vanilla', choices=['vanilla', 'DDU', 'SNGP', 'sghmc'])
-    parser.add_argument('--n_samples', type=int, default=None)
-    parser.add_argument('--n_epochs', type=int, default=10)
-    parser.add_argument('--coeff', type=float, default=1)
-    parser.add_argument('--eval_every', type=int, default=1)
-    parser.add_argument('--batch_size', type=int, default=32)
-    parser.add_argument('--weight_decay', type=float, default=.0)
-    parser.add_argument('--lr', type=float, default=1e-3)
-    parser.add_argument('--momentum', type=float, default=.9)
-    parser.add_argument('--lr_step_size', type=int, default=10)
-    parser.add_argument('--lr_gamma', type=float, default=.1)
-    parser.add_argument('--device', type=str, default='cuda')
-    parser.add_argument('--output_dir', type=str, default='./output')
-    parser.add_argument('--random_seed', type=int, default=42)
-    args = parser.parse_args()
-    main(args)
+    main()

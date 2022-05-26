@@ -148,10 +148,9 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None,
         optimizer.step()
 
         batch_size = inputs.shape[0]
-        acc1, acc5 = generalization.accuracy(outputs, targets, topk=(1, 5))
+        acc1, = generalization.accuracy(outputs, targets, topk=(1,))
         metric_logger.update(loss=loss.item(), lr=optimizer.param_groups[0]["lr"])
         metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
-        metric_logger.meters["acc5"].update(acc5.item(), n=batch_size)
 
     train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
     return train_stats
@@ -184,10 +183,11 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
 
     # Update test stats
     loss = criterion(logits_id, targets_id)
-    acc1, acc5 = generalization.accuracy(logits_id, targets_id, (1, 5))
-    test_stats.update({'test_loss': loss.item()})
-    test_stats.update({'test_acc1': acc1.item()})
-    test_stats.update({'test_acc5': acc5.item()})
+    acc1, = generalization.accuracy(logits_id, targets_id, (1,))
+    test_stats.update({
+        'loss': loss.item(),
+        'acc1': acc1.item()
+    })
 
     # Forward prop out of distribution
     logits_ood = []
@@ -211,4 +211,5 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     conf_ood, _ = probas_ood.max(-1)
     test_stats.update({'auroc_net_conf': ood.ood_auroc(1-conf_id, 1-conf_ood)})
 
+    test_stats = {f"test_{k}": v for k, v in test_stats.items()}
     return test_stats

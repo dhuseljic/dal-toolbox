@@ -5,8 +5,7 @@ from torch.utils.data import Subset
 from torchvision.transforms import Compose, Resize, Grayscale, ToTensor, Normalize
 from datasets.presets import ClassificationPresetTrain, ClassificationPresetEval
 
-def build_dataset(args, seed=42):
-    torch.manual_seed(seed)
+def build_dataset(args):
     if args.dataset == 'MNIST_vs_MNIST':
         # mnist 0 to 4 vs 5 to 9
         transform = Compose([Resize(size=(32, 32)), Grayscale(num_output_channels=3), ToTensor()])
