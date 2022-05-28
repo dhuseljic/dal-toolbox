@@ -1,7 +1,0 @@
-sghmc:
-  warm_up_batches: 10
-  n_snapshots: 10
-  epsilon: 0.001
-  C: 100
-  B_estim: 90
-  resample_each: 1000000000

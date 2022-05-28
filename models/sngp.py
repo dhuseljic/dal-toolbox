@@ -15,23 +15,19 @@ class SNGP(nn.Module):
                  num_inducing: int,
                  num_classes: int,
                  kernel_scale: float = 1,
-                 scale_input: bool = True,
+                 normalize_input: bool = False,
+                 auto_scale_kernel: bool = False,
                  momentum: float = .999,
                  ridge_penalty: float = 1e-6,
-                 normalize_input: bool = False,
-                 scale_kernel: bool = False,
                  ):
         super().__init__()
         self.model = model
         self.ridge_penalty = ridge_penalty
         self.momentum = momentum
 
-        self.input_scale = 1/math.sqrt(kernel_scale)
+        self.input_scale = (1/math.sqrt(kernel_scale) if kernel_scale is not None else None)
         self.feature_scale = math.sqrt(2./float(num_inducing))
         self.kernel_scale = kernel_scale
-
-        self.scale_input = scale_input
-        self.scale_kernel = scale_kernel
 
         self.normalize_input = normalize_input
         if self.normalize_input:
@@ -45,9 +41,8 @@ class SNGP(nn.Module):
         nn.init.uniform_(self.random_feature_linear.bias, 0, 2*math.pi)
 
         # Scale the random features according to SNGP, bigger sigma equals bigger kernel
-        if scale_kernel:
-            if kernel_scale is None:
-                kernel_scale = math.sqrt(in_features / 2)
+        if auto_scale_kernel:
+            kernel_scale = math.sqrt(in_features / 2) if kernel_scale is None else kernel_scale
             self.random_feature_linear.weight.data /= self.kernel_scale
 
         # Define output layer according to Eq 8.
@@ -84,7 +79,7 @@ class SNGP(nn.Module):
 
         if self.normalize_input:
             features = self.layer_norm(features)
-        elif self.scale_input:
+        elif self.input_scale is not None:
             features = features * self.input_scale
 
         # Get gp features according to Eq. 7

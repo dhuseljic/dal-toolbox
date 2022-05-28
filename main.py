@@ -1,22 +1,19 @@
 import os
-import argparse
-
 import hydra
 import torch
 
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-
 from datasets import build_dataset
 from models import build_model
 from utils import plot_grids, write_scalar_dict, seed_everything
 
 
-@hydra.main(version_base=None, config_path="./configs", config_name="default")
+@hydra.main(version_base=None, config_path="./configs", config_name="config")
 def main(args):
+    print(args)
     seed_everything(args.random_seed)
     writer = SummaryWriter(log_dir=args.output_dir)
-    print(args)
 
     # Load data
     train_ds, test_ds_id, test_ds_ood, n_classes = build_dataset(args)
@@ -28,9 +25,7 @@ def main(args):
     test_loader_ood = DataLoader(test_ds_ood, batch_size=args.batch_size*4)
 
     # Load model
-    model_params = {}  # TODO
-    model_params.update({'n_samples': len(train_ds), 'n_classes': n_classes})
-    model_dict = build_model(args, model_params)
+    model_dict = build_model(args, n_samples=len(train_ds), n_classes=n_classes)
     model, train_one_epoch, evaluate = model_dict['model'], model_dict['train_one_epoch'], model_dict['evaluate']
     lr_scheduler = model_dict.get('lr_scheduler')
 

@@ -1,9 +1,11 @@
+defaults:
+  - model: 'vanilla'
+
 dataset: "MNIST_vs_MNIST"
 n_samples: null
 n_epochs: 10
 eval_every: 10
 batch_size: 32
 device: "cuda"
-output_dir: "./output/"
 random_seed: 42
-backbone: "resnet18"
+output_dir: "./output/"
