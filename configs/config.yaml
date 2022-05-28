@@ -3,9 +3,9 @@ defaults:
 
 dataset: "MNIST_vs_MNIST"
 n_samples: null
-n_epochs: 10
-eval_every: 10
-batch_size: 32
+n_epochs: 200
+eval_interval: 10
+batch_size: 64
 device: "cuda"
 random_seed: 42
 output_dir: "./output/"

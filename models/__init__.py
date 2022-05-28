@@ -68,22 +68,24 @@ def build_model(args, **kwargs):
         }
     elif args.model.name == 'sngp':
         model = sngp.SNGP(
-            backbone,
-            in_features=512,
-            num_inducing=args.model.num_inducing,
+            model=backbone,
+            in_features=backbone.out_features,
             num_classes=n_classes,
+            num_inducing=args.model.num_inducing,
             kernel_scale=args.model.kernel_scale,
+            normalize_input=args.model.normalize_input,
+            cov_momentum=args.model.cov_momentum,
+            ridge_penalty=args.model.ridge_penalty,
+            mean_field_factor=args.model.mean_field_factor
         )
-        optimizer = torch.optim.Adam(
+        optimizer = torch.optim.SGD(
             model.parameters(),
             lr=args.model.lr,
             weight_decay=args.model.weight_decay,
+            momentum=args.model.momentum,
+            nesterov=True
         )
-        lr_scheduler = torch.optim.lr_scheduler.StepLR(
-            optimizer=optimizer,
-            step_size=args.model.lr_step_size,
-            gamma=args.model.lr_gamma
-        )
+        # TODO lr scheduler
         criterion = nn.CrossEntropyLoss()
         model_dict = {
             'model': model,

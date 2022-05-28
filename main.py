@@ -39,7 +39,7 @@ def main(args):
         write_scalar_dict(writer, prefix='train', dict=train_stats, global_step=i_epoch)
 
         # Eval
-        if (i_epoch+1) % args.eval_every == 0:
+        if (i_epoch+1) % args.eval_interval == 0:
             test_stats = evaluate(model, test_loader_id, test_loader_ood, **model_dict['eval_kwargs'])
             history_test.append(test_stats)
             write_scalar_dict(writer, prefix='test', dict=test_stats, global_step=i_epoch)

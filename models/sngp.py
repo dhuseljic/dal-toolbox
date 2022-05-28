@@ -17,13 +17,15 @@ class SNGP(nn.Module):
                  kernel_scale: float = 1,
                  normalize_input: bool = False,
                  auto_scale_kernel: bool = False,
-                 momentum: float = .999,
+                 cov_momentum: float = .999,
                  ridge_penalty: float = 1e-6,
+                 mean_field_factor: float = 1,
                  ):
         super().__init__()
         self.model = model
         self.ridge_penalty = ridge_penalty
-        self.momentum = momentum
+        self.cov_momentum = cov_momentum
+        self.mean_field_factor = mean_field_factor
 
         self.input_scale = (1/math.sqrt(kernel_scale) if kernel_scale is not None else None)
         self.feature_scale = math.sqrt(2./float(num_inducing))
@@ -59,11 +61,11 @@ class SNGP(nn.Module):
 
     def update_precision_matrix(self, phi):
         precision_matrix_minibatch = torch.matmul(phi.T, phi)
-        if self.momentum > 0:
+        if self.cov_momentum > 0:
             batch_size = len(phi)
             precision_matrix_minibatch = precision_matrix_minibatch / batch_size
-            precision_matrix_new = (self.momentum * self.precision_matrix +
-                                    (1-self.momentum) * precision_matrix_minibatch)
+            precision_matrix_new = (self.cov_momentum * self.precision_matrix +
+                                    (1-self.cov_momentum) * precision_matrix_minibatch)
         else:
             precision_matrix_new = self.precision_matrix + precision_matrix_minibatch
         self.precision_matrix = nn.Parameter(precision_matrix_new, requires_grad=False)
@@ -98,7 +100,13 @@ class SNGP(nn.Module):
         return logits
 
     @torch.no_grad()
+    def scale_logits(self, logits, cov):
+        scaled_logits = mean_field_logits(logits, cov, self.mean_field_factor)
+        return scaled_logits
+
+    @torch.no_grad()
     def forward_sample(self, x, n_draws=10):
+        # TODO
         # Transform to feature space
         _, features = self.model(x, return_features=True)
 
@@ -171,7 +179,8 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     for inputs, targets in dataloader_id:
         inputs, targets = inputs.to(device), targets.to(device)
         logits, cov = model(inputs, return_cov=True, update_precision=False)
-        logits_id.append(mean_field_logits(logits, cov))
+        logits_scaled = model.scale_logits(logits, cov)
+        logits_id.append(logits_scaled)
         targets_id.append(targets)
     logits_id = torch.cat(logits_id, dim=0).cpu()
     targets_id = torch.cat(targets_id, dim=0).cpu()
@@ -189,7 +198,8 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     for inputs, targets in dataloader_ood:
         inputs, targets = inputs.to(device), targets.to(device)
         logits, cov = model(inputs, return_cov=True, update_precision=False)
-        logits_ood.append(mean_field_logits(logits, cov))
+        logits_scaled = model.scale_logits(logits, cov)
+        logits_ood.append(logits_scaled)
     logits_ood = torch.cat(logits_ood, dim=0).cpu()
 
     # Update test stats
