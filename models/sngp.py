@@ -1,5 +1,7 @@
 import math
 import copy
+from random import Random
+from turtle import update
 
 import torch
 import torch.nn as nn
@@ -8,49 +10,152 @@ from utils import MetricLogger, SmoothedValue
 from metrics import ood, generalization
 
 
+# class RandomFeatureGaussianProcess(nn.Module):
+#     def __init__(self,
+#                  in_features: int,
+#                  out_features: int,
+#                  num_inducing: int = 1024,
+#                  kernel_scale: float = 1,
+#                  normalize_input: bool = False,
+#                  scale_random_features: bool = False,
+#                  cov_momentum: float = .999,
+#                  ridge_penalty: float = 1e-6,
+#                  mean_field_factor: float = 1,
+#                  ):
+#         super().__init__()
+#
+#         self.in_features = in_features
+#         self.out_features = out_features
+#         self.num_inducing = num_inducing
+#
+#         # scale inputs
+#         self.kernel_scale = kernel_scale
+#         self.normalize_input = normalize_input
+#         self.input_scale = (1/math.sqrt(kernel_scale) if kernel_scale is not None else None)
+#
+#         # Random features
+#         self.scale_random_features = scale_random_features
+#         self.random_feature_scale = math.sqrt(2./float(num_inducing))
+#
+#         # Inference
+#         self.mean_field_factor = mean_field_factor
+#
+#         # Covariance computation
+#         self.ridge_penalty = ridge_penalty
+#         self.cov_momentum = cov_momentum
+#
+#         # Define scale, weight and bias according to Eq. 7
+#         # https://github.com/google/uncertainty-baselines/blob/main/uncertainty_baselines/models/resnet50_sngp.py#L55
+#         self.random_feature_linear = nn.Linear(in_features, num_inducing)
+#         self.random_feature_linear.weight.requires_grad = False
+#         self.random_feature_linear.bias.requires_grad = False
+#         nn.init.normal_(self.random_feature_linear.weight, std=0.05)
+#         nn.init.uniform_(self.random_feature_linear.bias, 0, 2*math.pi)
+#
+#         # Define output layer according to Eq 8. For imagenet init with normal std=0.01?
+#         self.beta = nn.Linear(num_inducing, out_features, bias=False)
+#         nn.init.xavier_normal_(self.beta.weight)
+#
+#         self.init_precision_matrix = torch.eye(num_inducing)*self.ridge_penalty
+#         self.precision_matrix = nn.Parameter(copy.deepcopy(self.init_precision_matrix), requires_grad=False)
+#
+#     def forward(self, features, return_cov=False, update_precision=True):
+#         if self.normalize_input:
+#             features = self.layer_norm(features)
+#         elif self.input_scale is not None:
+#             features = features * self.input_scale
+#
+#         # Get gp features according to Eq. 7
+#         phi = torch.cos(self.random_feature_linear(features))
+#         # See: https://github.com/google/uncertainty-baselines/blob/main/uncertainty_baselines/models/wide_resnet_sngp.py#L207
+#         if self.scale_random_features:
+#             phi = self.random_feature_scale * phi
+#
+#         # Eq. 8
+#         logits = self.beta(phi)
+#
+#         if update_precision:
+#             self.update_precision_matrix(phi)
+#
+#         if return_cov:
+#             cov = self.compute_predictive_covariance(phi)
+#             return logits, cov
+#         return logits
+#
+#     def reset_covariance(self):
+#         device = self.precision_matrix.device
+#         self.precision_matrix = nn.Parameter(copy.deepcopy(self.init_precision_matrix), requires_grad=False)
+#         self.precision_matrix.to(device)
+#
+#     def update_precision_matrix(self, phi):
+#         precision_matrix_minibatch = torch.matmul(phi.T, phi)
+#         if self.cov_momentum > 0:
+#             batch_size = len(phi)
+#             precision_matrix_minibatch = precision_matrix_minibatch / batch_size
+#             precision_matrix_new = (self.cov_momentum * self.precision_matrix +
+#                                     (1-self.cov_momentum) * precision_matrix_minibatch)
+#         else:
+#             precision_matrix_new = self.precision_matrix + precision_matrix_minibatch
+#         self.precision_matrix = nn.Parameter(precision_matrix_new, requires_grad=False)
+#
+#     def compute_predictive_covariance(self, phi):
+#         covariance_matrix_feature = torch.linalg.pinv(self.precision_matrix)
+#         out = torch.matmul(covariance_matrix_feature, phi.T) * self.ridge_penalty
+#         covariance_matrix_gp = torch.matmul(phi, out)
+#         return covariance_matrix_gp
+
+
 class SNGP(nn.Module):
     def __init__(self,
                  model: nn.Module,
                  in_features: int,
-                 num_inducing: int,
                  num_classes: int,
+                 num_inducing: int = 1024,
                  kernel_scale: float = 1,
                  normalize_input: bool = False,
-                 auto_scale_kernel: bool = False,
+                 scale_random_features: bool = False,
+                 mean_field_factor: float = 1,
                  cov_momentum: float = .999,
                  ridge_penalty: float = 1e-6,
-                 mean_field_factor: float = 1,
                  ):
         super().__init__()
         self.model = model
-        self.ridge_penalty = ridge_penalty
-        self.cov_momentum = cov_momentum
-        self.mean_field_factor = mean_field_factor
 
-        self.input_scale = (1/math.sqrt(kernel_scale) if kernel_scale is not None else None)
-        self.feature_scale = math.sqrt(2./float(num_inducing))
+        # in_features -> num_inducing -> num_classes
+        self.in_features = in_features
+        self.num_inducing = num_inducing
+        self.num_classes = num_classes
+
+        # Scale input
         self.kernel_scale = kernel_scale
 
+        # Norm input
         self.normalize_input = normalize_input
         if self.normalize_input:
+            self.kernel_scale = 1
             self.layer_norm = nn.LayerNorm(in_features)
 
-        # Define scale, weight and bias according to Eq. 7
-        self.random_feature_linear = nn.Linear(in_features, num_inducing)
-        self.random_feature_linear.weight.requires_grad = False
-        self.random_feature_linear.bias.requires_grad = False
-        nn.init.normal_(self.random_feature_linear.weight)
-        nn.init.uniform_(self.random_feature_linear.bias, 0, 2*math.pi)
+        # Random features
+        self.scale_random_features = scale_random_features
 
-        # Scale the random features according to SNGP, bigger sigma equals bigger kernel
-        if auto_scale_kernel:
-            kernel_scale = math.sqrt(in_features / 2) if kernel_scale is None else kernel_scale
-            self.random_feature_linear.weight.data /= self.kernel_scale
+        # Inference
+        self.mean_field_factor = mean_field_factor
 
-        # Define output layer according to Eq 8.
+        # Covariance computation
+        self.cov_momentum = cov_momentum
+        self.ridge_penalty = ridge_penalty
+
+        self.random_features = RandomFourierFeatures(
+            in_features=in_features,
+            num_inducing=num_inducing,
+            kernel_scale=self.kernel_scale,
+            scale_features=self.scale_random_features
+        )
+
+        # Define output layer according to Eq 8., For imagenet init with normal std=0.01
         self.beta = nn.Linear(num_inducing, num_classes, bias=False)
-        nn.init.normal_(self.beta.weight, std=.01)  # std needs to be small here
 
+        # precision matrix
         self.init_precision_matrix = torch.eye(num_inducing)*self.ridge_penalty
         self.precision_matrix = nn.Parameter(copy.deepcopy(self.init_precision_matrix), requires_grad=False)
 
@@ -81,26 +186,23 @@ class SNGP(nn.Module):
 
         if self.normalize_input:
             features = self.layer_norm(features)
-        elif self.input_scale is not None:
-            features = features * self.input_scale
 
         # Get gp features according to Eq. 7
-        phi = torch.cos(self.random_feature_linear(features))
-        phi = self.feature_scale * phi
+        phi = self.random_features(features)
 
         # Eq. 8
         logits = self.beta(phi)
 
         if update_precision:
             self.update_precision_matrix(phi)
-
         if return_cov:
             cov = self.compute_predictive_covariance(phi)
             return logits, cov
         return logits
 
     @torch.no_grad()
-    def scale_logits(self, logits, cov):
+    def forward_mean_field(self, x):
+        logits, cov = self.forward(x, return_cov=True, update_precision=False)
         scaled_logits = mean_field_logits(logits, cov, self.mean_field_factor)
         return scaled_logits
 
@@ -130,6 +232,40 @@ class SNGP(nn.Module):
         return logits_sampled
 
 
+class RandomFourierFeatures(nn.Module):
+    def __init__(self, in_features, num_inducing=1024, kernel_scale=1, scale_features=True):
+        super().__init__()
+        self.kernel_scale = kernel_scale
+        self.input_scale = 1/math.sqrt(self.kernel_scale)
+
+        self.scale_features = scale_features
+        self.random_feature_scale = math.sqrt(2./float(num_inducing))
+
+        self.random_feature_linear = nn.Linear(in_features, num_inducing)
+        self.random_feature_linear.weight.requires_grad = False
+        self.random_feature_linear.bias.requires_grad = False
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        # https://github.com/google/uncertainty-baselines/blob/main/uncertainty_baselines/models/resnet50_sngp.py#L55
+        nn.init.normal_(self.random_feature_linear.weight, std=.05)
+        nn.init.uniform_(self.random_feature_linear.bias, 0, 2*math.pi)
+
+    def forward(self, x):
+        # Supports lengthscale for cutom random feature layer by directly rescaling the input.
+        x = x * self.input_scale
+        x = torch.cos(self.random_feature_linear(x))
+
+        # https://github.com/google/uncertainty-baselines/blob/main/uncertainty_baselines/models/wide_resnet_sngp.py#L207
+        if self.scale_features:
+            # Scale random feature by 2. / sqrt(num_inducing).  When using GP
+            # layer as the output layer of a nerual network, it is recommended
+            # to turn this scaling off to prevent it from changing the learning
+            # rate to the hidden layers.
+            x = self.random_feature_scale * x
+        return x
+
+
 def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
     model.train()
     model.reset_covariance()
@@ -139,7 +275,6 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None,
     metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
     header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
-    # Train the epoch
     for inputs, targets in metric_logger.log_every(dataloader, print_freq, header):
         inputs, targets = inputs.to(device), targets.to(device)
 
@@ -178,8 +313,7 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     logits_id, targets_id = [], []
     for inputs, targets in dataloader_id:
         inputs, targets = inputs.to(device), targets.to(device)
-        logits, cov = model(inputs, return_cov=True, update_precision=False)
-        logits_scaled = model.scale_logits(logits, cov)
+        logits_scaled = model.forward_mean_field(inputs)
         logits_id.append(logits_scaled)
         targets_id.append(targets)
     logits_id = torch.cat(logits_id, dim=0).cpu()
@@ -197,8 +331,7 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     logits_ood = []
     for inputs, targets in dataloader_ood:
         inputs, targets = inputs.to(device), targets.to(device)
-        logits, cov = model(inputs, return_cov=True, update_precision=False)
-        logits_scaled = model.scale_logits(logits, cov)
+        logits_scaled = model.forward_mean_field(inputs)
         logits_ood.append(logits_scaled)
     logits_ood = torch.cat(logits_ood, dim=0).cpu()
 

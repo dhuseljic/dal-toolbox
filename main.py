@@ -1,4 +1,5 @@
 import os
+import json
 import hydra
 import torch
 
@@ -62,6 +63,9 @@ def main(args):
     fname = os.path.join(args.output_dir, 'results_final.json')
     print(f"Saving results to {fname}.")
     torch.save(checkpoint, os.path.join(args.output_dir, "model_final.pth"))
+    results = {'train_history': history_train, 'test_history': history_test}
+    with open(fname, 'w') as f:
+        json.dump(results, f)
 
 
 if __name__ == '__main__':

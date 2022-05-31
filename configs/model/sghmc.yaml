@@ -1,9 +1,11 @@
 name: sghmc
 backbone: resnet18
-n_snapshots: 20
-warm_up_batches: 100
-auto_params: True
-epsilon: 0.01
-C: 10
-B_estim: 9
-resample_each: 1000000000
+ensemble: 
+  n_snapshots: 20
+  warm_up_batches: 100
+optimizer:
+  auto_params: True
+  epsilon: 0.01
+  C: 10
+  B_estim: 9
+  resample_each: 1000000000

@@ -32,7 +32,7 @@ def write_scalar_dict(writer, prefix, dict, global_step=None):
         writer.add_scalar(f'{prefix}/{key}', val, global_step=global_step)
 
 
-def unnormalize(img_normalized, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
+def unnormalize(img_normalized, mean=(0.5, 0.5, 0.5), std=(0.2, 0.2, 0.2)):
     device = img_normalized.device
     mean = torch.Tensor(mean).view(-1, 1, 1).to(device)
     std = torch.Tensor(std).view(-1, 1, 1).to(device)

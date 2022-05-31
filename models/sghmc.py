@@ -160,6 +160,8 @@ class SGHMC(torch.optim.Optimizer):
 
             # iterate parameter in current group
             for p in group['params']:
+                if not p.requires_grad:
+                    continue
                 ########################################################################
                 ## compute noisy estimate of the energy function gradient             ##
                 ##  where: p(theta|data) \propto exp(-U(theta))                       ##

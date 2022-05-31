@@ -1,6 +1,7 @@
 # %%
 # fmt: off
 import sys
+import math
 
 sys.path.append('../')
 
@@ -66,55 +67,59 @@ class Net(nn.Module):
 # %%
 
 
-hparams = {
-    'coef1f': .9,
-    'n_residuals': 6,
-    'num_inducing': 1024,
-    'kernel_scale': 10,
-    'auto_scale_kernel': False,
-    'epochs': 100,
-    'momentum': .999,
-    'ridge_penalty': 1e-6,
-    'weight_decay': 1e-2,
-}
-torch.manual_seed(0)
-model = SNGP(
-    model=Net(coeff=hparams['coeff'], n_residual_layers=hparams['n_residuals']),
-    in_features=128,
-    num_classes=2,
-    num_inducing=hparams['num_inducing'],
-    kernel_scale=hparams['kernel_scale'],
-    momentum=hparams['momentum'],
-    auto_scale_kernel=hparams['auto_scale_kernel'],
-    ridge_penalty=hparams['ridge_penalty']
-)
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=hparams['weight_decay'])
-# optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=hparams['weight_decay'])
-criterion = nn.CrossEntropyLoss()
-for i in range(hparams['epochs']):
-    train_one_epoch(model, train_loader, criterion, optimizer, device='cpu', epoch=i)
+def plot_contour(model, X, y, ax=None):
+    if ax:
+        plt.sca(ax)
+    model.eval()
+    domain = 5
+    xx, yy = torch.meshgrid(torch.linspace(-domain, domain, 51), torch.linspace(-domain, domain, 51))
+    zz = torch.stack((xx.flatten(), yy.flatten()), dim=1)
+
+    with torch.no_grad():
+        logits, cov = model(zz, return_cov=True, update_precision=False)
+
+    logits = model.scale_logits(logits, cov)
+    probas = logits.softmax(-1)
+    zz = probas[:, 1].view(xx.shape)
+
+    print(spectral_hparams, gp_hparams)
+    # plt.title(f"Ep {}")
+    plt.scatter(X[:, 0], X[:, 1], c=y, s=1)
+    plt.contourf(xx, yy, zz, alpha=.8, zorder=-1, levels=np.linspace(0, 1, 6))
+    plt.colorbar()
 # %%
-"""Plot contours."""
 
-model.eval()
-domain = 5
-xx, yy = torch.meshgrid(torch.linspace(-domain, domain, 51), torch.linspace(-domain, domain, 51))
-zz = torch.stack((xx.flatten(), yy.flatten()), dim=1)
+spectral_hparams = dict(
+    coeff=.9,
+    n_residual_layers=6,
+)
+gp_hparams = dict(
+    num_inducing=1024,
+    kernel_scale=.1,             # works like bandwidth
+    normalize_input=False,      # important to disable
+    scale_random_features=True, # important to enable
+    # Not that important, for inference
+    cov_momentum=-1,
+    ridge_penalty=1e-6,
+    mean_field_factor=math.pi/8,
+)
+epochs = 100
+weight_decay = 0
 
-with torch.no_grad():
-    logits, cov = model(zz, return_cov=True, update_precision=False)
+torch.manual_seed(0)
+model = SNGP(model=Net(**spectral_hparams), in_features=128, num_classes=2, **gp_hparams)
+# optimizer = torch.optim.SGD(model.parameters(), lr=1e-2, weight_decay=weight_decay, momentum=0.9, nesterov=True)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=weight_decay)
+criterion = nn.CrossEntropyLoss()
+history = []
+for i in range(epochs):
+    train_stats = train_one_epoch(model, train_loader, criterion, optimizer, device='cpu', epoch=i)
+    history.append(train_stats)
 
-# torch.distributions.MultivariateNormal(logits[:, 1], )
-# mean field approx
-logits = mean_field_logits(logits, cov)
-probas = logits.softmax(-1)
-zz = probas[:, 1].view(xx.shape)
-
-print(hparams)
-# plt.title(f"Ep {}")
-plt.scatter(X[:, 0], X[:, 1], c=y, s=1)
-plt.contourf(xx, yy, zz, alpha=.8, zorder=-1, levels=np.linspace(0, 1, 6))
-plt.colorbar()
+plt.figure(figsize=(15, 5))
+plt.subplot(121)
+plt.plot([d['train_loss'] for d in history])
+plot_contour(model, X, y, ax=plt.subplot(122))
 plt.show()
 
 # %%
