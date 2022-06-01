@@ -1,13 +1,13 @@
 import torchvision
 import torch.nn as nn
 
-from . import lenet, resnet_spectral_norm
+from . import lenet, resnet_spectral_norm, resnet
 
 
 def build_backbone(args, n_classes):
     if args.model.backbone == 'resnet18':
-        backbone = torchvision.models.resnet18(pretrained=False)
-        backbone.fc = nn.Linear(512, n_classes)
+        backbone = resnet.resnet18()
+        backbone.linear = nn.Linear(512, n_classes)
     elif args.model.backbone == 'resnet18_spectral_norm':
         backbone = resnet_spectral_norm.resnet18(
             num_classes=n_classes,
