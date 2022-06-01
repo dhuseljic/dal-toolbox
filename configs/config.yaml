@@ -5,7 +5,7 @@ dataset: "MNIST_vs_MNIST"
 n_samples: null
 n_epochs: 200
 eval_interval: 1
-batch_size: 128
+batch_size: 64
 device: "cuda"
 random_seed: 42
 output_dir: "./output/"

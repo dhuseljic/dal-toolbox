@@ -7,7 +7,6 @@ from backbones import build_backbone
 from . import ddu, sngp, vanilla, sghmc
 
 
-
 def build_model(args, **kwargs):
     n_classes = kwargs['n_classes']
     backbone = build_backbone(args, n_classes=n_classes)
@@ -19,7 +18,12 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True
         )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.n_epochs)
+        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
+            optimizer,
+            milestones=args.model.optimizer.lr_step_epochs,
+            gamma=args.model.optimizer.lr_gamma
+        )
+        # lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.n_epochs)
         # lr_scheduler = torch.optim.lr_scheduler.StepLR(
         #     optimizer=optimizer,
         #     step_size=args.model.optimizer.lr_step_size,
