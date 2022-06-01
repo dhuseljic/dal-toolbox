@@ -5,15 +5,17 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
 #SBATCH --job-name=vanilla_cifar10-vs-cifar100
-#SBATCH --output=/mnt/work/dhuseljic/logs/grid_search_spectral/%A_%a.log
-##SBATCH --array=1-120%50
+#SBATCH --output=/mnt/work/dhuseljic/logs/uncertainty_evaluation/%x_%A.log
 source /mnt/home/dhuseljic/.zshrc
 
-cd path_to_project
+conda activate uncertainty_evaluation
+
+cd /mnt/home/dhuseljic/projects/uncertainty-evaluation/
 
 OUTPUT_DIR=/mnt/work/dhuseljic/uncertainty_benchmarks/${SLURM_JOB_NAME}_${SLURM_JOB_ID}/
+echo "Saving results to $OUTPUT_DIR"
 
-python main.py \
+srun python -u main.py \
     dataset=CIFAR10_vs_CIFAR100 \
     model=vanilla \
-    output_dir=./output/vanilla
+    output_dir=$OUTPUT_DIR
