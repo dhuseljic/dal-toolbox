@@ -1,5 +1,5 @@
 name: vanilla
-backbone: wide_resnet_28_10
+backbone: resnet18
 optimizer:
   lr: 0.1
   weight_decay: 2e-4

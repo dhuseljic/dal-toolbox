@@ -1,4 +1,4 @@
-import torch
+# TODO: implementation from ...
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -91,29 +91,21 @@ class ResNet(nn.Module):
         return out
 
 
-def resnet18():
-    return ResNet(BasicBlock, [2, 2, 2, 2])
+def resnet18(num_classes):
+    return ResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes)
 
 
-def resnet34():
-    return ResNet(BasicBlock, [3, 4, 6, 3])
+def resnet34(num_classes):
+    return ResNet(BasicBlock, [3, 4, 6, 3], num_classes=num_classes)
 
 
-def resnet50():
-    return ResNet(Bottleneck, [3, 4, 6, 3])
+def resnet50(num_classes):
+    return ResNet(Bottleneck, [3, 4, 6, 3], num_classes=num_classes)
 
 
-def resnet101():
-    return ResNet(Bottleneck, [3, 4, 23, 3])
+def resnet101(num_classes):
+    return ResNet(Bottleneck, [3, 4, 23, 3], num_classes=num_classes)
 
 
-def resnet152():
-    return ResNet(Bottleneck, [3, 8, 36, 3])
-
-
-def test():
-    net = resnet18()
-    y = net(torch.randn(1, 3, 32, 32))
-    print(y.size())
-
-# test()
+def resnet152(num_classes):
+    return ResNet(Bottleneck, [3, 8, 36, 3], num_classes=num_classes)

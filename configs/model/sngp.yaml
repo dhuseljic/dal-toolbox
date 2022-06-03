@@ -1,5 +1,5 @@
 name : sngp
-backbone: resnet18_spectral_norm
+backbone: spectral_resnet18
 spectral_norm:
   use_spectral_norm: True
   coeff: 6

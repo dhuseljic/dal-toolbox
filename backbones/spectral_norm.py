@@ -1,7 +1,53 @@
 import torch
+import torch.nn as nn
 from typing import Any, Optional, TypeVar
 from torch.nn.modules import Module
 from torch.nn.functional import normalize, conv_transpose2d, conv2d
+
+
+class SpectralLinear(nn.Linear):
+    def __init__(self, in_features: int, out_features: int, spectral_norm=True, coeff=1, n_power_iterations=1, bias: bool = True, device=None, dtype=None) -> None:
+        super().__init__(in_features, out_features, bias, device, dtype)
+        # Apply spectral norm after init
+        self.coeff = coeff
+        self.n_power_iterations = n_power_iterations
+        if spectral_norm:
+            spectral_norm_fc(self, self.coeff, self.n_power_iterations)
+
+
+class SpectralConv2d(nn.Conv2d):
+    def __init__(self,
+                 in_channels: int,
+                 out_channels: int,
+                 kernel_size,
+                 spectral_norm=True,
+                 coeff=1,
+                 n_power_iterations=1,
+                 stride=1,
+                 padding=0,
+                 dilation=1,
+                 groups: int = 1,
+                 bias: bool = True,
+                 padding_mode: str = 'zeros',
+                 device=None,
+                 dtype=None) -> None:
+        super().__init__(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+            groups,
+            bias,
+            padding_mode,
+            device, dtype
+        )
+        # Apply spectral norm after init
+        self.coeff = coeff
+        self.n_power_iterations = n_power_iterations
+        if spectral_norm:
+            spectral_norm_fc(self, self.coeff, self.n_power_iterations)
 
 
 class SpectralNorm:
