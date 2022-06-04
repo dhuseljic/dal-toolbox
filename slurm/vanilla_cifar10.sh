@@ -18,4 +18,5 @@ echo "Saving results to $OUTPUT_DIR"
 srun python -u main.py \
     dataset=CIFAR10_vs_CIFAR100 \
     model=vanilla \
-    output_dir=$OUTPUT_DIR
+    output_dir=$OUTPUT_DIR \
+    eval_interval=1
