@@ -36,13 +36,11 @@ def build_model(args, **kwargs):
     elif args.model.name == 'sghmc':
         n_samples = kwargs['n_samples']
         n_total_batches = args.n_epochs * math.ceil(n_samples / args.batch_size)
-        if args.model.auto_params:
-            args.model.optimizer.epsilon = 0.1/math.sqrt(n_samples)
-            args.model.optimizer.C = .1 / args.model.optimizier.epsilon
-            args.model.optimizer.B_estim = .8*args.optimizer.model.C
+        if args.model.optimizer.auto_params:
+            args.model.optimizer.lr = 0.1/math.sqrt(n_samples)
+            args.model.optimizer.C = .1 / args.model.optimizer.lr
+            args.model.optimizer.B_estim = .8*args.model.optimizer.C
             args.model.optimizer.resample_each = int(1e19)
-
-        # Auto hparams
         model = sghmc.HMCModel(
             backbone,
             n_snaphots=args.model.ensemble.n_snapshots,
@@ -52,10 +50,15 @@ def build_model(args, **kwargs):
         optimizer = sghmc.SGHMC(
             model.parameters(),
             n_samples=n_samples,
-            epsilon=args.model.optimizer.epsilon,
+            lr=args.model.optimizer.lr,
             C=args.model.optimizer.C,
             B_estim=args.model.optimizer.B_estim,
             resample_each=args.model.optimizer.resample_each,
+        )
+        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
+            optimizer,
+            milestones=args.model.optimizer.lr_step_epochs,
+            gamma=args.model.optimizer.lr_gamma
         )
         criterion = nn.CrossEntropyLoss()
         model_dict = {
@@ -63,6 +66,7 @@ def build_model(args, **kwargs):
             'optimizer': optimizer,
             'train_one_epoch': sghmc.train_one_epoch,
             'evaluate': sghmc.evaluate,
+            'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
         }

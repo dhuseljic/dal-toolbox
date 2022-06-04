@@ -68,7 +68,7 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None,
 
         batch_size = inputs.shape[0]
         acc1, = generalization.accuracy(outputs, targets, topk=(1,))
-        metric_logger.update(loss=loss.item(), lr=optimizer.param_groups[0]["epsilon"])
+        metric_logger.update(loss=loss.item(), lr=optimizer.param_groups[0]["lr"])
         metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
 
     train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
@@ -127,14 +127,14 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
 
 
 class SGHMC(torch.optim.Optimizer):
-    def __init__(self, params, n_samples, epsilon=0.001, prior_precision=1, M=1.0, C=10, B_estim=0.0, resample_each=100):
-        if epsilon < 0.0:
-            raise ValueError(f"Invalid setp size (learning rate): {epsilon} - should be >=0.0")
+    def __init__(self, params, n_samples, lr=0.001, prior_precision=1, M=1.0, C=10, B_estim=0.0, resample_each=100):
+        if lr < 0.0:
+            raise ValueError(f"Invalid setp size (learning rate): {lr} - should be >=0.0")
         if prior_precision < 0.0:
             raise ValueError(f"Invalid prior_precision: {prior_precision} - should be >=0.0")
         defaults = dict(
             n_samples=n_samples,
-            epsilon=epsilon,
+            lr=lr,
             prior_precision=prior_precision,
             M=M,
             C=C,
@@ -151,7 +151,7 @@ class SGHMC(torch.optim.Optimizer):
         # iterate groups
         for group in self.param_groups:
             n_samples = group['n_samples']
-            epsilon = group['epsilon']
+            lr = group['lr']
             prior_precision = group['prior_precision']
             M = group['M']
             C = group['C']
@@ -182,6 +182,6 @@ class SGHMC(torch.optim.Optimizer):
                 else:
                     self.r[p] = math.sqrt(M)*torch.randn(*p.data.shape, device=p.device)
 
-                p.data.add_(epsilon/M*self.r[p])
-                self.r[p] = self.r[p] - epsilon*grad - epsilon*C/M*self.r[p] + \
-                    math.sqrt(2*(C-B_estim)*epsilon)*torch.randn(*p.data.shape, device=p.device)
+                p.data.add_(lr/M*self.r[p])
+                self.r[p] = self.r[p] - lr*grad - lr*C/M*self.r[p] + \
+                    math.sqrt(2*(C-B_estim)*lr)*torch.randn(*p.data.shape, device=p.device)
