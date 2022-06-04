@@ -18,7 +18,7 @@ def build_backbone(args, n_classes):
         backbone = spectral_resnet.spectral_resnet18(
             num_classes=n_classes,
             spectral_norm=args.model.spectral_norm.use_spectral_norm,
-            coeff=args.model.spectral_norm.coeff,
+            norm_bound=args.model.spectral_norm.coeff,
             n_power_iterations=args.model.spectral_norm.n_power_iterations,
         )
         backbone.out_features = 512

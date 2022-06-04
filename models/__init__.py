@@ -2,7 +2,6 @@ import math
 import torch
 import torch.nn as nn
 
-from backbones.resnet_spectral_norm import resnet18
 from backbones import build_backbone
 from . import ddu, sngp, vanilla, sghmc
 
@@ -99,19 +98,10 @@ def build_model(args, **kwargs):
             'eval_kwargs': dict(criterion=criterion, device=args.device),
         }
     elif args.model == 'DDU':
-        model = resnet18(
-            spectral_normalization=(args.coeff != 0),
-            num_classes=n_classes,
-            coeff=args.coeff,
-        )
-        model = ddu.DDUWrapper(model)
+        model = ddu.DDUWrapper(backbone)
         model.n_classes = n_classes
         optimizer = torch.optim.Adam(model.parameters(), weight_decay=args.weight_decay)
-        lr_scheduler = torch.optim.lr_scheduler.StepLR(
-            optimizer=optimizer,
-            step_size=args.lr_step_size,
-            gamma=args.lr_gamma
-        )
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.n_epochs)
         criterion = nn.CrossEntropyLoss()
         model_dict = {
             'model': model,

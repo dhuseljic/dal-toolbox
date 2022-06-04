@@ -1,108 +1,11 @@
 import math
 import copy
-from random import Random
-from turtle import update
 
 import torch
 import torch.nn as nn
 
 from utils import MetricLogger, SmoothedValue
 from metrics import ood, generalization
-
-
-# class RandomFeatureGaussianProcess(nn.Module):
-#     def __init__(self,
-#                  in_features: int,
-#                  out_features: int,
-#                  num_inducing: int = 1024,
-#                  kernel_scale: float = 1,
-#                  normalize_input: bool = False,
-#                  scale_random_features: bool = False,
-#                  cov_momentum: float = .999,
-#                  ridge_penalty: float = 1e-6,
-#                  mean_field_factor: float = 1,
-#                  ):
-#         super().__init__()
-#
-#         self.in_features = in_features
-#         self.out_features = out_features
-#         self.num_inducing = num_inducing
-#
-#         # scale inputs
-#         self.kernel_scale = kernel_scale
-#         self.normalize_input = normalize_input
-#         self.input_scale = (1/math.sqrt(kernel_scale) if kernel_scale is not None else None)
-#
-#         # Random features
-#         self.scale_random_features = scale_random_features
-#         self.random_feature_scale = math.sqrt(2./float(num_inducing))
-#
-#         # Inference
-#         self.mean_field_factor = mean_field_factor
-#
-#         # Covariance computation
-#         self.ridge_penalty = ridge_penalty
-#         self.cov_momentum = cov_momentum
-#
-#         # Define scale, weight and bias according to Eq. 7
-#         # https://github.com/google/uncertainty-baselines/blob/main/uncertainty_baselines/models/resnet50_sngp.py#L55
-#         self.random_feature_linear = nn.Linear(in_features, num_inducing)
-#         self.random_feature_linear.weight.requires_grad = False
-#         self.random_feature_linear.bias.requires_grad = False
-#         nn.init.normal_(self.random_feature_linear.weight, std=0.05)
-#         nn.init.uniform_(self.random_feature_linear.bias, 0, 2*math.pi)
-#
-#         # Define output layer according to Eq 8. For imagenet init with normal std=0.01?
-#         self.beta = nn.Linear(num_inducing, out_features, bias=False)
-#         nn.init.xavier_normal_(self.beta.weight)
-#
-#         self.init_precision_matrix = torch.eye(num_inducing)*self.ridge_penalty
-#         self.precision_matrix = nn.Parameter(copy.deepcopy(self.init_precision_matrix), requires_grad=False)
-#
-#     def forward(self, features, return_cov=False, update_precision=True):
-#         if self.normalize_input:
-#             features = self.layer_norm(features)
-#         elif self.input_scale is not None:
-#             features = features * self.input_scale
-#
-#         # Get gp features according to Eq. 7
-#         phi = torch.cos(self.random_feature_linear(features))
-#         # See: https://github.com/google/uncertainty-baselines/blob/main/uncertainty_baselines/models/wide_resnet_sngp.py#L207
-#         if self.scale_random_features:
-#             phi = self.random_feature_scale * phi
-#
-#         # Eq. 8
-#         logits = self.beta(phi)
-#
-#         if update_precision:
-#             self.update_precision_matrix(phi)
-#
-#         if return_cov:
-#             cov = self.compute_predictive_covariance(phi)
-#             return logits, cov
-#         return logits
-#
-#     def reset_covariance(self):
-#         device = self.precision_matrix.device
-#         self.precision_matrix = nn.Parameter(copy.deepcopy(self.init_precision_matrix), requires_grad=False)
-#         self.precision_matrix.to(device)
-#
-#     def update_precision_matrix(self, phi):
-#         precision_matrix_minibatch = torch.matmul(phi.T, phi)
-#         if self.cov_momentum > 0:
-#             batch_size = len(phi)
-#             precision_matrix_minibatch = precision_matrix_minibatch / batch_size
-#             precision_matrix_new = (self.cov_momentum * self.precision_matrix +
-#                                     (1-self.cov_momentum) * precision_matrix_minibatch)
-#         else:
-#             precision_matrix_new = self.precision_matrix + precision_matrix_minibatch
-#         self.precision_matrix = nn.Parameter(precision_matrix_new, requires_grad=False)
-#
-#     def compute_predictive_covariance(self, phi):
-#         covariance_matrix_feature = torch.linalg.pinv(self.precision_matrix)
-#         out = torch.matmul(covariance_matrix_feature, phi.T) * self.ridge_penalty
-#         covariance_matrix_gp = torch.matmul(phi, out)
-#         return covariance_matrix_gp
 
 
 class SNGP(nn.Module):
@@ -154,6 +57,7 @@ class SNGP(nn.Module):
 
         # Define output layer according to Eq 8., For imagenet init with normal std=0.01
         self.beta = nn.Linear(num_inducing, num_classes, bias=False)
+        nn.init.xavier_normal_(self.beta.weight)
 
         # precision matrix
         self.init_precision_matrix = torch.eye(num_inducing)*self.ridge_penalty
@@ -351,3 +255,96 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
 
     test_stats = {f"test_{k}": v for k, v in test_stats.items()}
     return test_stats
+
+# class RandomFeatureGaussianProcess(nn.Module):
+#     def __init__(self,
+#                  in_features: int,
+#                  out_features: int,
+#                  num_inducing: int = 1024,
+#                  kernel_scale: float = 1,
+#                  normalize_input: bool = False,
+#                  scale_random_features: bool = False,
+#                  cov_momentum: float = .999,
+#                  ridge_penalty: float = 1e-6,
+#                  mean_field_factor: float = 1,
+#                  ):
+#         super().__init__()
+#
+#         self.in_features = in_features
+#         self.out_features = out_features
+#         self.num_inducing = num_inducing
+#
+#         # scale inputs
+#         self.kernel_scale = kernel_scale
+#         self.normalize_input = normalize_input
+#         self.input_scale = (1/math.sqrt(kernel_scale) if kernel_scale is not None else None)
+#
+#         # Random features
+#         self.scale_random_features = scale_random_features
+#         self.random_feature_scale = math.sqrt(2./float(num_inducing))
+#
+#         # Inference
+#         self.mean_field_factor = mean_field_factor
+#
+#         # Covariance computation
+#         self.ridge_penalty = ridge_penalty
+#         self.cov_momentum = cov_momentum
+#
+#         # Define scale, weight and bias according to Eq. 7
+#         # https://github.com/google/uncertainty-baselines/blob/main/uncertainty_baselines/models/resnet50_sngp.py#L55
+#         self.random_feature_linear = nn.Linear(in_features, num_inducing)
+#         self.random_feature_linear.weight.requires_grad = False
+#         self.random_feature_linear.bias.requires_grad = False
+#         nn.init.normal_(self.random_feature_linear.weight, std=0.05)
+#         nn.init.uniform_(self.random_feature_linear.bias, 0, 2*math.pi)
+#
+#         # Define output layer according to Eq 8. For imagenet init with normal std=0.01?
+#         self.beta = nn.Linear(num_inducing, out_features, bias=False)
+#
+#         self.init_precision_matrix = torch.eye(num_inducing)*self.ridge_penalty
+#         self.precision_matrix = nn.Parameter(copy.deepcopy(self.init_precision_matrix), requires_grad=False)
+#
+#     def forward(self, features, return_cov=False, update_precision=True):
+#         if self.normalize_input:
+#             features = self.layer_norm(features)
+#         elif self.input_scale is not None:
+#             features = features * self.input_scale
+#
+#         # Get gp features according to Eq. 7
+#         phi = torch.cos(self.random_feature_linear(features))
+#         # See: https://github.com/google/uncertainty-baselines/blob/main/uncertainty_baselines/models/wide_resnet_sngp.py#L207
+#         if self.scale_random_features:
+#             phi = self.random_feature_scale * phi
+#
+#         # Eq. 8
+#         logits = self.beta(phi)
+#
+#         if update_precision:
+#             self.update_precision_matrix(phi)
+#
+#         if return_cov:
+#             cov = self.compute_predictive_covariance(phi)
+#             return logits, cov
+#         return logits
+#
+#     def reset_covariance(self):
+#         device = self.precision_matrix.device
+#         self.precision_matrix = nn.Parameter(copy.deepcopy(self.init_precision_matrix), requires_grad=False)
+#         self.precision_matrix.to(device)
+#
+#     def update_precision_matrix(self, phi):
+#         precision_matrix_minibatch = torch.matmul(phi.T, phi)
+#         if self.cov_momentum > 0:
+#             batch_size = len(phi)
+#             precision_matrix_minibatch = precision_matrix_minibatch / batch_size
+#             precision_matrix_new = (self.cov_momentum * self.precision_matrix +
+#                                     (1-self.cov_momentum) * precision_matrix_minibatch)
+#         else:
+#             precision_matrix_new = self.precision_matrix + precision_matrix_minibatch
+#         self.precision_matrix = nn.Parameter(precision_matrix_new, requires_grad=False)
+#
+#     def compute_predictive_covariance(self, phi):
+#         covariance_matrix_feature = torch.linalg.pinv(self.precision_matrix)
+#         out = torch.matmul(covariance_matrix_feature, phi.T) * self.ridge_penalty
+#         covariance_matrix_gp = torch.matmul(phi, out)
+#         return covariance_matrix_gp

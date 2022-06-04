@@ -1,18 +1,27 @@
+# Implementation from https://github.com/kimjeyoung/SNGP-BERT-Pytorch/blob/main/models/spectral_normalization.py
 import torch
 import torch.nn as nn
 from typing import Any, Optional, TypeVar
-from torch.nn.modules import Module
-from torch.nn.functional import normalize, conv_transpose2d, conv2d
+from torch.nn.functional import normalize
+from typing import Any, Optional, TypeVar
 
 
 class SpectralLinear(nn.Linear):
-    def __init__(self, in_features: int, out_features: int, spectral_norm=True, coeff=1, n_power_iterations=1, bias: bool = True, device=None, dtype=None) -> None:
+    def __init__(self,
+                 in_features: int,
+                 out_features: int,
+                 spectral_norm=True,
+                 norm_bound=1,
+                 n_power_iterations=1,
+                 bias: bool = True,
+                 device=None,
+                 dtype=None) -> None:
         super().__init__(in_features, out_features, bias, device, dtype)
         # Apply spectral norm after init
-        self.coeff = coeff
+        self.norm_bound = norm_bound
         self.n_power_iterations = n_power_iterations
         if spectral_norm:
-            spectral_norm_fc(self, self.coeff, self.n_power_iterations)
+            add_spectral_norm(self, norm_bound=self.norm_bound, n_power_iterations=self.n_power_iterations)
 
 
 class SpectralConv2d(nn.Conv2d):
@@ -21,7 +30,7 @@ class SpectralConv2d(nn.Conv2d):
                  out_channels: int,
                  kernel_size,
                  spectral_norm=True,
-                 coeff=1,
+                 norm_bound=1,
                  n_power_iterations=1,
                  stride=1,
                  padding=0,
@@ -41,13 +50,14 @@ class SpectralConv2d(nn.Conv2d):
             groups,
             bias,
             padding_mode,
-            device, dtype
+            device,
+            dtype
         )
         # Apply spectral norm after init
-        self.coeff = coeff
+        self.norm_bound = norm_bound
         self.n_power_iterations = n_power_iterations
         if spectral_norm:
-            spectral_norm_fc(self, self.coeff, self.n_power_iterations)
+            add_spectral_norm(self, norm_bound=self.norm_bound, n_power_iterations=self.n_power_iterations)
 
 
 class SpectralNorm:
@@ -55,39 +65,38 @@ class SpectralNorm:
     #   u = normalize(W @ v)
     # NB: At initialization, this invariant is not enforced
 
-    _version = 1
+    _version: int = 1
     # At version 1:
     #   made  `W` not a buffer,
     #   added `v` as a buffer, and
     #   made eval mode use `W = u @ W_orig @ v` rather than the stored `W`.
-    # name: str
-    # dim: int
-    # n_power_iterations: int
-    # eps: float
+    name: str
+    dim: int
+    n_power_iterations: int
+    eps: float
+    norm_bound: float
 
-    def __init__(
-        self, coeff: float = 1.0, name: str = "weight", n_power_iterations: int = 1, dim: int = 0, eps: float = 1e-12,
-    ) -> None:
-        self.coeff = coeff
+    def __init__(self, name: str = 'weight', norm_bound: float = 0.95, n_power_iterations: int = 1, dim: int = 0,
+                 eps: float = 1e-12,) -> None:
         self.name = name
         self.dim = dim
         if n_power_iterations <= 0:
-            raise ValueError(
-                "Expected n_power_iterations to be positive, but "
-                "got n_power_iterations={}".format(n_power_iterations)
-            )
+            raise ValueError('Expected n_power_iterations to be positive, but '
+                             'got n_power_iterations={}'.format(n_power_iterations))
         self.n_power_iterations = n_power_iterations
         self.eps = eps
+        self.norm_bound = norm_bound
 
     def reshape_weight_to_matrix(self, weight: torch.Tensor) -> torch.Tensor:
         weight_mat = weight
         if self.dim != 0:
             # permute dim to front
-            weight_mat = weight_mat.permute(self.dim, *[d for d in range(weight_mat.dim()) if d != self.dim])
+            weight_mat = weight_mat.permute(self.dim,
+                                            *[d for d in range(weight_mat.dim()) if d != self.dim])
         height = weight_mat.size(0)
         return weight_mat.reshape(height, -1)
 
-    def compute_weight(self, module: Module, do_power_iteration: bool) -> torch.Tensor:
+    def compute_weight(self, module: nn.Module, do_power_iteration: bool) -> torch.Tensor:
         # NB: If `do_power_iteration` is set, the `u` and `v` vectors are
         #     updated in power iteration **in-place**. This is very important
         #     because in `DataParallel` forward, the vectors (being buffers) are
@@ -117,10 +126,9 @@ class SpectralNorm:
         #    GAN training: loss = D(real) - D(fake). Otherwise, engine will
         #    complain that variables needed to do backward for the first forward
         #    (i.e., the `u` and `v` vectors) are changed in the second forward.
-        weight = getattr(module, self.name + "_orig")
-        u = getattr(module, self.name + "_u")
-        v = getattr(module, self.name + "_v")
-        sigma_log = getattr(module, self.name + "_sigma")  # for logging
+        weight = getattr(module, self.name + '_orig')
+        u = getattr(module, self.name + '_u')
+        v = getattr(module, self.name + '_v')
         weight_mat = self.reshape_weight_to_matrix(weight)
 
         if do_power_iteration:
@@ -137,46 +145,55 @@ class SpectralNorm:
                     v = v.clone(memory_format=torch.contiguous_format)
 
         sigma = torch.dot(u, torch.mv(weight_mat, v))
-        # soft normalization: only when sigma larger than coeff
-        factor = torch.max(torch.ones(1).to(weight.device), sigma / self.coeff)
-        weight = weight / factor
 
-        # for logging
-        sigma_log.copy_(sigma.detach())
+        # Bound spectral norm to be not larger than self.norm_multiplier.
+        # https://github.com/google/edward2/blob/main/edward2/tensorflow/layers/normalization.py#L388
+        w_norm = torch.where((self.norm_bound / sigma) < 1, (self.norm_bound / sigma) * weight, weight)
 
-        return weight
+        # weight = weight / sigma
+        return w_norm
 
-    def remove(self, module: Module) -> None:
+    def remove(self, module: nn.Module) -> None:
         with torch.no_grad():
             weight = self.compute_weight(module, do_power_iteration=False)
         delattr(module, self.name)
-        delattr(module, self.name + "_u")
-        delattr(module, self.name + "_v")
-        delattr(module, self.name + "_orig")
+        delattr(module, self.name + '_u')
+        delattr(module, self.name + '_v')
+        delattr(module, self.name + '_orig')
         module.register_parameter(self.name, torch.nn.Parameter(weight.detach()))
 
-    def __call__(self, module: Module, inputs: Any) -> None:
-        setattr(
-            module, self.name, self.compute_weight(module, do_power_iteration=module.training),
-        )
+    def __call__(self, module: nn.Module, inputs: Any) -> None:
+        setattr(module, self.name, self.compute_weight(module, do_power_iteration=module.training))
 
     def _solve_v_and_rescale(self, weight_mat, u, target_sigma):
         # Tries to returns a vector `v` s.t. `u = normalize(W @ v)`
         # (the invariant at top of this class) and `u @ W @ v = sigma`.
         # This uses pinverse in case W^T W is not invertible.
-        v = torch.chain_matmul(weight_mat.t().mm(weight_mat).pinverse(), weight_mat.t(), u.unsqueeze(1)).squeeze(1)
+        v = torch.linalg.multi_dot([weight_mat.t().mm(weight_mat).pinverse(), weight_mat.t(), u.unsqueeze(1)]).squeeze(
+            1)
         return v.mul_(target_sigma / torch.dot(u, torch.mv(weight_mat, v)))
 
     @staticmethod
-    def apply(
-        module: Module, name: str, coeff: float, n_power_iterations: int, dim: int, eps: float,
-    ) -> "SpectralNorm":
+    def apply(module: nn.Module, name: str, n_power_iterations: int, dim: int, eps: float, norm_bound: float) -> 'SpectralNorm':
         for k, hook in module._forward_pre_hooks.items():
             if isinstance(hook, SpectralNorm) and hook.name == name:
-                raise RuntimeError("Cannot register two spectral_norm hooks on " "the same parameter {}".format(name))
+                raise RuntimeError("Cannot register two spectral_norm hooks on "
+                                   "the same parameter {}".format(name))
 
-        fn = SpectralNorm(coeff, name, n_power_iterations, dim, eps)
+        fn = SpectralNorm(
+            name=name,
+            norm_bound=norm_bound,
+            n_power_iterations=n_power_iterations,
+            dim=dim,
+            eps=eps
+        )
         weight = module._parameters[name]
+        if weight is None:
+            raise ValueError(f'`SpectralNorm` cannot be applied as parameter `{name}` is None')
+        if isinstance(weight, torch.nn.parameter.UninitializedParameter):
+            raise ValueError(
+                'The module passed to `SpectralNorm` can\'t have uninitialized parameters. '
+                'Make sure to run the dummy forward before applying spectral normalization')
 
         with torch.no_grad():
             weight_mat = fn.reshape_weight_to_matrix(weight)
@@ -196,7 +213,6 @@ class SpectralNorm:
         setattr(module, fn.name, weight.data)
         module.register_buffer(fn.name + "_u", u)
         module.register_buffer(fn.name + "_v", v)
-        module.register_buffer(fn.name + "_sigma", torch.ones(1).to(weight.device))
 
         module.register_forward_pre_hook(fn)
         module._register_state_dict_hook(SpectralNormStateDictHook(fn))
@@ -219,22 +235,20 @@ class SpectralNormLoadStateDictPreHook:
     #
     # To compute `v`, we solve `W_orig @ x = u`, and let
     #    v = x / (u @ W_orig @ x) * (W / W_orig).
-    def __call__(self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs,) -> None:
+    def __call__(self, state_dict, prefix, local_metadata, strict,
+                 missing_keys, unexpected_keys, error_msgs) -> None:
         fn = self.fn
-        version = local_metadata.get("spectral_norm", {}).get(fn.name + ".version", None)
+        version = local_metadata.get('spectral_norm', {}).get(fn.name + '.version', None)
         if version is None or version < 1:
             weight_key = prefix + fn.name
-            if (
-                version is None
-                and all(weight_key + s in state_dict for s in ("_orig", "_u", "_v"))
-                and weight_key not in state_dict
-            ):
+            if version is None and all(weight_key + s in state_dict for s in ('_orig', '_u', '_v')) and \
+                    weight_key not in state_dict:
                 # Detect if it is the updated state dict and just missing metadata.
                 # This could happen if the users are crafting a state dict themselves,
                 # so we just pretend that this is the newest.
                 return
             has_missing_keys = False
-            for suffix in ("_orig", "", "_u"):
+            for suffix in ('_orig', '', '_u'):
                 key = weight_key + suffix
                 if key not in state_dict:
                     has_missing_keys = True
@@ -243,13 +257,13 @@ class SpectralNormLoadStateDictPreHook:
             if has_missing_keys:
                 return
             with torch.no_grad():
-                weight_orig = state_dict[weight_key + "_orig"]
+                weight_orig = state_dict[weight_key + '_orig']
                 weight = state_dict.pop(weight_key)
                 sigma = (weight_orig / weight).mean()
                 weight_mat = fn.reshape_weight_to_matrix(weight_orig)
-                u = state_dict[weight_key + "_u"]
+                u = state_dict[weight_key + '_u']
                 v = fn._solve_v_and_rescale(weight_mat, u, sigma)
-                state_dict[weight_key + "_v"] = v
+                state_dict[weight_key + '_v'] = v
 
 
 # This is a top level class because Py2 pickle doesn't like inner class nor an
@@ -260,31 +274,27 @@ class SpectralNormStateDictHook:
         self.fn = fn
 
     def __call__(self, module, state_dict, prefix, local_metadata) -> None:
-        if "spectral_norm" not in local_metadata:
-            local_metadata["spectral_norm"] = {}
-        key = self.fn.name + ".version"
-        if key in local_metadata["spectral_norm"]:
+        if 'spectral_norm' not in local_metadata:
+            local_metadata['spectral_norm'] = {}
+        key = self.fn.name + '.version'
+        if key in local_metadata['spectral_norm']:
             raise RuntimeError("Unexpected key in metadata['spectral_norm']: {}".format(key))
-        local_metadata["spectral_norm"][key] = self.fn._version
+        local_metadata['spectral_norm'][key] = self.fn._version
 
 
-T_module = TypeVar("T_module", bound=Module)
+T_module = TypeVar('T_module', bound=nn.Module)
 
 
-def spectral_norm_fc(
-    module: T_module,
-    coeff: float = 1.0,
-    n_power_iterations: int = 1,
-    name: str = "weight",
-    eps: float = 1e-12,
-    dim: Optional[int] = None,
-) -> T_module:
+def add_spectral_norm(module: T_module,
+                      name: str = 'weight',
+                      n_power_iterations: int = 1,
+                      eps: float = 1e-12,
+                      norm_bound: float = 0.95,
+                      dim: Optional[int] = None,) -> T_module:
     r"""Applies spectral normalization to a parameter in the given module.
-
     .. math::
         \mathbf{W}_{SN} = \dfrac{\mathbf{W}}{\sigma(\mathbf{W})},
         \sigma(\mathbf{W}) = \max_{\mathbf{h}: \mathbf{h} \ne 0} \dfrac{\|\mathbf{W} \mathbf{h}\|_2}{\|\mathbf{h}\|_2}
-
     Spectral normalization stabilizes the training of discriminators (critics)
     in Generative Adversarial Networks (GANs) by rescaling the weight tensor
     with spectral norm :math:`\sigma` of the weight matrix calculated using
@@ -292,11 +302,8 @@ def spectral_norm_fc(
     than 2, it is reshaped to 2D in power iteration method to get spectral
     norm. This is implemented via a hook that calculates spectral norm and
     rescales weight before every :meth:`~Module.forward` call.
-
     See `Spectral Normalization for Generative Adversarial Networks`_ .
-
     .. _`Spectral Normalization for Generative Adversarial Networks`: https://arxiv.org/abs/1802.05957
-
     Args:
         module (nn.Module): containing module
         name (str, optional): name of weight parameter
@@ -307,35 +314,38 @@ def spectral_norm_fc(
         dim (int, optional): dimension corresponding to number of outputs,
             the default is ``0``, except for modules that are instances of
             ConvTranspose{1,2,3}d, when it is ``1``
-
     Returns:
         The original module with the spectral norm hook
-
+    .. note::
+        This function has been reimplemented as
+        :func:`torch.nn.utils.parametrizations.spectral_norm` using the new
+        parametrization functionality in
+        :func:`torch.nn.utils.parametrize.register_parametrization`. Please use
+        the newer version. This function will be deprecated in a future version
+        of PyTorch.
     Example::
-
         >>> m = spectral_norm(nn.Linear(20, 40))
         >>> m
         Linear(in_features=20, out_features=40, bias=True)
         >>> m.weight_u.size()
         torch.Size([40])
-
     """
     if dim is None:
-        if isinstance(module, (torch.nn.ConvTranspose1d, torch.nn.ConvTranspose2d, torch.nn.ConvTranspose3d,),):
+        if isinstance(module, (torch.nn.ConvTranspose1d,
+                               torch.nn.ConvTranspose2d,
+                               torch.nn.ConvTranspose3d)):
             dim = 1
         else:
             dim = 0
-    SpectralNorm.apply(module, name, coeff, n_power_iterations, dim, eps)
+    SpectralNorm.apply(module, name, n_power_iterations, dim, eps, norm_bound)
     return module
 
 
-def remove_spectral_norm(module: T_module, name: str = "weight") -> T_module:
+def remove_spectral_norm(module: T_module, name: str = 'weight') -> T_module:
     r"""Removes the spectral normalization reparameterization from a module.
-
     Args:
-        module (Module): containing module
+        module (nn.Module): containing module
         name (str, optional): name of weight parameter
-
     Example:
         >>> m = spectral_norm(nn.Linear(40, 10))
         >>> remove_spectral_norm(m)
@@ -346,7 +356,8 @@ def remove_spectral_norm(module: T_module, name: str = "weight") -> T_module:
             del module._forward_pre_hooks[k]
             break
     else:
-        raise ValueError("spectral_norm of '{}' not found in {}".format(name, module))
+        raise ValueError("spectral_norm of '{}' not found in {}".format(
+            name, module))
 
     for k, hook in module._state_dict_hooks.items():
         if isinstance(hook, SpectralNormStateDictHook) and hook.fn.name == name:
@@ -359,260 +370,3 @@ def remove_spectral_norm(module: T_module, name: str = "weight") -> T_module:
             break
 
     return module
-
-
-"""
-From: https://github.com/jhjacobsen/invertible-resnet
-Which is based on: https://arxiv.org/abs/1811.00995
-
-Soft Spectral Normalization (not enforced, only <= coeff) for Conv2D layers
-Based on: Regularisation of Neural Networks by Enforcing Lipschitz Continuity
-    (Gouk et al. 2018)
-    https://arxiv.org/abs/1804.04368
-"""
-
-
-class SpectralNormConv(object):
-    # Invariant before and after each forward call:
-    #   u = normalize(W @ v)
-    # NB: At initialization, this invariant is not enforced
-
-    _version = 1
-    # At version 1:
-    #   made  `W` not a buffer,
-    #   added `v` as a buffer, and
-    #   made eval mode use `W = u @ W_orig @ v` rather than the stored `W`.
-
-    def __init__(self, coeff, input_dim, name="weight", n_power_iterations=1, eps=1e-12):
-        self.coeff = coeff
-        self.input_dim = input_dim
-        self.name = name
-        if n_power_iterations <= 0:
-            raise ValueError(
-                "Expected n_power_iterations to be positive, but "
-                "got n_power_iterations={}".format(n_power_iterations)
-            )
-        self.n_power_iterations = n_power_iterations
-        self.eps = eps
-
-    def compute_weight(self, module, do_power_iteration):
-        # NB: If `do_power_iteration` is set, the `u` and `v` vectors are
-        #     updated in power iteration **in-place**. This is very important
-        #     because in `DataParallel` forward, the vectors (being buffers) are
-        #     broadcast from the parallelized module to each module replica,
-        #     which is a new module object created on the fly. And each replica
-        #     runs its own spectral norm power iteration. So simply assigning
-        #     the updated vectors to the module this function runs on will cause
-        #     the update to be lost forever. And the next time the parallelized
-        #     module is replicated, the same randomly initialized vectors are
-        #     broadcast and used!
-        #
-        #     Therefore, to make the change propagate back, we rely on two
-        #     important bahaviors (also enforced via tests):
-        #       1. `DataParallel` doesn't clone storage if the broadcast tensor
-        #          is alreay on correct device; and it makes sure that the
-        #          parallelized module is already on `device[0]`.
-        #       2. If the out tensor in `out=` kwarg has correct shape, it will
-        #          just fill in the values.
-        #     Therefore, since the same power iteration is performed on all
-        #     devices, simply updating the tensors in-place will make sure that
-        #     the module replica on `device[0]` will update the _u vector on the
-        #     parallized module (by shared storage).
-        #
-        #    However, after we update `u` and `v` in-place, we need to **clone**
-        #    them before using them to normalize the weight. This is to support
-        #    backproping through two forward passes, e.g., the common pattern in
-        #    GAN training: loss = D(real) - D(fake). Otherwise, engine will
-        #    complain that variables needed to do backward for the first forward
-        #    (i.e., the `u` and `v` vectors) are changed in the second forward.
-        weight = getattr(module, self.name + "_orig")
-        u = getattr(module, self.name + "_u")
-        v = getattr(module, self.name + "_v")
-        sigma_log = getattr(module, self.name + "_sigma")  # for logging
-
-        # get settings from conv-module (for transposed convolution)
-        stride = module.stride
-        padding = module.padding
-
-        if do_power_iteration:
-            with torch.no_grad():
-                output_padding = 0
-                if stride[0] > 1:
-                    # Note: the below does not generalize to stride > 2
-                    output_padding = 1 - self.input_dim[-1] % 2
-                for _ in range(self.n_power_iterations):
-                    v_s = conv_transpose2d(
-                        u.view(self.out_shape),
-                        weight,
-                        stride=stride,
-                        padding=padding,
-                        output_padding=output_padding,
-                    )
-                    # Note: out flag for in-place changes
-                    v = normalize(v_s.view(-1), dim=0, eps=self.eps, out=v)
-
-                    u_s = conv2d(v.view(self.input_dim), weight, stride=stride, padding=padding, bias=None,)
-                    u = normalize(u_s.view(-1), dim=0, eps=self.eps, out=u)
-                if self.n_power_iterations > 0:
-                    # See above on why we need to clone
-                    u = u.clone()
-                    v = v.clone()
-        weight_v = conv2d(v.view(self.input_dim), weight, stride=stride, padding=padding, bias=None)
-        weight_v = weight_v.view(-1)
-        sigma = torch.dot(u.view(-1), weight_v)
-        # enforce spectral norm only as constraint
-        factorReverse = torch.max(torch.ones(1, device=weight.device), sigma / self.coeff)
-
-        # rescaling
-        weight = weight / (factorReverse + 1e-5)  # for stability
-
-        # for logging
-        sigma_log.copy_(sigma.detach())
-
-        return weight
-
-    def remove(self, module):
-        with torch.no_grad():
-            weight = self.compute_weight(module, do_power_iteration=False)
-        delattr(module, self.name)
-        delattr(module, self.name + "_u")
-        delattr(module, self.name + "_orig")
-        module.register_parameter(self.name, torch.nn.Parameter(weight.detach()))
-
-    def __call__(self, module, inputs):
-        assert inputs[0].shape[1:] == self.input_dim[1:], "Input dims don't match actual input"
-        setattr(
-            module, self.name, self.compute_weight(module, do_power_iteration=module.training),
-        )
-
-    @staticmethod
-    def apply(module, coeff, input_dim, name, n_power_iterations, eps):
-        for k, hook in module._forward_pre_hooks.items():
-            if isinstance(hook, SpectralNormConv) and hook.name == name:
-                raise RuntimeError("Cannot register two spectral_norm hooks on " "the same parameter {}".format(name))
-
-        fn = SpectralNormConv(coeff, input_dim, name, n_power_iterations, eps)
-        weight = module._parameters[name]
-
-        with torch.no_grad():
-            num_input_dim = input_dim[0] * input_dim[1] * input_dim[2] * input_dim[3]
-            v = normalize(torch.randn(num_input_dim), dim=0, eps=fn.eps)
-
-            # get settings from conv-module (for transposed convolution)
-            stride = module.stride
-            padding = module.padding
-            # forward call to infer the shape
-            u = conv2d(v.view(input_dim), weight, stride=stride, padding=padding, bias=None)
-            fn.out_shape = u.shape
-            num_output_dim = fn.out_shape[0] * fn.out_shape[1] * fn.out_shape[2] * fn.out_shape[3]
-            # overwrite u with random init
-            u = normalize(torch.randn(num_output_dim), dim=0, eps=fn.eps)
-
-        delattr(module, fn.name)
-        module.register_parameter(fn.name + "_orig", weight)
-        setattr(module, fn.name, weight.data)
-        module.register_buffer(fn.name + "_u", u)
-        module.register_buffer(fn.name + "_v", v)
-        module.register_buffer(fn.name + "_sigma", torch.ones(1).to(weight.device))
-
-        module.register_forward_pre_hook(fn)
-
-        module._register_state_dict_hook(SpectralNormConvStateDictHook(fn))
-        module._register_load_state_dict_pre_hook(SpectralNormConvLoadStateDictPreHook(fn))
-        return fn
-
-
-class SpectralNormConvLoadStateDictPreHook(object):
-    # See docstring of SpectralNorm._version on the changes to spectral_norm.
-    def __init__(self, fn):
-        self.fn = fn
-
-    # For state_dict with version None, (assuming that it has gone through at
-    # least one training forward), we have
-    #
-    #    u = normalize(W_orig @ v)
-    #    W = W_orig / sigma, where sigma = u @ W_orig @ v
-    #
-    # To compute `v`, we solve `W_orig @ x = u`, and let
-    #    v = x / (u @ W_orig @ x) * (W / W_orig).
-    def __call__(
-        self, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs,
-    ):
-        fn = self.fn
-        version = local_metadata.get("spectral_norm_conv", {}).get(fn.name + ".version", None)
-        if version is None or version < 1:
-            with torch.no_grad():
-                weight_orig = state_dict[prefix + fn.name + "_orig"]
-                weight = state_dict.pop(prefix + fn.name)
-                sigma = (weight_orig / weight).mean()
-                weight_mat = fn.reshape_weight_to_matrix(weight_orig)
-                u = state_dict[prefix + fn.name + "_u"]
-
-
-class SpectralNormConvStateDictHook(object):
-    # See docstring of SpectralNorm._version on the changes to spectral_norm.
-    def __init__(self, fn):
-        self.fn = fn
-
-    def __call__(self, module, state_dict, prefix, local_metadata):
-        if "spectral_norm_conv" not in local_metadata:
-            local_metadata["spectral_norm_conv"] = {}
-        key = self.fn.name + ".version"
-        if key in local_metadata["spectral_norm_conv"]:
-            raise RuntimeError("Unexpected key in metadata['spectral_norm_conv']: {}".format(key))
-        local_metadata["spectral_norm_conv"][key] = self.fn._version
-
-
-def spectral_norm_conv(module, coeff, input_dim, n_power_iterations, name="weight", eps=1e-12):
-    r"""Applies spectral normalization to a parameter in the given module.
-    .. math::
-         \mathbf{W} = \dfrac{\mathbf{W}}{\sigma(\mathbf{W})} \\
-         \sigma(\mathbf{W}) = \max_{\mathbf{h}: \mathbf{h} \ne 0} \dfrac{\|\mathbf{W} \mathbf{h}\|_2}{\|\mathbf{h}\|_2}
-    Spectral normalization stabilizes the training of discriminators (critics)
-    in Generaive Adversarial Networks (GANs) by rescaling the weight tensor
-    with spectral norm :math:`\sigma` of the weight matrix calculated using
-    power iteration method. If the dimension of the weight tensor is greater
-    than 2, it is reshaped to 2D in power iteration method to get spectral
-    norm. This is implemented via a hook that calculates spectral norm and
-    rescales weight before every :meth:`~Module.forward` call.
-    See `Spectral Normalization for Generative Adversarial Networks`_ .
-    .. _`Spectral Normalization for Generative Adversarial Networks`: https://arxiv.org/abs/1802.05957
-    Args:
-        module (nn.Module): containing module
-        name (str, optional): name of weight parameter
-        n_power_iterations (int, optional): number of power iterations to
-            calculate spectal norm
-        eps (float, optional): epsilon for numerical stability in
-            calculating norms
-        dim (int, optional): dimension corresponding to number of outputs,
-            the default is 0, except for modules that are instances of
-            ConvTranspose1/2/3d, when it is 1
-    Returns:
-        The original module with the spectal norm hook
-    Example::
-        >>> m = spectral_norm(nn.Linear(20, 40))
-        Linear (20 -> 40)
-        >>> m.weight_u.size()
-        torch.Size([20])
-    """
-    input_dim_4d = torch.Size([1, input_dim[0], input_dim[1], input_dim[2]])
-    SpectralNormConv.apply(module, coeff, input_dim_4d, name, n_power_iterations, eps)
-    return module
-
-
-def remove_spectral_norm_conv(module, name="weight"):
-    r"""Removes the spectral normalization reparameterization from a module.
-    Args:
-        module (nn.Module): containing module
-        name (str, optional): name of weight parameter
-    Example:
-        >>> m = spectral_norm(nn.Linear(40, 10))
-        >>> remove_spectral_norm(m)
-    """
-    for k, hook in module._forward_pre_hooks.items():
-        if isinstance(hook, SpectralNormConv) and hook.name == name:
-            hook.remove(module)
-            del module._forward_pre_hooks[k]
-            return module
-
-    raise ValueError("spectral_norm of '{}' not found in {}".format(name, module))
