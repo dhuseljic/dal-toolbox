@@ -4,7 +4,7 @@ ensemble:
   n_snapshots: 20
   warm_up_batches: 100
 optimizer:
-  auto_params: True
+  auto_params: False
   lr: 0.1
   C: 10
   B_estim: 9
