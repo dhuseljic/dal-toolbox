@@ -5,7 +5,7 @@ ensemble:
   warm_up_batches: 100
 optimizer:
   auto_params: True
-  lr: 0.01
+  lr: 0.1
   C: 10
   B_estim: 9
   resample_each: 1000000000
