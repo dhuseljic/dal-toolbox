@@ -1,5 +1,6 @@
 name: vanilla
 backbone: spectral_wide_resnet_28_10
+dropout_rate: 0.3
 optimizer:
   lr: 0.1
   weight_decay: 2e-4
