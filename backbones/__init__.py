@@ -1,7 +1,7 @@
 import torchvision
 import torch.nn as nn
 
-from . import lenet, resnet, wide_resnet, spectral_resnet
+from . import lenet, resnet, wide_resnet, spectral_resnet, spectral_wide_resnet
 
 
 def build_backbone(args, n_classes):
@@ -14,6 +14,15 @@ def build_backbone(args, n_classes):
             dropout_rate=.3,
             num_classes=n_classes
         )
+    elif args.model.backbone == 'spectral_wide_resnet_28_10':
+        backbone = spectral_wide_resnet.WideResNet(
+            depth=28, widen_factor=10, num_classes=n_classes,
+            dropout_rate=args.model.dropout_rate,
+            spectral_norm=args.model.spectral_norm.use_spectral_norm,
+            norm_bound=args.model.spectral_norm.coeff,
+            n_power_iterations=args.model.spectral_norm.n_power_iterations,
+        )
+        backbone.out_features = 640
     elif args.model.backbone == 'spectral_resnet18':
         backbone = spectral_resnet.spectral_resnet18(
             num_classes=n_classes,

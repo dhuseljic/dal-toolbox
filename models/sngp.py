@@ -152,6 +152,7 @@ class RandomFourierFeatures(nn.Module):
 
     def reset_parameters(self):
         # https://github.com/google/uncertainty-baselines/blob/main/uncertainty_baselines/models/resnet50_sngp.py#L55
+        # TODO: change init for 2d?
         nn.init.normal_(self.random_feature_linear.weight, std=.05)
         nn.init.uniform_(self.random_feature_linear.bias, 0, 2*math.pi)
 
