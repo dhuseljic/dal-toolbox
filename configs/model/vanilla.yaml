@@ -1,5 +1,5 @@
 name: vanilla
-backbone: spectral_wide_resnet_28_10
+backbone: wide_resnet_28_10
 dropout_rate: 0.3
 optimizer:
   lr: 0.1

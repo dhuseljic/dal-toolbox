@@ -9,10 +9,8 @@ def build_backbone(args, n_classes):
         backbone = resnet.resnet18(num_classes=n_classes)
     elif args.model.backbone == 'wide_resnet_28_10':
         backbone = wide_resnet.WideResNet(
-            depth=28,
-            widen_factor=10,
-            dropout_rate=.3,
-            num_classes=n_classes
+            depth=28, widen_factor=10, num_classes=n_classes,
+            dropout_rate=args.model.dropout_rate,
         )
     elif args.model.backbone == 'spectral_wide_resnet_28_10':
         backbone = spectral_wide_resnet.WideResNet(
