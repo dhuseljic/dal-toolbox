@@ -1,8 +1,10 @@
 import math
 import copy
+from random import sample
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from utils import MetricLogger, SmoothedValue
 from metrics import ood, generalization
@@ -63,6 +65,8 @@ class SNGP(nn.Module):
         self.init_precision_matrix = torch.eye(num_inducing)*self.ridge_penalty
         self.precision_matrix = nn.Parameter(copy.deepcopy(self.init_precision_matrix), requires_grad=False)
 
+        self.sampled_betas = None
+
     def reset_covariance(self):
         device = self.precision_matrix.device
         self.precision_matrix = nn.Parameter(copy.deepcopy(self.init_precision_matrix), requires_grad=False)
@@ -111,27 +115,39 @@ class SNGP(nn.Module):
         return scaled_logits
 
     @torch.no_grad()
-    def forward_sample(self, x, n_draws=10):
-        # TODO
-        # Transform to feature space
+    def forward_sample(self, x, n_draws=10, resample=False, return_dist=False):
+        if self.sampled_betas is None or resample:
+            # Dist from the normal that approximates the posterior over beta
+            dist = torch.distributions.MultivariateNormal(
+                loc=self.beta.weight,
+                precision_matrix=self.precision_matrix
+            )
+            self.sampled_betas = dist.sample(sample_shape=(n_draws,))
+            # TODO return_dist
+
+        _, features = self.model(x, return_features=True)
+        if self.normalize_input:
+            features = self.layer_norm(features)
+        phi = self.random_features(features)
+        logits_sampled = torch.einsum('nd,ekd->enk', phi, self.sampled_betas)
+        return logits_sampled
+
+    @torch.no_grad()
+    def compute_weights(self, x, y, n_draws=10):
         _, features = self.model(x, return_features=True)
 
         if self.normalize_input:
             features = self.layer_norm(features)
+        phi = self.random_features(features)
 
-        features = features * self.input_scale
-        phi = torch.cos(self.random_feature_linear(features))
-        phi = self.feature_scale * phi
-
-        logits_mean = self.beta(phi)
-        logits_cov = self.compute_predictive_covariance(phi)
-
-        n_samples, n_classes = logits_mean.shape
-        logits_cov += torch.eye(n_samples)*1e-3
-        logits_sampled = torch.empty((n_draws, n_samples, n_classes))
-        for k in range(n_classes):
-            dist = torch.distributions.MultivariateNormal(loc=logits_mean[:, k], covariance_matrix=logits_cov)
-            logits_sampled[:, :, k] = dist.sample((n_draws,))
+        # Dist from the normal that approximates the posterior over beta
+        dist = torch.distributions.MultivariateNormal(
+            loc=self.beta.weight,
+            precision_matrix=self.precision_matrix
+        )
+        sampled_betas = dist.sample(sample_shape=(n_draws,))
+        logits_sampled = torch.einsum('nd,ekd->enk', phi, sampled_betas)
+        probas_sampled = logits_sampled.sotmax(-1)
 
         return logits_sampled
 

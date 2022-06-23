@@ -18,7 +18,7 @@ from backbones.spectral_norm import SpectralLinear
 # fmt: on
 
 # %%
-X, y = datasets.make_moons(500, noise=.1)
+X, y = datasets.make_moons(100, noise=.1)
 # X, y = datasets.make_circles(500, noise=.02)
 X = (X - X.mean(0)) / X.std(0)
 X = torch.from_numpy(X).float()
@@ -54,7 +54,7 @@ class Net(nn.Module):
         self.last = nn.Linear(feature_dim, num_classes)
 
         self.act = nn.ReLU()
-        self.dropout = nn.Dropout(p=.1)
+        self.dropout = nn.Dropout(p=0)
 
     def forward(self, x, return_features=False):
         # : Added activation to first layer
@@ -94,12 +94,12 @@ def plot_contour(model, X, y, ax=None):
 
 spectral_hparams = dict(
     norm_bound=.9,
-    n_residual_layers=6,
+    n_residual_layers=1,
     spectral_norm=True,
 )
 gp_hparams = dict(
-    num_inducing=1024,
-    kernel_scale=1,             # works like bandwidth
+    num_inducing=4*1024,
+    kernel_scale=2,             # works like bandwidth
     normalize_input=False,      # important to disable
     scale_random_features=True,  # important to enable
     # Not that important, for inference
@@ -108,15 +108,14 @@ gp_hparams = dict(
     mean_field_factor=math.pi/8,
 )
 epochs = 200
-weight_decay = 1e-6
-
+weight_decay = 1e-2
 
 torch.manual_seed(0)
 train_loader = torch.utils.data.DataLoader(train_ds, batch_size=128, shuffle=True)
 model = sngp.SNGP(model=Net(num_classes=2, **spectral_hparams), in_features=128, num_classes=2, **gp_hparams)
 nn.init.normal_(model.random_features.random_feature_linear.weight)
 nn.init.xavier_normal_(model.beta.weight)
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay=weight_decay)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=weight_decay)
 criterion = nn.CrossEntropyLoss()
 history = []
 for i in range(epochs):
@@ -129,5 +128,105 @@ plt.subplot(121)
 plt.plot([d['train_loss'] for d in history])
 plot_contour(model, X, y, ax=plt.subplot(122))
 plt.show()
+
+
+# %%
+"""Implement reweighting"""
+torch.manual_seed(1)
+domain = 5
+draws = 10000
+n_samples_new = 20
+
+plt.figure(figsize=(15, 5))
+plt.subplot(121)
+xx, yy = torch.meshgrid(torch.linspace(-domain, domain, 51), torch.linspace(-domain, domain, 51))
+zz = torch.stack((xx.flatten(), yy.flatten()), dim=1)
+
+logits = model.forward_sample(zz, n_draws=draws, resample=True)
+probas = logits.softmax(-1)
+probas = probas.mean(0)[:, 1].view(xx.shape)
+
+plt.scatter(X[:, 0], X[:, 1], c=y, s=10)
+
+# p = logits.softmax(-1)[74]
+# probas = p[:,1].view(xx.shape)
+# c = plt.contourf(xx, yy, probas, alpha=.8, zorder=-1, levels=np.linspace(0, 1, 6))
+# plt.colorbar(c)
+
+c = plt.contourf(xx, yy, probas, alpha=.8, zorder=-1, levels=np.linspace(0, 1, 6))
+plt.colorbar(c)
+plt.contour(xx, yy, probas, alpha=.3, zorder=-1, levels=[0.5], colors='black')
+
+
+plt.subplot(122)
+
+# Create new Cluster
+X_new = torch.cat([
+    torch.randn((n_samples_new, 2))*.2 + 3,
+    torch.randn((n_samples_new, 2))*.2 - 3,
+    torch.randn((n_samples_new, 2))*.2 - torch.Tensor([3, -3]),
+    torch.randn((n_samples_new, 2))*.2 + torch.Tensor([3, -3]),
+    torch.randn((n_samples_new, 2))*.2 + torch.Tensor([0, -3]),
+    torch.randn((n_samples_new, 2))*.2 + torch.Tensor([0, 3]),
+    torch.randn((n_samples_new, 2))*.2 + torch.Tensor([-3, 0]),
+    torch.randn((n_samples_new, 2))*.2 + torch.Tensor([3, 0]),
+    # torch.randn((n_samples_new, 2))*2,
+])
+y_new = torch.cat([
+    torch.ones(n_samples_new).long()*1,
+    torch.ones(n_samples_new).long()*1,
+    torch.ones(n_samples_new).long()*0,
+    torch.ones(n_samples_new).long()*0,
+    torch.ones(n_samples_new).long()*1,
+    torch.ones(n_samples_new).long()*0,
+    torch.ones(n_samples_new).long()*1,
+    torch.ones(n_samples_new).long()*0,
+    # torch.ones(n_samples_new).long()*0,
+])
+
+
+plt.scatter(X_new[:, 0], X_new[:, 1], s=10, c=y_new)
+
+# Reweighting
+lmb = .1
+log_probas_sampled = model.forward_sample(X_new, n_draws=draws).log_softmax(-1)
+# uniform prior
+log_weights = torch.log(torch.ones(draws) / draws)  
+# MVN prior
+# dist = torch.distributions.MultivariateNormal(loc=model.beta.weight.data, precision_matrix=model.precision_matrix)
+# log_weights = dist.log_prob(model.sampled_betas).sum(-1)
+log_weights += lmb*log_probas_sampled[:, torch.arange(len(X_new)), y_new].sum(dim=1)
+weights = log_weights.exp()
+weights /= weights.sum()
+
+# for l, w in zip(logits, weights):
+#     p = l.softmax(-1)
+#     probas = p[:,1].view(xx.shape)
+#     plt.contour(xx, yy, probas, alpha=.6, zorder=-1, levels=[0.5], colors='red', linewidths=w)
+
+# Reweighted probas
+probas_reweighted = torch.einsum('e,enk->nk', weights, logits.softmax(-1))
+# plt.contourf(xx, yy, probas_reweighted[:, 1].view(xx.shape), alpha=.6, zorder=-1, levels=[0.5], colors='purple')
+plt.scatter(X[:, 0], X[:, 1], c=y, s=10)
+c = plt.contourf(xx, yy, probas_reweighted[:, 1].view(xx.shape), alpha=.8, zorder=-1, levels=np.linspace(0, 1, 6))
+plt.contour(xx, yy, probas_reweighted[:, 1].view(xx.shape), alpha=.3, zorder=-1, levels=[0.5], colors='black')
+plt.colorbar(c)
+
+# %%
+
+# %%
+dist = torch.distributions.MultivariateNormal(loc=model.beta.weight.data, precision_matrix=model.precision_matrix)
+dist.log_prob(model.sampled_betas).sum(-1)
+math.log(1/1000)
+
+
+# %%
+log_weights = log_weights.sum(-1)
+# %%
+model.sampled_betas
+
+# %%
+
+plt.bar(range(len(weights)),weights)
 
 # %%

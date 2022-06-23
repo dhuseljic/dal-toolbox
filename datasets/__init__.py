@@ -7,11 +7,12 @@ from datasets.presets import ClassificationPresetTrain, ClassificationPresetEval
 
 
 def build_mnist(split):
-    # TODO add normalization
+    mean, std = (0.1307,), (0.3081,)
     transform = transforms.Compose([
         transforms.Resize(size=(32, 32)),
         transforms.Grayscale(num_output_channels=3),
-        transforms.ToTensor()
+        transforms.ToTensor(),
+        transforms.Normalize(mean*3, std*3),
     ])
     if split == 'train':
         ds = torchvision.datasets.MNIST('data/', train=True, download=True, transform=transform)
@@ -40,7 +41,7 @@ def build_cifar10(split):
 
 
 def build_cifar100(split):
-    mean, std = (0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)
+    mean, std = (0.5071, 0.4865, 0.4409), (0.2673, 0.2564, 0.2762)
     if split == 'train':
         train_transform = transforms.Compose([
             transforms.RandomCrop(32, padding=4),
@@ -56,7 +57,7 @@ def build_cifar100(split):
 
 
 def build_svhn(split):
-    mean, std = (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
+    mean, std = (0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970)
     if split == 'train':
         train_transform = ClassificationPresetTrain(crop_size=32, mean=mean, std=std, hflip_prob=0.5)
         ds = torchvision.datasets.CIFAR100('data/', train=True, download=True, transform=train_transform)
