@@ -3,7 +3,8 @@ import torch
 import torch.nn as nn
 
 from backbones import build_backbone
-from . import ddu, sngp, vanilla, sghmc
+from models.mcdropout import MCDropout
+from . import ddu, sngp, vanilla, sghmc, mcdropout
 
 
 def build_model(args, **kwargs):
@@ -117,6 +118,20 @@ def build_model(args, **kwargs):
             'optimizer': optimizer,
             'train_one_epoch': ddu.train_one_epoch,
             'evaluate': ddu.evaluate,
+            'lr_scheduler': lr_scheduler,
+            'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
+            'eval_kwargs': dict(criterion=criterion, device=args.device),
+        }
+    elif args.model.name == 'mcdropout':
+        model = MCDropout(backbone, args.model.n_passes)
+        optimizer = torch.optim.Adam(model.parameters(), weight_decay=args.model.optimizer.weight_decay)
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.n_epochs)
+        criterion = nn.CrossEntropyLoss()
+        model_dict = {
+            'model': model,
+            'optimizer': optimizer,
+            'train_one_epoch': mcdropout.train_one_epoch,
+            'evaluate': mcdropout.evaluate,
             'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),

@@ -1,12 +1,14 @@
 import torchvision
 import torch.nn as nn
 
-from . import lenet, resnet, wide_resnet, spectral_resnet, spectral_wide_resnet
+from . import lenet, resnet, wide_resnet, spectral_resnet, spectral_wide_resnet, dropout_resnet
 
 
 def build_backbone(args, n_classes):
     if args.model.backbone == 'resnet18':
         backbone = resnet.resnet18(num_classes=n_classes)
+    elif args.model.backbone == 'dropout_resnet':
+        backbone = dropout_resnet.DropoutResNet(block=dropout_resnet.DropoutBasicBlock, num_blocks=[2,2,2,2], num_classes=n_classes, p_drop=args.model.dropout_rate)
     elif args.model.backbone == 'wide_resnet_28_10':
         backbone = wide_resnet.WideResNet(
             depth=28, widen_factor=10, num_classes=n_classes,
