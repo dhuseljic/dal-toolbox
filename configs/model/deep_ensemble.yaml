@@ -1,5 +1,6 @@
-name: vanilla
+name: deep_ensemble
 backbone: resnet18
+n_member: 5
 optimizer:
   lr: 0.1
   weight_decay: 5e-4

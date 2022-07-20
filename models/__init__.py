@@ -4,7 +4,7 @@ import torch.nn as nn
 
 from backbones import build_backbone
 from models.mcdropout import MCDropout
-from . import ddu, sngp, vanilla, sghmc, mcdropout
+from . import ddu, sngp, vanilla, sghmc, mcdropout, deep_ensemble
 
 
 def build_model(args, **kwargs):
@@ -124,14 +124,55 @@ def build_model(args, **kwargs):
         }
     elif args.model.name == 'mcdropout':
         model = MCDropout(backbone, args.model.n_passes)
-        optimizer = torch.optim.Adam(model.parameters(), weight_decay=args.model.optimizer.weight_decay)
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.n_epochs)
+        optimizer = torch.optim.SGD(
+            backbone.parameters(),
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+            nesterov=True
+        )
+        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
+            optimizer,
+            milestones=args.model.optimizer.lr_step_epochs,
+            gamma=args.model.optimizer.lr_gamma
+        )
         criterion = nn.CrossEntropyLoss()
         model_dict = {
             'model': model,
             'optimizer': optimizer,
             'train_one_epoch': mcdropout.train_one_epoch,
             'evaluate': mcdropout.evaluate,
+            'lr_scheduler': lr_scheduler,
+            'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
+            'eval_kwargs': dict(criterion=criterion, device=args.device),
+        }
+    elif args.model.name == 'deep_ensemble':
+        backbones, lr_schedulers, optimizers = [], [], []
+        for _ in range(args.model.n_member):
+            mod = build_backbone(args, n_classes)
+            opt = torch.optim.SGD(
+                    mod.parameters(),
+                    lr=args.model.optimizer.lr,
+                    weight_decay=args.model.optimizer.weight_decay,
+                    momentum=args.model.optimizer.momentum,
+                    nesterov=True
+                    )
+            lrs = torch.optim.lr_scheduler.MultiStepLR(
+                    opt,
+                    milestones=args.model.optimizer.lr_step_epochs,
+                    gamma=args.model.optimizer.lr_gamma)
+            backbones.append(mod)
+            optimizers.append(opt)
+            lr_schedulers.append(lrs)
+        model = deep_ensemble.Ensemble(backbones)
+        optimizer = deep_ensemble.EnsembleOptimizer(optimizers)
+        lr_scheduler = deep_ensemble.EnsembleLR(lr_schedulers)
+        criterion = nn.CrossEntropyLoss()
+        model_dict = {
+            'model': model,
+            'optimizer': optimizer,
+            'train_one_epoch': deep_ensemble.train_one_epoch,
+            'evaluate': deep_ensemble.evaluate,
             'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),

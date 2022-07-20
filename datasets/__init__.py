@@ -84,7 +84,7 @@ def build_dataset(args):
     elif args.dataset == 'CIFAR10_vs_CIFAR100':
         train_ds = build_cifar10('train')
         test_ds_id = build_cifar10('test')
-        test_ds_ood = build_svhn('test')
+        test_ds_ood = build_cifar100('test')
         n_classes = 10
     elif args.dataset == 'CIFAR10_vs_SVHN':
         train_ds = build_cifar10('train')

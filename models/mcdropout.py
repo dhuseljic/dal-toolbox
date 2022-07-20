@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from metrics import ood, generalization
+from metrics import metrics, generalization
 from utils import MetricLogger, SmoothedValue
 
 
@@ -23,10 +23,8 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
         logits_id_k.append(model.model.mc_forward(inputs, model.k))
         targets_id.append(targets)
     logits_id_k = torch.cat(logits_id_k, dim=0).cpu()
-    print(logits_id_k.shape)
     logits_id = torch.mean(logits_id_k, dim=1)
     targets_id = torch.cat(targets_id, dim=0).cpu()
-    print(logits_id.shape)
 
 
     # Update test stats
@@ -44,20 +42,7 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     # Mean over dim=1 since Bayesian Dropout Module stores the k passes in second dimension
     logits_ood = torch.mean(logits_ood_k, dim=1)
 
-    # Update test stats
-    # net auroc 1 - max prob
-    probas_id = logits_id.softmax(-1)
-    probas_ood = logits_ood.softmax(-1)
-    entropy_id = ood.entropy_fn(probas_id)
-    entropy_ood = ood.entropy_fn(probas_ood)
-    test_stats.update({'auroc': ood.ood_auroc(entropy_id, entropy_ood)})
-
-    # net auroc 1 - max prob
-    probas_id = logits_id.softmax(-1)
-    conf_id, _ = probas_id.max(-1)
-    probas_ood = logits_ood.softmax(-1)
-    conf_ood, _ = probas_ood.max(-1)
-    test_stats.update({'auroc_net_conf': ood.ood_auroc(1-conf_id, 1-conf_ood)})
+    test_stats = metrics.get_test_stats(logits_id, targets_id, logits_ood)
 
     test_stats = {f"test_{k}": v for k, v in test_stats.items()}
     return test_stats

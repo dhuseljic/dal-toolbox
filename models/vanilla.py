@@ -1,7 +1,6 @@
 import torch
-# import torch.nn as nn
 
-from metrics import ood, generalization
+from metrics import generalization, metrics
 from utils import MetricLogger, SmoothedValue
 
 def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
@@ -48,12 +47,6 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     logits_id = torch.cat(logits_id, dim=0).cpu()
     targets_id = torch.cat(targets_id, dim=0).cpu()
 
-    # Update test stats
-    loss = criterion(logits_id, targets_id)
-    acc1, = generalization.accuracy(logits_id, targets_id, (1,))
-    test_stats.update({'loss': loss.item()})
-    test_stats.update({'acc1': acc1.item()})
-
     # Forward prop out of distribution
     logits_ood = []
     for inputs, targets in dataloader_ood:
@@ -61,20 +54,7 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
         logits_ood.append(model(inputs))
     logits_ood = torch.cat(logits_ood, dim=0).cpu()
 
-    # Update test stats
-    # net auroc 1 - max prob
-    probas_id = logits_id.softmax(-1)
-    probas_ood = logits_ood.softmax(-1)
-    entropy_id = ood.entropy_fn(probas_id)
-    entropy_ood = ood.entropy_fn(probas_ood)
-    test_stats.update({'auroc': ood.ood_auroc(entropy_id, entropy_ood)})
-
-    # net auroc 1 - max prob
-    probas_id = logits_id.softmax(-1)
-    conf_id, _ = probas_id.max(-1)
-    probas_ood = logits_ood.softmax(-1)
-    conf_ood, _ = probas_ood.max(-1)
-    test_stats.update({'auroc_net_conf': ood.ood_auroc(1-conf_id, 1-conf_ood)})
-
+    test_stats = metrics.get_test_stats(logits_id, targets_id, logits_ood)
+    
     test_stats = {f"test_{k}": v for k, v in test_stats.items()}
     return test_stats
