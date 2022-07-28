@@ -46,7 +46,7 @@ class Ensemble(nn.Module):
         self.models = nn.ModuleList(models)
 
     def forward(self, x):
-        return torch.mean(self.forward_sample(x), dim=0)
+        pass
 
     def forward_sample(self, x):
         logits = []
@@ -98,36 +98,45 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     model.eval()
     model.to(device)
 
-    # Logits and targets for in-domain-test-set
-    logits_id, targets_id, = [], []
+    # Get logits and targets for in-domain-test-set (Number of Members x Number of Samples x Number of Classes)
+    ensemble_logits_id, targets_id, = [], []
     for inputs, targets in dataloader_id:
         inputs, targets = inputs.to(device), targets.to(device)
-        logits_id.append(model(inputs))
+        ensemble_logits_id.append(model.forward_sample(inputs))
         targets_id.append(targets)
-    logits_id = torch.cat(logits_id, dim=0).cpu()
+    
+    # Transform to tensor
+    ensemble_logits_id = torch.cat(ensemble_logits_id, dim=1).cpu()
     targets_id = torch.cat(targets_id, dim=0).cpu()
 
-    # Logits and targets for out-of-domain-test-set
-    logits_ood = []
+    # Transform into probabilitys 
+    ensemble_probas_id = ensemble_logits_id.softmax(dim=-1)
+
+    # Average of probas per sample
+    mean_probas_id = torch.mean(ensemble_probas_id, dim=0)
+
+    # Repeat for out-of-domain-test-set
+    ensemble_logits_ood = []
     for inputs, targets in dataloader_ood:
         inputs, targets = inputs.to(device), targets.to(device)
-        logits_ood.append(model(inputs))
-    logits_ood = torch.cat(logits_ood, dim=0).cpu()
-    
+        ensemble_logits_ood.append(model.forward_sample(inputs))
+    ensemble_logits_ood = torch.cat(ensemble_logits_ood, dim=1).cpu()
+    ensemble_probas_ood = ensemble_logits_ood.softmax(dim=-1)
+    mean_probas_ood = torch.mean(ensemble_probas_ood, dim=0)
+
+
     # Test Loss and Accuracy for in domain testset
-    acc1 = generalization.accuracy(logits_id, targets_id, (1,))[0].item()
-    loss = criterion(logits_id, targets_id).item()
+    acc1 = generalization.accuracy(mean_probas_id, targets_id, (1,))[0].item()
+    loss = criterion(torch.log(mean_probas_id), targets_id).item()
 
     # Confidence- and entropy-Scores of in domain and out of domain logits
-    probas_id = logits_id.softmax(-1)
-    probas_ood = logits_ood.softmax(-1)
-    conf_id, _ = probas_id.max(-1)
-    conf_ood, _ = probas_ood.max(-1)
-    entropy_id = ood.entropy_fn(probas_id)
-    entropy_ood = ood.entropy_fn(probas_ood)
+    conf_id, _ = mean_probas_id.max(-1)
+    conf_ood, _ = mean_probas_ood.max(-1)
+    entropy_id = ood.entropy_fn(mean_probas_id)
+    entropy_ood = ood.entropy_fn(mean_probas_ood)
 
     # Negative Log Likelihood
-    nll = torch.nn.CrossEntropyLoss(reduction='mean')(logits_id, targets_id).item()
+    nll = torch.nn.CrossEntropyLoss(reduction='mean')(torch.log(mean_probas_id), targets_id).item()
 
     # Area under the Precision-Recall-Curve
     entropy_aupr = ood.ood_aupr(entropy_id, entropy_ood)
@@ -138,8 +147,8 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     conf_auroc = ood.ood_auroc(1-conf_id, 1-conf_ood)
 
     # Top- and Marginal Calibration Error
-    tce = calibration.TopLabelCalibrationError()(probas_id, targets_id).item()
-    mce = calibration.MarginalCalibrationError()(probas_id, targets_id).item()
+    tce = calibration.TopLabelCalibrationError()(mean_probas_id, targets_id).item()
+    mce = calibration.MarginalCalibrationError()(mean_probas_id, targets_id).item()
     
     return {f"test_{k}": v for k, v in {
         "acc1":acc1,

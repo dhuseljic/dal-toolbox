@@ -15,38 +15,45 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     model.eval()
     model.to(device)
 
-    # Forward prop in distribution
-    logits_id_k, targets_id, = [], []
+    # Get logits and targets for in-domain-test-set (Number of Samples x Number of Passes x Number of Classes)
+    dropout_logits_id, targets_id, = [], []
     for inputs, targets in dataloader_id:
         inputs, targets = inputs.to(device), targets.to(device)
-        logits_id_k.append(model.model.mc_forward(inputs, model.k))
+        dropout_logits_id.append(model.model.mc_forward(inputs, model.k))
         targets_id.append(targets)
-    logits_id_k = torch.cat(logits_id_k, dim=0).cpu()
-    logits_id = torch.mean(logits_id_k, dim=1)
+    
+    # Transform to tensor
+    dropout_logits_id = torch.cat(dropout_logits_id, dim=0).cpu()
     targets_id = torch.cat(targets_id, dim=0).cpu()
 
-    # Forward prop out of distribution
-    logits_ood_k = []
+    # Transform into probabilitys 
+    dropout_probas_id = dropout_logits_id.softmax(dim=-1)
+
+    # Average of probas per sample
+    mean_probas_id = torch.mean(dropout_probas_id, dim=1)
+
+    # Repeat for out-of-domain-test-set
+    dropout_logits_ood = []
     for inputs, targets in dataloader_ood:
         inputs, targets = inputs.to(device), targets.to(device)
-        logits_ood_k.append(model.model.mc_forward(inputs, model.k))
-    logits_ood_k = torch.cat(logits_ood_k, dim=0).cpu()
-    logits_ood = torch.mean(logits_ood_k, dim=1) # Mean over dim=1 since Bayesian Dropout Module stores the k passes in second dimension
+        dropout_logits_ood.append(model.model.mc_forward(inputs, model.k))
+    dropout_logits_ood = torch.cat(dropout_logits_ood, dim=0).cpu()
+    dropout_probas_ood = dropout_logits_ood.softmax(dim=-1)
+    mean_probas_ood = torch.mean(dropout_probas_ood, dim=0)
+
 
     # Test Loss and Accuracy for in domain testset
-    acc1 = generalization.accuracy(logits_id, targets_id, (1,))[0].item()
-    loss = criterion(logits_id, targets_id).item()
+    acc1 = generalization.accuracy(mean_probas_id, targets_id, (1,))[0].item()
+    loss = criterion(torch.log(mean_probas_id), targets_id).item()
 
     # Confidence- and entropy-Scores of in domain and out of domain logits
-    probas_id = logits_id.softmax(-1)
-    probas_ood = logits_ood.softmax(-1)
-    conf_id, _ = probas_id.max(-1)
-    conf_ood, _ = probas_ood.max(-1)
-    entropy_id = ood.entropy_fn(probas_id)
-    entropy_ood = ood.entropy_fn(probas_ood)
+    conf_id, _ = mean_probas_id.max(-1)
+    conf_ood, _ = mean_probas_ood.max(-1)
+    entropy_id = ood.entropy_fn(mean_probas_id)
+    entropy_ood = ood.entropy_fn(mean_probas_ood)
 
     # Negative Log Likelihood
-    nll = torch.nn.CrossEntropyLoss(reduction='mean')(logits_id, targets_id).item()
+    nll = torch.nn.CrossEntropyLoss(reduction='mean')(torch.log(mean_probas_id), targets_id).item()
 
     # Area under the Precision-Recall-Curve
     entropy_aupr = ood.ood_aupr(entropy_id, entropy_ood)
@@ -57,8 +64,8 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     conf_auroc = ood.ood_auroc(1-conf_id, 1-conf_ood)
 
     # Top- and Marginal Calibration Error
-    tce = calibration.TopLabelCalibrationError()(probas_id, targets_id).item()
-    mce = calibration.MarginalCalibrationError()(probas_id, targets_id).item()
+    tce = calibration.TopLabelCalibrationError()(mean_probas_id, targets_id).item()
+    mce = calibration.MarginalCalibrationError()(mean_probas_id, targets_id).item()
     
     return {f"test_{k}": v for k, v in {
         "acc1":acc1,
@@ -73,14 +80,14 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     }.items()}
 
 
+
+
 def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
     metric_logger = MetricLogger(delimiter="  ")
     metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
     header = f"Training: Epoch {epoch}"
     model.to(device)
     model.train()
-
-    #TODO: Train Model with or without Dropout? What are optimal ResNet Params for Training with 2dropout for each dataset?
 
     for X_batch, y_batch in metric_logger.log_every(dataloader, print_freq=print_freq, header=header):
         X_batch, y_batch = X_batch.to(device), y_batch.to(device)
