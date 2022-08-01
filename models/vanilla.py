@@ -36,7 +36,6 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None,
 def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     model.eval()
     model.to(device)
-    test_stats = {}
 
     # Forward prop in distribution
     logits_id, targets_id, = [], []
