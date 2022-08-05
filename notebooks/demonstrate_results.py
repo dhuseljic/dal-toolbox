@@ -48,7 +48,7 @@ for model_name in test_metrics:
 # %%
 # Display results in a table
 df = pd.DataFrame(avg_test_metrics).T
-df.style.highlight_min(color= 'darkgrey', axis=0)
+df.style.background_gradient(cmap='Blues')
 # %%
 # Lets also analyse the Training-Process so once again
 # For each Model - For each Metric - For each Run

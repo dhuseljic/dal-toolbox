@@ -39,7 +39,7 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
         dropout_logits_ood.append(model.model.mc_forward(inputs, model.k))
     dropout_logits_ood = torch.cat(dropout_logits_ood, dim=0).cpu()
     dropout_probas_ood = dropout_logits_ood.softmax(dim=-1)
-    mean_probas_ood = torch.mean(dropout_probas_ood, dim=0)
+    mean_probas_ood = torch.mean(dropout_probas_ood, dim=1)
 
 
     # Test Loss and Accuracy for in domain testset
