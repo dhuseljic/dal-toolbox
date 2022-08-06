@@ -135,9 +135,8 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     entropy_id = ood.entropy_fn(mean_probas_id)
     entropy_ood = ood.entropy_fn(mean_probas_ood)
 
-    # Negative Log Likelihood with torch.nn.CrossEntropyLoss
-    nll_1 = torch.nn.CrossEntropyLoss(reduction='mean')(torch.log(mean_probas_id), targets_id).item()
-    nll_2 = EnsembleCrossEntropy.nll(ensemble_logits_id, targets_id)
+    # Negative Log Likelihood with torch.nn.CrossEntropyLossS
+    nll = EnsembleCrossEntropy.EnsembleCrossEntropy()(ensemble_logits_id, targets_id).item()
 
     # Area under the Precision-Recall-Curve
     entropy_aupr = ood.ood_aupr(entropy_id, entropy_ood)
@@ -154,8 +153,7 @@ def evaluate(model, dataloader_id, dataloader_ood, criterion, device):
     return {f"test_{k}": v for k, v in {
         "acc1":acc1,
         "loss":loss,
-        "nll_1":nll_1,
-        "nll_2":nll_2,
+        "nll":nll,
         "entropy_auroc":entropy_auroc,
         "entropy_aupr":entropy_aupr,
         "conf_auroc":conf_auroc,

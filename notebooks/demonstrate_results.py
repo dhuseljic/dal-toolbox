@@ -10,7 +10,7 @@ import pandas as pd
 from omegaconf import OmegaConf
 from pathlib import Path
 
-root_path = Path('../results/runV2/output')
+root_path = Path('../results/runV4')
 # %%
 # Load all model results into one large dictionary
 model_names = ["ensemble_5", "ensemble_10", "mcdropout", "vanilla"]
@@ -47,8 +47,7 @@ for model_name in test_metrics:
         avg_test_metrics[model_name][metric_name] = np.sum(metric_list)/len(metric_list)
 # %%
 # Display results in a table
-df = pd.DataFrame(avg_test_metrics).T
-df.style.background_gradient(cmap='Blues')
+pd.DataFrame(avg_test_metrics).T
 # %%
 # Lets also analyse the Training-Process so once again
 # For each Model - For each Metric - For each Run
