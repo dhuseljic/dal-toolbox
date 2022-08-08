@@ -96,7 +96,6 @@ class WideResNet(nn.Module):
         out = self.linear(out)
         if return_features:
             out = (out, self.features)
-
         return out
 
 

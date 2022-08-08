@@ -1,5 +1,6 @@
 name : sngp
-backbone: resnet18
+backbone: spectral_resnet18
+dropout_rate: 0.1
 spectral_norm:
   use_spectral_norm: True
   coeff: 6

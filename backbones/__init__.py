@@ -7,6 +7,7 @@ from . import lenet, resnet, wide_resnet, spectral_resnet, spectral_wide_resnet,
 def build_backbone(args, n_classes):
     if args.model.backbone == 'resnet18':
         backbone = resnet.resnet18(num_classes=n_classes)
+        backbone.out_features = 512
     elif args.model.backbone == 'dropout_resnet':
         backbone = dropout_resnet.DropoutResNet(block=dropout_resnet.DropoutBasicBlock, num_blocks=[2,2,2,2], num_classes=n_classes, p_drop=args.model.dropout_rate)
     elif args.model.backbone == 'wide_resnet_28_10':
