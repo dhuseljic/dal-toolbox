@@ -1,9 +1,9 @@
 defaults:
-  - model: 'vanilla'
+  - model: 'deterministic'
 
 dataset: "MNIST_vs_MNIST"
 n_samples: null
-n_epochs: 1
+n_epochs: 200
 eval_interval: 1
 batch_size: 64
 device: "cuda"

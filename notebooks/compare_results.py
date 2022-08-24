@@ -60,31 +60,6 @@ for model_name in model_names:
 df = pd.DataFrame(avg_test_metrics).T
 df
 
-# %%
-# Maybe use consistent Metrics that all should be minimized?
-avg_test_metrics_new = {}
-for model_name in model_names:
-    for avg_tm, name in zip([avg_test_metrics_1, avg_test_metrics_2], ["_al", "_ub"]):
-        new_avg_tm = {}
-        for metric, value in avg_tm[model_name].items():
-            if metric == 'test_acc1':
-                new_avg_tm['test_err'] = 100-value
-            elif metric == 'test_entropy_auroc':
-                new_avg_tm['test_entropy_aoroc'] = 1-value
-            elif metric == 'test_entropy_aupr':
-                new_avg_tm['test_entropy_aopr'] = 1-value
-            elif metric == 'test_conf_auroc':
-                new_avg_tm['test_conf_aoroc'] = 1-value
-            elif metric == 'test_conf_aupr':
-                new_avg_tm['test_conf_aopr'] = 1-value
-            else:
-                new_avg_tm[metric] = value
-        avg_test_metrics[model_name+name]=new_avg_tm
-
-# Display results in a table
-df = pd.DataFrame(avg_test_metrics).T
-df.style.background_gradient(cmap='Blues')
-
 
 # %%
 # Lets also analyse the Training-Process so once again

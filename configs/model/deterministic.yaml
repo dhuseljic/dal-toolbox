@@ -1,8 +1,9 @@
-name: vanilla
+name: deterministic
 backbone: resnet18
 optimizer:
   lr: 0.1
   weight_decay: 2e-4
   momentum: 0.9
+  lr_scheduler: 'multi_step'
   lr_gamma: 0.2
   lr_step_epochs: [60, 120, 160]

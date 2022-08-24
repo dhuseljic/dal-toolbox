@@ -4,13 +4,13 @@ import torch.nn as nn
 
 from backbones import build_backbone
 from models.mcdropout import MCDropout
-from . import ddu, sngp, vanilla, sghmc, mcdropout, deep_ensemble
+from . import ddu, deterministic, sngp, sghmc, mcdropout, deep_ensemble
 
 
 def build_model(args, **kwargs):
     n_classes = kwargs['n_classes']
     backbone = build_backbone(args, n_classes=n_classes)
-    if args.model.name == 'vanilla':
+    if args.model.name == 'deterministic':
         optimizer = torch.optim.SGD(
             backbone.parameters(),
             lr=args.model.optimizer.lr,
@@ -18,18 +18,22 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True
         )
-        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
-            optimizer,
-            milestones=args.model.optimizer.lr_step_epochs,
-            gamma=args.model.optimizer.lr_gamma
-        )
-        #lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.n_epochs)
+        if args.model.optimizer.lr_scheduler == 'multi_step':
+            lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
+                optimizer,
+                milestones=args.model.optimizer.lr_step_epochs,
+                gamma=args.model.optimizer.lr_gamma
+            )
+        elif args.model.optimizer.lr_scheduler == 'cosine':
+            lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.n_epochs)
+        else:
+            assert "no available lr_scheduler chosen!"
         criterion = nn.CrossEntropyLoss()
         model_dict = {
             'model': backbone,
             'optimizer': optimizer,
-            'train_one_epoch': vanilla.train_one_epoch,
-            'evaluate': vanilla.evaluate,
+            'train_one_epoch': deterministic.train_one_epoch,
+            'evaluate': deterministic.evaluate,
             'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
@@ -56,11 +60,16 @@ def build_model(args, **kwargs):
             B_estim=args.model.optimizer.B_estim,
             resample_each=args.model.optimizer.resample_each,
         )
-        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
-            optimizer,
-            milestones=args.model.optimizer.lr_step_epochs,
-            gamma=args.model.optimizer.lr_gamma
-        )
+        if args.model.optimizer.lr_scheduler == 'multi_step':
+            lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
+                optimizer,
+                milestones=args.model.optimizer.lr_step_epochs,
+                gamma=args.model.optimizer.lr_gamma
+            )
+        elif args.model.optimizer.lr_scheduler == 'cosine':
+            lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.n_epochs)
+        else:
+            assert "no available lr_scheduler chosen!"
         criterion = nn.CrossEntropyLoss()
         model_dict = {
             'model': model,
@@ -91,12 +100,16 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True
         )
-        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
-            optimizer,
-            milestones=args.model.optimizer.lr_step_epochs,
-            gamma=args.model.optimizer.lr_gamma
-        )
-        #lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.n_epochs)
+        if args.model.optimizer.lr_scheduler == 'multi_step':
+            lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
+                optimizer,
+                milestones=args.model.optimizer.lr_step_epochs,
+                gamma=args.model.optimizer.lr_gamma
+            )
+        elif args.model.optimizer.lr_scheduler == 'cosine':
+            lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.n_epochs)
+        else:
+            assert "no available lr_scheduler chosen!"
         criterion = nn.CrossEntropyLoss()
         model_dict = {
             'model': model,
@@ -131,12 +144,16 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True
         )
-        #lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
-        #    optimizer,
-        #    milestones=args.model.optimizer.lr_step_epochs,
-        #    gamma=args.model.optimizer.lr_gamma
-        #)
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.n_epochs)
+        if args.model.optimizer.lr_scheduler == 'multi_step':
+            lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
+                optimizer,
+                milestones=args.model.optimizer.lr_step_epochs,
+                gamma=args.model.optimizer.lr_gamma
+            )
+        elif args.model.optimizer.lr_scheduler == 'cosine':
+            lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.n_epochs)
+        else:
+            assert "no available lr_scheduler chosen!"
         criterion = nn.CrossEntropyLoss()
         model_dict = {
             'model': model,
@@ -158,11 +175,16 @@ def build_model(args, **kwargs):
                     momentum=args.model.optimizer.momentum,
                     nesterov=True
                     )
-            lrs = torch.optim.lr_scheduler.MultiStepLR(
-                    opt,
+            if args.model.optimizer.lr_scheduler == 'multi_step':
+                lrs = torch.optim.lr_scheduler.MultiStepLR(
+                    optimizer,
                     milestones=args.model.optimizer.lr_step_epochs,
-                    gamma=args.model.optimizer.lr_gamma)
-            #lrs = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.n_epochs)
+                    gamma=args.model.optimizer.lr_gamma
+                )
+            elif args.model.optimizer.lr_scheduler == 'cosine':
+                lrs = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.n_epochs)
+            else:
+                assert "no available lr_scheduler chosen!"
             backbones.append(mod)
             optimizers.append(opt)
             lr_schedulers.append(lrs)
