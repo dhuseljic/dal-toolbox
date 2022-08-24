@@ -17,14 +17,15 @@ def main(args):
     seed_everything(args.random_seed)
     writer = SummaryWriter(log_dir=args.output_dir)
 
-    # Load data
-    train_ds, test_ds_id, test_ds_ood, n_classes = build_dataset(args)
-    fig = plot_grids(train_ds, test_ds_id, test_ds_ood)
+    # Load data 
+    train_ds, test_ds_id, test_dss_ood, n_classes = build_dataset(args)
+    #TODO: What should i change about the plotting if there are mutliple ood datasets?
+    fig = plot_grids(train_ds, test_ds_id, list(test_dss_ood.values())[0])
     writer.add_figure('Data Example', fig)
 
     train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True)
     test_loader_id = DataLoader(test_ds_id, batch_size=args.batch_size*4)
-    test_loader_ood = DataLoader(test_ds_ood, batch_size=args.batch_size*4)
+    test_loaders_ood = {name:DataLoader(test_ds_ood, batch_size=args.batch_size*4) for name, test_ds_ood in test_dss_ood.items()}
 
     # Load model
     model_dict = build_model(args, n_samples=len(train_ds), n_classes=n_classes)
@@ -42,7 +43,7 @@ def main(args):
 
         # Eval
         if (i_epoch+1) % args.eval_interval == 0:
-            test_stats = evaluate(model, test_loader_id, test_loader_ood, **model_dict['eval_kwargs'])
+            test_stats = evaluate(model, test_loader_id, test_loaders_ood, **model_dict['eval_kwargs'])
             history_test.append(test_stats)
             write_scalar_dict(writer, prefix='test', dict=test_stats, global_step=i_epoch)
             print(f"Epoch [{i_epoch}]", train_stats, test_stats)

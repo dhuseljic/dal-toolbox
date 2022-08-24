@@ -1,7 +1,8 @@
 defaults:
   - model: 'deterministic'
 
-dataset: "MNIST_vs_MNIST"
+dataset: MNIST04
+ood_datasets: ["MNIST59"]
 n_samples: null
 n_epochs: 200
 eval_interval: 1

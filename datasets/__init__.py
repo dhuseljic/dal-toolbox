@@ -20,6 +20,21 @@ def build_mnist(split):
         ds = torchvision.datasets.MNIST('data/', train=False, download=True, transform=transform)
     return ds
 
+def build_fashionmnist(split):
+    #TODO: I took the same transformations from MNIST since i couldn't find any better
+    mean, std = (0.5,), (0.5,)
+    transform = transforms.Compose([
+        transforms.Resize(size=(32, 32)),
+        transforms.Grayscale(num_output_channels=3),
+        transforms.ToTensor(),
+        transforms.Normalize(mean*3, std*3),
+    ])
+    if split == 'train':
+        ds = torchvision.datasets.FashionMNIST('data/', train=True, download=True, transform=transform)
+    else:
+        ds = torchvision.datasets.FashionMNIST('data/', train=False, download=True, transform=transform)
+    return ds
+
 
 def build_cifar10(split):
     mean, std = (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
@@ -68,56 +83,113 @@ def build_svhn(split):
 
 
 def build_dataset(args):
-    if args.dataset == 'MNIST_vs_MNIST':
+    # At first build the in domain dataset
+    if args.dataset == 'MNIST':
         train_ds = build_mnist('train')
         test_ds = build_mnist('test')
+        n_classes = 10
 
-        # Prepare train -> mnist 0 to 4 vs 5 to 9
+    elif args.dataset == 'MNIST04':
+        train_ds = build_mnist('train')
+        test_ds = build_mnist('test')
         indices_id = (train_ds.targets < 5).nonzero().flatten()
         train_ds = Subset(train_ds, indices=indices_id)
-
         indices_id = (test_ds.targets < 5).nonzero().flatten()
         test_ds_id = Subset(test_ds, indices=indices_id)
-        indices_ood = (test_ds.targets >= 5).nonzero().flatten()
-        test_ds_ood = Subset(test_ds, indices=indices_ood)
         n_classes = 5
-    elif args.dataset == 'CIFAR10_vs_CIFAR100':
+
+    elif args.dataset == 'MNIST59':
+        train_ds = build_mnist('train')
+        test_ds = build_mnist('test')
+        indices_id = (train_ds.targets >= 5).nonzero().flatten()
+        train_ds = Subset(train_ds, indices=indices_id)
+        indices_id = (test_ds.targets >= 5).nonzero().flatten()
+        test_ds_id = Subset(test_ds, indices=indices_id)
+        n_classes = 5
+
+    elif args.dataset == 'FashionMNIST':
+            train_ds = build_fashionmnist('train')
+            test_ds_id = build_fashionmnist('test')
+            n_classes = 10
+
+    elif args.dataset == 'CIFAR10':
         train_ds = build_cifar10('train')
         test_ds_id = build_cifar10('test')
-        test_ds_ood = build_cifar100('test')
         n_classes = 10
-    elif args.dataset == 'CIFAR10_vs_SVHN':
-        train_ds = build_cifar10('train')
-        test_ds_id = build_cifar10('test')
-        test_ds_ood = build_svhn('test')
-        n_classes = 10
-    elif args.dataset == 'CIFAR100_vs_CIFAR10':
+
+    elif args.dataset == 'CIFAR100':
         train_ds = build_cifar100('train')
         test_ds_id = build_cifar100('test')
-        test_ds_ood = build_cifar10('test')
         n_classes = 100
-    elif args.dataset == 'CIFAR100_vs_SVHN':
-        train_ds = build_cifar100('train')
-        test_ds_id = build_cifar100('test')
-        test_ds_ood = build_svhn('test')
-        n_classes = 100
+
+    elif args.dataset == 'SVHN':
+        train_ds = build_svhn('train')
+        test_ds = build_svhn('test')
+        n_classes = 10
+
     else:
         raise NotImplementedError
 
-    # make test id and ood the same size
-    n_samples_id = len(test_ds_id)
-    n_samples_ood = len(test_ds_ood)
-    if n_samples_id != n_samples_ood:
-        if n_samples_id < n_samples_ood:
-            rnd_indices = torch.randperm(n_samples_ood)[:n_samples_id]
-            test_ds_ood = Subset(test_ds_ood, indices=rnd_indices)
-        else:
-            rnd_indices = torch.randperm(n_samples_id)[:n_samples_ood]
-            test_ds_id = Subset(test_ds_id, indices=rnd_indices)
+    # Second, choose out of domain datasets
+    test_dss_ood = {}
+    if 'MNIST' in args.ood_datasets:
+        temp_ds = build_mnist('test')
+        test_ds_id, temp_ds = equal_set_sizes(test_ds_id, temp_ds)
+        test_dss_ood["MNIST"] = temp_ds
 
+    if 'MNIST04' in args.ood_datasets:
+        temp_ds = build_mnist('test')
+        indices_ood = (temp_ds.targets < 5).nonzero().flatten()
+        temp_ds = Subset(temp_ds, indices=indices_ood)
+        test_ds_id, temp_ds = equal_set_sizes(test_ds_id, temp_ds)
+        test_dss_ood["MNIST04"] = temp_ds
+
+    if 'MNIST59' in args.ood_datasets:
+        temp_ds = build_mnist('test')
+        indices_ood = (temp_ds.targets >= 5).nonzero().flatten()
+        temp_ds = Subset(temp_ds, indices=indices_ood)
+        test_ds_id, temp_ds = equal_set_sizes(test_ds_id, temp_ds)
+        test_dss_ood["MNIST59"] = temp_ds
+
+    if 'FashionMNIST' in args.ood_datasets:
+        temp_ds = build_fashionmnist('test')
+        test_ds_id, temp_ds = equal_set_sizes(test_ds_id, temp_ds)
+        test_dss_ood["FashionMNIST"] = temp_ds
+    
+    if 'CIFAR10' in args.ood_datasets:
+        temp_ds = build_cifar10('test')
+        test_ds_id, temp_ds = equal_set_sizes(test_ds_id, temp_ds)
+        test_dss_ood["CIFAR10"] = temp_ds
+
+    if 'CIFAR100' in args.ood_datasets:
+        temp_ds = build_cifar100('test')
+        test_ds_id, temp_ds = equal_set_sizes(test_ds_id, temp_ds)
+        test_dss_ood["CIFAR100"] = temp_ds
+
+    if 'SVHN' in args.ood_datasets:
+        temp_ds = build_svhn('test')
+        test_ds_id, temp_ds = equal_set_sizes(test_ds_id, temp_ds)
+        test_dss_ood["SVHN"] = temp_ds
+
+    # Reduce trainset size if wished
     if args.n_samples:
         indices_id = torch.randperm(len(train_ds))[:args.n_samples]
         train_ds = Subset(train_ds, indices=indices_id)
 
-    assert len(test_ds_id) == len(test_ds_ood)
-    return train_ds, test_ds_id, test_ds_ood, n_classes
+    assert len(test_dss_ood) != 0, "No ood dataset has been chosen!"
+    assert [len(test_ds_id) == len(t_ds_ood) for t_ds_ood in test_dss_ood.values()].count(0) == 0, 'All test sets should have the same size!'
+    return train_ds, test_ds_id, test_dss_ood, n_classes
+
+
+def equal_set_sizes(ds_id, ds_ood):
+    # Make test id and ood the same size
+    n_samples_id = len(ds_id)
+    n_samples_ood = len(ds_ood)
+    if n_samples_id != n_samples_ood:
+        if n_samples_id < n_samples_ood:
+            rnd_indices = torch.randperm(n_samples_ood)[:n_samples_id]
+            ds_ood = Subset(ds_ood, indices=rnd_indices)
+        else:
+            rnd_indices = torch.randperm(n_samples_id)[:n_samples_ood]
+            ds_id = Subset(ds_id, indices=rnd_indices)
+    return ds_id, ds_ood
