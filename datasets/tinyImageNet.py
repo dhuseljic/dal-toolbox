@@ -1,6 +1,5 @@
 import os
 import numpy as np
-import torch
 
 from collections import defaultdict
 from torch.utils.data import Dataset

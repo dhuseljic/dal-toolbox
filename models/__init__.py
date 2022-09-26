@@ -177,7 +177,7 @@ def build_model(args, **kwargs):
                     )
             if args.model.optimizer.lr_scheduler == 'multi_step':
                 lrs = torch.optim.lr_scheduler.MultiStepLR(
-                    optimizer,
+                    opt,
                     milestones=args.model.optimizer.lr_step_epochs,
                     gamma=args.model.optimizer.lr_gamma
                 )
