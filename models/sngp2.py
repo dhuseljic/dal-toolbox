@@ -1,14 +1,15 @@
 import math
 import copy
-import math
+
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from utils import MetricLogger, SmoothedValue
-from metrics import generalization, calibration, ood
+from metrics import ood, generalization, calibration
 
 
-class SNGP(nn.Module):
+class SNGP2(nn.Module):
     def __init__(self,
                  model: nn.Module,
                  in_features: int,
@@ -61,33 +62,49 @@ class SNGP(nn.Module):
 
         # precision matrix
         self.init_precision_matrix = torch.eye(num_inducing)*self.ridge_penalty
-        self.precision_matrix = nn.Parameter(copy.deepcopy(self.init_precision_matrix), requires_grad=False)
+        self.register_buffer("precision_matrix", copy.deepcopy(self.init_precision_matrix))
+        self.cov_mat = None
 
         self.sampled_betas = None
 
-    def reset_covariance(self):
-        device = self.precision_matrix.device
-        self.precision_matrix = nn.Parameter(copy.deepcopy(self.init_precision_matrix), requires_grad=False)
-        self.precision_matrix.to(device)
+    @property
+    def covariance_matrix(self):
+        device = self.precision_matrix.data.device
+        if self.cov_mat is None:
+            u = torch.linalg.cholesky(self.precision_matrix.data)
+            self.cov_mat = torch.cholesky_inverse(u)
+        return self.cov_mat.to(device)
 
-    def update_precision_matrix(self, phi):
-        precision_matrix_minibatch = torch.matmul(phi.T, phi)
+    def reset_precision_matrix(self):
+        device = self.precision_matrix.device
+        self.precision_matrix.data = copy.deepcopy(self.init_precision_matrix)
+        self.precision_matrix.to(device)
+        self.cov_mat = None
+
+    @torch.no_grad()
+    def update_precision_matrix(self, phi, logits):
+        probas = logits.softmax(-1)
+        probas_max = probas.max(1)[0]
+        precision_matrix_minibatch = torch.matmul(
+            probas_max * (1-probas_max) * phi.T, phi
+        )
         if self.cov_momentum > 0:
             batch_size = len(phi)
             precision_matrix_minibatch = precision_matrix_minibatch / batch_size
-            precision_matrix_new = (self.cov_momentum * self.precision_matrix +
+            precision_matrix_new = (self.cov_momentum * self.precision_matrix.data +
                                     (1-self.cov_momentum) * precision_matrix_minibatch)
         else:
-            precision_matrix_new = self.precision_matrix + precision_matrix_minibatch
-        self.precision_matrix = nn.Parameter(precision_matrix_new, requires_grad=False)
+            precision_matrix_new = self.precision_matrix.data + precision_matrix_minibatch
+        self.precision_matrix.data = precision_matrix_new
+        self.cov_mat = None
 
     def compute_predictive_covariance(self, phi):
-        covariance_matrix_feature = torch.linalg.pinv(self.precision_matrix)
+        covariance_matrix_feature = self.covariance_matrix
         out = torch.matmul(covariance_matrix_feature, phi.T) * self.ridge_penalty
         covariance_matrix_gp = torch.matmul(phi, out)
         return covariance_matrix_gp
 
-    def forward(self, x, return_cov=False, update_precision=True):
+    def forward(self, x, return_cov=False):
         _, features = self.model(x, return_features=True)
 
         if self.normalize_input:
@@ -99,8 +116,8 @@ class SNGP(nn.Module):
         # Eq. 8
         logits = self.beta(phi)
 
-        if update_precision:
-            self.update_precision_matrix(phi)
+        if self.training:
+            self.update_precision_matrix(phi, logits)
         if return_cov:
             cov = self.compute_predictive_covariance(phi)
             return logits, cov
@@ -108,21 +125,21 @@ class SNGP(nn.Module):
 
     @torch.no_grad()
     def forward_mean_field(self, x):
-        logits, cov = self.forward(x, return_cov=True, update_precision=False)
+        if self.training:
+            raise ValueError("Call eval mode before!")
+        logits, cov = self.forward(x, return_cov=True)
         scaled_logits = mean_field_logits(logits, cov, self.mean_field_factor)
         return scaled_logits
 
-    @torch.no_grad()
-    def forward_sample(self, x, n_draws=10, resample=False, return_dist=False):
-        if self.sampled_betas is None or resample:
-            # Dist from the normal that approximates the posterior over beta
-            dist = torch.distributions.MultivariateNormal(
-                loc=self.beta.weight,
-                precision_matrix=self.precision_matrix
-            )
-            self.sampled_betas = dist.sample(sample_shape=(n_draws,))
-            # TODO return_dist
+    def sample_betas(self, n_draws):
+        dist = torch.distributions.MultivariateNormal(
+            loc=self.beta.weight,
+            precision_matrix=self.precision_matrix
+        )
+        self.sampled_betas = dist.sample(sample_shape=(n_draws,))
 
+    @torch.no_grad()
+    def forward_sample(self, x):
         _, features = self.model(x, return_features=True)
         if self.normalize_input:
             features = self.layer_norm(features)
@@ -130,24 +147,28 @@ class SNGP(nn.Module):
         logits_sampled = torch.einsum('nd,ekd->enk', phi, self.sampled_betas)
         return logits_sampled
 
-    @torch.no_grad()
-    def compute_weights(self, x, y, n_draws=10):
-        _, features = self.model(x, return_features=True)
+    def forward_dirichlet(self, x, use_variance_correction=False):
+        if self.training:
+            raise ValueError("Call eval mode before!")
+        # Get logit mean and covariance predictions.
+        logits, cov = self(x, return_cov=True)
+        var = torch.diag(cov)
+        var = torch.clamp(var, min=1.e-5)
 
-        if self.normalize_input:
-            features = self.layer_norm(features)
-        phi = self.random_features(features)
+        # Zero mean correction.
+        logits -= ((var * logits.sum(-1)) / (var * self.num_classes))[:, None]
+        var *= (self.num_classes - 1) / self.num_classes
 
-        # Dist from the normal that approximates the posterior over beta
-        dist = torch.distributions.MultivariateNormal(
-            loc=self.beta.weight,
-            precision_matrix=self.precision_matrix
-        )
-        sampled_betas = dist.sample(sample_shape=(n_draws,))
-        logits_sampled = torch.einsum('nd,ekd->enk', phi, sampled_betas)
-        probas_sampled = logits_sampled.sotmax(-1)
+        # Optional variance correction.
+        if use_variance_correction:
+            c = var / math.sqrt(self.num_classes/2)
+            logits /= c.sqrt()[:, None]
+            var /= c
 
-        return logits_sampled
+        # Compute alphas.
+        sum_exp = torch.exp(-logits).sum(dim=1).unsqueeze(-1)
+        alphas = (1 - 2/self.num_classes + logits.exp()/self.num_classes**2 * sum_exp) / var[:, None]
+        return alphas
 
 
 class RandomFourierFeatures(nn.Module):
@@ -164,11 +185,9 @@ class RandomFourierFeatures(nn.Module):
         self.random_feature_linear.bias.requires_grad = False
         self.reset_parameters()
 
-    def reset_parameters(self):
+    def reset_parameters(self, std_init=1):
         # https://github.com/google/uncertainty-baselines/blob/main/uncertainty_baselines/models/resnet50_sngp.py#L55
-        # TODO: change init for 2d?
-        # TODO: Play with std, kernel scale
-        nn.init.normal_(self.random_feature_linear.weight, std=1)
+        nn.init.normal_(self.random_feature_linear.weight, std=std_init)
         nn.init.uniform_(self.random_feature_linear.bias, 0, 2*math.pi)
 
     def forward(self, x):
@@ -186,9 +205,18 @@ class RandomFourierFeatures(nn.Module):
         return x
 
 
+def mean_field_logits(logits, cov, lmb=math.pi / 8):
+    """Scale logits using the mean field approximation proposed by https://arxiv.org/abs/2006.07584"""
+    if lmb is None or lmb < 0:
+        return logits
+    variances = torch.diag(cov).view(-1, 1) if cov is not None else 1
+    logits_adjusted = logits / torch.sqrt(1 + lmb*variances)
+    return logits_adjusted
+
+
 def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
     model.train()
-    model.reset_covariance()
+    model.reset_precision_matrix()
     model.to(device)
 
     metric_logger = MetricLogger(delimiter=" ")
@@ -212,15 +240,6 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None,
 
     train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
     return train_stats
-
-
-def mean_field_logits(logits, cov, lmb=math.pi / 8):
-    """Scale logits using the mean field approximation proposed by https://arxiv.org/abs/2006.07584"""
-    if lmb is None or lmb < 0:
-        return logits
-    variances = torch.diag(cov).view(-1, 1) if cov is not None else 1
-    logits_adjusted = logits / torch.sqrt(1 + lmb*variances)
-    return logits_adjusted
 
 
 @torch.no_grad()
@@ -292,95 +311,70 @@ def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
 
     return {f"test_{k}": v for k, v in metrics.items()}
 
-# class RandomFeatureGaussianProcess(nn.Module):
-#     def __init__(self,
-#                  in_features: int,
-#                  out_features: int,
-#                  num_inducing: int = 1024,
-#                  kernel_scale: float = 1,
-#                  normalize_input: bool = False,
-#                  scale_random_features: bool = False,
-#                  cov_momentum: float = .999,
-#                  ridge_penalty: float = 1e-6,
-#                  mean_field_factor: float = 1,
-#                  ):
-#         super().__init__()
-#
-#         self.in_features = in_features
-#         self.out_features = out_features
-#         self.num_inducing = num_inducing
-#
-#         # scale inputs
-#         self.kernel_scale = kernel_scale
-#         self.normalize_input = normalize_input
-#         self.input_scale = (1/math.sqrt(kernel_scale) if kernel_scale is not None else None)
-#
-#         # Random features
-#         self.scale_random_features = scale_random_features
-#         self.random_feature_scale = math.sqrt(2./float(num_inducing))
-#
-#         # Inference
-#         self.mean_field_factor = mean_field_factor
-#
-#         # Covariance computation
-#         self.ridge_penalty = ridge_penalty
-#         self.cov_momentum = cov_momentum
-#
-#         # Define scale, weight and bias according to Eq. 7
-#         # https://github.com/google/uncertainty-baselines/blob/main/uncertainty_baselines/models/resnet50_sngp.py#L55
-#         self.random_feature_linear = nn.Linear(in_features, num_inducing)
-#         self.random_feature_linear.weight.requires_grad = False
-#         self.random_feature_linear.bias.requires_grad = False
-#         nn.init.normal_(self.random_feature_linear.weight, std=0.05)
-#         nn.init.uniform_(self.random_feature_linear.bias, 0, 2*math.pi)
-#
-#         # Define output layer according to Eq 8. For imagenet init with normal std=0.01?
-#         self.beta = nn.Linear(num_inducing, out_features, bias=False)
-#
-#         self.init_precision_matrix = torch.eye(num_inducing)*self.ridge_penalty
-#         self.precision_matrix = nn.Parameter(copy.deepcopy(self.init_precision_matrix), requires_grad=False)
-#
-#     def forward(self, features, return_cov=False, update_precision=True):
-#         if self.normalize_input:
-#             features = self.layer_norm(features)
-#         elif self.input_scale is not None:
-#             features = features * self.input_scale
-#
-#         # Get gp features according to Eq. 7
-#         phi = torch.cos(self.random_feature_linear(features))
-#         # See: https://github.com/google/uncertainty-baselines/blob/main/uncertainty_baselines/models/wide_resnet_sngp.py#L207
-#         if self.scale_random_features:
-#             phi = self.random_feature_scale * phi
-#
-#         # Eq. 8
-#         logits = self.beta(phi)
-#
-#         if update_precision:
-#             self.update_precision_matrix(phi)
-#
-#         if return_cov:
-#             cov = self.compute_predictive_covariance(phi)
-#             return logits, cov
-#         return logits
-#
-#     def reset_covariance(self):
-#         device = self.precision_matrix.device
-#         self.precision_matrix = nn.Parameter(copy.deepcopy(self.init_precision_matrix), requires_grad=False)
-#         self.precision_matrix.to(device)
-#
-#     def update_precision_matrix(self, phi):
-#         precision_matrix_minibatch = torch.matmul(phi.T, phi)
-#         if self.cov_momentum > 0:
-#             batch_size = len(phi)
-#             precision_matrix_minibatch = precision_matrix_minibatch / batch_size
-#             precision_matrix_new = (self.cov_momentum * self.precision_matrix +
-#                                     (1-self.cov_momentum) * precision_matrix_minibatch)
-#         else:
-#             precision_matrix_new = self.precision_matrix + precision_matrix_minibatch
-#         self.precision_matrix = nn.Parameter(precision_matrix_new, requires_grad=False)
-#
-#     def compute_predictive_covariance(self, phi):
-#         covariance_matrix_feature = torch.linalg.pinv(self.precision_matrix)
-#         out = torch.matmul(covariance_matrix_feature, phi.T) * self.ridge_penalty
-#         covariance_matrix_gp = torch.matmul(phi, out)
-#         return covariance_matrix_gp
+
+@torch.no_grad()
+def reweight(model, dataloader, device, lmb=1):
+    model.eval()
+    model.to(device)
+
+    # Get all features and targets
+    all_phis, all_targets = [], []
+    for inputs, targets in dataloader:
+        _, features = model.model(inputs.to(device), return_features=True)
+        if model.normalize_input:
+            features = model.layer_norm(features)
+        phi = model.random_features(features)
+        all_phis.append(phi.cpu())
+        all_targets.append(targets)
+    phis = torch.cat(all_phis)
+    targets = torch.cat(all_targets)
+
+    # Reweight
+    model.cpu()
+    mean = model.beta.weight.data.clone()
+    cov = model.covariance_matrix.data.clone()
+    targets_onehot = F.one_hot(targets, num_classes=model.num_classes)
+
+    for phi, target_onehot in zip(phis, targets_onehot):
+        for _ in range(lmb):
+            tmp_1 = cov @ phi
+            tmp_2 = torch.outer(tmp_1, tmp_1)
+
+            # Compute new prediction.
+            var = F.linear(phi, tmp_1)
+            logits = F.linear(phi, mean)
+            probas = logits.softmax(-1)
+            probas_max = probas.max()
+
+            # Update covariance matrix.
+            num = probas_max * (1-probas_max)
+            denom = 1 + num * var
+            factor = num / denom
+            cov_update = factor * tmp_2
+            cov -= cov_update
+
+            # Update mean.
+            tmp_3 = F.linear(cov, phi)
+            tmp_4 = (target_onehot - probas)
+            mean += torch.outer(tmp_4, tmp_3)
+
+            # Undo cov update.
+            cov += cov_update
+
+            # Compute new prediction.
+            var = F.linear(phi, tmp_1)
+            logits = F.linear(phi, mean)
+            probas = logits.softmax(-1)
+            probas_max = probas.max()
+
+            # Update covariance matrix.
+            num = probas_max * (1 - probas_max)
+            denom = 1 + num * var
+            factor = num / denom
+            cov_update = factor * tmp_2
+            cov -= cov_update
+
+    model_reweighted = copy.deepcopy(model)
+    model_reweighted.beta.weight.data = mean
+    model_reweighted.covariance_matrix.data = cov
+    return model_reweighted

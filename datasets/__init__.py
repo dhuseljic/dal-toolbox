@@ -1,5 +1,6 @@
 import torch
 import torchvision
+import numpy as np
 
 from torch.utils.data import Subset
 from torchvision import transforms
@@ -94,10 +95,13 @@ def build_svhn(split):
 
 def build_tinyimagenet(split):
     #TODO: Check if mean, std is correct
-    mean, std = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
+    mean, std = (120.0378, 111.3496, 106.5628), (73.6951, 69.0155, 69.3879)
     if split == 'train':
         train_transform = ClassificationPresetTrain(crop_size=32, mean=mean, std=std)
         ds = TinyImageNet(root="./data", split='train', transform=train_transform)
+        #print("Calculating mean and std...")
+        #print("Mean: ",torch.mean(torch.tensor(np.array(ds.images)).float(), dim=(0,1,2)))
+        #print("Std:",torch.std(torch.tensor(np.array(ds.images)).float(), dim=(0,1,2)))
     elif split == 'test':
         eval_transform = ClassificationPresetEval(crop_size=32, mean=mean, std=std)
         ds = TinyImageNet(root="./data", split='test', transform=eval_transform)
