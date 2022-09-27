@@ -1,9 +1,11 @@
 name: mcdropout
 backbone: dropout_resnet
 dropout_rate: 0.1
-n_passes: 30
+n_passes: 15
 optimizer:
   lr: 0.1
   weight_decay: 3e-4
   momentum: 0.9
   lr_scheduler: 'multi_step'
+  lr_step_epochs: [60, 120, 160]
+  lr_gamma: 0.2

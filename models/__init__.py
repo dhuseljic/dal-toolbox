@@ -4,7 +4,7 @@ import torch.nn as nn
 
 from backbones import build_backbone
 from models.mcdropout import MCDropout
-from . import ddu, deterministic, sngp, sghmc, mcdropout, deep_ensemble
+from . import ddu, deterministic, sngp, sghmc, mcdropout, deep_ensemble, sngp2
 
 
 def build_model(args, **kwargs):
@@ -120,6 +120,46 @@ def build_model(args, **kwargs):
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
         }
+    elif args.model.name == 'sngp2':
+        model = sngp2.SNGP2(
+            model=backbone,
+            in_features=backbone.out_features,
+            num_inducing=args.model.gp.num_inducing,
+            num_classes=n_classes,
+            kernel_scale=args.model.gp.kernel_scale,
+            normalize_input=args.model.gp.normalize_input,
+            scale_random_features=args.model.gp.scale_random_features,
+            cov_momentum=args.model.gp.cov_momentum,
+            ridge_penalty=args.model.gp.ridge_penalty,
+            mean_field_factor=args.model.gp.mean_field_factor
+        )
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+            nesterov=True
+        )
+        if args.model.optimizer.lr_scheduler == 'multi_step':
+            lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
+                optimizer,
+                milestones=args.model.optimizer.lr_step_epochs,
+                gamma=args.model.optimizer.lr_gamma
+            )
+        elif args.model.optimizer.lr_scheduler == 'cosine':
+            lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.n_epochs)
+        else:
+            assert "no available lr_scheduler chosen!"
+        criterion = nn.CrossEntropyLoss()
+        model_dict = {
+            'model': model,
+            'optimizer': optimizer,
+            'train_one_epoch': sngp2.train_one_epoch,
+            'evaluate': sngp2.evaluate,
+            'lr_scheduler': lr_scheduler,
+            'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
+            'eval_kwargs': dict(criterion=criterion, device=args.device),
+        }
     elif args.model == 'DDU':
         model = ddu.DDUWrapper(backbone)
         model.n_classes = n_classes
@@ -177,7 +217,7 @@ def build_model(args, **kwargs):
                     )
             if args.model.optimizer.lr_scheduler == 'multi_step':
                 lrs = torch.optim.lr_scheduler.MultiStepLR(
-                    optimizer,
+                    opt,
                     milestones=args.model.optimizer.lr_step_epochs,
                     gamma=args.model.optimizer.lr_gamma
                 )

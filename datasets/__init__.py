@@ -1,9 +1,11 @@
 import torch
 import torchvision
+import numpy as np
 
 from torch.utils.data import Subset
 from torchvision import transforms
 from datasets.presets import ClassificationPresetTrain, ClassificationPresetEval
+from datasets.tinyImageNet import TinyImageNet
 
 
 def build_mnist(split):
@@ -81,36 +83,60 @@ def build_svhn(split):
         ds = torchvision.datasets.CIFAR100('data/', train=False, download=True, transform=eval_transform)
     return ds
 
+#def build_imagenet(split, path):
+#    mean, std = 0, 1
+#    if split == 'train':
+#        train_transform = 
+#        ds = torchvision.datasets.ImageNet(root=path, split=split, transform=train_transform)
+#    elif split == 'test':
+#        eval_transform = 
+#        ds = torchvision.datasets.ImageNet(root=path, split=split, transform=eval_transform)
+#    return ds
+
+def build_tinyimagenet(split):
+    #TODO: Check if mean, std is correct
+    mean, std = (120.0378, 111.3496, 106.5628), (73.6951, 69.0155, 69.3879)
+    if split == 'train':
+        train_transform = ClassificationPresetTrain(crop_size=32, mean=mean, std=std)
+        ds = TinyImageNet(root="./data", split='train', transform=train_transform)
+        #print("Calculating mean and std...")
+        #print("Mean: ",torch.mean(torch.tensor(np.array(ds.images)).float(), dim=(0,1,2)))
+        #print("Std:",torch.std(torch.tensor(np.array(ds.images)).float(), dim=(0,1,2)))
+    elif split == 'test':
+        eval_transform = ClassificationPresetEval(crop_size=32, mean=mean, std=std)
+        ds = TinyImageNet(root="./data", split='test', transform=eval_transform)
+    return ds
+
 
 def build_dataset(args):
     # At first build the in domain dataset
     if args.dataset == 'MNIST':
         train_ds = build_mnist('train')
-        test_ds = build_mnist('test')
+        test_ds_id = build_mnist('test')
         n_classes = 10
 
     elif args.dataset == 'MNIST04':
         train_ds = build_mnist('train')
-        test_ds = build_mnist('test')
+        test_ds_id = build_mnist('test')
         indices_id = (train_ds.targets < 5).nonzero().flatten()
         train_ds = Subset(train_ds, indices=indices_id)
-        indices_id = (test_ds.targets < 5).nonzero().flatten()
-        test_ds_id = Subset(test_ds, indices=indices_id)
+        indices_id = (test_ds_id.targets < 5).nonzero().flatten()
+        test_ds_id = Subset(test_ds_id, indices=indices_id)
         n_classes = 5
 
     elif args.dataset == 'MNIST59':
         train_ds = build_mnist('train')
-        test_ds = build_mnist('test')
+        test_ds_id = build_mnist('test')
         indices_id = (train_ds.targets >= 5).nonzero().flatten()
         train_ds = Subset(train_ds, indices=indices_id)
-        indices_id = (test_ds.targets >= 5).nonzero().flatten()
-        test_ds_id = Subset(test_ds, indices=indices_id)
+        indices_id = (test_ds_id.targets >= 5).nonzero().flatten()
+        test_ds_id = Subset(test_ds_id, indices=indices_id)
         n_classes = 5
 
     elif args.dataset == 'FashionMNIST':
-            train_ds = build_fashionmnist('train')
-            test_ds_id = build_fashionmnist('test')
-            n_classes = 10
+        train_ds = build_fashionmnist('train')
+        test_ds_id = build_fashionmnist('test')
+        n_classes = 10
 
     elif args.dataset == 'CIFAR10':
         train_ds = build_cifar10('train')
@@ -124,8 +150,18 @@ def build_dataset(args):
 
     elif args.dataset == 'SVHN':
         train_ds = build_svhn('train')
-        test_ds = build_svhn('test')
+        test_ds_id = build_svhn('test')
         n_classes = 10
+
+    elif args.dataset == 'tinyImagenet':
+        train_ds = build_tinyimagenet('train')
+        test_ds_id = build_tinyimagenet('test')
+        n_classes = 200
+
+    #elif args.dataset == 'Imagenet':
+    #    train_ds = build_imagenet('train', args.imagenet_path)
+    #    test_ds_id = build_imagenet('test', args.imagenet_path)
+    #    n_classes = ?
 
     else:
         raise NotImplementedError
@@ -170,6 +206,16 @@ def build_dataset(args):
         temp_ds = build_svhn('test')
         test_ds_id, temp_ds = equal_set_sizes(test_ds_id, temp_ds)
         test_dss_ood["SVHN"] = temp_ds
+
+    if 'tinyImagenet' in args.ood_datasets:
+        temp_ds = build_tinyimagenet('test')
+        test_ds_id, temp_ds = equal_set_sizes(test_ds_id, temp_ds)
+        test_dss_ood["tinyImagenet"] = temp_ds
+
+    #if 'Imagenet' in args.ood_datasets:
+    #    temp_ds = build_imagenet('test')
+    #    test_ds_id, temp_ds = equal_set_sizes(test_ds_id, temp_ds)
+    #    test_dss_ood["Imagenet"] = temp_ds
 
     # Reduce trainset size if wished
     if args.n_samples:

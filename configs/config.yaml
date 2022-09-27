@@ -1,5 +1,7 @@
 defaults:
+  - _self_
   - model: 'deterministic'
+
 
 dataset: MNIST04
 ood_datasets: ["MNIST59"]
