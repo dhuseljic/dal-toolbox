@@ -83,15 +83,15 @@ def build_svhn(split):
         ds = torchvision.datasets.CIFAR100('data/', train=False, download=True, transform=eval_transform)
     return ds
 
-#def build_imagenet(split, path):
-#    mean, std = 0, 1
-#    if split == 'train':
-#        train_transform = 
-#        ds = torchvision.datasets.ImageNet(root=path, split=split, transform=train_transform)
-#    elif split == 'test':
-#        eval_transform = 
-#        ds = torchvision.datasets.ImageNet(root=path, split=split, transform=eval_transform)
-#    return ds
+def build_imagenet(split, path):
+    mean, std = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
+    if split == 'train':
+        train_transform = ClassificationPresetTrain(crop_size=32, mean=mean, std=std)
+        ds = torchvision.datasets.ImageNet(root=path, split=split, transform=train_transform)
+    elif split == 'val':
+        eval_transform = ClassificationPresetEval(crop_size=32, mean=mean, std=std)
+        ds = torchvision.datasets.ImageNet(root=path, split=split, transform=eval_transform)
+    return ds
 
 def build_tinyimagenet(split):
     #TODO: Check if mean, std is correct
@@ -158,10 +158,10 @@ def build_dataset(args):
         test_ds_id = build_tinyimagenet('test')
         n_classes = 200
 
-    #elif args.dataset == 'Imagenet':
-    #    train_ds = build_imagenet('train', args.imagenet_path)
-    #    test_ds_id = build_imagenet('test', args.imagenet_path)
-    #    n_classes = ?
+    elif args.dataset == 'Imagenet':
+        train_ds = build_imagenet('train', args.imagenet_path)
+        test_ds_id = build_imagenet('val', args.imagenet_path)
+        n_classes = 1000
 
     else:
         raise NotImplementedError
@@ -212,10 +212,10 @@ def build_dataset(args):
         test_ds_id, temp_ds = equal_set_sizes(test_ds_id, temp_ds)
         test_dss_ood["tinyImagenet"] = temp_ds
 
-    #if 'Imagenet' in args.ood_datasets:
-    #    temp_ds = build_imagenet('test')
-    #    test_ds_id, temp_ds = equal_set_sizes(test_ds_id, temp_ds)
-    #    test_dss_ood["Imagenet"] = temp_ds
+    if 'Imagenet' in args.ood_datasets:
+        temp_ds = build_imagenet('val')
+        test_ds_id, temp_ds = equal_set_sizes(test_ds_id, temp_ds)
+        test_dss_ood["Imagenet"] = temp_ds
 
     # Reduce trainset size if wished
     if args.n_samples:

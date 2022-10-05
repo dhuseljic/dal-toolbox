@@ -10,10 +10,10 @@ import pandas as pd
 from omegaconf import OmegaConf
 from pathlib import Path
 
-root_path = Path('../results/runV4')
+root_path = Path('../results/SNGP_tests2/output')
 # %%
 # Load all model results into one large dictionary
-model_names = ["ensemble_5", "ensemble_10", "mcdropout", "vanilla"]
+model_names = ["SNGP1", "SNGP2"]
 all_results = {mn:{} for mn in model_names}
 
 for model_name in model_names:
