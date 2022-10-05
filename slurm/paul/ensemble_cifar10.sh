@@ -11,13 +11,14 @@ source /mnt/stud/home/phahn/.zshrc
 
 conda activate pytorch_alc_env
 
-cd /mnt/stud/work/phahn/uncertainty/uncertainty_evaluation
+cd /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation
 
 OUTPUT_DIR=/mnt/stud/work/phahn/uncertainty/output/${SLURM_JOB_NAME}_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}/
 echo "Saving results to $OUTPUT_DIR"
 
 srun python -u main.py \
-    dataset=CIFAR10_vs_CIFAR100 \
+    dataset=CIFAR10 \
+    ood_datasets=\[CIFAR100\] \
     model=deep_ensemble \
     output_dir=$OUTPUT_DIR \
     eval_interval=1 \

@@ -11,4 +11,4 @@ batch_size: 64
 device: "cuda"
 random_seed: 42
 output_dir: "./output/"
-imagenet_path: /mnt/datasets/imagenet/ILSVRC2012
+imagenet_path: /mnt/datasets/imagenet/ILSVRC2012/downloads
