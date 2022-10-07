@@ -4,7 +4,7 @@ import torch.nn as nn
 
 from backbones import build_backbone
 from models.mcdropout import MCDropout
-from . import ddu, deterministic, sngp, sghmc, mcdropout, deep_ensemble, sngp2
+from . import ddu, deterministic, resnet18_sngp, sghmc, mcdropout, deep_ensemble, sngp2
 
 
 def build_model(args, **kwargs):
@@ -80,19 +80,20 @@ def build_model(args, **kwargs):
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
         }
-    elif args.model.name == 'sngp':
-        model = sngp.SNGP(
-            model=backbone,
-            in_features=backbone.out_features,
+    elif args.model.name == 'resnet18_sngp':
+        model = resnet18_sngp.resnet18_sngp(
+            num_classes=10,
+            spectral_norm=args.model.spectral_norm.use_spectral_norm,
+            norm_bound=args.model.spectral_norm.coeff,
+            n_power_iterations=args.model.spectral_norm.n_power_iterations,
             num_inducing=args.model.gp.num_inducing,
-            num_classes=n_classes,
             kernel_scale=args.model.gp.kernel_scale,
-            normalize_input=args.model.gp.normalize_input,
+            normalize_input=False,
             scale_random_features=args.model.gp.scale_random_features,
+            mean_field_factor=args.model.gp.mean_field_factor,
             cov_momentum=args.model.gp.cov_momentum,
             ridge_penalty=args.model.gp.ridge_penalty,
-            mean_field_factor=args.model.gp.mean_field_factor
-        )
+            )
         optimizer = torch.optim.SGD(
             model.parameters(),
             lr=args.model.optimizer.lr,
@@ -100,22 +101,13 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True
         )
-        if args.model.optimizer.lr_scheduler == 'multi_step':
-            lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
-                optimizer,
-                milestones=args.model.optimizer.lr_step_epochs,
-                gamma=args.model.optimizer.lr_gamma
-            )
-        elif args.model.optimizer.lr_scheduler == 'cosine':
-            lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.n_epochs)
-        else:
-            assert "no available lr_scheduler chosen!"
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.n_epochs)
         criterion = nn.CrossEntropyLoss()
         model_dict = {
             'model': model,
             'optimizer': optimizer,
-            'train_one_epoch': sngp.train_one_epoch,
-            'evaluate': sngp.evaluate,
+            'train_one_epoch': resnet18_sngp.train_one_epoch,
+            'evaluate': resnet18_sngp.evaluate,
             'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
