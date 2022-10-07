@@ -135,7 +135,7 @@ plt.show()
 torch.manual_seed(1)
 domain = 5
 draws = 10000
-n_samples_new = 20
+n_samples_new = 10
 
 plt.figure(figsize=(15, 5))
 plt.subplot(121)
@@ -161,15 +161,16 @@ plt.contour(xx, yy, probas, alpha=.3, zorder=-1, levels=[0.5], colors='black')
 plt.subplot(122)
 
 # Create new Cluster
+noise = .2
 X_new = torch.cat([
-    torch.randn((n_samples_new, 2))*.2 + 3,
-    torch.randn((n_samples_new, 2))*.2 - 3,
-    torch.randn((n_samples_new, 2))*.2 - torch.Tensor([3, -3]),
-    torch.randn((n_samples_new, 2))*.2 + torch.Tensor([3, -3]),
-    torch.randn((n_samples_new, 2))*.2 + torch.Tensor([0, -3]),
-    torch.randn((n_samples_new, 2))*.2 + torch.Tensor([0, 3]),
-    torch.randn((n_samples_new, 2))*.2 + torch.Tensor([-3, 0]),
-    torch.randn((n_samples_new, 2))*.2 + torch.Tensor([3, 0]),
+    torch.randn((n_samples_new, 2))*noise + 3,
+    torch.randn((n_samples_new, 2))*noise - 3,
+    torch.randn((n_samples_new, 2))*noise - torch.Tensor([3, -3]),
+    torch.randn((n_samples_new, 2))*noise + torch.Tensor([3, -3]),
+    torch.randn((n_samples_new, 2))*noise + torch.Tensor([0, -3]),
+    torch.randn((n_samples_new, 2))*noise + torch.Tensor([0, 3]),
+    torch.randn((n_samples_new, 2))*noise + torch.Tensor([-3, 0]),
+    torch.randn((n_samples_new, 2))*noise + torch.Tensor([3, 0]),
     # torch.randn((n_samples_new, 2))*2,
 ])
 y_new = torch.cat([
@@ -190,13 +191,10 @@ plt.scatter(X_new[:, 0], X_new[:, 1], s=10, c=y_new)
 # Reweighting
 lmb = .1
 log_probas_sampled = model.forward_sample(X_new, n_draws=draws).log_softmax(-1)
-# uniform prior
-log_weights = torch.log(torch.ones(draws) / draws)  
-# MVN prior
-# dist = torch.distributions.MultivariateNormal(loc=model.beta.weight.data, precision_matrix=model.precision_matrix)
-# log_weights = dist.log_prob(model.sampled_betas).sum(-1)
+log_weights = torch.log(torch.ones(draws) / draws)  # uniform prior
 log_weights += lmb*log_probas_sampled[:, torch.arange(len(X_new)), y_new].sum(dim=1)
-weights = log_weights.exp()
+# normalize log probs numerically stable
+weights = torch.exp(log_weights - log_weights.max())
 weights /= weights.sum()
 
 # for l, w in zip(logits, weights):
@@ -212,21 +210,95 @@ c = plt.contourf(xx, yy, probas_reweighted[:, 1].view(xx.shape), alpha=.8, zorde
 plt.contour(xx, yy, probas_reweighted[:, 1].view(xx.shape), alpha=.3, zorder=-1, levels=[0.5], colors='black')
 plt.colorbar(c)
 
-# %%
 
 # %%
+plt.bar(range(len(weights)), weights)
+
+# %%
+
 dist = torch.distributions.MultivariateNormal(loc=model.beta.weight.data, precision_matrix=model.precision_matrix)
-dist.log_prob(model.sampled_betas).sum(-1)
-math.log(1/1000)
-
-
+log_weights = dist.log_prob(model.sampled_betas).sum(-1)
+plt.hist(log_weights.numpy())
 # %%
-log_weights = log_weights.sum(-1)
-# %%
-model.sampled_betas
+"""SNGP Random Sequence."""
 
-# %%
+# INIT model
+spectral_hparams = dict(
+    norm_bound=.9,
+    n_residual_layers=1,
+    spectral_norm=True,
+)
+gp_hparams = dict(
+    num_inducing=4*1024,
+    kernel_scale=.1,             # works like bandwidth
+    normalize_input=False,      # important to disable
+    scale_random_features=True,  # important to enable
+    # Not that important, for inference
+    cov_momentum=-1,
+    ridge_penalty=1,
+    mean_field_factor=math.pi/8,
+)
+epochs = 200
+weight_decay = 1e-2
 
-plt.bar(range(len(weights)),weights)
+torch.manual_seed(0)
+model = sngp.SNGP(model=Net(num_classes=2, **spectral_hparams), in_features=128, num_classes=2, **gp_hparams)
+nn.init.normal_(model.random_features.random_feature_linear.weight)
+nn.init.xavier_normal_(model.beta.weight)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=weight_decay)
+criterion = nn.CrossEntropyLoss()
+
+domain = 2
+draws = 10000
+
+# Subset training
+n_samples_train = 20
+indices = range(n_samples_train)
+train_ds_subset = torch.utils.data.Subset(train_ds, indices=indices)
+train_loader = torch.utils.data.DataLoader(train_ds_subset, batch_size=128, shuffle=True)
+
+# Subset Bayesian updating
+n_samples_updating = 50
+indices_updating= range(n_samples_train, n_samples_train+n_samples_updating)
+# train_ds_updating = torch.utils.data.Subset(train_ds, indices=indices_updating)
+
+for i_epoch in range(epochs):
+    train_stats = sngp.train_one_epoch(model, train_loader, criterion, optimizer, device='cpu', epoch=i_epoch)
+
+plt.figure(figsize=(15, 8))
+plt.subplot(121)
+xx, yy = torch.meshgrid(torch.linspace(-domain, domain, 51), torch.linspace(-domain, domain, 51))
+zz = torch.stack((xx.flatten(), yy.flatten()), dim=1)
+
+logits = model.forward_sample(zz, n_draws=draws, resample=True)
+probas = logits.softmax(-1)
+probas = probas.mean(0)[:, 1].view(xx.shape)
+
+plt.scatter(X[:, 0], X[:, 1], c=y, s=1)
+plt.scatter(X[indices, 0], X[indices, 1], c=y[indices], s=20)
+
+c = plt.contourf(xx, yy, probas, alpha=.8, zorder=-1, levels=np.linspace(0, 1, 6))
+plt.colorbar(c)
+plt.contour(xx, yy, probas, alpha=.3, zorder=-1, levels=[0.5], colors='black')
+
+plt.subplot(122)
+
+# Reweighting
+lmb = .5
+log_probas_sampled = model.forward_sample(X[indices_updating], n_draws=draws).log_softmax(-1)
+log_weights = torch.log(torch.ones(draws) / draws)  # uniform prior
+log_weights += lmb*log_probas_sampled[:, torch.arange(len(X[indices_updating])), y[indices_updating]].sum(dim=1)
+# normalize log probs numerically stable
+weights = torch.exp(log_weights - log_weights.max())
+weights /= weights.sum()
+probas_reweighted = torch.einsum('e,enk->nk', weights, logits.softmax(-1))
+
+# plt.contourf(xx, yy, probas_reweighted[:, 1].view(xx.shape), alpha=.6, zorder=-1, levels=[0.5], colors='purple')
+plt.scatter(X[:, 0], X[:, 1], c=y, s=1)
+plt.scatter(X[indices_updating, 0], X[indices_updating, 1], c=y[indices_updating], s=20)
+c = plt.contourf(xx, yy, probas_reweighted[:, 1].view(xx.shape), alpha=.8, zorder=-1, levels=np.linspace(0, 1, 6))
+plt.contour(xx, yy, probas_reweighted[:, 1].view(xx.shape), alpha=.3, zorder=-1, levels=[0.5], colors='black')
+plt.colorbar(c)
+
 
 # %%

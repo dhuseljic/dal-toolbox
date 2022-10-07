@@ -5,6 +5,7 @@ from . import lenet, resnet, wide_resnet, spectral_resnet, spectral_wide_resnet,
 
 
 def build_backbone(args, n_classes):
+    return None
     # TODO: not needed anymore?
     if args.model.backbone == 'resnet18':
         backbone = resnet.resnet18(num_classes=n_classes)
@@ -37,4 +38,3 @@ def build_backbone(args, n_classes):
         backbone = lenet.LeNet(n_classes=n_classes)
     else:
         raise NotImplementedError(f'Backbone {args.model.backbone} is not implemented.')
-    return None
