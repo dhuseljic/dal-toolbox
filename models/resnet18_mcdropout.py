@@ -1,14 +1,98 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from metrics import generalization, calibration, ood
 from utils import MetricLogger, SmoothedValue
+from models.utils.baysian_module import BayesianModule, ConsistentMCDropout2d
 
-
-class MCDropout(nn.Module):
-    def __init__(self, model, k):
-        super().__init__()
-        self.model = model
+class DropoutResNet(BayesianModule):
+    def __init__(self, num_classes=10, k=None, p_drop=0.2):
+        super(BayesianModule, self).__init__()
+        self.in_planes = 64
+        self.dropout = True
+        self.block = DropoutBasicBlock
+        self.num_blocks = [2,2,2,2]
         self.k = k
+
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=3,
+                               stride=1, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(64)
+        self.layer1 = self._make_layer(self.block, 64, self.num_blocks[0] , p_drop, stride=1)
+        self.layer2 = self._make_layer(self.block, 128, self.num_blocks[1] , p_drop, stride=2)
+        self.layer3 = self._make_layer(self.block, 256, self.num_blocks[2] , p_drop, stride=2)
+        self.layer4 = self._make_layer(self.block, 512, self.num_blocks[3] , p_drop, stride=2)
+        self.linear = nn.Linear(512*self.block.expansion, num_classes)
+
+        self.layers = [self.layer1, self.layer2, self.layer3, self.layer4]
+
+    def _make_layer(self, block, planes, num_blocks, p_drop, stride):
+        strides = [stride] + [1]*(num_blocks-1)
+        layers = []
+        for stride in strides:
+            layers.append(block(self.in_planes, planes, p_drop, stride))
+            self.in_planes = planes * block.expansion
+        return nn.Sequential(*layers)
+
+    def forward(self, x, get_embeddings=False):
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.layer1(out)
+        out = self.layer2(out)
+        out = self.layer3(out)
+        out = self.layer4(out)
+        out = F.avg_pool2d(out, 4)
+        out = out.view(out.size(0), -1)
+        out = (self.linear(out), out) if get_embeddings else self.linear(out)
+        return out 
+
+    def mc_forward_impl(self, mc_input_BK: torch.Tensor):
+        out = self.conv1(mc_input_BK)
+        out = F.relu(self.bn1(out))
+        out = self.layer1(out)
+        out = self.layer2(out)
+        out = self.layer3(out)
+        out = self.layer4(out)
+        out = F.avg_pool2d(out, 4)
+        out = out.view(out.size(0), -1)
+        out = self.linear(out)
+        return out
+
+    def set_dropout(self, mod):
+        self.dropout=mod
+        for seq in self.layers:
+            for module in seq:
+                module.dropout=mod
+
+
+class DropoutBasicBlock(nn.Module):
+    expansion = 1
+
+    def __init__(self, in_planes, planes, p_drop, stride=1):
+        super().__init__()
+        self.dropout = True
+
+        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.conv1_drop = ConsistentMCDropout2d(p_drop)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(planes)
+
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_planes != self.expansion*planes:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_planes, self.expansion*planes,
+                          kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(self.expansion*planes)
+            )
+
+    def forward(self, x):
+        out = self.conv1(x)
+        out = self.conv1_drop(out) if self.dropout else out
+        out = F.relu(self.bn1(out))
+        out = self.bn2(self.conv2(out))
+        out += self.shortcut(x)
+        out = F.relu(out)
+        return out
+        
 
 
 @torch.no_grad()
@@ -20,7 +104,7 @@ def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
     dropout_logits_id, targets_id, = [], []
     for inputs, targets in dataloader_id:
         inputs, targets = inputs.to(device), targets.to(device)
-        dropout_logits_id.append(model.model.mc_forward(inputs, model.k))
+        dropout_logits_id.append(model.mc_forward(inputs, model.k))
         targets_id.append(targets)
     
     # Transform to tensor
@@ -61,7 +145,7 @@ def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
         dropout_logits_ood = []
         for inputs, targets in dataloader_ood:
             inputs, targets = inputs.to(device), targets.to(device)
-            dropout_logits_ood.append(model.model.mc_forward(inputs, model.k))
+            dropout_logits_ood.append(model.mc_forward(inputs, model.k))
         dropout_logits_ood = torch.cat(dropout_logits_ood, dim=0).cpu()
         dropout_probas_ood = dropout_logits_ood.softmax(dim=-1)
         mean_probas_ood = torch.mean(dropout_probas_ood, dim=1)
@@ -98,7 +182,7 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None,
 
     for X_batch, y_batch in metric_logger.log_every(dataloader, print_freq=print_freq, header=header):
         X_batch, y_batch = X_batch.to(device), y_batch.to(device)
-        out = model.model.mc_forward(X_batch, 1).squeeze(1)
+        out = model.mc_forward(X_batch, 1).squeeze(1)
         loss = criterion(out, y_batch)
         batch_size = X_batch.size(0)
 

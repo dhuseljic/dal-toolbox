@@ -1,6 +1,7 @@
-name : sngp
-backbone: spectral_resnet18
+name : wide_resnet_sngp
 dropout_rate: 0.1
+depth: 28
+widen_factor: 10
 spectral_norm:
   use_spectral_norm: True
   coeff: 6
@@ -17,6 +18,7 @@ optimizer:
   lr: 0.08
   weight_decay: 3e-4
   momentum: .9
-  lr_scheduler: 'multi_step'
-  lr_gamma: 0.2
-  lr_step_epochs: [60, 120, 160]
+lr_scheduler:
+  step_epochs: [60, 120, 160]
+  gamma: 0.2
+  

@@ -1,71 +1,211 @@
 import math
 import copy
-
+import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.init as init
 import torch.nn.functional as F
 
 from utils import MetricLogger, SmoothedValue
-from metrics import ood, generalization, calibration
+from metrics import generalization, calibration, ood
+from .utils.spectral_norm import SpectralConv2d
 
 
-class SNGP2(nn.Module):
+def conv3x3(in_planes, out_planes, stride=1, spectral_norm=True, norm_bound=1, n_power_iterations=1):
+    return SpectralConv2d(in_planes, out_planes, kernel_size=3, spectral_norm=spectral_norm, norm_bound=norm_bound,
+                          n_power_iterations=n_power_iterations, stride=stride, padding=1, bias=True)
+
+
+def conv_init(m):
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:
+        init.xavier_uniform_(m.weight, gain=np.sqrt(2))
+        init.constant_(m.bias, 0)
+    elif classname.find('BatchNorm') != -1:
+        init.constant_(m.weight, 1)
+        init.constant_(m.bias, 0)
+
+
+class WideBasic(nn.Module):
+    def __init__(self, in_planes, planes, dropout_rate, stride=1, spectral_norm=True, norm_bound=1, n_power_iterations=1):
+        super(WideBasic, self).__init__()
+        self.bn1 = nn.BatchNorm2d(in_planes)
+        self.conv1 = SpectralConv2d(in_planes, planes, kernel_size=3, spectral_norm=spectral_norm,
+                                    norm_bound=norm_bound, n_power_iterations=n_power_iterations, padding=1, bias=True)
+        self.dropout = nn.Dropout(p=dropout_rate)
+        self.bn2 = nn.BatchNorm2d(planes)
+        self.conv2 = SpectralConv2d(planes, planes, kernel_size=3, spectral_norm=spectral_norm,
+                                    norm_bound=norm_bound, n_power_iterations=n_power_iterations, stride=stride, padding=1, bias=True)
+
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_planes != planes:
+            self.shortcut = nn.Sequential(
+                SpectralConv2d(in_planes, planes, kernel_size=1, spectral_norm=spectral_norm,
+                               norm_bound=norm_bound, n_power_iterations=n_power_iterations, stride=stride, bias=True),
+            )
+
+    def forward(self, x):
+        out = self.conv1(F.relu(self.bn1(x)))
+        out = self.dropout(out)
+        out = self.conv2(F.relu(self.bn2(out)))
+        out += self.shortcut(x)
+
+        return out
+
+
+
+class WideResNetSNGP(nn.Module):
+    def __init__(self, 
+    depth, 
+    widen_factor, 
+    dropout_rate, 
+    num_classes,  
+    norm_bound, 
+    n_power_iterations,
+    spectral_norm=True,
+    num_inducing=1024,
+    kernel_scale=1,
+    normalize_input=False,
+    scale_random_features=True,
+    mean_field_factor=math.pi/8,
+    cov_momentum=-1,
+    ridge_penalty=1
+    ):
+        super(WideResNetSNGP, self).__init__()
+        self.in_planes = 16
+
+        # Spectral norm params
+        self.spectral_norm = spectral_norm
+        self.norm_bound = norm_bound
+        self.n_power_iterations = n_power_iterations
+
+        assert ((depth-4) % 6 == 0), 'Wide-resnet depth should be 6n+4'
+        n = (depth-4)/6
+        k = widen_factor
+
+        nStages = [16, 16*k, 32*k, 64*k]
+
+        self.conv1 = conv3x3(3, nStages[0], spectral_norm=self.spectral_norm,
+                             norm_bound=self.norm_bound, n_power_iterations=self.n_power_iterations)
+        self.layer1 = self._wide_layer(WideBasic, nStages[1], n, dropout_rate, stride=1)
+        self.layer2 = self._wide_layer(WideBasic, nStages[2], n, dropout_rate, stride=2)
+        self.layer3 = self._wide_layer(WideBasic, nStages[3], n, dropout_rate, stride=2)
+        self.bn1 = nn.BatchNorm2d(nStages[3], momentum=0.9)
+
+        # Last Layer will be a random feature GP
+        self.output_layer = RandomFeatureGaussianProcess(
+            in_features=nStages[3],
+            out_features=num_classes,
+            num_inducing=num_inducing,
+            kernel_scale=kernel_scale,
+            normalize_input=normalize_input,
+            scale_random_features=scale_random_features,
+            mean_field_factor=mean_field_factor,
+            cov_momentum=cov_momentum,
+            ridge_penalty=ridge_penalty,
+        )
+
+
+    def _wide_layer(self, block, planes, num_blocks, dropout_rate, stride):
+        strides = [stride] + [1]*(int(num_blocks)-1)
+        layers = []
+
+        for stride in strides:
+            layers.append(block(in_planes=self.in_planes, planes=planes, dropout_rate=dropout_rate, stride=stride,
+                          spectral_norm=self.spectral_norm, norm_bound=self.norm_bound, n_power_iterations=self.n_power_iterations))
+            self.in_planes = planes
+
+        return nn.Sequential(*layers)
+
+    def forward(self, x, mean_field=False, return_cov=False):
+        out = self.conv1(x)
+        out = self.layer1(out)
+        out = self.layer2(out)
+        out = self.layer3(out)
+        out = F.relu(self.bn1(out))
+        out = F.avg_pool2d(out, 8)
+        out = out.view(out.size(0), -1)
+        self.features = out
+        if mean_field:
+            out = self.output_layer.forward_mean_field(self.features)
+        else:
+            out = self.output_layer(self.features, return_cov=return_cov)
+        return out
+
+
+
+class RandomFeatureGaussianProcess(nn.Module):
     def __init__(self,
-                 model: nn.Module,
                  in_features: int,
-                 num_classes: int,
+                 out_features: int,
                  num_inducing: int = 1024,
                  kernel_scale: float = 1,
                  normalize_input: bool = False,
-                 scale_random_features: bool = False,
+                 scale_random_features: bool = True,
                  mean_field_factor: float = math.pi/8,
                  cov_momentum: float = -1,
                  ridge_penalty: float = 1,
                  ):
         super().__init__()
-        self.model = model
 
-        # in_features -> num_inducing -> num_classes
         self.in_features = in_features
+        self.out_features = out_features
         self.num_inducing = num_inducing
-        self.num_classes = num_classes
 
-        # Scale input
+        # scale inputs
         self.kernel_scale = kernel_scale
-
-        # Norm input
         self.normalize_input = normalize_input
-        if self.normalize_input:
-            self.kernel_scale = 1
-            self.layer_norm = nn.LayerNorm(in_features)
+        self.input_scale = (1/math.sqrt(kernel_scale) if kernel_scale is not None else None)
 
         # Random features
         self.scale_random_features = scale_random_features
+        self.random_feature_scale = math.sqrt(2./float(num_inducing))
 
         # Inference
         self.mean_field_factor = mean_field_factor
 
         # Covariance computation
-        self.cov_momentum = cov_momentum
         self.ridge_penalty = ridge_penalty
+        self.cov_momentum = cov_momentum
 
         self.random_features = RandomFourierFeatures(
-            in_features=in_features,
-            num_inducing=num_inducing,
+            in_features=self.in_features,
+            num_inducing=self.num_inducing,
             kernel_scale=self.kernel_scale,
-            scale_features=self.scale_random_features
+            scale_features=self.scale_random_features,
         )
 
-        # Define output layer according to Eq 8., For imagenet init with normal std=0.01
-        self.beta = nn.Linear(num_inducing, num_classes, bias=False)
-        nn.init.xavier_normal_(self.beta.weight)
+        # Define output layer according to Eq 8. For imagenet init with normal std=0.01?
+        self.beta = nn.Linear(num_inducing, out_features, bias=False)
 
         # precision matrix
         self.init_precision_matrix = torch.eye(num_inducing)*self.ridge_penalty
         self.register_buffer("precision_matrix", copy.deepcopy(self.init_precision_matrix))
         self.cov_mat = None
 
-        self.sampled_betas = None
+    def forward(self, features, return_cov=False):
+        if self.normalize_input:
+            features = self.layer_norm(features)
+
+        phi = self.random_features(features)
+
+        # Eq. 8
+        logits = self.beta(phi)
+
+        if self.training:
+            self.update_precision_matrix(phi, logits)
+        if return_cov:
+            cov = self.compute_predictive_covariance(phi)
+            return logits, cov
+        return logits
+
+    @torch.no_grad()
+    def forward_mean_field(self, x):
+        if self.training:
+            raise ValueError("Call eval mode before!")
+        logits, cov = self.forward(x, return_cov=True)
+        scaled_logits = mean_field_logits(logits, cov, self.mean_field_factor)
+        return scaled_logits
 
     @property
     def covariance_matrix(self):
@@ -103,72 +243,6 @@ class SNGP2(nn.Module):
         out = torch.matmul(covariance_matrix_feature, phi.T) * self.ridge_penalty
         covariance_matrix_gp = torch.matmul(phi, out)
         return covariance_matrix_gp
-
-    def forward(self, x, return_cov=False):
-        _, features = self.model(x, return_features=True)
-
-        if self.normalize_input:
-            features = self.layer_norm(features)
-
-        # Get gp features according to Eq. 7
-        phi = self.random_features(features)
-
-        # Eq. 8
-        logits = self.beta(phi)
-
-        if self.training:
-            self.update_precision_matrix(phi, logits)
-        if return_cov:
-            cov = self.compute_predictive_covariance(phi)
-            return logits, cov
-        return logits
-
-    @torch.no_grad()
-    def forward_mean_field(self, x):
-        if self.training:
-            raise ValueError("Call eval mode before!")
-        logits, cov = self.forward(x, return_cov=True)
-        scaled_logits = mean_field_logits(logits, cov, self.mean_field_factor)
-        return scaled_logits
-
-    def sample_betas(self, n_draws):
-        dist = torch.distributions.MultivariateNormal(
-            loc=self.beta.weight,
-            precision_matrix=self.precision_matrix
-        )
-        self.sampled_betas = dist.sample(sample_shape=(n_draws,))
-
-    @torch.no_grad()
-    def forward_sample(self, x):
-        _, features = self.model(x, return_features=True)
-        if self.normalize_input:
-            features = self.layer_norm(features)
-        phi = self.random_features(features)
-        logits_sampled = torch.einsum('nd,ekd->enk', phi, self.sampled_betas)
-        return logits_sampled
-
-    def forward_dirichlet(self, x, use_variance_correction=False):
-        if self.training:
-            raise ValueError("Call eval mode before!")
-        # Get logit mean and covariance predictions.
-        logits, cov = self(x, return_cov=True)
-        var = torch.diag(cov)
-        var = torch.clamp(var, min=1.e-5)
-
-        # Zero mean correction.
-        logits -= ((var * logits.sum(-1)) / (var * self.num_classes))[:, None]
-        var *= (self.num_classes - 1) / self.num_classes
-
-        # Optional variance correction.
-        if use_variance_correction:
-            c = var / math.sqrt(self.num_classes/2)
-            logits /= c.sqrt()[:, None]
-            var /= c
-
-        # Compute alphas.
-        sum_exp = torch.exp(-logits).sum(dim=1).unsqueeze(-1)
-        alphas = (1 - 2/self.num_classes + logits.exp()/self.num_classes**2 * sum_exp) / var[:, None]
-        return alphas
 
 
 class RandomFourierFeatures(nn.Module):
@@ -216,7 +290,7 @@ def mean_field_logits(logits, cov, lmb=math.pi / 8):
 
 def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
     model.train()
-    model.reset_precision_matrix()
+    model.output_layer.reset_precision_matrix()
     model.to(device)
 
     metric_logger = MetricLogger(delimiter=" ")
@@ -251,7 +325,7 @@ def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
     logits_id, targets_id = [], []
     for inputs, targets in dataloader_id:
         inputs, targets = inputs.to(device), targets.to(device)
-        logits_scaled = model.forward_mean_field(inputs)
+        logits_scaled = model(inputs, mean_field=True)
         logits_id.append(logits_scaled)
         targets_id.append(targets)
     logits_id = torch.cat(logits_id, dim=0).cpu()
@@ -274,11 +348,11 @@ def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
     mce = calibration.MarginalCalibrationError()(probas_id, targets_id).item()
 
     metrics = {
-        "acc1":acc1,
-        "loss":loss,
-        "nll":nll,
-        "tce":tce,
-        "mce":mce
+        "acc1": acc1,
+        "loss": loss,
+        "nll": nll,
+        "tce": tce,
+        "mce": mce
     }
 
     for name, dataloader_ood in dataloaders_ood.items():
@@ -286,7 +360,7 @@ def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
         logits_ood = []
         for inputs, targets in dataloader_ood:
             inputs, targets = inputs.to(device), targets.to(device)
-            logits_scaled = model.forward_mean_field(inputs)
+            logits_scaled = model(inputs, mean_field=True)
             logits_ood.append(logits_scaled)
         logits_ood = torch.cat(logits_ood, dim=0).cpu()
 
@@ -294,7 +368,7 @@ def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
         probas_ood = logits_ood.softmax(-1)
         conf_ood, _ = probas_ood.max(-1)
         entropy_ood = ood.entropy_fn(probas_ood)
-        
+
         # Area under the Precision-Recall-Curve
         entropy_aupr = ood.ood_aupr(entropy_id, entropy_ood)
         conf_aupr = ood.ood_aupr(1-conf_id, 1-conf_ood)
@@ -310,71 +384,3 @@ def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
         metrics[name+"_conf_aupr"] = conf_aupr
 
     return {f"test_{k}": v for k, v in metrics.items()}
-
-
-@torch.no_grad()
-def reweight(model, dataloader, device, lmb=1):
-    model.eval()
-    model.to(device)
-
-    # Get all features and targets
-    all_phis, all_targets = [], []
-    for inputs, targets in dataloader:
-        _, features = model.model(inputs.to(device), return_features=True)
-        if model.normalize_input:
-            features = model.layer_norm(features)
-        phi = model.random_features(features)
-        all_phis.append(phi.cpu())
-        all_targets.append(targets)
-    phis = torch.cat(all_phis)
-    targets = torch.cat(all_targets)
-
-    # Reweight
-    model.cpu()
-    mean = model.beta.weight.data.clone()
-    cov = model.covariance_matrix.data.clone()
-    targets_onehot = F.one_hot(targets, num_classes=model.num_classes)
-
-    for phi, target_onehot in zip(phis, targets_onehot):
-        for _ in range(lmb):
-            tmp_1 = cov @ phi
-            tmp_2 = torch.outer(tmp_1, tmp_1)
-
-            # Compute new prediction.
-            var = F.linear(phi, tmp_1)
-            logits = F.linear(phi, mean)
-            probas = logits.softmax(-1)
-            probas_max = probas.max()
-
-            # Update covariance matrix.
-            num = probas_max * (1-probas_max)
-            denom = 1 + num * var
-            factor = num / denom
-            cov_update = factor * tmp_2
-            cov -= cov_update
-
-            # Update mean.
-            tmp_3 = F.linear(cov, phi)
-            tmp_4 = (target_onehot - probas)
-            mean += torch.outer(tmp_4, tmp_3)
-
-            # Undo cov update.
-            cov += cov_update
-
-            # Compute new prediction.
-            var = F.linear(phi, tmp_1)
-            logits = F.linear(phi, mean)
-            probas = logits.softmax(-1)
-            probas_max = probas.max()
-
-            # Update covariance matrix.
-            num = probas_max * (1 - probas_max)
-            denom = 1 + num * var
-            factor = num / denom
-            cov_update = factor * tmp_2
-            cov -= cov_update
-
-    model_reweighted = copy.deepcopy(model)
-    model_reweighted.beta.weight.data = mean
-    model_reweighted.covariance_matrix.data = cov
-    return model_reweighted
