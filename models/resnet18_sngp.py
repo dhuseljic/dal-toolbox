@@ -1,6 +1,6 @@
-import math
 import copy
 import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -10,7 +10,6 @@ from metrics import generalization, calibration, ood
 from .utils.spectral_norm import SpectralConv2d
 
 
-# TODO: Build Resnet
 class BasicBlock(nn.Module):
     expansion = 1
 
@@ -124,6 +123,9 @@ class ResNetSNGP(nn.Module):
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
 
+    def reset_precision_matrix(self):
+        self.output_layer.reset_precision_matrix()
+
     def forward(self, x, mean_field=False, return_cov=False):
         out = F.relu(self.bn1(self.conv1(x)))
         out = self.layer1(out)
@@ -161,11 +163,9 @@ class RandomFeatureGaussianProcess(nn.Module):
         # scale inputs
         self.kernel_scale = kernel_scale
         self.normalize_input = normalize_input
-        self.input_scale = (1/math.sqrt(kernel_scale) if kernel_scale is not None else None)
 
         # Random features
         self.scale_random_features = scale_random_features
-        self.random_feature_scale = math.sqrt(2./float(num_inducing))
 
         # Inference
         self.mean_field_factor = mean_field_factor
@@ -231,8 +231,10 @@ class RandomFeatureGaussianProcess(nn.Module):
     def update_precision_matrix(self, phi, logits):
         probas = logits.softmax(-1)
         probas_max = probas.max(1)[0]
+        multiplier = probas_max * (1-probas_max)
+        phi = (torch.sqrt(multiplier) * phi.T).T
         precision_matrix_minibatch = torch.matmul(
-            probas_max * (1-probas_max) * phi.T, phi
+            phi.T, phi
         )
         if self.cov_momentum > 0:
             batch_size = len(phi)
@@ -296,7 +298,7 @@ def mean_field_logits(logits, cov, lmb=math.pi / 8):
 
 def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
     model.train()
-    model.output_layer.reset_precision_matrix()
+    model.reset_precision_matrix()
     model.to(device)
 
     metric_logger = MetricLogger(delimiter=" ")
