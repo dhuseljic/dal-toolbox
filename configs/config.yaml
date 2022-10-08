@@ -2,13 +2,18 @@ defaults:
   - _self_
   - model: 'deterministic'
 
-dataset: MNIST04
-ood_datasets: ["MNIST59"]
+dataset: CIFAR10 
+ood_datasets: ["SVHN"]
 n_samples: null
 n_epochs: 200
 eval_interval: 1
 batch_size: 64
 device: "cuda"
 random_seed: 42
-output_dir: "./output/"
 imagenet_path: /mnt/datasets/imagenet/ILSVRC2012/downloads
+
+# Define output dir
+output_dir: "./output/"
+hydra:
+  run:
+    dir: ${output_dir}
