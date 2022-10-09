@@ -232,9 +232,8 @@ class RandomFeatureGaussianProcess(nn.Module):
         probas = logits.softmax(-1)
         probas_max = probas.max(1)[0]
         multiplier = probas_max * (1-probas_max)
-        phi = (torch.sqrt(multiplier) * phi.T).T
         precision_matrix_minibatch = torch.matmul(
-            phi.T, phi
+            multiplier*phi.T, phi
         )
         if self.cov_momentum > 0:
             batch_size = len(phi)
