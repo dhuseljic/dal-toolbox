@@ -9,6 +9,7 @@ from pathlib import Path
 
 result_path = Path('../results/')
 
+
 # %%
 
 
@@ -24,8 +25,9 @@ def get_results(result_path, glob_pattern):
     return results
 
 
-results = get_results(result_path, glob_pattern='CIFAR10*')
+results = get_results(result_path, glob_pattern='CIFAR10__resnet18_sngp__[1-9]')
 results
+
 
 # %%
 
@@ -38,11 +40,13 @@ def get_metric_dict(results):
         d[metric] = value
     return d
 
-d_normal = get_metric_dict(get_results(result_path, glob_pattern='CIFAR10*'))
-d_changed = get_metric_dict(get_results(result_path, glob_pattern='CHANGED__CIFAR10*'))
-
-
-pd.DataFrame([d_normal, d_changed], index=['normal', 'changed'])
+exp_names = {
+    "default": "CIFAR10__resnet18_sngp__[1-9]",
+    "num_inducing4096": "CIFAR10__resnet18_sngp__num_inducing4096__[1-9]",
+}
+data = [get_metric_dict(get_results(result_path, glob_pattern=n)) for _, n in exp_names.items()]
+df = pd.DataFrame(data, index=exp_names.keys())
+print(df.to_markdown())
 
 
 
