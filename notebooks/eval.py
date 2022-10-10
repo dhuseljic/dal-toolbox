@@ -46,7 +46,7 @@ exp_names = {
 }
 data = [get_metric_dict(get_results(result_path, glob_pattern=n)) for _, n in exp_names.items()]
 df = pd.DataFrame(data, index=exp_names.keys())
-print(df.to_markdown())
+print(df.to_markdown(floatfmt=".3f"))
 
 
 

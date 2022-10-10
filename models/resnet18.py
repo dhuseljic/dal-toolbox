@@ -32,9 +32,9 @@ class BasicBlock(nn.Module):
         return out
 
 
-class ResNetDeterministic(nn.Module):
+class ResNet18(nn.Module):
     def __init__(self, num_classes=10):
-        super(ResNetDeterministic, self).__init__()
+        super(ResNet18, self).__init__()
         self.in_planes = 64
         self.block = BasicBlock
         self.num_blocks = [2, 2, 2, 2]
