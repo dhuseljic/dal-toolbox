@@ -14,7 +14,7 @@ import torch.nn.functional as F
 
 from sklearn import datasets
 from models.utils.spectral_norm import SpectralLinear
-from models.resnet18_sngp import RandomFeatureGaussianProcess, resnet18_sngp, train_one_epoch
+from models.resnet18_sngp import RandomFeatureGaussianProcess, train_one_epoch
 # fmt: on
 
 # %%
@@ -102,10 +102,10 @@ spectral_norm_params = dict(
 )
 gp_params = dict(
     num_inducing=1024,
-    kernel_scale=1,
+    kernel_scale=2,
     normalize_input=False,
-    scale_random_features=True,
-    mean_field_factor=math.pi/8,
+    scale_random_features=False,
+    mean_field_factor=.1,
     cov_momentum=-1,
     ridge_penalty=1
 )
@@ -134,6 +134,4 @@ plt.plot([d['train_loss'] for d in history])
 plot_contour(model, X, y, ax=plt.subplot(121))
 plt.show()
 # %%
-# %%
-model.cpu()
-model(X)
+model.last.covariance_matrix.max()
