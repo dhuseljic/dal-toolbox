@@ -23,9 +23,9 @@ def main(args):
     #fig = plot_grids(train_ds, test_ds_id, list(test_dss_ood.values())[0])
     #writer.add_figure('Data Example', fig)
 
-    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True)
-    test_loader_id = DataLoader(test_ds_id, batch_size=args.batch_size*4)
-    test_loaders_ood = {name:DataLoader(test_ds_ood, batch_size=args.batch_size*4) for name, test_ds_ood in test_dss_ood.items()}
+    train_loader = DataLoader(train_ds, batch_size=args.train_batch_size, shuffle=True)
+    test_loader_id = DataLoader(test_ds_id, batch_size=args.test_batch_size)
+    test_loaders_ood = {name:DataLoader(test_ds_ood, batch_size=args.test_batch_size) for name, test_ds_ood in test_dss_ood.items()}
 
     # Load model
     model_dict = build_model(args, n_samples=len(train_ds), n_classes=n_classes)

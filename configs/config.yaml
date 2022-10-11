@@ -7,7 +7,8 @@ ood_datasets: ["SVHN"]
 n_samples: null
 n_epochs: 200
 eval_interval: 1
-batch_size: 64
+train_batch_size: 64
+test_batch_size: 64
 device: "cuda"
 random_seed: 42
 imagenet_path: /mnt/datasets/imagenet/ILSVRC2012/downloads
