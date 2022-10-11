@@ -1,6 +1,5 @@
 import os
 import json
-from typing import OrderedDict
 import hydra
 import torch
 
@@ -8,7 +7,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from datasets import build_dataset
 from models import build_model
-from utils import plot_grids, write_scalar_dict, seed_everything
+from utils import write_scalar_dict, seed_everything
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="config")
@@ -19,10 +18,6 @@ def main(args):
 
     # Load data 
     train_ds, test_ds_id, test_dss_ood, n_classes = build_dataset(args)
-    #TODO: What should i change about the plotting if there are mutliple ood datasets?
-    #fig = plot_grids(train_ds, test_ds_id, list(test_dss_ood.values())[0])
-    #writer.add_figure('Data Example', fig)
-
     train_loader = DataLoader(train_ds, batch_size=args.train_batch_size, shuffle=True)
     test_loader_id = DataLoader(test_ds_id, batch_size=args.test_batch_size)
     test_loaders_ood = {name:DataLoader(test_ds_ood, batch_size=args.test_batch_size) for name, test_ds_ood in test_dss_ood.items()}
