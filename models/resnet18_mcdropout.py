@@ -5,7 +5,7 @@ from metrics import generalization, calibration, ood
 from utils import MetricLogger, SmoothedValue
 from models.utils.baysian_module import BayesianModule, ConsistentMCDropout2d
 
-class DropoutResNet(BayesianModule):
+class DropoutResNet18(BayesianModule):
     def __init__(self, num_classes=10, k=None, p_drop=0.2):
         super(BayesianModule, self).__init__()
         self.in_planes = 64
