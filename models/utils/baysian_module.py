@@ -102,6 +102,32 @@ class _ConsistentMCDropout(nn.Module):
         # Flatten MCDI, batch into one dimension again.
         return BayesianModule.flatten_tensor(mc_output)
 
+class ConsistentMCDropout(_ConsistentMCDropout):
+    r"""Randomly zeroes some of the elements of the input
+    tensor with probability :attr:`p` using samples from a Bernoulli
+    distribution. The elements to zero are randomized on every forward call during training time.
+    During eval time, a fixed mask is picked and kept until `reset_mask()` is called.
+    This has proven to be an effective technique for regularization and
+    preventing the co-adaptation of neurons as described in the paper
+    `Improving neural networks by preventing co-adaptation of feature
+    detectors`_ .
+    Furthermore, the outputs are scaled by a factor of :math:`\frac{1}{1-p}` during
+    training. This means that during evaluation the module simply computes an
+    identity function.
+    Args:
+        p: probability of an element to be zeroed. Default: 0.5
+        inplace: If set to ``True``, will do this operation in-place. Default: ``False``
+    Shape:
+        - Input: `Any`. Input can be of any shape
+        - Output: `Same`. Output is of the same shape as input
+    Examples::
+        >>> m = nn.Dropout(p=0.2)
+        >>> input = torch.randn(20, 16)
+        >>> output = m(input)
+    .. _Improving neural networks by preventing co-adaptation of feature
+        detectors: https://arxiv.org/abs/1207.0580
+    """
+
 
 class ConsistentMCDropout2d(_ConsistentMCDropout):
     def _get_sample_mask_shape(self, sample_shape):

@@ -182,7 +182,7 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None,
 
     for X_batch, y_batch in metric_logger.log_every(dataloader, print_freq=print_freq, header=header):
         X_batch, y_batch = X_batch.to(device), y_batch.to(device)
-        out = model.mc_forward(X_batch, 1).squeeze(1)
+        out = model(X_batch)
         loss = criterion(out, y_batch)
         batch_size = X_batch.size(0)
 
