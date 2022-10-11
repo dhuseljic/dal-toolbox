@@ -30,9 +30,9 @@ class BasicBlock(nn.Module):
         return out
 
 
-class Member(nn.Module):
+class ResNet18(nn.Module):
     def __init__(self, num_classes=10):
-        super(Member, self).__init__()
+        super(ResNet18, self).__init__()
         self.in_planes = 64
         self.block = BasicBlock
         self.num_blocks = [2, 2, 2, 2]
@@ -71,8 +71,8 @@ class Member(nn.Module):
             out = (out, features)
         return out
 
-class EnsembleLR(torch.optim.lr_scheduler.MultiStepLR):
-    def __init__(self, lr_schedulers):
+class EnsembleLRScheduler:
+    def __init__(self, lr_schedulers: list):
         self.lr_schedulers = lr_schedulers
 
     def step(self):
@@ -91,8 +91,8 @@ class EnsembleLR(torch.optim.lr_scheduler.MultiStepLR):
             yield lrs
 
 
-class EnsembleOptimizer(torch.optim.SGD):
-    def __init__(self, optimizers):
+class EnsembleOptimizer:
+    def __init__(self, optimizers: list):
         self.optimizers = optimizers
 
     def state_dict(self) -> dict:
@@ -113,7 +113,7 @@ class Ensemble(nn.Module):
         self.models = nn.ModuleList(models)
 
     def forward(self, x):
-        pass
+        raise ValueError('Forward method should only be used on ensemble members.')
 
     def forward_sample(self, x):
         logits = []
@@ -134,8 +134,7 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None,
     model.train()
     model.to(device)
 
-    for i_member, (member, optim) in enumerate(zip(model.models, optimizer)):
-        
+    for i_member, (member, optim) in enumerate(zip(model, optimizer)):
         metric_logger = MetricLogger(delimiter=" ")
         header = f"Epoch [{epoch}] Model [{i_member}] " if epoch is not None else f"Model [{i_member}] "
 

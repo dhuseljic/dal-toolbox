@@ -48,10 +48,10 @@ def build_model(args, **kwargs):
             'eval_kwargs': dict(criterion=criterion, device=args.device),
         }
 
-    elif args.model.name == 'deep_ensemble':
+    elif args.model.name == 'resnet18_ensemble':
         members, lr_schedulers, optimizers = [], [], []
         for _ in range(args.model.n_member):
-            mem = resnet18_ensemble.Member(n_classes)
+            mem = resnet18_ensemble.ResNet18(n_classes)
             opt = torch.optim.SGD(
                 mem.parameters(),
                 lr=args.model.optimizer.lr,
@@ -59,22 +59,13 @@ def build_model(args, **kwargs):
                 momentum=args.model.optimizer.momentum,
                 nesterov=True
             )
-            if args.model.optimizer.lr_scheduler == 'multi_step':
-                lrs = torch.optim.lr_scheduler.MultiStepLR(
-                    opt,
-                    milestones=args.model.optimizer.lr_step_epochs,
-                    gamma=args.model.optimizer.lr_gamma
-                )
-            elif args.model.optimizer.lr_scheduler == 'cosine':
-                lrs = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.n_epochs)
-            else:
-                assert "no available lr_scheduler chosen!"
+            lrs = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.n_epochs)
             members.append(mem)
             optimizers.append(opt)
             lr_schedulers.append(lrs)
         model = resnet18_ensemble.Ensemble(members)
         optimizer = resnet18_ensemble.EnsembleOptimizer(optimizers)
-        lr_scheduler = resnet18_ensemble.EnsembleLR(lr_schedulers)
+        lr_scheduler = resnet18_ensemble.EnsembleLRScheduler(lr_schedulers)
         criterion = nn.CrossEntropyLoss()
         model_dict = {
             'model': model,
