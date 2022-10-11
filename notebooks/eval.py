@@ -62,7 +62,8 @@ for key, name in exp_names.items():
     data.append(metric_dict)
 
 df = pd.DataFrame(data, index=exp_names.keys())
-df.to_markdown()
+print(df.to_markdown())
+df
 
 
 # %%
@@ -83,7 +84,8 @@ for key, name in exp_names.items():
     data.append(metric_dict)
 
 df = pd.DataFrame(data, index=exp_names.keys())
-df.to_markdown()
+print(df.to_markdown())
+df
 
 
 # %%
