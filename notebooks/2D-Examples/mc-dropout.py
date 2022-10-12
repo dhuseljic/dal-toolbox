@@ -48,17 +48,14 @@ class MCDropoutNet(BayesianModule):
 
     def forward(self, x):
         x = self.act(self.first(x))
-        x = self.act(self.hidden(x))
-        out = self.last(x)
-        return out
-
-    def mc_forward_impl(self, x):
-        x = self.act(self.first(x))
         x = self.first_dropout(x)
         x = self.act(self.hidden(x))
         x = self.hidden_dropout(x)
         out = self.last(x)
         return out
+
+    def mc_forward_impl(self, x):
+        return self.forward(x)
 
 # %%
 
@@ -88,7 +85,7 @@ def plot_contour(model, X, y, ax=None):
 dropout_rate = 0.5
 optimizer_params = dict(
     lr=1e-1,
-    weight_decay=1e-4,
+    weight_decay=0,
     momentum=.9,
 )
 epochs = 1000
