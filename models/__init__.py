@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
 
-from . import resnet, resnet_mcdropout, resnet_sngp 
+from . import resnet, resnet_mcdropout, resnet_sngp
 from . import wideresnet, wideresnet_mcdropout, wideresnet_sngp, ensemble
+
 
 def build_model(args, **kwargs):
     n_classes = kwargs['n_classes']
@@ -112,7 +113,7 @@ def build_model(args, **kwargs):
 
     elif args.model.name == 'wideresnet2810_deterministic':
         model = wideresnet.WideResNet2810(
-            dropout_rate=args.model.dropout_rate, 
+            dropout_rate=args.model.dropout_rate,
             num_classes=n_classes)
         optimizer = torch.optim.SGD(
             model.parameters(),
