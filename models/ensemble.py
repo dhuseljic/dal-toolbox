@@ -64,7 +64,7 @@ class EnsembleOptimizer:
             yield optim
 
 
-def ensemble_train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
+def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
     train_stats = {}
     model.train()
     model.to(device)
@@ -94,7 +94,7 @@ def ensemble_train_one_epoch(model, dataloader, criterion, optimizer, device, ep
 
 
 @torch.no_grad()
-def ensemble_evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
+def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
     model.eval()
     model.to(device)
 
