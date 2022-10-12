@@ -1,5 +1,6 @@
-name: resnet18_ensemble
+name: wideresnet2810_ensemble
 n_member: 4
+dropout_rate: 0.1
 optimizer:
   lr: 0.1
   weight_decay: 2e-4

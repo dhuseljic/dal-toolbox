@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 
 from . import resnet18, resnet18_ensemble, resnet18_mcdropout, resnet18_sngp 
-from . import wideresnet2810, wideresnet2810_sngp
+from . import wideresnet2810, wideresnet2810_ensemble, wideresnet2810_sngp
+from .utils.ensemble_utils import Ensemble, EnsembleLRScheduler, EnsembleOptimizer
 
 
 def build_model(args, **kwargs):
@@ -64,9 +65,9 @@ def build_model(args, **kwargs):
             members.append(mem)
             optimizers.append(opt)
             lr_schedulers.append(lrs)
-        model = resnet18_ensemble.Ensemble(members)
-        optimizer = resnet18_ensemble.EnsembleOptimizer(optimizers)
-        lr_scheduler = resnet18_ensemble.EnsembleLRScheduler(lr_schedulers)
+        model = Ensemble(members)
+        optimizer = EnsembleOptimizer(optimizers)
+        lr_scheduler = EnsembleLRScheduler(lr_schedulers)
         criterion = nn.CrossEntropyLoss()
         model_dict = {
             'model': model,
@@ -127,6 +128,35 @@ def build_model(args, **kwargs):
             'optimizer': optimizer,
             'train_one_epoch': wideresnet2810.train_one_epoch,
             'evaluate': wideresnet2810.evaluate,
+            'lr_scheduler': lr_scheduler,
+            'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
+            'eval_kwargs': dict(criterion=criterion, device=args.device),
+        }
+
+    elif args.model.name == 'wideresnet2810_ensemble':
+        members, lr_schedulers, optimizers = [], [], []
+        for _ in range(args.model.n_member):
+            mem = wideresnet2810_ensemble.WideResNet2810(args.model.dropout_rate, n_classes)
+            opt = torch.optim.SGD(
+                mem.parameters(),
+                lr=args.model.optimizer.lr,
+                weight_decay=args.model.optimizer.weight_decay,
+                momentum=args.model.optimizer.momentum,
+                nesterov=True
+            )
+            lrs = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.n_epochs)
+            members.append(mem)
+            optimizers.append(opt)
+            lr_schedulers.append(lrs)
+        model = Ensemble(members)
+        optimizer = EnsembleOptimizer(optimizers)
+        lr_scheduler = EnsembleLRScheduler(lr_schedulers)
+        criterion = nn.CrossEntropyLoss()
+        model_dict = {
+            'model': model,
+            'optimizer': optimizer,
+            'train_one_epoch': wideresnet2810_ensemble.train_one_epoch,
+            'evaluate': wideresnet2810_ensemble.evaluate,
             'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
