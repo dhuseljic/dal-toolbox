@@ -1,15 +1,15 @@
 import torch
 import torch.nn as nn
 
-from . import resnet18, resnet18_ensemble, resnet18_mcdropout, resnet18_sngp 
-from . import wideresnet2810, wideresnet2810_ensemble, wideresnet2810_sngp
+from . import resnet, resnet18_ensemble, resnet18_mcdropout, resnet_sngp 
+from . import wideresnet, wideresnet2810_ensemble, wideresnet_sngp
 from .utils.ensemble_utils import Ensemble, EnsembleLRScheduler, EnsembleOptimizer
 
 
 def build_model(args, **kwargs):
     n_classes = kwargs['n_classes']
     if args.model.name == 'resnet18_deterministic':
-        model = resnet18.ResNet18(n_classes)
+        model = resnet.ResNet18(n_classes)
         optimizer = torch.optim.SGD(
             model.parameters(),
             lr=args.model.optimizer.lr,
@@ -22,8 +22,8 @@ def build_model(args, **kwargs):
         model_dict = {
             'model': model,
             'optimizer': optimizer,
-            'train_one_epoch': resnet18.train_one_epoch,
-            'evaluate': resnet18.evaluate,
+            'train_one_epoch': resnet.train_one_epoch,
+            'evaluate': resnet.evaluate,
             'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
@@ -80,7 +80,7 @@ def build_model(args, **kwargs):
         }
 
     elif args.model.name == 'resnet18_sngp':
-        model = resnet18_sngp.resnet18_sngp(
+        model = resnet_sngp.resnet18_sngp(
             num_classes=10,
             spectral_norm=args.model.spectral_norm.use_spectral_norm,
             norm_bound=args.model.spectral_norm.coeff,
@@ -105,15 +105,19 @@ def build_model(args, **kwargs):
         model_dict = {
             'model': model,
             'optimizer': optimizer,
-            'train_one_epoch': resnet18_sngp.train_one_epoch,
-            'evaluate': resnet18_sngp.evaluate,
+            'train_one_epoch': resnet_sngp.train_one_epoch,
+            'evaluate': resnet_sngp.evaluate,
             'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
         }
 
     elif args.model.name == 'wideresnet2810_deterministic':
-        model = wideresnet2810.WideResNet2810(args.model.dropout_rate, n_classes)
+        model = wideresnet.WideResNet(
+            depth=28,
+            widen_factor=10,
+            dropout_rate=args.model.dropout_rate, 
+            num_classes=n_classes)
         optimizer = torch.optim.SGD(
             model.parameters(),
             lr=args.model.optimizer.lr,
@@ -126,8 +130,8 @@ def build_model(args, **kwargs):
         model_dict = {
             'model': model,
             'optimizer': optimizer,
-            'train_one_epoch': wideresnet2810.train_one_epoch,
-            'evaluate': wideresnet2810.evaluate,
+            'train_one_epoch': wideresnet.train_one_epoch,
+            'evaluate': wideresnet.evaluate,
             'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
@@ -163,7 +167,9 @@ def build_model(args, **kwargs):
         }
 
     elif args.model.name == 'wideresnet2810_sngp':
-        model = wideresnet2810_sngp.WideResNetSNGP(
+        model = wideresnet_sngp.WideResNetSNGP(
+            depth=28,
+            widen_factor=10,
             dropout_rate=args.model.dropout_rate,
             num_classes=n_classes,
             spectral_norm=args.model.spectral_norm.use_spectral_norm,
@@ -193,8 +199,8 @@ def build_model(args, **kwargs):
         model_dict = {
             'model': model,
             'optimizer': optimizer,
-            'train_one_epoch': resnet18_sngp.train_one_epoch,
-            'evaluate': resnet18_sngp.evaluate,
+            'train_one_epoch': resnet_sngp.train_one_epoch,
+            'evaluate': resnet_sngp.evaluate,
             'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),

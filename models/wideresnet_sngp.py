@@ -56,6 +56,8 @@ class WideBasic(nn.Module):
 
 class WideResNetSNGP(nn.Module):
     def __init__(self,
+    depth,
+    widen_factor,
     dropout_rate, 
     num_classes,  
     norm_bound, 
@@ -71,8 +73,8 @@ class WideResNetSNGP(nn.Module):
     ):
         super(WideResNetSNGP, self).__init__()
         self.in_planes = 16
-        self.depth = 28
-        self.widen_factor = 10
+        self.depth = depth
+        self.widen_factor = widen_factor
 
         # Spectral norm params
         self.spectral_norm = spectral_norm

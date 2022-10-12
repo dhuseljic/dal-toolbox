@@ -14,7 +14,7 @@ import torch.nn.functional as F
 
 from sklearn import datasets
 from models.utils.spectral_norm import SpectralLinear
-from models.resnet18_sngp import RandomFeatureGaussianProcess, train_one_epoch
+from models.resnet_sngp import RandomFeatureGaussianProcess, train_one_epoch
 # fmt: on
 
 # %%
