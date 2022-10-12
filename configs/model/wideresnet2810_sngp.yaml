@@ -1,7 +1,5 @@
-name : wide_resnet_sngp
+name : wideresnet2810_sngp
 dropout_rate: 0.1
-depth: 28
-widen_factor: 10
 spectral_norm:
   use_spectral_norm: True
   coeff: 6

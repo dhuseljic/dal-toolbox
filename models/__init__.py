@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 
-from . import resnet18, resnet18_ensemble, resnet18_mcdropout, resnet18_sngp, wide_resnet_sngp
+from . import resnet18, resnet18_ensemble, resnet18_mcdropout, resnet18_sngp 
+from . import wideresnet2810, wideresnet2810_sngp
 
 
 def build_model(args, **kwargs):
@@ -110,10 +111,29 @@ def build_model(args, **kwargs):
             'eval_kwargs': dict(criterion=criterion, device=args.device),
         }
 
-    elif args.model.name == 'wide_resnet_sngp':
-        model = wide_resnet_sngp.WideResNetSNGP(
-            depth=args.model.depth,
-            widen_factor=args.model.widen_factor,
+    elif args.model.name == 'wideresnet2810_deterministic':
+        model = wideresnet2810.WideResNet2810(args.model.dropout_rate, n_classes)
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+            nesterov=True
+        )
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.n_epochs)
+        criterion = nn.CrossEntropyLoss()
+        model_dict = {
+            'model': model,
+            'optimizer': optimizer,
+            'train_one_epoch': wideresnet2810.train_one_epoch,
+            'evaluate': wideresnet2810.evaluate,
+            'lr_scheduler': lr_scheduler,
+            'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
+            'eval_kwargs': dict(criterion=criterion, device=args.device),
+        }
+
+    elif args.model.name == 'wideresnet2810_sngp':
+        model = wideresnet2810_sngp.WideResNetSNGP(
             dropout_rate=args.model.dropout_rate,
             num_classes=n_classes,
             spectral_norm=args.model.spectral_norm.use_spectral_norm,

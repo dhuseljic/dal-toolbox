@@ -1,0 +1,9 @@
+name : wideresnet2810_deterministic
+dropout_rate: 0.1
+optimizer:
+  lr: 0.08
+  weight_decay: 3e-4
+  momentum: .9
+lr_scheduler:
+  step_epochs: [60, 120, 160]
+  gamma: 0.2
