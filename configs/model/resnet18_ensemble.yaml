@@ -1,5 +1,5 @@
 name: resnet18_ensemble
-n_member: 4
+n_member: 10
 optimizer:
   lr: 0.1
   weight_decay: 2e-4

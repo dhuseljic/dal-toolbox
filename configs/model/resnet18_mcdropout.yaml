@@ -1,6 +1,6 @@
 name: resnet18_mcdropout
 dropout_rate: 0.1
-n_passes: 30
+n_passes: 100
 optimizer:
   lr: 0.1
   weight_decay: 3e-4
