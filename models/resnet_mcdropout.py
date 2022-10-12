@@ -104,6 +104,7 @@ def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
 
     # Average of probas per sample
     mean_probas_id = torch.mean(dropout_probas_id, dim=1)
+    mean_probas_id = ood.clamp_probas(mean_probas_id)
 
     # Confidence- and entropy-Scores of in domain set logits
     conf_id, _ = mean_probas_id.max(-1)
@@ -137,6 +138,7 @@ def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
         dropout_logits_ood = torch.cat(dropout_logits_ood, dim=0).cpu()
         dropout_probas_ood = dropout_logits_ood.softmax(dim=-1)
         mean_probas_ood = torch.mean(dropout_probas_ood, dim=1)
+        mean_probas_ood = ood.clamp_probas(mean_probas_ood)
 
         # Confidence- and entropy-Scores of out of domain logits
         conf_ood, _ = mean_probas_ood.max(-1)

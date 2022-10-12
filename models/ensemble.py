@@ -89,7 +89,7 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None,
             acc1, = generalization.accuracy(outputs, targets, topk=(1,))
             metric_logger.update(loss=loss.item())
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
-        train_stats.update({f"train_model{i_member}_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()})
+        train_stats.update({f"train_{k}_model{i_member}": meter.global_avg for k, meter, in metric_logger.meters.items()})
     return train_stats
 
 
