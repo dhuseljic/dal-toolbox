@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from utils import MetricLogger
-from metrics import generalization, calibration, ood, EnsembleCrossEntropy
+from metrics import crossentropy, generalization, calibration, ood
 
 
 class Ensemble(nn.Module):

@@ -7,6 +7,8 @@ from torchvision import transforms
 from datasets.presets import ClassificationPresetTrain, ClassificationPresetEval
 from datasets.tinyImageNet import TinyImageNet
 
+from .corruptions import GaussianNoise
+
 
 def build_mnist(split):
     mean, std = (0.1307,), (0.3081,)
@@ -54,6 +56,16 @@ def build_cifar10(split):
             transforms.Normalize(mean, std),
         ])
         ds = torchvision.datasets.CIFAR10('data/', train=False, download=True, transform=eval_transform)
+    return ds
+
+def build_cifar10_c(severity):
+    mean, std = (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
+    eval_transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean, std),
+            GaussianNoise(severity)
+        ])
+    ds = torchvision.datasets.CIFAR10('data/', train=False, download=True, transform=eval_transform)
     return ds
 
 
@@ -167,6 +179,7 @@ def build_dataset(args):
         raise NotImplementedError
 
     # Second, choose out of domain datasets
+    #TODO: Own methods for each dataset-type
     test_dss_ood = {}
     if 'MNIST' in args.ood_datasets:
         temp_ds = build_mnist('test')
@@ -196,6 +209,11 @@ def build_dataset(args):
         temp_ds = build_cifar10('test')
         test_ds_id, temp_ds = equal_set_sizes(test_ds_id, temp_ds)
         test_dss_ood["CIFAR10"] = temp_ds
+
+    if 'CIFAR10-C' in args.ood_datasets:
+        temp_ds = build_cifar10_c(.5)
+        test_ds_id, temp_ds = equal_set_sizes(test_ds_id, temp_ds)
+        test_dss_ood["CIFAR10-C"] = temp_ds
 
     if 'CIFAR100' in args.ood_datasets:
         temp_ds = build_cifar100('test')
