@@ -13,7 +13,7 @@ import torch.nn.functional as F
 
 from sklearn import datasets
 from models.utils.baysian_module import BayesianModule, ConsistentMCDropout
-from models.resnet18_mcdropout import train_one_epoch
+from models.resnet_mcdropout import train_one_epoch
 # fmt: on
 
 # %%

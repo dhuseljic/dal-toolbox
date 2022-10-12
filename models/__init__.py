@@ -1,10 +1,9 @@
 import torch
 import torch.nn as nn
 
-from . import resnet, resnet18_ensemble, resnet18_mcdropout, resnet_sngp 
-from . import wideresnet, wideresnet2810_ensemble, wideresnet_sngp
-from .utils.ensemble_utils import Ensemble, EnsembleLRScheduler, EnsembleOptimizer
-
+from . import resnet, resnet_mcdropout, resnet_sngp 
+from . import wideresnet, wideresnet_sngp
+from .utils.ensemble_utils import Ensemble, EnsembleLRScheduler, EnsembleOptimizer, ensemble_train_one_epoch, ensemble_evaluate
 
 def build_model(args, **kwargs):
     n_classes = kwargs['n_classes']
@@ -30,7 +29,7 @@ def build_model(args, **kwargs):
         }
 
     elif args.model.name == 'resnet18_mcdropout':
-        model = resnet18_mcdropout.DropoutResNet18(n_classes, args.model.n_passes, args.model.dropout_rate)
+        model = resnet_mcdropout.DropoutResNet18(n_classes, args.model.n_passes, args.model.dropout_rate)
         optimizer = torch.optim.SGD(
             model.parameters(),
             lr=args.model.optimizer.lr,
@@ -43,8 +42,8 @@ def build_model(args, **kwargs):
         model_dict = {
             'model': model,
             'optimizer': optimizer,
-            'train_one_epoch': resnet18_mcdropout.train_one_epoch,
-            'evaluate': resnet18_mcdropout.evaluate,
+            'train_one_epoch': resnet_mcdropout.train_one_epoch,
+            'evaluate': resnet_mcdropout.evaluate,
             'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
@@ -53,7 +52,7 @@ def build_model(args, **kwargs):
     elif args.model.name == 'resnet18_ensemble':
         members, lr_schedulers, optimizers = [], [], []
         for _ in range(args.model.n_member):
-            mem = resnet18_ensemble.ResNet18(n_classes)
+            mem = resnet.ResNet18(n_classes)
             opt = torch.optim.SGD(
                 mem.parameters(),
                 lr=args.model.optimizer.lr,
@@ -72,8 +71,8 @@ def build_model(args, **kwargs):
         model_dict = {
             'model': model,
             'optimizer': optimizer,
-            'train_one_epoch': resnet18_ensemble.train_one_epoch,
-            'evaluate': resnet18_ensemble.evaluate,
+            'train_one_epoch': ensemble_train_one_epoch,
+            'evaluate': ensemble_evaluate,
             'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
@@ -113,9 +112,7 @@ def build_model(args, **kwargs):
         }
 
     elif args.model.name == 'wideresnet2810_deterministic':
-        model = wideresnet.WideResNet(
-            depth=28,
-            widen_factor=10,
+        model = wideresnet.WideResNet2810(
             dropout_rate=args.model.dropout_rate, 
             num_classes=n_classes)
         optimizer = torch.optim.SGD(
@@ -140,7 +137,7 @@ def build_model(args, **kwargs):
     elif args.model.name == 'wideresnet2810_ensemble':
         members, lr_schedulers, optimizers = [], [], []
         for _ in range(args.model.n_member):
-            mem = wideresnet2810_ensemble.WideResNet2810(args.model.dropout_rate, n_classes)
+            mem = wideresnet.WideResNet2810(args.model.dropout_rate, n_classes)
             opt = torch.optim.SGD(
                 mem.parameters(),
                 lr=args.model.optimizer.lr,
@@ -159,8 +156,8 @@ def build_model(args, **kwargs):
         model_dict = {
             'model': model,
             'optimizer': optimizer,
-            'train_one_epoch': wideresnet2810_ensemble.train_one_epoch,
-            'evaluate': wideresnet2810_ensemble.evaluate,
+            'train_one_epoch': ensemble_train_one_epoch,
+            'evaluate': ensemble_evaluate,
             'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
