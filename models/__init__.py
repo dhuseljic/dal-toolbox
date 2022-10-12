@@ -1,14 +1,14 @@
 import torch
 import torch.nn as nn
 
-from . import resnet18, resnet18_ensemble, resnet18_mcdropout, resnet18_sngp 
+from . import resnet, resnet18_ensemble, resnet18_mcdropout, resnet_sngp 
 from . import wideresnet2810, wideresnet2810_sngp
 
 
 def build_model(args, **kwargs):
     n_classes = kwargs['n_classes']
     if args.model.name == 'resnet18_deterministic':
-        model = resnet18.ResNet18(n_classes)
+        model = resnet.ResNet18(n_classes)
         optimizer = torch.optim.SGD(
             model.parameters(),
             lr=args.model.optimizer.lr,
@@ -21,8 +21,8 @@ def build_model(args, **kwargs):
         model_dict = {
             'model': model,
             'optimizer': optimizer,
-            'train_one_epoch': resnet18.train_one_epoch,
-            'evaluate': resnet18.evaluate,
+            'train_one_epoch': resnet.train_one_epoch,
+            'evaluate': resnet.evaluate,
             'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
@@ -79,7 +79,7 @@ def build_model(args, **kwargs):
         }
 
     elif args.model.name == 'resnet18_sngp':
-        model = resnet18_sngp.resnet18_sngp(
+        model = resnet_sngp.resnet18_sngp(
             num_classes=10,
             spectral_norm=args.model.spectral_norm.use_spectral_norm,
             norm_bound=args.model.spectral_norm.coeff,
@@ -104,8 +104,8 @@ def build_model(args, **kwargs):
         model_dict = {
             'model': model,
             'optimizer': optimizer,
-            'train_one_epoch': resnet18_sngp.train_one_epoch,
-            'evaluate': resnet18_sngp.evaluate,
+            'train_one_epoch': resnet_sngp.train_one_epoch,
+            'evaluate': resnet_sngp.evaluate,
             'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
@@ -163,8 +163,8 @@ def build_model(args, **kwargs):
         model_dict = {
             'model': model,
             'optimizer': optimizer,
-            'train_one_epoch': resnet18_sngp.train_one_epoch,
-            'evaluate': resnet18_sngp.evaluate,
+            'train_one_epoch': resnet_sngp.train_one_epoch,
+            'evaluate': resnet_sngp.evaluate,
             'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
