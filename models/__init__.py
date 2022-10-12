@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from . import resnet, resnet_mcdropout, resnet_sngp 
-from . import wideresnet, wideresnet_sngp
+from . import wideresnet, wideresnet_mcdropout, wideresnet_sngp
 from .utils.ensemble_utils import Ensemble, EnsembleLRScheduler, EnsembleOptimizer, ensemble_train_one_epoch, ensemble_evaluate
 
 def build_model(args, **kwargs):
@@ -129,6 +129,27 @@ def build_model(args, **kwargs):
             'optimizer': optimizer,
             'train_one_epoch': wideresnet.train_one_epoch,
             'evaluate': wideresnet.evaluate,
+            'lr_scheduler': lr_scheduler,
+            'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
+            'eval_kwargs': dict(criterion=criterion, device=args.device),
+        }
+
+    elif args.model.name == 'wideresnet2810_mcdropout':
+        model = wideresnet_mcdropout.DropoutWideResNet2810(n_classes, args.model.n_passes, args.model.dropout_rate)
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+            nesterov=True
+        )
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.n_epochs)
+        criterion = nn.CrossEntropyLoss()
+        model_dict = {
+            'model': model,
+            'optimizer': optimizer,
+            'train_one_epoch': wideresnet_mcdropout.train_one_epoch,
+            'evaluate': wideresnet_mcdropout.evaluate,
             'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
