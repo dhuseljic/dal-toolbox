@@ -2,9 +2,13 @@ import torch
 from sklearn.metrics import roc_auc_score, average_precision_score
 
 
-def entropy_fn(probas, delta=1e-9):
-    probas = probas.clone()
-    probas = probas.clamp(min=delta, max=(1-delta))
+def clamp_probas(probas):
+    eps = torch.finfo(probas.dtype).eps
+    return probas.clamp(min=eps, max=1 - eps)
+
+
+def entropy_fn(probas):
+    probas = clamp_probas(probas)
     return - torch.sum(probas * probas.log(), -1)
 
 
