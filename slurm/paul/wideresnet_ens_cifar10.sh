@@ -4,9 +4,9 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --job-name=vanilla_cifar10-vs-cifar100
+#SBATCH --job-name=WRS2810-ENS
 #SBATCH --output=/mnt/stud/work/phahn/uncertainty/logs/%x_%A_%a.log
-#SBATCH --array=1-5%5
+#SBATCH --array=1-8%8
 source /mnt/stud/home/phahn/.zshrc
 
 conda activate pytorch_alc_env
@@ -18,8 +18,10 @@ echo "Saving results to $OUTPUT_DIR"
 
 srun python -u main.py \
     dataset=CIFAR10 \
-    ood_datasets=\[CIFAR100\] \
-    model=deterministic \
+    ood_datasets=\[SVHN\] \
+    model=wideresnet2810_ensemble \
     output_dir=$OUTPUT_DIR \
     eval_interval=1 \
+    n_epochs=250 \
+    batch_size=128 \
     random_seed=${SLURM_ARRAY_TASK_ID}
