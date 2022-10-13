@@ -1,5 +1,4 @@
 name : resnet18_sngp
-# dropout_rate: 0.1
 spectral_norm:
   use_spectral_norm: True
   coeff: 6
@@ -8,10 +7,10 @@ gp:
   kernel_scale: 1
   num_inducing: 1024
   normalize_input: False
-  scale_random_features: False
+  scale_random_features: True
   cov_momentum: -1
   ridge_penalty: 1
-  mean_field_factor: 20 # pi / 8
+  mean_field_factor: 0.393 # pi / 8
 optimizer:
   lr: 0.08
   weight_decay: 3e-4
