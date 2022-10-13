@@ -112,6 +112,7 @@ def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
 
     # Model specific test loss and accuracy for in domain testset
     acc1 = generalization.accuracy(torch.log(mean_probas_id), targets_id, (1,))[0].item()
+    prec = generalization.avg_precision(mean_probas_id, targets_id)
     loss = criterion(torch.log(mean_probas_id), targets_id).item()
 
     # Negative Log Likelihood
@@ -123,6 +124,7 @@ def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
 
     metrics = {
         "acc1": acc1,
+        "prec": prec,
         "loss": loss,
         "nll": nll,
         "tce": tce,

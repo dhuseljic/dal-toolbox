@@ -1,4 +1,6 @@
 import torch
+import numpy as np
+from sklearn.metrics import precision_score
 
 @torch.inference_mode()
 def accuracy(output, target, topk=(1,)):
@@ -17,3 +19,10 @@ def accuracy(output, target, topk=(1,)):
         correct_k = correct[:k].flatten().sum(dtype=torch.float32)
         res.append(correct_k * (100.0 / batch_size))
     return res
+
+
+def avg_precision(output, targets):
+    _, pred = output.topk(1, 1, True, True)
+    pred = np.array(pred)
+    targets = np.array(targets)
+    return precision_score(targets, pred, average='weighted')

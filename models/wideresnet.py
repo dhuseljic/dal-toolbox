@@ -139,6 +139,7 @@ def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
 
     # Model specific test loss and accuracy for in domain testset
     acc1 = generalization.accuracy(logits_id, targets_id, (1,))[0].item()
+    prec = generalization.avg_precision(probas_id, targets_id)
     loss = criterion(logits_id, targets_id).item()
 
     # Negative Log Likelihood
@@ -149,11 +150,12 @@ def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
     mce = calibration.MarginalCalibrationError()(probas_id, targets_id).item()
 
     metrics = {
-        "acc1":acc1,
-        "loss":loss,
-        "nll":nll,
-        "tce":tce,
-        "mce":mce
+        "acc1": acc1,
+        "prec": prec,
+        "loss": loss,
+        "nll": nll,
+        "tce": tce,
+        "mce": mce
     }
 
     for name, dataloader_ood in dataloaders_ood.items():

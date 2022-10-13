@@ -49,20 +49,21 @@ class DropoutWideBasic(nn.Module):
 
 
 class DropoutWideResNet2810(BayesianModule):
-    def __init__(self, dropout_rate, num_classes):
+    def __init__(self, num_classes=10, k=None, dropout_rate=0.1):
         super(BayesianModule, self).__init__()
         self.in_planes = 16
         self.depth = 28
         self.widen_factor = 10
+        self.k = k
 
         assert ((self.depth-4) % 6 == 0), 'Wide-resnet depth should be 6n+4'
         n = (self.depth-4)/6
-        k = self.widen_factor
+        w = self.widen_factor
 
-        nStages = [16, 16*k, 32*k, 64*k]
+        nStages = [16, 16*w, 32*w, 64*w]
 
         self.conv1 = conv3x3(3, nStages[0])
-        self.conv1_dropout = ConsistentMCDropout2d(self.dropout_rate)
+        self.conv1_dropout = ConsistentMCDropout2d(dropout_rate)
         self.layer1 = self._wide_layer(DropoutWideBasic, nStages[1], n, dropout_rate, stride=1)
         self.layer2 = self._wide_layer(DropoutWideBasic, nStages[2], n, dropout_rate, stride=2)
         self.layer3 = self._wide_layer(DropoutWideBasic, nStages[3], n, dropout_rate, stride=2)
@@ -125,6 +126,7 @@ def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
 
     # Model specific test loss and accuracy for in domain testset
     acc1 = generalization.accuracy(torch.log(mean_probas_id), targets_id, (1,))[0].item()
+    prec = generalization.avg_precision(mean_probas_id, targets_id)
     loss = criterion(torch.log(mean_probas_id), targets_id).item()
 
     # Negative Log Likelihood
@@ -136,6 +138,7 @@ def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
 
     metrics = {
         "acc1": acc1,
+        "prec": prec,
         "loss": loss,
         "nll": nll,
         "tce": tce,

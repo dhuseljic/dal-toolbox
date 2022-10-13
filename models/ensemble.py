@@ -125,17 +125,21 @@ def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
 
     # Negative Log Likelihood
     nll = torch.nn.CrossEntropyLoss(reduction='mean')(torch.log(mean_probas_id), targets_id).item()
+    ensemble_cross_entropy = crossentropy.EnsembleCrossEntropy()(ensemble_logits_id, targets_id).item()
+    gibbs_cross_entropy = crossentropy.GibsCrossEntropy()(ensemble_logits_id, targets_id).item()
 
     # Top- and Marginal Calibration Error
     tce = calibration.TopLabelCalibrationError()(mean_probas_id, targets_id).item()
     mce = calibration.MarginalCalibrationError()(mean_probas_id, targets_id).item()
 
     metrics = {
-        "acc1":acc1,
-        "loss":loss,
-        "nll":nll,
-        "tce":tce,
-        "mce":mce
+        "acc1": acc1,
+        "loss": loss,
+        "nll": nll,
+        "ensemble_cross_entropy": ensemble_cross_entropy,
+        "gibbs_cross_entropy": gibbs_cross_entropy,
+        "tce": tce,
+        "mce": mce
     }
 
     for name, dataloader_ood in dataloaders_ood.items():

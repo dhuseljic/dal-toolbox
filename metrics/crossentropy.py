@@ -32,8 +32,6 @@ class EnsembleCrossEntropy(nn.Module):
         return torch.mean(nll)
 
 
-#TODO: Change according to robustness metrics
-
 class GibsCrossEntropy(nn.Module):
     def __init__(self):
         super().__init__()
@@ -55,10 +53,7 @@ class GibsCrossEntropy(nn.Module):
         
         # Non Reduction Cross Entropy
         loss = torch.nn.CrossEntropyLoss(reduction='none')
-        ce = loss(logits, labels).reshape(-1, 1)
-
-        # Reduce LogSumExp + log of Ensemble Size
-        nll = -torch.logsumexp(-ce, dim=1) + math.log(ensemble_size)
+        nll = loss(logits, labels).reshape(-1, 1)
 
         #Return Average
         return torch.mean(nll)

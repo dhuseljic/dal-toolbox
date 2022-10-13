@@ -135,7 +135,7 @@ def build_model(args, **kwargs):
         }
 
     elif args.model.name == 'wideresnet2810_mcdropout':
-        model = wideresnet_mcdropout.DropoutWideResNet2810(n_classes, args.model.dropout_rate)
+        model = wideresnet_mcdropout.DropoutWideResNet2810(n_classes, args.model.n_passes, args.model.dropout_rate)
         optimizer = torch.optim.SGD(
             model.parameters(),
             lr=args.model.optimizer.lr,
