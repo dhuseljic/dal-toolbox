@@ -30,6 +30,8 @@ python main.py model=$MODEL output_dir=$OUTPUT_DIR
 |:--------------------|------------:|------------:|-----------:|-----------:|-----------:|--------------------------:|-------------------------:|
 | wideresnet2810_sngp |      95.72  |    0.208077 |   0.208077 |  0.070292  |  0.042647  |                       --- |                      --- |
 
+## Ablations
+
 ### SNGP Ablation: CIFAR10
 
 |                      |   test_acc1 |   test_loss |   test_nll |   test_tce |   test_mce |   test_SVHN_entropy_auroc |   test_SVHN_entropy_aupr |
