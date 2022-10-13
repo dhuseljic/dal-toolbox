@@ -19,11 +19,15 @@ python main.py model=$MODEL output_dir=$OUTPUT_DIR
 
 ## Results
 
-### CIFAR10
+### CIFAR10: ResNet18
 |                     |   test_acc1 |   test_loss |   test_nll |   test_tce |   test_mce |   test_SVHN_entropy_auroc |   test_SVHN_entropy_aupr |
 |:--------------------|------------:|------------:|-----------:|-----------:|-----------:|--------------------------:|-------------------------:|
 | resnet18            |      95.275 |    0.197757 |   0.197757 |  0.0695829 |  0.0447987 |                  0.880982 |                 0.869589 |
 | resnet18_sngp       |      94.477 |    0.22009  |   0.22009  |  0.0738159 |  0.0460703 |                  0.863937 |                 0.85443  |
+
+### CIFAR10: Wide-ResNet-28-10
+|                     |   test_acc1 |   test_loss |   test_nll |   test_tce |   test_mce |   test_SVHN_entropy_auroc |   test_SVHN_entropy_aupr |
+|:--------------------|------------:|------------:|-----------:|-----------:|-----------:|--------------------------:|-------------------------:|
 | wideresnet2810_sngp |      95.72  |    0.208077 |   0.208077 |  0.070292  |  0.042647  |                       --- |                      --- |
 
 ### SNGP Ablation: CIFAR10
