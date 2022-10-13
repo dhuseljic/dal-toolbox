@@ -181,7 +181,7 @@ class RandomFeatureGaussianProcess(nn.Module):
             kernel_scale=self.kernel_scale,
             scale_features=self.scale_random_features,
         )
-        self.random_features.reset_parameters(std_init=0.05)
+        # TODO: self.random_features.reset_parameters(std_init=0.05)
 
         # Define output layer according to Eq 8. For imagenet init with normal std=0.01?
         self.beta = nn.Linear(num_inducing, out_features, bias=False)
