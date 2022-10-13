@@ -7,7 +7,7 @@ gp:
   kernel_scale: 1
   num_inducing: 1024
   normalize_input: False
-  scale_random_features: True
+  scale_random_features: False
   cov_momentum: -1
   ridge_penalty: 1
   mean_field_factor: 0.393 # pi / 8
