@@ -23,5 +23,5 @@ srun python -u main.py \
     output_dir=$OUTPUT_DIR \
     eval_interval=1 \
     n_epochs=250 \
-    batch_size=128 \
+    train_batch_size=128 \
     random_seed=${SLURM_ARRAY_TASK_ID}

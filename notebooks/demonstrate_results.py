@@ -10,10 +10,10 @@ import pandas as pd
 from omegaconf import OmegaConf
 from pathlib import Path
 
-root_path = Path('../results/wideresnet_sngp_test/output')
+root_path = Path('../results/20221016 updated wr2810/output')
 # %%
 # Load all model results into one large dictionary
-model_names = ["WR-28-10-SNGP"]
+model_names = ["WRS2810-DET", "WRS2810-MC", "WRS2810-SNGP", "WRS2810-ENS"]
 all_results = {mn:{} for mn in model_names}
 
 for model_name in model_names:

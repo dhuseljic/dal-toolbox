@@ -119,6 +119,9 @@ class WideResNetSNGP(nn.Module):
 
         return nn.Sequential(*layers)
 
+    def reset_precision_matrix(self):
+        self.output_layer.reset_precision_matrix()
+
     def forward(self, x, mean_field=False, return_cov=False):
         out = self.conv1(x)
         out = self.layer1(out)
