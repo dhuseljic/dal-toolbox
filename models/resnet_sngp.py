@@ -343,6 +343,7 @@ def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
     probas_id = logits_id.softmax(-1)
     conf_id, _ = probas_id.max(-1)
     entropy_id = ood.entropy_fn(probas_id)
+    dempster_shafer_id = ood.dempster_shafer_uncertainty(logits_id)
 
     # Model specific test loss and accuracy for in domain testset
     acc1 = generalization.accuracy(logits_id, targets_id, (1,))[0].item()
@@ -378,19 +379,24 @@ def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
         probas_ood = logits_ood.softmax(-1)
         conf_ood, _ = probas_ood.max(-1)
         entropy_ood = ood.entropy_fn(probas_ood)
+        dempster_shafer_ood = ood.dempster_shafer_uncertainty(logits_ood)
 
         # Area under the Precision-Recall-Curve
         entropy_aupr = ood.ood_aupr(entropy_id, entropy_ood)
         conf_aupr = ood.ood_aupr(1-conf_id, 1-conf_ood)
+        dempster_shafer_aupr = ood.ood_aupr(dempster_shafer_id, dempster_shafer_ood)
+
+        metrics[name+"_entropy_aupr"] = entropy_aupr
+        metrics[name+"_conf_aupr"] = conf_aupr
+        metrics[name+"_dempster_aupr"] = dempster_shafer_aupr
 
         # Area under the Receiver-Operator-Characteristic-Curve
         entropy_auroc = ood.ood_auroc(entropy_id, entropy_ood)
         conf_auroc = ood.ood_auroc(1-conf_id, 1-conf_ood)
+        dempster_shafer_auroc = ood.ood_aupr(dempster_shafer_id, dempster_shafer_ood)
 
-        # Add to metrics
         metrics[name+"_entropy_auroc"] = entropy_auroc
         metrics[name+"_conf_auroc"] = conf_auroc
-        metrics[name+"_entropy_aupr"] = entropy_aupr
-        metrics[name+"_conf_aupr"] = conf_aupr
+        metrics[name+"_dempster_auroc"] = dempster_shafer_auroc
 
     return {f"test_{k}": v for k, v in metrics.items()}
