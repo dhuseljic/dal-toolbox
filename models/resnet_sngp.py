@@ -233,7 +233,7 @@ class RandomFeatureGaussianProcess(nn.Module):
     def update_precision_matrix(self, phi, logits):
         probas = logits.softmax(-1)
         probas_max = probas.max(1)[0]
-        multiplier = probas_max * (1-probas_max)
+        multiplier = 1 # probas_max * (1-probas_max)
         precision_matrix_minibatch = torch.matmul(
             multiplier*phi.T, phi
         )
