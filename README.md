@@ -35,6 +35,32 @@ python main.py model=$MODEL output_dir=$OUTPUT_DIR
 
 ## Ablations
 
+### SNGP 
+Default Config:
+```
+name : resnet18_sngp
+spectral_norm:
+  use_spectral_norm: True
+  coeff: 6
+  n_power_iterations: 1
+gp:
+  kernel_scale: ...
+  num_inducing: 1024
+  normalize_input: False
+  scale_random_features: False
+  cov_momentum: -1
+  ridge_penalty: 1
+  mean_field_factor: 0.393 # = pi / 8
+optimizer:
+  lr: 0.08
+  weight_decay: 3e-4
+  momentum: .9
+```
+Adapt Kernel Scale:
+|                      |   test_acc1 |   test_loss |   test_nll |   test_tce |   test_mce |   test_SVHN_entropy_auroc |   test_SVHN_entropy_aupr |
+|:---------------------|------------:|------------:|-----------:|-----------:|-----------:|--------------------------:|-------------------------:|
+
+
 ### SNGP Ablation: CIFAR10
 
 |                      |   test_acc1 |   test_loss |   test_nll |   test_tce |   test_mce |   test_SVHN_entropy_auroc |   test_SVHN_entropy_aupr |
