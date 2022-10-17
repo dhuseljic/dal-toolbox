@@ -86,10 +86,7 @@ def build_svhn(split, ds_path):
         ds = torchvision.datasets.SVHN(ds_path, split='train', download=True, transform=train_transform)
     elif split == 'test':
         eval_transform = None
-        train_transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(mean, std),
-        ])
+        eval_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean, std)])
         ds = torchvision.datasets.SVHN(ds_path, split='test', download=True, transform=eval_transform)
     return ds
 
