@@ -121,6 +121,7 @@ train_loader = torch.utils.data.DataLoader(train_ds, batch_size=128, shuffle=Tru
 
 model = SNGPNet(num_classes=2, spectral_norm_params=spectral_norm_params, gp_params=gp_params)
 model.last.random_features.reset_parameters(std_init=1)
+
 optimizer = torch.optim.SGD(model.parameters(), **optimizer_params)
 criterion = nn.CrossEntropyLoss()
 history = []

@@ -20,12 +20,15 @@ def get_experiments(result_path, glob_pattern):
         exp_json = exp_path / 'results_final.json'
         exp_cfg = exp_path / '.hydra' / 'config.yaml'
 
-        with open(exp_json, 'r') as f:
-            data = json.load(f)
-            cfg = {}  # OmegaConf.load(exp_cfg)
+        try:
+            with open(exp_json, 'r') as f:
+                data = json.load(f)
+                cfg = {}# OmegaConf.load(exp_cfg)
 
-        result_dict_final_epoch = data['test_history'][-1]
-        experiments.append({'results': result_dict_final_epoch, 'cfg': cfg})
+            result_dict_final_epoch = data['test_history'][-1]
+            experiments.append({'results': result_dict_final_epoch, 'cfg': cfg})
+        except:
+            print(f'{exp_path} has missing results.')
     return experiments
 
 
@@ -50,42 +53,44 @@ def get_metric_dict(experiments, ignore_metrics=[]):
 """Results for default parameters."""
 
 exp_names = {
-    "resnet18": "CIFAR10__resnet18",
-    "resnet18_sngp": "CIFAR10__resnet18_sngp",
+    'deterministic': 'CIFAR10__resnet18',
+    "dropout": "CIFAR10__resnet18_mcdropout",
+    "sngp": "CIFAR10__resnet18_sngp__scale10",
 }
 ignore_metrics = ['test_SVHN_conf_auroc', 'test_SVHN_conf_aupr']
 
 data = []
 for key, name in exp_names.items():
-    experiments = get_experiments(result_path / name, glob_pattern='seed*')
+    experiments = get_experiments(result_path / name, glob_pattern='seed[1-3]')
     metric_dict = get_metric_dict(experiments, ignore_metrics=ignore_metrics)
     data.append(metric_dict)
 
 df = pd.DataFrame(data, index=exp_names.keys())
-print(df.to_markdown())
 df
+# print(df.to_markdown())
 
 
 # %%
 """SNGP ablation."""
 
 exp_names = {
-    "default": "CIFAR10__resnet18_sngp",
-    "kernel_scale=10": "CIFAR10__resnet18_sngp__kernel_scale10",
-    "num_inducing=4096": "CIFAR10__resnet18_sngp__num_inducing4096",
-    "scale_features=False": "CIFAR10__resnet18_sngp__scale_features",
+ 'deterministic': 'CIFAR10__resnet18',
+ 'scale5': 'CIFAR10__resnet18_sngp__scale5',
+ 'scale10': 'CIFAR10__resnet18_sngp__scale10',
+ 'scale20': 'CIFAR10__resnet18_sngp__scale20',
+ 'scale50': 'CIFAR10__resnet18_sngp__scale50',
+ 'scale100': 'CIFAR10__resnet18_sngp__scale100',
+ 'scale200': 'CIFAR10__resnet18_sngp__scale200',
 }
 ignore_metrics = ['test_SVHN_conf_auroc', 'test_SVHN_conf_aupr']
 
 data = []
 for key, name in exp_names.items():
-    experiments = get_experiments(result_path / name, glob_pattern='seed*')
+    experiments = get_experiments(result_path / name, glob_pattern='seed[1-3]')
     metric_dict = get_metric_dict(experiments, ignore_metrics=ignore_metrics)
     data.append(metric_dict)
 
 df = pd.DataFrame(data, index=exp_names.keys())
-print(df.to_markdown())
 df
+# print(df.to_markdown())
 
-
-# %%

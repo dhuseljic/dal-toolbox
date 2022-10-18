@@ -272,6 +272,9 @@ class RandomFourierFeatures(nn.Module):
         nn.init.normal_(self.random_feature_linear.weight, std=std_init)
         nn.init.uniform_(self.random_feature_linear.bias, 0, 2*math.pi)
 
+        # TODO: Maybe include ORF features as done in 
+        # https://github.com/y0ast/DUE/blob/f29c990811fd6a8e76215f17049e6952ef5ea0c9/due/sngp.py#L11
+
     def forward(self, x):
         # Supports lengthscale for cutom random feature layer by directly rescaling the input.
         x = x * self.input_scale
