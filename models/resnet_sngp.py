@@ -257,7 +257,7 @@ class RandomFourierFeatures(nn.Module):
         super().__init__()
         self.kernel_scale = kernel_scale
         # Google uses: self.input_scale = 1/math.sqrt(self.kernel_scale)
-        self.input_scale = 1 / self.kernel_scale
+        self.input_scale = 1 / math.sqrt(2*self.kernel_scale)
 
         self.scale_features = scale_features
         self.random_feature_scale = math.sqrt(2./float(num_inducing))
