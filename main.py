@@ -54,7 +54,7 @@ def main(args):
             "test_history": history_test,
             "lr_scheduler": lr_scheduler.state_dict() if lr_scheduler else None,
         }
-        torch.save(checkpoint, os.path.join(args.output_dir, f"model_{i_epoch}.pth"))
+        # torch.save(checkpoint, os.path.join(args.output_dir, f"model_{i_epoch}.pth"))
         torch.save(checkpoint, os.path.join(args.output_dir, "checkpoint.pth"))
 
     # Saving results
