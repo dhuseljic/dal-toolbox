@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 from metrics import generalization, calibration, ood
 from utils import MetricLogger, SmoothedValue
-from models.utils.baysian_module import BayesianModule, ConsistentMCDropout2d
+from models.utils.bayesian_module import BayesianModule, ConsistentMCDropout2d
 
 
 class DropoutResNet18(BayesianModule):

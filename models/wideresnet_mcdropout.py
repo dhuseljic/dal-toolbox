@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import numpy as np
 from metrics import generalization, ood, calibration
 from utils import MetricLogger, SmoothedValue
-from models.utils.baysian_module import BayesianModule, ConsistentMCDropout2d
+from models.utils.bayesian_module import BayesianModule, ConsistentMCDropout2d
 
 
 def conv3x3(in_planes, out_planes, stride=1):
