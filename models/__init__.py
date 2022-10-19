@@ -87,6 +87,7 @@ def build_model(args, **kwargs):
             num_inducing=args.model.gp.num_inducing,
             kernel_scale=args.model.gp.kernel_scale,
             normalize_input=False,
+            random_feature_type=args.model.gp.random_feature_type,
             scale_random_features=args.model.gp.scale_random_features,
             mean_field_factor=args.model.gp.mean_field_factor,
             cov_momentum=args.model.gp.cov_momentum,

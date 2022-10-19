@@ -103,8 +103,9 @@ spectral_norm_params = dict(
 )
 gp_params = dict(
     num_inducing=1024,
-    kernel_scale=2,
+    kernel_scale=100,
     normalize_input=False,
+    random_feature_type='orf',
     scale_random_features=False,
     # mean_field_factor=.1,
     # cov_momentum=-1,
@@ -121,7 +122,6 @@ torch.manual_seed(0)
 train_loader = torch.utils.data.DataLoader(train_ds, batch_size=128, shuffle=True)
 
 model = SNGPNet(num_classes=2, spectral_norm_params=spectral_norm_params, gp_params=gp_params)
-model.last.random_features.reset_parameters(std_init=1)
 
 optimizer = torch.optim.SGD(model.parameters(), **optimizer_params)
 criterion = nn.CrossEntropyLoss()

@@ -11,6 +11,7 @@ from .utils.spectral_norm import SpectralConv2d
 from .utils.random_features import RandomFeatureGaussianProcess
 
 
+
 class BasicBlock(nn.Module):
     expansion = 1
 
@@ -46,6 +47,7 @@ def resnet18_sngp(num_classes,
                   num_inducing=1024,
                   kernel_scale=1,
                   normalize_input=False,
+                  random_feature_type='rff',
                   scale_random_features=True,
                   mean_field_factor=math.pi/8,
                   cov_momentum=-1,
@@ -62,6 +64,7 @@ def resnet18_sngp(num_classes,
         num_inducing=num_inducing,
         kernel_scale=kernel_scale,
         normalize_input=normalize_input,
+        random_feature_type=random_feature_type,
         scale_random_features=scale_random_features,
         mean_field_factor=mean_field_factor,
         cov_momentum=cov_momentum,
@@ -80,6 +83,7 @@ class ResNetSNGP(nn.Module):
                  num_inducing=1024,
                  kernel_scale=1,
                  normalize_input=False,
+                 random_feature_type='rff',
                  scale_random_features=True,
                  mean_field_factor=math.pi/8,
                  cov_momentum=-1,
@@ -108,6 +112,7 @@ class ResNetSNGP(nn.Module):
             num_inducing=num_inducing,
             kernel_scale=kernel_scale,
             normalize_input=normalize_input,
+            random_feature_type=random_feature_type,
             scale_random_features=scale_random_features,
             mean_field_factor=mean_field_factor,
             cov_momentum=cov_momentum,

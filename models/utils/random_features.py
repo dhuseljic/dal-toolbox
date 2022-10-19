@@ -5,8 +5,9 @@ import torch.nn as nn
 
 
 class RandomFourierFeatures(nn.Module):
-    def __init__(self, in_features, num_inducing=1024, kernel_scale=1, scale_features=True):
+    def __init__(self, in_features, num_inducing=1024, kernel_scale=1, scale_features=True, random_feature_type='rff'):
         super().__init__()
+
         self.kernel_scale = kernel_scale
         self.input_scale = 1 / math.sqrt(self.kernel_scale)
 
@@ -16,15 +17,19 @@ class RandomFourierFeatures(nn.Module):
         self.random_feature_linear = nn.Linear(in_features, num_inducing)
         self.random_feature_linear.weight.requires_grad = False
         self.random_feature_linear.bias.requires_grad = False
-        self.reset_parameters()
+        self.reset_parameters(random_feature_type=random_feature_type)
 
-    def reset_parameters(self, std_init=1):
+    def reset_parameters(self, random_feature_type='rff'):
         # https://github.com/google/uncertainty-baselines/blob/main/uncertainty_baselines/models/resnet50_sngp.py#L55
-        nn.init.normal_(self.random_feature_linear.weight, std=std_init)
-        nn.init.uniform_(self.random_feature_linear.bias, 0, 2*math.pi)
+        # nn.init.normal_(self.random_feature_linear.weight, std=std_init)
+        if random_feature_type == 'rff':
+            nn.init.normal_(self.random_feature_linear.weight)
+        elif random_feature_type == 'orf':
+            orthogonal_random_(self.random_feature_linear.weight)
+        else:
+            raise ValueError('Only Random Fourier Features `rff` and Orthogonal Random Features `orf` are supported.')
 
-        # TODO: Maybe include ORF features as done in
-        # https://github.com/y0ast/DUE/blob/f29c990811fd6a8e76215f17049e6952ef5ea0c9/due/sngp.py#L11
+        nn.init.uniform_(self.random_feature_linear.bias, 0, 2*math.pi)
 
     def forward(self, x):
         # Supports lengthscale for cutom random feature layer by directly rescaling the input.
@@ -48,6 +53,7 @@ class RandomFeatureGaussianProcess(nn.Module):
                  num_inducing: int = 1024,
                  kernel_scale: float = 1,
                  normalize_input: bool = False,
+                 random_feature_type: str = 'rff',
                  scale_random_features: bool = True,
                  mean_field_factor: float = math.pi/8,
                  cov_momentum: float = -1,
@@ -79,6 +85,7 @@ class RandomFeatureGaussianProcess(nn.Module):
             num_inducing=self.num_inducing,
             kernel_scale=self.kernel_scale,
             scale_features=self.scale_random_features,
+            random_feature_type=random_feature_type,
         )
 
         # Define output layer according to Eq 8. For imagenet init with normal std=0.01?
@@ -149,6 +156,29 @@ class RandomFeatureGaussianProcess(nn.Module):
         out = torch.matmul(covariance_matrix_feature, phi.T) * self.ridge_penalty
         covariance_matrix_gp = torch.matmul(phi, out)
         return covariance_matrix_gp
+
+
+def orthogonal_random_(tensor):
+    def sample_ortho(shape):
+        return torch.linalg.qr(torch.randn(*shape))[0]
+
+    num_rows, num_cols = tensor.shape
+    if num_rows > num_cols:
+        ortho_mat_list = []
+        num_rows_sampled = 0
+        while num_rows_sampled < num_rows:
+            ortho_mat_square = sample_ortho((num_cols, num_cols))
+            ortho_mat_list.append(ortho_mat_square)
+            num_rows_sampled += num_cols
+        ortho_mat = torch.cat(ortho_mat_list, dim=0)
+        ortho_mat = ortho_mat[:num_rows]
+    else:
+        ortho_mat = sample_ortho((num_rows, num_cols))
+
+    feature_norms_square = torch.randn(ortho_mat.shape)**2
+    feature_norms = torch.sum(feature_norms_square, dim=1).sqrt()
+    ortho_mat = feature_norms.unsqueeze(-1) * ortho_mat
+    tensor.data = ortho_mat
 
 
 def mean_field_logits(logits, cov, lmb=math.pi / 8):
