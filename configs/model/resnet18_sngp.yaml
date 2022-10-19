@@ -7,7 +7,7 @@ gp:
   kernel_scale: 1
   num_inducing: 1024
   normalize_input: False
-  random_feature_type: orf # rff
+  random_feature_type: rff
   scale_random_features: False
   cov_momentum: -1
   ridge_penalty: 1
