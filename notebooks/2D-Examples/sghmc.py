@@ -3,9 +3,8 @@
 import sys
 import math
 
-from models.utils import sghmc
 
-sys.path.append('../')
+sys.path.append('../../')
 
 import numpy as np
 import pylab as plt
@@ -15,7 +14,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from sklearn import datasets
 
-from models import sngp
+from models.utils import sghmc
+# from models import sngp
 # fmt: on
 # %%
 
@@ -36,19 +36,13 @@ plt.show()
 
 
 class Net(nn.Module):
-    def __init__(self,  feature_dim=128, kernel_scale=1, num_inducing=1024, scale_features=True):
+    def __init__(self,  feature_dim=128):
         super().__init__()
 
         self.first = nn.Linear(2, feature_dim)
         self.hidden1 = nn.Linear(feature_dim, feature_dim)
         self.hidden2 = nn.Linear(feature_dim, feature_dim)
-        self.random_features = sngp.RandomFourierFeatures(
-            feature_dim,
-            num_inducing,
-            kernel_scale=kernel_scale,
-            scale_features=scale_features
-        )
-        self.last = nn.Linear(num_inducing, 2)
+        self.last = nn.Linear(feature_dim, 2)
 
         self.act = nn.ReLU()
 
@@ -57,7 +51,6 @@ class Net(nn.Module):
         x = self.act(self.first(x))
         x = self.act(self.hidden1(x))
         x = self.act(self.hidden2(x))
-        x = self.random_features(x)
         x = self.last(x)
         return x
 
@@ -71,9 +64,6 @@ torch.manual_seed(0)
 # DNN
 hparams_net = dict(
     feature_dim=128,
-    kernel_scale=.1,
-    num_inducing=1024,
-    scale_features=True,
 )
 net = Net(**hparams_net)
 # sghmc
@@ -90,7 +80,7 @@ B_estim = .8*C
 resample_each = int(1e10)
 hparams_sghmc = dict(
     n_samples=len(train_ds),
-    epsilon=epsilon,
+    lr=epsilon,
     C=C,
     B_estim=B_estim,
     resample_each=resample_each,
