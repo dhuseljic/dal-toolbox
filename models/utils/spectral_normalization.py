@@ -1,10 +1,10 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 from torch.nn import Module
 from torch.nn.utils import parametrize
 from torch.nn.utils.parametrizations import _SpectralNorm
-
 
 
 class SpectralNormLinear(_SpectralNorm):
@@ -64,6 +64,7 @@ def spectral_norm_linear(module: Module, norm_bound: float, name='weight', n_pow
 
 
 class SpectralNormConv2d(_SpectralNorm):
+    # TODO:
     def __init__(self,
                  weight: torch.Tensor,
                  norm_bound: float = 1,
@@ -108,3 +109,57 @@ class SpectralNormConv2d(_SpectralNorm):
                                   dim=0, eps=self.eps, out=self._u)   # type: ignore[has-type]
             self._v = F.normalize(torch.mv(weight_mat.t(), self._u),
                                   dim=0, eps=self.eps, out=self._v)   # type: ignore[has-type]
+
+
+class SpectralLinear(nn.Linear):
+    def __init__(self,
+                 in_features: int,
+                 out_features: int,
+                 spectral_norm=True,
+                 norm_bound=1,
+                 n_power_iterations=1,
+                 bias: bool = True,
+                 device=None,
+                 dtype=None) -> None:
+        super().__init__(in_features, out_features, bias, device, dtype)
+        # Apply spectral norm after init
+        self.norm_bound = norm_bound
+        self.n_power_iterations = n_power_iterations
+        if spectral_norm:
+            spectral_norm_linear(self, norm_bound=self.norm_bound, n_power_iterations=self.n_power_iterations)
+
+
+class SpectralConv2d(nn.Conv2d):
+    def __init__(self,
+                 in_channels: int,
+                 out_channels: int,
+                 kernel_size,
+                 spectral_norm=True,
+                 norm_bound=1,
+                 n_power_iterations=1,
+                 stride=1,
+                 padding=0,
+                 dilation=1,
+                 groups: int = 1,
+                 bias: bool = True,
+                 padding_mode: str = 'zeros',
+                 device=None,
+                 dtype=None) -> None:
+        super().__init__(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+            groups,
+            bias,
+            padding_mode,
+            device,
+            dtype
+        )
+        # Apply spectral norm after init
+        self.norm_bound = norm_bound
+        self.n_power_iterations = n_power_iterations
+        if spectral_norm:
+            spectral_norm_linear(self, norm_bound=self.norm_bound, n_power_iterations=self.n_power_iterations)
