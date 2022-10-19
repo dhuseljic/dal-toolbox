@@ -14,11 +14,12 @@ import torch.nn.functional as F
 
 from sklearn import datasets
 from models.utils.spectral_norm import SpectralLinear
-from models.resnet_sngp import RandomFeatureGaussianProcess, train_one_epoch
+from models.utils.random_features import RandomFeatureGaussianProcess
+from models.resnet_sngp import train_one_epoch
 # fmt: on
 
 # %%
-X, y = datasets.make_moons(100, noise=.1)
+X, y = datasets.make_moons(200, noise=.1)
 # X, y = datasets.make_circles(500, noise=.02)
 X = (X - X.mean(0)) / X.std(0)
 X = torch.from_numpy(X).float()
@@ -102,15 +103,15 @@ spectral_norm_params = dict(
 )
 gp_params = dict(
     num_inducing=1024,
-    kernel_scale=1,
+    kernel_scale=2,
     normalize_input=False,
     scale_random_features=False,
-    # mean_field_factor=np.pi/8,
+    # mean_field_factor=.1,
     # cov_momentum=-1,
     # ridge_penalty=1
 )
 optimizer_params = dict(
-    lr=1e-3,
+    lr=1e-2,
     weight_decay=1e-2,
     momentum=.9,
 )

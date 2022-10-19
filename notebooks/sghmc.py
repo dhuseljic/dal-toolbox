@@ -3,6 +3,8 @@
 import sys
 import math
 
+from models.utils import sghmc
+
 sys.path.append('../')
 
 import numpy as np
@@ -13,7 +15,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from sklearn import datasets
 
-from models import sghmc, sngp
+from models import sngp
 # fmt: on
 # %%
 

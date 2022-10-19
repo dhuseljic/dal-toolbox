@@ -82,11 +82,11 @@ exp_names = {
  'scale100': 'CIFAR10__resnet18_sngp__scale100',
  'scale200': 'CIFAR10__resnet18_sngp__scale200',
 }
-ignore_metrics = ['test_SVHN_conf_auroc', 'test_SVHN_conf_aupr']
+ignore_metrics = ['test_SVHN_conf_auroc', 'test_SVHN_conf_aupr', 'test_SVHN_dempster_aupr', 'test_SVHN_dempster_auroc']
 
 data = []
 for key, name in exp_names.items():
-    experiments = get_experiments(result_path / name, glob_pattern='seed[1-3]')
+    experiments = get_experiments(result_path / name, glob_pattern='seed*')
     metric_dict = get_metric_dict(experiments, ignore_metrics=ignore_metrics)
     data.append(metric_dict)
 
@@ -94,3 +94,5 @@ df = pd.DataFrame(data, index=exp_names.keys())
 df
 # print(df.to_markdown())
 
+
+# %%
