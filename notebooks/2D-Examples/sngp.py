@@ -13,9 +13,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from sklearn import datasets
-from models.utils.spectral_norm import SpectralLinear
+
 from models.utils.random_features import RandomFeatureGaussianProcess
 from models.resnet_sngp import train_one_epoch
+from models.utils.spectral_normalization import spectral_norm_linear
 # fmt: on
 
 # %%
@@ -36,6 +37,7 @@ plt.show()
 class SNGPNet(nn.Module):
     def __init__(self,
                  num_classes: int,
+                 use_spectral_norm: bool = True,
                  spectral_norm_params: dict = {},
                  gp_params: dict = {},
                  n_residual_layers: int = 6,
@@ -43,13 +45,14 @@ class SNGPNet(nn.Module):
                  ):
         super().__init__()
 
+        def linear_layer(*args, **kwargs):
+            if use_spectral_norm:
+                return spectral_norm_linear(nn.Linear(*args, **kwargs), **spectral_norm_params)
+            else:
+                return nn.Linear(*args, **kwargs)
+
         self.first = nn.Linear(2, feature_dim)
-        self.residuals = nn.ModuleList([
-            SpectralLinear(
-                feature_dim,
-                feature_dim,
-                **spectral_norm_params
-            ) for _ in range(n_residual_layers)])
+        self.residuals = nn.ModuleList([linear_layer(128, 128) for _ in range(n_residual_layers)])
         self.last = RandomFeatureGaussianProcess(
             in_features=feature_dim,
             out_features=num_classes,
@@ -97,13 +100,12 @@ def plot_contour(model, X, y, ax=None):
 
 # %%
 spectral_norm_params = dict(
-    spectral_norm=True,
-    norm_bound=.9,
+    norm_bound=1,
     n_power_iterations=1
 )
 gp_params = dict(
     num_inducing=1024,
-    kernel_scale=100,
+    kernel_scale=10,
     normalize_input=False,
     random_feature_type='orf',
     scale_random_features=False,
@@ -116,12 +118,12 @@ optimizer_params = dict(
     weight_decay=1e-2,
     momentum=.9,
 )
-epochs=200
+epochs = 200
 
 torch.manual_seed(0)
 train_loader = torch.utils.data.DataLoader(train_ds, batch_size=128, shuffle=True)
 
-model = SNGPNet(num_classes=2, spectral_norm_params=spectral_norm_params, gp_params=gp_params)
+model = SNGPNet(num_classes=2, use_spectral_norm=True, spectral_norm_params=spectral_norm_params, gp_params=gp_params)
 
 optimizer = torch.optim.SGD(model.parameters(), **optimizer_params)
 criterion = nn.CrossEntropyLoss()
