@@ -18,7 +18,8 @@ export HYDRA_FULL_ERROR=1
 MODEL=resnet18
 DATASET=CIFAR10
 OOD_DATASETS=['SVHN']
-OUTPUT_DIR=/mnt/work/dhuseljic/results/uncertainty_evaluation/${DATASET}__${MODEL}/seed${SLURM_ARRAY_TASK_ID}/
+N_SAMPLES=10000
+OUTPUT_DIR=/mnt/work/dhuseljic/results/uncertainty_evaluation/ablations/${DATASET}__${MODEL}__${N_SAMPLES}samples/seed${SLURM_ARRAY_TASK_ID}/
 echo "Writing results to ${OUTPUT_DIR}"
 
 srun python -u main.py \
@@ -27,4 +28,5 @@ srun python -u main.py \
 	ood_datasets=$OOD_DATASETS \
 	output_dir=$OUTPUT_DIR \
     	random_seed=$SLURM_ARRAY_TASK_ID \
-	eval_interval=50
+	eval_interval=50 \
+	n_samples=$N_SAMPLES
