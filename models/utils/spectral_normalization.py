@@ -64,7 +64,6 @@ def spectral_norm_linear(module: Module, norm_bound: float, name='weight', n_pow
 
 
 class SpectralNormConv2d(_SpectralNorm):
-    # TODO:
     def __init__(self,
                  weight: torch.Tensor,
                  norm_bound: float = 1,
@@ -74,41 +73,6 @@ class SpectralNormConv2d(_SpectralNorm):
         super().__init__(weight, n_power_iterations, dim, eps)
         self.norm_bound = norm_bound
 
-    def forward(self, weight: torch.Tensor) -> torch.Tensor:
-        if weight.ndim == 1:
-            # Faster and more exact path, no need to approximate anything
-            return F.normalize(weight, dim=0, eps=self.eps)
-        else:
-            weight_mat = self._reshape_weight_to_matrix(weight)
-            if self.training:
-                self._power_method(weight_mat, self.n_power_iterations)
-            # See above on why we need to clone
-            u = self._u.clone(memory_format=torch.contiguous_format)
-            v = self._v.clone(memory_format=torch.contiguous_format)
-            # The proper way of computing this should be through F.bilinear, but
-            # it seems to have some efficiency issues:
-            # https://github.com/pytorch/pytorch/issues/58093
-            sigma = torch.dot(u, torch.mv(weight_mat, v))
-
-            # weight_norm = weight / sigma
-
-            weight_norm = torch.where((self.norm_bound / sigma) < 1, (self.norm_bound / sigma) * weight, weight)
-
-            factor = torch.max(torch.ones(1, device=weight.device), sigma / self.norm_bound)
-            weight_norm = weight / factor
-            return weight_norm
-
-    def _power_method(self, weight_mat: torch.Tensor, n_power_iterations: int) -> None:
-        assert weight_mat.ndim > 1
-
-        for _ in range(n_power_iterations):
-            # Spectral norm of weight equals to `u^T W v`, where `u` and `v`
-            # are the first left and right singular vectors.
-            # This power iteration produces approximations of `u` and `v`.
-            self._u = F.normalize(torch.mv(weight_mat, self._v),      # type: ignore[has-type]
-                                  dim=0, eps=self.eps, out=self._u)   # type: ignore[has-type]
-            self._v = F.normalize(torch.mv(weight_mat.t(), self._u),
-                                  dim=0, eps=self.eps, out=self._v)   # type: ignore[has-type]
 
 
 class SpectralLinear(nn.Linear):
