@@ -4,6 +4,7 @@ import json
 import numpy as np
 import pandas as pd
 
+from IPython.display import display
 from pathlib import Path
 from omegaconf import OmegaConf
 
@@ -56,7 +57,7 @@ exp_names = {
     'deterministic': 'CIFAR10__resnet18',
     "dropout": "CIFAR10__resnet18_mcdropout",
     "sngp": "CIFAR10__resnet18_sngp",
-    "sngp_orf": "CIFAR10__resnet18_sngp__orf",
+    "sngp_optimized": "CIFAR10__resnet18_sngp__scale200",
 }
 ignore_metrics = ['test_SVHN_conf_auroc', 'test_SVHN_conf_aupr', 'test_SVHN_dempster_aupr', 'test_SVHN_dempster_auroc']
 
@@ -67,12 +68,12 @@ for key, name in exp_names.items():
     data.append(metric_dict)
 
 df = pd.DataFrame(data, index=exp_names.keys())
-df
+display(df)
 # print(df.to_markdown())
 
 
 # %%
-"""SNGP ablation."""
+"""SNGP kernel scale ablation."""
 
 exp_names = {
     'deterministic': 'CIFAR10__resnet18',
@@ -81,7 +82,7 @@ exp_names = {
     'scale50': 'CIFAR10__resnet18_sngp__scale50',
     'scale100': 'CIFAR10__resnet18_sngp__scale100',
     'scale200': 'CIFAR10__resnet18_sngp__scale200',
-    'scale400': 'CIFAR10__resnet18_sngp__scale200',
+    # 'scale400': 'CIFAR10__resnet18_sngp__scale400',
 }
 ignore_metrics = ['test_SVHN_conf_auroc', 'test_SVHN_conf_aupr', 'test_SVHN_dempster_aupr', 'test_SVHN_dempster_auroc']
 
@@ -92,7 +93,7 @@ for key, name in exp_names.items():
     data.append(metric_dict)
 
 df = pd.DataFrame(data, index=exp_names.keys())
-df
+display(df)
 # print(df.to_markdown())
 
 
@@ -100,7 +101,7 @@ df
 """Number of Samples."""
 for n_samples in [100, 500, 1000, 5000, 10000]:
     exp_names = {
-        # 'deterministic': 'CIFAR10__resnet18__{}samples'.format(n_samples),
+        'deterministic': 'CIFAR10__resnet18__{}samples'.format(n_samples),
         # 'dropout': 'CIFAR10__resnet18_mcdropout__{}samples'.format(n_samples),
         'sngp': f'CIFAR10__resnet18_sngp_{n_samples}samples',
     }
@@ -114,5 +115,9 @@ for n_samples in [100, 500, 1000, 5000, 10000]:
         data.append(metric_dict)
 
     df = pd.DataFrame(data, index=exp_names.keys())
+    df.columns.name = f"{n_samples} samples"
+    display(df)
+    # print(df.to_markdown())
+
 
 # %%
