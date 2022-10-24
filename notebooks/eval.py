@@ -77,18 +77,19 @@ display(df)
 
 exp_names = {
     'deterministic': 'CIFAR10__resnet18',
-    'scale10': 'CIFAR10__resnet18_sngp__scale10',
-    'scale20': 'CIFAR10__resnet18_sngp__scale20',
-    'scale50': 'CIFAR10__resnet18_sngp__scale50',
-    'scale100': 'CIFAR10__resnet18_sngp__scale100',
-    'scale200': 'CIFAR10__resnet18_sngp__scale200',
-    # 'scale400': 'CIFAR10__resnet18_sngp__scale400',
+    'scale10': 'ablations/CIFAR10__resnet18_sngp__scale10',
+    'scale20': 'ablations/CIFAR10__resnet18_sngp__scale20',
+    'scale50': 'ablations/CIFAR10__resnet18_sngp__scale50',
+    'scale100': 'ablations/CIFAR10__resnet18_sngp__scale100',
+    'scale200': 'ablations/CIFAR10__resnet18_sngp__scale200',
+    # 'scale400': 'ablations/CIFAR10__resnet18_sngp__scale400',
 }
 ignore_metrics = ['test_SVHN_conf_auroc', 'test_SVHN_conf_aupr', 'test_SVHN_dempster_aupr', 'test_SVHN_dempster_auroc']
 
 data = []
 for key, name in exp_names.items():
-    experiments = get_experiments(result_path / name, glob_pattern='seed*')
+    exp_path = result_path / name
+    experiments = get_experiments(exp_path, glob_pattern='seed*')
     metric_dict = get_metric_dict(experiments, ignore_metrics=ignore_metrics)
     data.append(metric_dict)
 
@@ -101,15 +102,15 @@ display(df)
 """Number of Samples."""
 for n_samples in [100, 500, 1000, 5000, 10000]:
     exp_names = {
-        'deterministic': 'CIFAR10__resnet18__{}samples'.format(n_samples),
-        # 'dropout': 'CIFAR10__resnet18_mcdropout__{}samples'.format(n_samples),
-        'sngp': f'CIFAR10__resnet18_sngp_{n_samples}samples',
+        'deterministic': 'ablations/CIFAR10__resnet18__{}samples'.format(n_samples),
+        'dropout': 'ablations/CIFAR10__resnet18_mcdropout__{}samples'.format(n_samples),
+        'sngp': f'ablations/CIFAR10__resnet18_sngp_{n_samples}samples',
     }
     ignore_metrics = ['test_SVHN_conf_auroc', 'test_SVHN_conf_aupr', 'test_SVHN_dempster_aupr', 'test_SVHN_dempster_auroc']
 
     data = []
     for key, name in exp_names.items():
-        exp_path = result_path / 'ablations' / name
+        exp_path = result_path /  name
         experiments = get_experiments(exp_path, glob_pattern='seed*')
         metric_dict = get_metric_dict(experiments, ignore_metrics=ignore_metrics)
         data.append(metric_dict)
@@ -117,7 +118,7 @@ for n_samples in [100, 500, 1000, 5000, 10000]:
     df = pd.DataFrame(data, index=exp_names.keys())
     df.columns.name = f"{n_samples} samples"
     display(df)
-    # print(df.to_markdown())
+    print(df.to_markdown())
 
 
 # %%
