@@ -57,7 +57,7 @@ exp_names = {
     'deterministic': 'CIFAR10__resnet18',
     "dropout": "CIFAR10__resnet18_mcdropout",
     "sngp": "CIFAR10__resnet18_sngp",
-    "sngp_optimized": "CIFAR10__resnet18_sngp__scale200",
+    "sngp_spectral": "CIFAR10__resnet18_sngp__new_spectral",
 }
 ignore_metrics = ['test_SVHN_conf_auroc', 'test_SVHN_conf_aupr', 'test_SVHN_dempster_aupr', 'test_SVHN_dempster_auroc']
 
@@ -69,7 +69,7 @@ for key, name in exp_names.items():
 
 df = pd.DataFrame(data, index=exp_names.keys())
 display(df)
-# print(df.to_markdown())
+print(df.to_markdown())
 
 
 # %%
@@ -82,7 +82,7 @@ exp_names = {
     'scale50': 'ablations/CIFAR10__resnet18_sngp__scale50',
     'scale100': 'ablations/CIFAR10__resnet18_sngp__scale100',
     'scale200': 'ablations/CIFAR10__resnet18_sngp__scale200',
-    # 'scale400': 'ablations/CIFAR10__resnet18_sngp__scale400',
+    'scale400': 'ablations/CIFAR10__resnet18_sngp__scale400',
 }
 ignore_metrics = ['test_SVHN_conf_auroc', 'test_SVHN_conf_aupr', 'test_SVHN_dempster_aupr', 'test_SVHN_dempster_auroc']
 
