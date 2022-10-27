@@ -10,7 +10,7 @@ from models import build_model
 from utils import write_scalar_dict, seed_everything
 
 
-@hydra.main(version_base=None, config_path="./configs", config_name="config")
+@hydra.main(version_base=None, config_path="./configs", config_name="uncertainty")
 def main(args):
     print(args)
     seed_everything(args.random_seed)
@@ -18,7 +18,7 @@ def main(args):
 
     # Load data
     train_ds, test_ds_id, test_dss_ood, n_classes = build_dataset(args)
-    train_loader = DataLoader(train_ds, batch_size=args.train_batch_size, shuffle=True)
+    train_loader = DataLoader(train_ds, batch_size=args.model.batch_size, shuffle=True)
     test_loader_id = DataLoader(test_ds_id, batch_size=args.test_batch_size)
     test_loaders_ood = {name: DataLoader(test_ds_ood, batch_size=args.test_batch_size)
                         for name, test_ds_ood in test_dss_ood.items()}
@@ -29,7 +29,7 @@ def main(args):
     lr_scheduler = model_dict.get('lr_scheduler')
 
     history_train, history_test = [], []
-    for i_epoch in range(args.n_epochs):
+    for i_epoch in range(args.model.n_epochs):
         # Train
         train_stats = train_one_epoch(model, train_loader, **model_dict['train_kwargs'], epoch=i_epoch)
         if lr_scheduler:
@@ -38,7 +38,7 @@ def main(args):
         write_scalar_dict(writer, prefix='train', dict=train_stats, global_step=i_epoch)
 
         # Eval
-        if (i_epoch+1) % args.eval_interval == 0 or (i_epoch+1) == args.n_epochs:
+        if (i_epoch+1) % args.eval_interval == 0 or (i_epoch+1) == args.model.n_epochs:
             test_stats = evaluate(model, test_loader_id, test_loaders_ood, **model_dict['eval_kwargs'])
             history_test.append(test_stats)
             write_scalar_dict(writer, prefix='test', dict=test_stats, global_step=i_epoch)

@@ -5,13 +5,11 @@ defaults:
 dataset: CIFAR10 
 dataset_path: ./data # /mnt/datasets/imagenet/ILSVRC2012/downloads
 ood_datasets: ["SVHN"]
-n_samples: null
-n_epochs: 200
+n_samples: None
 eval_interval: 1
-train_batch_size: 64
 test_batch_size: 64
-device: "cuda"
 random_seed: 42
+device: "cuda"
 
 # Define output dir
 output_dir: "./output/"
