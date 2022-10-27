@@ -187,6 +187,7 @@ def build_dataset(args):
     else:
         raise NotImplementedError
 
+
     # Second, choose out of domain datasets
     # TODO: Own methods for each dataset-type
     test_dss_ood = {}
@@ -254,6 +255,49 @@ def build_dataset(args):
             ].count(0) == 0, 'All test sets should have the same size!'
     return train_ds, test_ds_id, test_dss_ood, n_classes
 
+def build_al_datasets(args):
+    if args.dataset == 'MNIST':
+        train_ds = build_mnist('train', args.dataset_path)
+        test_ds_id = build_mnist('test', args.dataset_path)
+        n_classes = 10
+
+    elif args.dataset == 'FashionMNIST':
+        train_ds = build_fashionmnist('train', args.dataset_path)
+        test_ds_id = build_fashionmnist('test', args.dataset_path)
+        n_classes = 10
+
+    elif args.dataset == 'CIFAR10':
+        train_ds = build_cifar10('train', args.dataset_path)
+        test_ds_id = build_cifar10('test', args.dataset_path)
+        n_classes = 10
+
+    elif args.dataset == 'CIFAR100':
+        train_ds = build_cifar100('train', args.dataset_path)
+        test_ds_id = build_cifar100('test', args.dataset_path)
+        n_classes = 100
+
+    elif args.dataset == 'SVHN':
+        train_ds = build_svhn('train', args.dataset_path)
+        test_ds_id = build_svhn('test', args.dataset_path)
+        n_classes = 10
+
+    elif args.dataset == 'TinyImagenet':
+        train_ds = build_tinyimagenet('train', args.dataset_path)
+        test_ds_id = build_tinyimagenet('test', args.dataset_path)
+        n_classes = 200
+
+    elif args.dataset == 'Imagenet':
+        train_ds = build_imagenet('train', args.dataset_path)
+        test_ds_id = build_imagenet('val', args.dataset_path)
+        n_classes = 1000
+
+    else:
+        raise NotImplementedError
+
+    # TODO: add query_ds
+    query_ds = train_ds
+
+    return train_ds, query_ds, test_ds_id, n_classes
 
 def equal_set_sizes(ds_id, ds_ood):
     # Make test id and ood the same size

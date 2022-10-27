@@ -1,0 +1,23 @@
+defaults:
+  - model: resnet18_sngp
+  - al_strategy: random
+
+al_cycle:
+  n_init: 100
+  acq_size: 100
+  n_acq: 10
+  cold_start: True
+
+dataset: CIFAR10
+dataset_path: ./data/
+output_dir: ./output/
+device: cuda
+
+random_seed: 42
+val_batch_size: 128
+print_freq_eval: 100
+print_freq_train: 100
+
+hydra:
+  run:
+    dir: ${output_dir}

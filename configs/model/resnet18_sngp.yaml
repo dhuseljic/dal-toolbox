@@ -13,6 +13,7 @@ gp:
   ridge_penalty: 1
   mean_field_factor: 0.393 # = pi / 8
 optimizer:
+  n_epochs: 200
   lr: 0.08
   weight_decay: 3e-4
   momentum: .9
