@@ -93,6 +93,8 @@ def build_model(args, **kwargs):
             cov_momentum=args.model.gp.cov_momentum,
             ridge_penalty=args.model.gp.ridge_penalty,
         )
+        # TODO: Forward pass to activate spectral norm
+        model(torch.randn(1, 3, 32, 32))
         optimizer = torch.optim.SGD(
             model.parameters(),
             lr=args.model.optimizer.lr,
