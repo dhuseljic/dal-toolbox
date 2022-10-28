@@ -57,7 +57,6 @@ exp_names = {
     'deterministic': 'CIFAR10__resnet18',
     "dropout": "CIFAR10__resnet18_mcdropout",
     "sngp": "CIFAR10__resnet18_sngp",
-    "sngp_spectral": "CIFAR10__resnet18_sngp__new_spectral",
 }
 ignore_metrics = ['test_SVHN_conf_auroc', 'test_SVHN_conf_aupr', 'test_SVHN_dempster_aupr', 'test_SVHN_dempster_auroc']
 
@@ -97,6 +96,33 @@ df = pd.DataFrame(data, index=exp_names.keys())
 display(df)
 # print(df.to_markdown())
 
+# %%
+
+exp_names = {
+    'deterministic': 'ablations/CIFAR10__resnet18__500samples',
+    'scale10': 'ablations/CIFAR10__resnet18_sngp__scale10_500samples',
+    'scale20': 'ablations/CIFAR10__resnet18_sngp__scale20_500samples',
+    'scale50': 'ablations/CIFAR10__resnet18_sngp__scale50_500samples',
+    'scale100': 'ablations/CIFAR10__resnet18_sngp__scale100_500samples',
+    'scale200': 'ablations/CIFAR10__resnet18_sngp__scale200_500samples',
+    'scale400': 'ablations/CIFAR10__resnet18_sngp__scale400_500samples',
+    'scale800': 'ablations/CIFAR10__resnet18_sngp__scale800_500samples',
+    'scale1600': 'ablations/CIFAR10__resnet18_sngp__scale1600_500samples',
+    'scale3200': 'ablations/CIFAR10__resnet18_sngp__scale3200_500samples',
+}
+ignore_metrics = ['test_SVHN_conf_auroc', 'test_SVHN_conf_aupr', 'test_SVHN_dempster_aupr', 'test_SVHN_dempster_auroc']
+
+data = []
+for key, name in exp_names.items():
+    exp_path = result_path / name
+    experiments = get_experiments(exp_path, glob_pattern='seed*')
+    metric_dict = get_metric_dict(experiments, ignore_metrics=ignore_metrics)
+    data.append(metric_dict)
+
+df = pd.DataFrame(data, index=exp_names.keys())
+display(df)
+print(df.to_markdown())
+
 
 # %%
 """Number of Samples."""
@@ -117,7 +143,8 @@ for n_samples in [100, 500, 1000, 5000, 10000]:
 
     df = pd.DataFrame(data, index=exp_names.keys())
     df.columns.name = f"{n_samples} samples"
-    display(df)
+    # display(df)
+    print(f'\n**n_samples = {n_samples}**')
     print(df.to_markdown())
 
 
