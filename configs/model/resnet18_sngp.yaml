@@ -6,7 +6,7 @@ spectral_norm:
   norm_bound: 6
   n_power_iterations: 1
 gp:
-  kernel_scale: 1
+  kernel_scale: 400
   num_inducing: 1024
   normalize_input: False
   random_feature_type: orf
