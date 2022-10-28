@@ -82,7 +82,7 @@ def build_model(args, **kwargs):
         model = resnet_sngp.resnet18_sngp(
             num_classes=10,
             spectral_norm=args.model.spectral_norm.use_spectral_norm,
-            norm_bound=args.model.spectral_norm.coeff,
+            norm_bound=args.model.spectral_norm.norm_bound,
             n_power_iterations=args.model.spectral_norm.n_power_iterations,
             num_inducing=args.model.gp.num_inducing,
             kernel_scale=args.model.gp.kernel_scale,

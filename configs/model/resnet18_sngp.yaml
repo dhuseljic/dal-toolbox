@@ -3,7 +3,7 @@ n_epochs: 200
 batch_size: 64
 spectral_norm:
   use_spectral_norm: True
-  coeff: 6
+  norm_bound: 6
   n_power_iterations: 1
 gp:
   kernel_scale: 1
