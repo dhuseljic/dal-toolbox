@@ -125,6 +125,7 @@ def build_tinyimagenet(split, ds_path, mean=None, std=None):
 
 
 def build_cifar10_c(severity, ds_path, mean=None, std=None):
+    #TODO: Set Mean to mean and not to none, same with std
     if not mean:
         mean, std = (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
     eval_transform = transforms.Compose([
