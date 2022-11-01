@@ -1,6 +1,6 @@
 name : wideresnet2810_due
 n_epochs: 200
-dropout_rate: 0.1
+dropout_rate: 0.3
 batch_size: 128
 
 n_inducing_points: 4
@@ -9,12 +9,12 @@ kernel: RBF
 spectral_norm:
   use_spectral_norm: True
   spectral_conv: True
-  spectral_bn: 
+  spectral_bn: True
   coeff: 3
   n_power_iterations: 1
 
 optimizer:
-  lr: 0.08
+  lr: 0.1
   weight_decay: 5e-4
   momentum: .9
   
