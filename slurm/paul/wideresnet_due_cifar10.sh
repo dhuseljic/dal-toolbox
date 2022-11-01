@@ -16,11 +16,9 @@ cd /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation
 OUTPUT_DIR=/mnt/stud/work/phahn/uncertainty/output/${SLURM_JOB_NAME}_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}/
 echo "Saving results to $OUTPUT_DIR"
 
-srun python -u main.py \
+srun python -u uncertainty.py \
     dataset=CIFAR10 \
     ood_datasets=\[SVHN\] \
     model=wideresnet2810_due \
     output_dir=$OUTPUT_DIR \
-    eval_interval=1 \
-    train_batch_size=128 \
     random_seed=${SLURM_ARRAY_TASK_ID}
