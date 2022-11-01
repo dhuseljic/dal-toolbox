@@ -24,7 +24,7 @@ def main(args):
                         for name, test_ds_ood in test_dss_ood.items()}
 
     # Load model
-    model_dict = build_model(args, n_samples=len(train_ds), n_classes=n_classes)
+    model_dict = build_model(args, n_samples=len(train_ds), n_classes=n_classes, train_ds=train_ds)
     model, train_one_epoch, evaluate = model_dict['model'], model_dict['train_one_epoch'], model_dict['evaluate']
     lr_scheduler = model_dict.get('lr_scheduler')
 

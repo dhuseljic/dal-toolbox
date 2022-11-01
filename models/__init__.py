@@ -1,12 +1,17 @@
 import torch
 import torch.nn as nn
 
+from models.wideresnet_due import WideResNet
+
 from . import resnet, resnet_mcdropout, resnet_sngp
-from . import wideresnet, wideresnet_mcdropout, wideresnet_sngp, ensemble
+from . import wideresnet, wideresnet_mcdropout, wideresnet_sngp, wideresnet_due, ensemble
+
+from gpytorch.mlls import VariationalELBO
+from gpytorch.likelihoods import SoftmaxLikelihood
 
 
 def build_model(args, **kwargs):
-    n_classes = kwargs['n_classes']
+    n_classes, train_ds = kwargs['n_classes'], kwargs['train_ds']
     if args.model.name == 'resnet18_deterministic':
         model = resnet.ResNet18(n_classes)
         optimizer = torch.optim.SGD(
@@ -225,6 +230,63 @@ def build_model(args, **kwargs):
             'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
+        }
+
+    elif args.model.name == 'wideresnet2810_due':
+
+        if args.dataset == 'CIFAR10':
+            input_size = 32
+
+        feature_extractor = wideresnet_due.WideResNet(
+            input_size=input_size,
+            spectral_conv=args.model.spectral_norm.spectral_conv,
+            spectral_bn=args.model.spectral_norm.spectral_bn,
+            dropout_rate=args.model.dropout_rate,
+            coeff=args.model.spectral_norm.coeff,
+            n_power_iterations=args.model.spectral_norm.n_power_iterations,
+        )
+
+
+        initial_inducing_points, initial_lengthscale = wideresnet_due.initial_values(
+            train_ds, feature_extractor, args.model.n_inducing_points
+        )
+
+        gp = wideresnet_due.GP(
+            num_outputs=n_classes,
+            initial_lengthscale=initial_lengthscale,
+            initial_inducing_points=initial_inducing_points,
+            kernel=args.model.kernel,
+        )
+
+        model = wideresnet_due.DKL(feature_extractor, gp)
+
+        likelihood = SoftmaxLikelihood(num_classes=n_classes, mixing_weights=False)
+        likelihood = likelihood.cuda()
+
+        elbo_fn = VariationalELBO(likelihood, gp, num_data=len(train_ds))
+        criterion = lambda x, y: -elbo_fn(x, y)
+
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.model.optimizer.lr,
+            momentum=0.9,
+            weight_decay=args.model.optimizer.weight_decay,
+        )
+
+        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
+            optimizer=optimizer,
+            milestones=args.model.lr_scheduler.step_epochs,
+            gamma=args.model.lr_scheduler.gamma
+        )
+
+        model_dict = {
+            'model': model,
+            'optimizer': optimizer,
+            'train_one_epoch': wideresnet_due.train_one_epoch,
+            'evaluate': wideresnet_due.evaluate,
+            'lr_scheduler': lr_scheduler,
+            'train_kwargs': dict(optimizer=optimizer, criterion=criterion, likelihood=likelihood, device=args.device),
+            'eval_kwargs': dict(criterion=criterion, likelihood=likelihood, device=args.device),
         }
     else:
         NotImplementedError(f'Model {args.model} not implemented.')
