@@ -125,7 +125,7 @@ def build_tinyimagenet(split, ds_path, mean=None, std=None):
 
 
 def build_cifar10_c(severity, ds_path, mean=None, std=None):
-    #TODO: Set Mean to mean and not to none, same with std
+    # TODO: Set Mean to mean and not to none, same with std
     if not mean:
         mean, std = (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
     eval_transform = transforms.Compose([
@@ -138,142 +138,97 @@ def build_cifar10_c(severity, ds_path, mean=None, std=None):
 
 
 def build_dataset(args):
-    ds_path = args.dataset_path
-    # At first build the in domain dataset
+    ds_info = {}
     if args.dataset == 'MNIST':
-        mean, std = (0.1307,), (0.3081,)
-        train_ds = build_mnist('train', ds_path)
-        test_ds_id = build_mnist('test', ds_path)
-        n_classes = 10
-
-    elif args.dataset == 'MNIST04':
-        #TODO: Adapt mean, std to Subset
-        mean, std = (0.1307,), (0.3081,)
-        train_ds = build_mnist('train', ds_path)
-        test_ds_id = build_mnist('test', ds_path)
-        indices_id = (train_ds.targets < 5).nonzero().flatten()
-        train_ds = Subset(train_ds, indices=indices_id)
-        indices_id = (test_ds_id.targets < 5).nonzero().flatten()
-        test_ds_id = Subset(test_ds_id, indices=indices_id)
-        n_classes = 5
-
-    elif args.dataset == 'MNIST59':
-        #TODO: Adapt mean, std to Subset
-        mean, std = (0.1307,), (0.3081,)
-        train_ds = build_mnist('train', ds_path)
-        test_ds_id = build_mnist('test', ds_path)
-        indices_id = (train_ds.targets >= 5).nonzero().flatten()
-        train_ds = Subset(train_ds, indices=indices_id)
-        indices_id = (test_ds_id.targets >= 5).nonzero().flatten()
-        test_ds_id = Subset(test_ds_id, indices=indices_id)
-        n_classes = 5
+        ds_info['n_classes'] = 10
+        ds_info['mean'] = (0.1307,)
+        ds_info['std'] = (0.3081,)
+        train_ds = build_mnist('train', args.dataset_path)
+        test_ds = build_mnist('test', args.dataset_path)
 
     elif args.dataset == 'FashionMNIST':
-        mean, std = (0.5,), (0.5,)
-        train_ds = build_fashionmnist('train', ds_path)
-        test_ds_id = build_fashionmnist('test', ds_path)
-        n_classes = 10
+        ds_info['n_classes'] = 10
+        ds_info['mean'] = (0.5,)
+        ds_info['std'] = (0.5,)
+        train_ds = build_fashionmnist('train', args.dataset_path)
+        test_ds = build_fashionmnist('test', args.dataset_path)
 
     elif args.dataset == 'CIFAR10':
-        mean, std = (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
-        train_ds = build_cifar10('train', ds_path)
-        test_ds_id = build_cifar10('test', ds_path)
-        n_classes = 10
+        ds_info['n_classes'] = 10
+        ds_info['mean'] = (0.4914, 0.4822, 0.4465)
+        ds_info['std'] = (0.2023, 0.1994, 0.2010)
+        train_ds = build_cifar10('train', args.dataset_path)
+        test_ds = build_cifar10('test', args.dataset_path)
 
     elif args.dataset == 'CIFAR100':
-        mean, std = (0.5071, 0.4865, 0.4409), (0.2673, 0.2564, 0.2762)
-        train_ds = build_cifar100('train', ds_path)
-        test_ds_id = build_cifar100('test', ds_path)
-        n_classes = 100
+        ds_info['n_classes'] = 100
+        ds_info['mean'] = (0.5071, 0.4865, 0.4409)
+        ds_info['std'] = (0.2673, 0.2564, 0.2762)
+        train_ds = build_cifar100('train', args.dataset_path)
+        test_ds = build_cifar100('test', args.dataset_path)
 
     elif args.dataset == 'SVHN':
-        mean, std = (0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970)
-        train_ds = build_svhn('train', ds_path)
-        test_ds_id = build_svhn('test', ds_path)
-        n_classes = 10
+        ds_info['n_classes'] = 10
+        ds_info['mean'] = (0.4377, 0.4438, 0.4728)
+        ds_info['std'] = (0.1980, 0.2010, 0.1970)
+        train_ds = build_svhn('train', args.dataset_path)
+        test_ds = build_svhn('test', args.dataset_path)
 
     elif args.dataset == 'TinyImagenet':
-        #TODO: Check mean and std
+        # TODO: Check mean and std
         mean, std = (120.0378, 111.3496, 106.5628), (73.6951, 69.0155, 69.3879)
-        train_ds = build_tinyimagenet('train', ds_path)
-        test_ds_id = build_tinyimagenet('test', ds_path)
+        train_ds = build_tinyimagenet('train', args.dataset_path)
+        test_ds = build_tinyimagenet('test', args.dataset_path)
         n_classes = 200
 
     elif args.dataset == 'Imagenet':
-        mean, std = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
-        train_ds = build_imagenet('train', ds_path)
-        test_ds_id = build_imagenet('val', ds_path)
-        n_classes = 1000
-
+        ds_info['n_classes'] = 1000
+        ds_info['mean'] = (0.485, 0.456, 0.406)
+        ds_info['std'] = (0.229, 0.224, 0.225)
+        train_ds = build_imagenet('train', args.dataset_path)
+        test_ds = build_imagenet('val', args.dataset_path)
     else:
         raise NotImplementedError
 
+    return train_ds, test_ds, ds_info
 
-    # Second, choose out of domain datasets
-    test_dss_ood = {}
+
+def build_ood_datasets(args, mean, std):
+    ood_datasets = {}
     if 'MNIST' in args.ood_datasets:
-        test_ds_ood = build_mnist('test', ds_path, mean, std)
-        test_ds_id, test_ds_ood = equal_set_sizes(test_ds_id, test_ds_ood)
-        test_dss_ood["MNIST"] = test_ds_ood
-
-    if 'MNIST04' in args.ood_datasets:
-        test_ds_ood = build_mnist('test', ds_path, mean, std)
-        indices_ood = (test_ds_ood.targets < 5).nonzero().flatten()
-        test_ds_ood = Subset(test_ds_ood, indices=indices_ood)
-        test_ds_id, test_ds_ood = equal_set_sizes(test_ds_id, test_ds_ood)
-        test_dss_ood["MNIST04"] = test_ds_ood
-
-    if 'MNIST59' in args.ood_datasets:
-        test_ds_ood = build_mnist('test', ds_path, mean, std)
-        indices_ood = (test_ds_ood.targets >= 5).nonzero().flatten()
-        test_ds_ood = Subset(test_ds_ood, indices=indices_ood)
-        test_ds_id, test_ds_ood = equal_set_sizes(test_ds_id, test_ds_ood)
-        test_dss_ood["MNIST59"] = test_ds_ood
+        test_ds_ood = build_mnist('test', args.dataset_path, mean, std)
+        ood_datasets["MNIST"] = test_ds_ood
 
     if 'FashionMNIST' in args.ood_datasets:
-        test_ds_ood = build_fashionmnist('test', ds_path, mean, std)
-        test_ds_id, test_ds_ood = equal_set_sizes(test_ds_id, test_ds_ood)
-        test_dss_ood["FashionMNIST"] = test_ds_ood
+        test_ds_ood = build_fashionmnist('test', args.dataset_path, mean, std)
+        ood_datasets["FashionMNIST"] = test_ds_ood
 
     if 'CIFAR10' in args.ood_datasets:
-        test_ds_ood = build_cifar10('test', ds_path, mean, std)
-        test_ds_id, test_ds_ood = equal_set_sizes(test_ds_id, test_ds_ood)
-        test_dss_ood["CIFAR10"] = test_ds_ood
+        test_ds_ood = build_cifar10('test', args.dataset_path, mean, std)
+        ood_datasets["CIFAR10"] = test_ds_ood
 
     if 'CIFAR10-C' in args.ood_datasets:
-        test_ds_ood = build_cifar10_c(.5, ds_path, mean, std)
-        test_ds_id, test_ds_ood = equal_set_sizes(test_ds_id, test_ds_ood)
-        test_dss_ood["CIFAR10-C"] = test_ds_ood
+        test_ds_ood = build_cifar10_c(.5, args.dataset_path, mean, std)
+        ood_datasets["CIFAR10-C"] = test_ds_ood
 
     if 'CIFAR100' in args.ood_datasets:
-        test_ds_ood = build_cifar100('test', ds_path, mean, std)
-        test_ds_id, test_ds_ood = equal_set_sizes(test_ds_id, test_ds_ood)
-        test_dss_ood["CIFAR100"] = test_ds_ood
+        test_ds_ood = build_cifar100('test', args.dataset_path, mean, std)
+        ood_datasets["CIFAR100"] = test_ds_ood
 
     if 'SVHN' in args.ood_datasets:
-        test_ds_ood = build_svhn('test', ds_path, mean, std)
-        test_ds_id, test_ds_ood = equal_set_sizes(test_ds_id, test_ds_ood)
-        test_dss_ood["SVHN"] = test_ds_ood
+        test_ds_ood = build_svhn('test', args.dataset_path, mean, std)
+        ood_datasets["SVHN"] = test_ds_ood
 
     if 'TinyImagenet' in args.ood_datasets:
-        test_ds_ood = build_tinyimagenet('test', ds_path, mean, std)
-        test_ds_id, test_ds_ood = equal_set_sizes(test_ds_id, test_ds_ood)
-        test_dss_ood["TinyImagenet"] = test_ds_ood
+        test_ds_ood = build_tinyimagenet('test', args.dataset_path, mean, std)
+        ood_datasets["TinyImagenet"] = test_ds_ood
 
     if 'Imagenet' in args.ood_datasets:
-        test_ds_ood = build_imagenet('val', ds_path, mean, std)
-        test_ds_id, test_ds_ood = equal_set_sizes(test_ds_id, test_ds_ood)
-        test_dss_ood["Imagenet"] = test_ds_ood
+        test_ds_ood = build_imagenet('val', args.dataset_path, mean, std)
+        ood_datasets["Imagenet"] = test_ds_ood
 
-    # Reduce trainset size if wished
-    if args.n_samples != 'None':
-        indices_id = torch.randperm(len(train_ds))[:args.n_samples]
-        train_ds = Subset(train_ds, indices=indices_id)
+    return ood_datasets
 
-    assert len(test_dss_ood) != 0, "No ood dataset has been chosen!"
-    assert [len(test_ds_id) == len(t_ds_ood) for t_ds_ood in test_dss_ood.values()
-            ].count(0) == 0, 'All test sets should have the same size!'
-    return train_ds, test_ds_id, test_dss_ood, n_classes
 
 def build_al_datasets(args):
     if args.dataset == 'MNIST':
@@ -318,6 +273,7 @@ def build_al_datasets(args):
     query_ds = train_ds
 
     return train_ds, query_ds, test_ds_id, n_classes
+
 
 def equal_set_sizes(ds_id, ds_ood):
     # Make test id and ood the same size
