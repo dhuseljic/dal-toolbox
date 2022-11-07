@@ -44,13 +44,16 @@ class WideBasic(nn.Module):
 
         return out
 
+def wide_resnet_28_10(num_classes, dropout_rate=0.3):
+    model = WideResNet(depth=28, widen_factor=10, dropout_rate=dropout_rate, num_classes=num_classes)
+    return model
 
-class WideResNet2810(nn.Module):
-    def __init__(self, dropout_rate, num_classes):
-        super(WideResNet2810, self).__init__()
+class WideResNet(nn.Module):
+    def __init__(self, depth, widen_factor, dropout_rate, num_classes):
+        super(WideResNet, self).__init__()
         self.in_planes = 16
-        self.depth = 28
-        self.widen_factor = 10
+        self.depth = depth
+        self.widen_factor = widen_factor
 
         assert ((self.depth-4) % 6 == 0), 'Wide-resnet depth should be 6n+4'
         n = (self.depth-4)/6
