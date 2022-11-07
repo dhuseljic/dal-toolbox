@@ -25,4 +25,4 @@ def avg_precision(output, targets):
     _, pred = output.topk(1, 1, True, True)
     pred = np.array(pred)
     targets = np.array(targets)
-    return precision_score(targets, pred, average='weighted')
+    return precision_score(targets, pred, average='weighted', zero_division=0)
