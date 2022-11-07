@@ -5,7 +5,7 @@ defaults:
 dataset: CIFAR10 
 dataset_path: ./data # /mnt/datasets/imagenet/ILSVRC2012/downloads
 ood_datasets: ["SVHN"]
-n_samples: None
+n_samples: null
 eval_interval: 1
 test_batch_size: 64
 random_seed: 42
