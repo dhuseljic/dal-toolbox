@@ -48,12 +48,23 @@ class DropoutWideBasic(nn.Module):
         return out
 
 
-class DropoutWideResNet2810(BayesianModule):
-    def __init__(self, num_classes=10, k=None, dropout_rate=0.1):
+def dropout_wide_resnet_28_10(num_classes, n_mc_passes, dropout_rate=0.3):
+    model = DropoutWideResNet(
+        depth=28,
+        widen_factor=10,
+        k=n_mc_passes,
+        dropout_rate=dropout_rate,
+        num_classes=num_classes
+    )
+    return model
+
+
+class DropoutWideResNet(BayesianModule):
+    def __init__(self, depth, widen_factor, num_classes=10, k=None, dropout_rate=0.1):
         super(BayesianModule, self).__init__()
         self.in_planes = 16
-        self.depth = 28
-        self.widen_factor = 10
+        self.depth = depth
+        self.widen_factor = widen_factor
         self.k = k
 
         assert ((self.depth-4) % 6 == 0), 'Wide-resnet depth should be 6n+4'
@@ -97,6 +108,7 @@ class DropoutWideResNet2810(BayesianModule):
 
     def mc_forward_impl(self, mc_input_BK: torch.Tensor):
         return self.forward(mc_input_BK)
+
 
 @torch.no_grad()
 def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
