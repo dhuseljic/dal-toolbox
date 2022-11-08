@@ -32,8 +32,8 @@ def main(args):
     al_dataset = ALDataset(train_ds, query_ds)
     al_dataset.random_init(n_samples=args.al_cycle.n_init)
 
-    # Setup Model
-    model_dict = build_model(args, n_classes=n_classes)
+    # Setup Model #TODO: Does DUE need labels? Otherwise we can input the whole train ds instead of labeled samples
+    model_dict = build_model(args, n_classes=n_classes, train_ds=al_dataset.labeled_dataset)
     model, train_one_epoch, evaluate = model_dict['model'], model_dict['train_one_epoch'], model_dict['evaluate']
     optimizer, lr_scheduler = model_dict['optimizer'], model_dict['lr_scheduler']
 

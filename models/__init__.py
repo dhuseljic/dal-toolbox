@@ -120,26 +120,36 @@ def build_model(args, **kwargs):
         }
 
     elif args.model.name == 'wideresnet2810_deterministic':
-        model_dict = build_wide_resnet_deterministic(
-            n_classes=n_classes,
+        model = wideresnet.WideResNet2810(
             dropout_rate=args.model.dropout_rate,
+            num_classes=n_classes)
+        optimizer = torch.optim.SGD(
+            model.parameters(),
             lr=args.model.optimizer.lr,
             weight_decay=args.model.optimizer.weight_decay,
             momentum=args.model.optimizer.momentum,
-            n_epochs=args.model.n_epochs,
-            device=args.device,
+            nesterov=True
         )
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.n_epochs)
+        criterion = nn.CrossEntropyLoss()
+        model_dict = {
+            'model': model,
+            'optimizer': optimizer,
+            'train_one_epoch': wideresnet.train_one_epoch,
+            'evaluate': wideresnet.evaluate,
+            'lr_scheduler': lr_scheduler,
+            'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
+            'eval_kwargs': dict(criterion=criterion, device=args.device),
+        }
 
     elif args.model.name == 'wideresnet2810_mcdropout':
-        model_dict = build_wide_resnet_mcdropout(
-            n_classes=n_classes,
-            dropout_rate=args.model.dropout_rate,
-            n_mc_passes=args.model.n_passes,
+        model = wideresnet_mcdropout.DropoutWideResNet2810(n_classes, args.model.n_passes, args.model.dropout_rate)
+        optimizer = torch.optim.SGD(
+            model.parameters(),
             lr=args.model.optimizer.lr,
             weight_decay=args.model.optimizer.weight_decay,
             momentum=args.model.optimizer.momentum,
-            n_epochs=args.model.n_epochs,
-            device=args.device,
+            nesterov=True
         )
     elif args.model.name == 'wideresnet2810_sngp':
         model_dict = build_wide_resnet_sngp(
@@ -167,7 +177,7 @@ def build_model(args, **kwargs):
     elif args.model.name == 'wideresnet2810_ensemble':
         members, lr_schedulers, optimizers = [], [], []
         for _ in range(args.model.n_member):
-            mem = wide_resnet.WideResNet2810(args.model.dropout_rate, n_classes)
+            mem = wideresnet.WideResNet2810(args.model.dropout_rate, n_classes)
             opt = torch.optim.SGD(
                 mem.parameters(),
                 lr=args.model.optimizer.lr,
