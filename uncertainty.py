@@ -1,4 +1,5 @@
 import os
+import logging
 import json
 import hydra
 import torch
@@ -12,7 +13,8 @@ from utils import write_scalar_dict, seed_everything
 
 @hydra.main(version_base=None, config_path="./configs", config_name="uncertainty")
 def main(args):
-    print(args)
+    logging.basicConfig(filename=os.path.join(args.output_dir, 'uncertainty.log'), format='%(asctime)s %(message)s')
+    logging.info(args)
     seed_everything(args.random_seed)
     writer = SummaryWriter(log_dir=args.output_dir)
     exp_info = {}
@@ -21,15 +23,15 @@ def main(args):
     train_ds, test_ds_id, ds_info = build_dataset(args)
     ood_datasets = build_ood_datasets(args, ds_info['mean'], ds_info['std'])
     if args.n_samples:
-        print(f'Creating random training subset with {args.n_samples} samples.')
+        logging.info(f'Creating random training subset with {args.n_samples} samples.')
         indices_id = torch.randperm(len(train_ds))[:args.n_samples]
         train_ds = Subset(train_ds, indices=indices_id)
         exp_info['train_indices'] =  indices_id.tolist()
 
-    print(f'Training on {args.dataset} with {len(train_ds)} samples.')
-    print(f'Test in-distribution dataset {args.dataset} has {len(test_ds_id)} samples.')
+    logging.info('Training on %s with %i samples.', args.dataset, len(train_ds))
+    logging.info('Test in-distribution dataset %s has %i samples.', args.dataset, len(test_ds_id))
     for name, test_ds_ood in ood_datasets.items():
-        print(f'Test out-of-distribution dataset {name} has {len(test_ds_ood)} samples.')
+        logging.info(f'Test out-of-distribution dataset {name} has {len(test_ds_ood)} samples.')
 
     train_loader = DataLoader(train_ds, batch_size=args.model.batch_size, shuffle=True, drop_last=True)
     test_loader_id = DataLoader(test_ds_id, batch_size=args.test_batch_size)
@@ -56,7 +58,7 @@ def main(args):
             test_stats = evaluate(model, test_loader_id, test_loaders_ood, **model_dict['eval_kwargs'])
             history_test.append(test_stats)
             write_scalar_dict(writer, prefix='test', dict=test_stats, global_step=i_epoch)
-            print(f"Epoch [{i_epoch}]", train_stats, test_stats)
+            logging.info("Epoch [%i] %s %s", i_epoch, train_stats, test_stats)
 
         # Saving checkpoint
         checkpoint = {
@@ -73,7 +75,7 @@ def main(args):
 
     # Saving results
     fname = os.path.join(args.output_dir, 'results_final.json')
-    print(f"Saving results to {fname}.")
+    logging.info("Saving results to %s.", fname)
     torch.save(checkpoint, os.path.join(args.output_dir, "model_final.pth"))
     results = {
         'exp_info': exp_info,
