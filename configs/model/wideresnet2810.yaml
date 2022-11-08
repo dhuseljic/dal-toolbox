@@ -1,7 +1,8 @@
 name: wideresnet2810_deterministic
-n_epochs: 200
+n_epochs: 250
+
 batch_size: 64
-dropout_rate: 0.3
+dropout_rate: 0.0
 optimizer:
   lr: 0.08
   weight_decay: 3e-4
