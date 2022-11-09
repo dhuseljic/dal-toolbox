@@ -13,7 +13,7 @@ gp:
   scale_random_features: False
   cov_momentum: -1
   ridge_penalty: 1
-  mean_field_factor: 0.393 # = pi / 8
+  mean_field_factor: 0.3927
 optimizer:
   lr: 0.08
   weight_decay: 3e-4

@@ -4,7 +4,7 @@ import torch.nn as nn
 
 def calibration_error(confs: torch.Tensor, accs: torch.Tensor, n_samples: torch.Tensor, p: int = 2):
     probas_bin = n_samples/n_samples.nansum()
-    ce = (torch.nansum(probas_bin * (confs-accs)**p))**(1/p)
+    ce = (torch.nansum(probas_bin * torch.abs(confs-accs)**p))**(1/p)
     return ce
 
 
