@@ -28,9 +28,9 @@ class DropoutWideBasic(nn.Module):
         self.bn1 = nn.BatchNorm2d(in_planes)
         self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, padding=1, bias=True)
         self.conv1_dropout = ConsistentMCDropout2d(dropout_rate)
+
         self.bn2 = nn.BatchNorm2d(planes)
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride, padding=1, bias=True)
-        self.conv2_dropout = ConsistentMCDropout2d(dropout_rate)
 
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != planes:
@@ -43,7 +43,6 @@ class DropoutWideBasic(nn.Module):
         out = self.conv1_dropout(out)
         out = self.conv2(F.relu(self.bn2(out)))
         out += self.shortcut(x)
-        out = self.conv2_dropout(out)
 
         return out
 
@@ -74,7 +73,6 @@ class DropoutWideResNet(BayesianModule):
         nStages = [16, 16*w, 32*w, 64*w]
 
         self.conv1 = conv3x3(3, nStages[0])
-        self.conv1_dropout = ConsistentMCDropout2d(dropout_rate)
         self.layer1 = self._wide_layer(DropoutWideBasic, nStages[1], n, dropout_rate, stride=1)
         self.layer2 = self._wide_layer(DropoutWideBasic, nStages[2], n, dropout_rate, stride=2)
         self.layer3 = self._wide_layer(DropoutWideBasic, nStages[3], n, dropout_rate, stride=2)
@@ -91,9 +89,8 @@ class DropoutWideResNet(BayesianModule):
             self.in_planes = planes
         return nn.Sequential(*layers)
 
-    def forward(self, x, return_features=False):
+    def forward(self, x):
         out = self.conv1(x)
-        out = self.conv1_dropout(out)
         out = self.layer1(out)
         out = self.layer2(out)
         out = self.layer3(out)
@@ -102,8 +99,6 @@ class DropoutWideResNet(BayesianModule):
         out = out.view(out.size(0), -1)
         features = out
         out = self.linear(out)
-        if return_features:
-            out = (out, features)
         return out
 
     def mc_forward_impl(self, mc_input_BK: torch.Tensor):
