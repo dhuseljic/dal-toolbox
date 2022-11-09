@@ -131,17 +131,16 @@ class WideResNetSNGP(nn.Module):
         out = F.relu(self.bn1(out))
         out = F.avg_pool2d(out, 8)
         out = out.view(out.size(0), -1)
-        self.features = out
         if mean_field:
-            out = self.output_layer.forward_mean_field(self.features)
+            out = self.output_layer.forward_mean_field(out)
         else:
-            out = self.output_layer(self.features, return_cov=return_cov)
+            out = self.output_layer(out, return_cov=return_cov)
         return out
 
 
 def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
     model.train()
-    model.output_layer.reset_precision_matrix()
+    model.reset_precision_matrix()
     model.to(device)
 
     metric_logger = MetricLogger(delimiter=" ")

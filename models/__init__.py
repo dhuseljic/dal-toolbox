@@ -312,8 +312,8 @@ def build_wide_resnet_sngp(n_classes, depth, widen_factor, dropout_rate, use_spe
     model_dict = {
         'model': model,
         'optimizer': optimizer,
-        'train_one_epoch': resnet_sngp.train_one_epoch,
-        'evaluate': resnet_sngp.evaluate,
+        'train_one_epoch': wide_resnet_sngp.train_one_epoch,
+        'evaluate': wide_resnet_sngp.evaluate,
         'lr_scheduler': lr_scheduler,
         'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=device),
         'eval_kwargs': dict(criterion=criterion, device=device),
