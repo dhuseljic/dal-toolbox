@@ -4,6 +4,7 @@ import json
 import hydra
 import torch
 
+from omegaconf import OmegaConf
 from torch.utils.data import DataLoader, Subset
 from torch.utils.tensorboard import SummaryWriter
 from datasets import build_dataset, build_ood_datasets
@@ -13,8 +14,8 @@ from utils import write_scalar_dict, seed_everything
 
 @hydra.main(version_base=None, config_path="./configs", config_name="uncertainty")
 def main(args):
-    logging.basicConfig(filename=os.path.join(args.output_dir, 'uncertainty.log'), format='%(asctime)s %(message)s')
-    logging.info(args)
+    logging.basicConfig(filename=os.path.join(args.output_dir, 'uncertainty.log'), filemode='w')
+    logging.info('Using config: \n %s', OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
     writer = SummaryWriter(log_dir=args.output_dir)
     exp_info = {}
@@ -23,15 +24,15 @@ def main(args):
     train_ds, test_ds_id, ds_info = build_dataset(args)
     ood_datasets = build_ood_datasets(args, ds_info['mean'], ds_info['std'])
     if args.n_samples:
-        logging.info(f'Creating random training subset with {args.n_samples} samples.')
+        logging.info('Creating random training subset with %i samples.', args.n_samples)
         indices_id = torch.randperm(len(train_ds))[:args.n_samples]
         train_ds = Subset(train_ds, indices=indices_id)
-        exp_info['train_indices'] =  indices_id.tolist()
+        exp_info['train_indices'] = indices_id.tolist()
 
     logging.info('Training on %s with %i samples.', args.dataset, len(train_ds))
     logging.info('Test in-distribution dataset %s has %i samples.', args.dataset, len(test_ds_id))
     for name, test_ds_ood in ood_datasets.items():
-        logging.info(f'Test out-of-distribution dataset {name} has {len(test_ds_ood)} samples.')
+        logging.info('Test out-of-distribution dataset %s has %i samples.', name, len(test_ds_ood))
 
     train_loader = DataLoader(train_ds, batch_size=args.model.batch_size, shuffle=True, drop_last=True)
     test_loader_id = DataLoader(test_ds_id, batch_size=args.test_batch_size)
