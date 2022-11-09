@@ -1,6 +1,6 @@
 name : wideresnet2810_sngp
 batch_size: 64
-n_epochs: 200
+n_epochs: 250
 dropout_rate: 0.1
 spectral_norm:
   use_spectral_norm: True
