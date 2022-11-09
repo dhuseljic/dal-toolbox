@@ -11,7 +11,7 @@ def calibration_error(confs: torch.Tensor, accs: torch.Tensor, n_samples: torch.
 class TopLabelCalibrationError(nn.Module):
     """Computes the calibration plot for each class."""
 
-    def __init__(self, n_bins=10, p=2):
+    def __init__(self, n_bins=15, p=1):
         super().__init__()
         self.n_bins = n_bins
         self.p = p
@@ -47,7 +47,7 @@ class TopLabelCalibrationError(nn.Module):
 class MarginalCalibrationError(nn.Module):
     """Computes the calibration plot for each class."""
 
-    def __init__(self, n_bins=10, p=2):
+    def __init__(self, n_bins=15, p=2):
         super().__init__()
         self.n_bins = n_bins
         self.p = p
