@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from utils import MetricLogger
-from metrics import crossentropy, generalization, calibration, ood
+from metrics import generalization, calibration, ood
 
 
 class Ensemble(nn.Module):
@@ -125,8 +125,8 @@ def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
 
     # Negative Log Likelihood
     nll = torch.nn.CrossEntropyLoss(reduction='mean')(torch.log(mean_probas_id), targets_id).item()
-    ensemble_cross_entropy = crossentropy.EnsembleCrossEntropy()(ensemble_logits_id, targets_id).item()
-    gibbs_cross_entropy = crossentropy.GibsCrossEntropy()(ensemble_logits_id, targets_id).item()
+    ensemble_cross_entropy = calibration.EnsembleCrossEntropy()(ensemble_logits_id, targets_id).item()
+    gibbs_cross_entropy = calibration.GibsCrossEntropy()(ensemble_logits_id, targets_id).item()
 
     # Top- and Marginal Calibration Error
     tce = calibration.TopLabelCalibrationError()(mean_probas_id, targets_id).item()

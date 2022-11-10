@@ -165,33 +165,16 @@ def build_model(args, **kwargs):
         )
 
     elif args.model.name == 'wideresnet2810_ensemble':
-        members, lr_schedulers, optimizers = [], [], []
-        for _ in range(args.model.n_member):
-            mem = wide_resnet.WideResNet2810(args.model.dropout_rate, n_classes)
-            opt = torch.optim.SGD(
-                mem.parameters(),
-                lr=args.model.optimizer.lr,
-                weight_decay=args.model.optimizer.weight_decay,
-                momentum=args.model.optimizer.momentum,
-                nesterov=True
-            )
-            lrs = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.n_epochs)
-            members.append(mem)
-            optimizers.append(opt)
-            lr_schedulers.append(lrs)
-        model = ensemble.Ensemble(members)
-        optimizer = ensemble.EnsembleOptimizer(optimizers)
-        lr_scheduler = ensemble.EnsembleLRScheduler(lr_schedulers)
-        criterion = nn.CrossEntropyLoss()
-        model_dict = {
-            'model': model,
-            'optimizer': optimizer,
-            'train_one_epoch': ensemble.train_one_epoch,
-            'evaluate': ensemble.evaluate,
-            'lr_scheduler': lr_scheduler,
-            'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
-            'eval_kwargs': dict(criterion=criterion, device=args.device),
-        }
+        model_dict = build_wide_resnet_ensemble(
+            n_classes=n_classes,
+            n_member=args.model.n_member,
+            dropout_rate=args.model.dropout_rate,
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+            n_epochs=args.model.n_epochs,
+            device=args.device
+        )
 
     elif args.model.name == 'wideresnet2810_due':
 
@@ -287,8 +270,35 @@ def build_wide_resnet_mcdropout(n_classes, n_mc_passes, dropout_rate, lr, weight
     return model_dict
 
 
+def build_wide_resnet_ensemble(n_classes, n_member, dropout_rate, lr, weight_decay, momentum, n_epochs, device):
+    members, lr_schedulers, optimizers = [], [], []
+    for _ in range(n_member):
+        member = wide_resnet.wide_resnet_28_10(num_classes=n_classes, dropout_rate=dropout_rate)
+        optimizer = torch.optim.SGD(member.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=True)
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
+        members.append(member)
+        optimizers.append(optimizer)
+        lr_schedulers.append(lr_scheduler)
+
+    model = ensemble.Ensemble(members)
+    optimizer = ensemble.EnsembleOptimizer(optimizers)
+    lr_scheduler = ensemble.EnsembleLRScheduler(lr_schedulers)
+    criterion = nn.CrossEntropyLoss()
+    model_dict = {
+        'model': model,
+        'optimizer': optimizer,
+        'train_one_epoch': ensemble.train_one_epoch,
+        'evaluate': ensemble.evaluate,
+        'lr_scheduler': lr_scheduler,
+        'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=device),
+        'eval_kwargs': dict(criterion=criterion, device=device),
+    }
+    return model_dict
+
+
 def build_wide_resnet_sngp(n_classes, depth, widen_factor, dropout_rate, use_spectral_norm, norm_bound,
-                           n_power_iterations, num_inducing, kernel_scale, scale_random_features, random_feature_type, mean_field_factor, cov_momentum, ridge_penalty, lr, weight_decay, momentum, n_epochs, device):
+                           n_power_iterations, num_inducing, kernel_scale, scale_random_features, random_feature_type,
+                           mean_field_factor, cov_momentum, ridge_penalty, lr, weight_decay, momentum, n_epochs, device):
     model = wide_resnet_sngp.WideResNetSNGP(
         depth=depth,
         widen_factor=widen_factor,
