@@ -4,6 +4,10 @@ import torch.nn as nn
 
 
 class EnsembleCrossEntropy(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.cross_entropy = nn.CrossEntropyLoss(reduction='none')
+
     def forward(self, logits: list, labels: list):
         """
         logits.shape = (EnsembleMembers, Samples, Classes)
@@ -20,8 +24,7 @@ class EnsembleCrossEntropy(nn.Module):
         logits = logits.reshape(ensemble_size*n_samples, n_classes)
 
         # Non Reduction Cross Entropy
-        loss = torch.nn.CrossEntropyLoss(reduction='none')
-        ce = loss(logits, labels).reshape(-1, 1)
+        ce = self.cross_entropy(logits, labels).reshape(-1, 1)
 
         # Reduce LogSumExp + log of Ensemble Size
         nll = -torch.logsumexp(-ce, dim=1) + math.log(ensemble_size)
@@ -31,6 +34,10 @@ class EnsembleCrossEntropy(nn.Module):
 
 
 class GibsCrossEntropy(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.cross_entropy = nn.CrossEntropyLoss(reduction='none')
+
     def forward(self, logits: list, labels: list):
         """
         logits.shape = (EnsembleMembers, Samples, Classes)
@@ -40,15 +47,12 @@ class GibsCrossEntropy(nn.Module):
         ensemble_size, n_samples, n_classes = logits.shape
 
         # Reshape to fit CrossEntropy
-        # logits.shape = (EnsembleMembers*Samples, Classes)
-        # labels.shape = (EnsembleMembers*Sampels)
         labels = torch.broadcast_to(labels.unsqueeze(0), logits.shape[:-1])
         labels = labels.reshape(ensemble_size*n_samples)
         logits = logits.reshape(ensemble_size*n_samples, n_classes)
 
         # Non Reduction Cross Entropy
-        loss = torch.nn.CrossEntropyLoss(reduction='none')
-        nll = loss(logits, labels).reshape(-1, 1)
+        nll = self.cross_entropy(logits, labels).reshape(-1, 1)
 
         # Return Average
         return torch.mean(nll)
