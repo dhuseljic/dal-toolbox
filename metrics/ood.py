@@ -2,16 +2,6 @@ import torch
 from sklearn.metrics import roc_auc_score, average_precision_score
 
 
-def clamp_probas(probas):
-    eps = torch.finfo(probas.dtype).eps
-    return probas.clamp(min=eps, max=1 - eps)
-
-
-def entropy_fn(probas):
-    probas = clamp_probas(probas)
-    return - torch.sum(probas * probas.log(), -1)
-
-
 def ood_aupr(score_id: torch.Tensor, score_ood: torch.Tensor):
     """Computes the AUROC and assumes that a higher score is OOD.
 
@@ -60,3 +50,13 @@ def dempster_shafer_uncertainty(logits):
     num_classes = logits.shape[-1]
     belief_mass = torch.sum(torch.exp(logits), dim=-1)
     return num_classes / (belief_mass + num_classes)
+
+
+def clamp_probas(probas):
+    eps = torch.finfo(probas.dtype).eps
+    return probas.clamp(min=eps, max=1 - eps)
+
+
+def entropy_fn(probas):
+    probas = clamp_probas(probas)
+    return - torch.sum(probas * probas.log(), -1)
