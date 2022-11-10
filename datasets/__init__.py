@@ -10,9 +10,7 @@ from datasets.tinyImageNet import TinyImageNet
 from .corruptions import GaussianNoise
 
 
-def build_mnist(split, ds_path, mean=None, std=None):
-    if not mean:
-        mean, std = (0.1307,), (0.3081,)
+def build_mnist(split, ds_path, mean=(0.1307,), std=(0.3081,), return_info=False):
     transform = transforms.Compose([
         transforms.Resize(size=(32, 32)),
         transforms.Grayscale(num_output_channels=3),
@@ -23,12 +21,13 @@ def build_mnist(split, ds_path, mean=None, std=None):
         ds = torchvision.datasets.MNIST(ds_path, train=True, download=True, transform=transform)
     else:
         ds = torchvision.datasets.MNIST(ds_path, train=False, download=True, transform=transform)
+    if return_info:
+        ds_info = {'n_classes': 10, 'mean': mean, 'std': std}
+        return ds, ds_info
     return ds
 
 
-def build_fashionmnist(split, ds_path, mean=None, std=None):
-    if not mean:
-        mean, std = (0.5,), (0.5,)
+def build_fashionmnist(split, ds_path, mean=(0.5,), std=(0.5,), return_info=False):
     transform = transforms.Compose([
         transforms.Resize(size=(32, 32)),
         transforms.Grayscale(num_output_channels=3),
@@ -39,12 +38,13 @@ def build_fashionmnist(split, ds_path, mean=None, std=None):
         ds = torchvision.datasets.FashionMNIST(ds_path, train=True, download=True, transform=transform)
     else:
         ds = torchvision.datasets.FashionMNIST(ds_path, train=False, download=True, transform=transform)
+    if return_info:
+        ds_info = {'n_classes': 10, 'mean': mean, 'std': std}
+        return ds, ds_info
     return ds
 
 
-def build_cifar10(split, ds_path, mean=None, std=None):
-    if not mean:
-        mean, std = (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
+def build_cifar10(split, ds_path, mean=(0.4914, 0.4822, 0.4465), std=(0.2023, 0.1994, 0.2010), return_info=False):
     if split == 'train':
         train_transform = transforms.Compose([
             transforms.RandomCrop(32, padding=4),
@@ -59,12 +59,13 @@ def build_cifar10(split, ds_path, mean=None, std=None):
             transforms.Normalize(mean, std),
         ])
         ds = torchvision.datasets.CIFAR10(ds_path, train=False, download=True, transform=eval_transform)
+    if return_info:
+        ds_info = {'n_classes': 10, 'mean': mean, 'std': std}
+        return ds, ds_info
     return ds
 
 
-def build_cifar100(split, ds_path, mean=None, std=None):
-    if not mean:
-        mean, std = (0.5071, 0.4865, 0.4409), (0.2673, 0.2564, 0.2762)
+def build_cifar100(split, ds_path, mean=(0.5071, 0.4865, 0.4409), std=(0.2673, 0.2564, 0.2762), return_info=False):
     if split == 'train':
         train_transform = transforms.Compose([
             transforms.RandomCrop(32, padding=4),
@@ -76,12 +77,13 @@ def build_cifar100(split, ds_path, mean=None, std=None):
     elif split == 'test':
         eval_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean, std)])
         ds = torchvision.datasets.CIFAR100(ds_path, train=False, download=True, transform=eval_transform)
+    if return_info:
+        ds_info = {'n_classes': 100, 'mean': mean, 'std': std}
+        return ds, ds_info
     return ds
 
 
-def build_svhn(split, ds_path, mean=None, std=None):
-    if not mean:
-        mean, std = (0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970)
+def build_svhn(split, ds_path, mean=(0.4377, 0.4438, 0.4728), std=(0.1980, 0.2010, 0.1970), return_info=False):
     if split == 'train':
         train_transform = transforms.Compose([
             transforms.RandomCrop(32, padding=4),
@@ -93,25 +95,27 @@ def build_svhn(split, ds_path, mean=None, std=None):
         eval_transform = None
         eval_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean, std)])
         ds = torchvision.datasets.SVHN(ds_path, split='test', download=True, transform=eval_transform)
+    if return_info:
+        ds_info = {'n_classes': 10, 'mean': mean, 'std': std}
+        return ds, ds_info
     return ds
 
 
-def build_imagenet(split, ds_path, mean=None, std=None):
-    if not mean:
-        mean, std = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
+def build_imagenet(split, ds_path, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), return_info=False):
     if split == 'train':
         train_transform = ClassificationPresetTrain(crop_size=32, mean=mean, std=std)
         ds = torchvision.datasets.ImageNet(root=ds_path, split=split, transform=train_transform)
     elif split == 'val':
         eval_transform = ClassificationPresetEval(crop_size=32, mean=mean, std=std)
         ds = torchvision.datasets.ImageNet(root=ds_path, split=split, transform=eval_transform)
+    if return_info:
+        ds_info = {'n_classes': 1000, 'mean': mean, 'std': std}
+        return ds, ds_info
     return ds
 
 
-def build_tinyimagenet(split, ds_path, mean=None, std=None):
-    if not mean:
-        # TODO: Check if mean, std is correct
-        mean, std = (120.0378, 111.3496, 106.5628), (73.6951, 69.0155, 69.3879)
+def build_tinyimagenet(split, ds_path, mean=(120.0378, 111.3496, 106.5628), std=(73.6951, 69.0155, 69.3879), return_info=False):
+    # TODO: @phahn compute mean std
     if split == 'train':
         train_transform = ClassificationPresetTrain(crop_size=32, mean=mean, std=std)
         ds = TinyImageNet(root=ds_path, split='train', transform=train_transform)
@@ -121,13 +125,13 @@ def build_tinyimagenet(split, ds_path, mean=None, std=None):
     elif split == 'test':
         eval_transform = ClassificationPresetEval(crop_size=32, mean=mean, std=std)
         ds = TinyImageNet(root=ds_path, split='test', transform=eval_transform)
+    if return_info:
+        ds_info = {'n_classes': 200, 'mean': mean, 'std': std}
+        return ds, ds_info
     return ds
 
 
-def build_cifar10_c(severity, ds_path, mean=None, std=None):
-    # TODO: Set Mean to mean and not to none, same with std
-    if not mean:
-        mean, std = (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
+def build_cifar10_c(severity, ds_path, mean=(0.4914, 0.4822, 0.4465), std=(0.2023, 0.1994, 0.2010)):
     eval_transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize(mean, std),
@@ -138,54 +142,33 @@ def build_cifar10_c(severity, ds_path, mean=None, std=None):
 
 
 def build_dataset(args):
-    ds_info = {}
     if args.dataset == 'MNIST':
-        ds_info['n_classes'] = 10
-        ds_info['mean'] = (0.1307,)
-        ds_info['std'] = (0.3081,)
-        train_ds = build_mnist('train', args.dataset_path)
+        train_ds, ds_info = build_mnist('train', args.dataset_path, return_info=True)
         test_ds = build_mnist('test', args.dataset_path)
 
     elif args.dataset == 'FashionMNIST':
-        ds_info['n_classes'] = 10
-        ds_info['mean'] = (0.5,)
-        ds_info['std'] = (0.5,)
-        train_ds = build_fashionmnist('train', args.dataset_path)
+        train_ds, ds_info = build_fashionmnist('train', args.dataset_path, return_info=True)
         test_ds = build_fashionmnist('test', args.dataset_path)
 
     elif args.dataset == 'CIFAR10':
-        ds_info['n_classes'] = 10
-        ds_info['mean'] = (0.4914, 0.4822, 0.4465)
-        ds_info['std'] = (0.2023, 0.1994, 0.2010)
-        train_ds = build_cifar10('train', args.dataset_path)
+        train_ds, ds_info = build_cifar10('train', args.dataset_path, return_info=True)
         test_ds = build_cifar10('test', args.dataset_path)
 
     elif args.dataset == 'CIFAR100':
-        ds_info['n_classes'] = 100
-        ds_info['mean'] = (0.5071, 0.4865, 0.4409)
-        ds_info['std'] = (0.2673, 0.2564, 0.2762)
-        train_ds = build_cifar100('train', args.dataset_path)
+        train_ds, ds_info = build_cifar100('train', args.dataset_path, return_info=True)
         test_ds = build_cifar100('test', args.dataset_path)
 
     elif args.dataset == 'SVHN':
-        ds_info['n_classes'] = 10
-        ds_info['mean'] = (0.4377, 0.4438, 0.4728)
-        ds_info['std'] = (0.1980, 0.2010, 0.1970)
-        train_ds = build_svhn('train', args.dataset_path)
+        train_ds, ds_info = build_svhn('train', args.dataset_path, return_info=True)
         test_ds = build_svhn('test', args.dataset_path)
 
     elif args.dataset == 'TinyImagenet':
         # TODO: Check mean and std
-        mean, std = (120.0378, 111.3496, 106.5628), (73.6951, 69.0155, 69.3879)
-        train_ds = build_tinyimagenet('train', args.dataset_path)
+        train_ds, ds_info = build_tinyimagenet('train', args.dataset_path, return_info=True)
         test_ds = build_tinyimagenet('test', args.dataset_path)
-        n_classes = 200
 
     elif args.dataset == 'Imagenet':
-        ds_info['n_classes'] = 1000
-        ds_info['mean'] = (0.485, 0.456, 0.406)
-        ds_info['std'] = (0.229, 0.224, 0.225)
-        train_ds = build_imagenet('train', args.dataset_path)
+        train_ds, ds_info = build_imagenet('train', args.dataset_path)
         test_ds = build_imagenet('val', args.dataset_path)
     else:
         raise NotImplementedError
