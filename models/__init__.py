@@ -316,8 +316,7 @@ def build_wide_resnet_sngp(n_classes, depth, widen_factor, dropout_rate, use_spe
         cov_momentum=cov_momentum,
         ridge_penalty=ridge_penalty,
     )
-    model(torch.randn(1, 3, 32, 32))
-    model.zero_grad()
+    model.init_spectral_norm(input_shape=(3, 32, 32))
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=True)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
     criterion = nn.CrossEntropyLoss()

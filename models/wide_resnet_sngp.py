@@ -109,6 +109,11 @@ class WideResNetSNGP(nn.Module):
             ridge_penalty=ridge_penalty,
         )
 
+    @torch.no_grad()
+    def init_spectral_norm(self, input_shape):
+        dummy_input = torch.randn((1, *input_shape))
+        self(dummy_input)
+
     def reset_precision_matrix(self):
         self.output_layer.reset_precision_matrix()
 
