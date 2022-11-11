@@ -5,7 +5,7 @@ import torch.nn as nn
 
 
 class RandomFourierFeatures(nn.Module):
-    def __init__(self, in_features, num_inducing=1024, kernel_scale=1, scale_features=True, random_feature_type='rff'):
+    def __init__(self, in_features, num_inducing=1024, kernel_scale=1, scale_features=True, random_feature_type='orf'):
         super().__init__()
 
         self.kernel_scale = kernel_scale
@@ -19,7 +19,7 @@ class RandomFourierFeatures(nn.Module):
         self.random_feature_linear.bias.requires_grad = False
         self.reset_parameters(random_feature_type=random_feature_type)
 
-    def reset_parameters(self, random_feature_type='rff'):
+    def reset_parameters(self, random_feature_type='orf'):
         # https://github.com/google/uncertainty-baselines/blob/main/uncertainty_baselines/models/resnet50_sngp.py#L55
         # nn.init.normal_(self.random_feature_linear.weight, std=std_init)
         if random_feature_type == 'rff':
