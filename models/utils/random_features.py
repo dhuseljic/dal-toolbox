@@ -53,7 +53,7 @@ class RandomFeatureGaussianProcess(nn.Module):
                  num_inducing: int = 1024,
                  kernel_scale: float = 1,
                  normalize_input: bool = False,
-                 random_feature_type: str = 'rff',
+                 random_feature_type: str = 'orf',
                  scale_random_features: bool = True,
                  mean_field_factor: float = math.pi/8,
                  cov_momentum: float = -1,
@@ -102,7 +102,6 @@ class RandomFeatureGaussianProcess(nn.Module):
 
         phi = self.random_features(features)
 
-        # Eq. 8
         logits = self.beta(phi)
 
         if self.training:
@@ -122,7 +121,9 @@ class RandomFeatureGaussianProcess(nn.Module):
     def update_precision_matrix(self, phi, logits):
         probas = logits.softmax(-1)
         probas_max = probas.max(1)[0]
-        multiplier = probas_max * (1-probas_max)
+        # TODO: check multiplier
+        # multiplier = probas_max * (1-probas_max)
+        multiplier = 1 
         precision_matrix_minibatch = torch.matmul(
             multiplier*phi.T, phi
         )
@@ -141,6 +142,8 @@ class RandomFeatureGaussianProcess(nn.Module):
         device = self.precision_matrix.data.device
         if self.cov_mat is None:
             self.cov_mat = torch.linalg.inv(self.precision_matrix.data)
+            # u = torch.linalg.cholesky(self.precision_matrix.data)
+            # self.cov_mat = torch.cholesky_inverse(u)
         return self.cov_mat.to(device)
 
     @torch.no_grad()
