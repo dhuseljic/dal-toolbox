@@ -253,6 +253,7 @@ class SpectralConv2d(nn.Conv2d):
             self.spectral_norm_added = True
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
+        out = super().forward(input)
         if not self.spectral_norm_added:
             self.add_spectral_norm_conv2d(input)
-        return super().forward(input)
+        return out
