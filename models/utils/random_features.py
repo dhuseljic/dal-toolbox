@@ -94,7 +94,8 @@ class RandomFeatureGaussianProcess(nn.Module):
         # precision matrix
         self.init_precision_matrix = torch.eye(num_inducing)*self.ridge_penalty
         self.register_buffer("precision_matrix", copy.deepcopy(self.init_precision_matrix))
-        self.cov_mat = None
+        self.recompute_covariance = True
+        self.covariance_matrix = None
 
     def forward(self, features, return_cov=False):
         if self.normalize_input:
@@ -115,18 +116,16 @@ class RandomFeatureGaussianProcess(nn.Module):
         device = self.precision_matrix.device
         self.precision_matrix.data = copy.deepcopy(self.init_precision_matrix)
         self.precision_matrix.to(device)
-        self.cov_mat = None
+        self.covariance_matrix = None
 
     @torch.no_grad()
     def update_precision_matrix(self, phi, logits):
-        probas = logits.softmax(-1)
-        probas_max = probas.max(1)[0]
         # TODO: check multiplier
+        # probas = logits.softmax(-1)
+        # probas_max = probas.max(1)[0]
         # multiplier = probas_max * (1-probas_max)
-        multiplier = 1 
-        precision_matrix_minibatch = torch.matmul(
-            multiplier*phi.T, phi
-        )
+        multiplier = 1
+        precision_matrix_minibatch = torch.matmul(multiplier*phi.T, phi)
         if self.cov_momentum > 0:
             batch_size = len(phi)
             precision_matrix_minibatch = precision_matrix_minibatch / batch_size
@@ -135,16 +134,18 @@ class RandomFeatureGaussianProcess(nn.Module):
         else:
             precision_matrix_new = self.precision_matrix.data + precision_matrix_minibatch
         self.precision_matrix.data = precision_matrix_new
-        self.cov_mat = None
+        # If there is a change in the precision matrix, recompute the covariance
+        self.recompute_covariance = True
 
-    @property
-    def covariance_matrix(self):
-        device = self.precision_matrix.data.device
-        if self.cov_mat is None:
+    def compute_predictive_covariance(self, phi):
+        if self.recompute_covariance:
             # self.cov_mat = torch.linalg.inv(self.precision_matrix.data)
             u = torch.linalg.cholesky(self.precision_matrix.data)
-            self.cov_mat = torch.cholesky_inverse(u)
-        return self.cov_mat.to(device)
+            self.covariance_matrix = torch.cholesky_inverse(u)
+        covariance_matrix_feature = self.covariance_matrix.data
+        out = torch.matmul(covariance_matrix_feature, phi.T) * self.ridge_penalty
+        covariance_matrix_gp = torch.matmul(phi, out)
+        return covariance_matrix_gp
 
     @torch.no_grad()
     def forward_mean_field(self, x):
@@ -153,12 +154,6 @@ class RandomFeatureGaussianProcess(nn.Module):
         logits, cov = self.forward(x, return_cov=True)
         scaled_logits = mean_field_logits(logits, cov, self.mean_field_factor)
         return scaled_logits
-
-    def compute_predictive_covariance(self, phi):
-        covariance_matrix_feature = self.covariance_matrix.data
-        out = torch.matmul(covariance_matrix_feature, phi.T) * self.ridge_penalty
-        covariance_matrix_gp = torch.matmul(phi, out)
-        return covariance_matrix_gp
 
 
 def orthogonal_random_(tensor):
