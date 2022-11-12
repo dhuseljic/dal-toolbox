@@ -141,9 +141,9 @@ class RandomFeatureGaussianProcess(nn.Module):
     def covariance_matrix(self):
         device = self.precision_matrix.data.device
         if self.cov_mat is None:
-            self.cov_mat = torch.linalg.inv(self.precision_matrix.data)
-            # u = torch.linalg.cholesky(self.precision_matrix.data)
-            # self.cov_mat = torch.cholesky_inverse(u)
+            # self.cov_mat = torch.linalg.inv(self.precision_matrix.data)
+            u = torch.linalg.cholesky(self.precision_matrix.data)
+            self.cov_mat = torch.cholesky_inverse(u)
         return self.cov_mat.to(device)
 
     @torch.no_grad()
