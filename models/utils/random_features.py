@@ -120,7 +120,6 @@ class RandomFeatureGaussianProcess(nn.Module):
 
     @torch.no_grad()
     def update_precision_matrix(self, phi, logits):
-        # TODO: check multiplier
         # probas = logits.softmax(-1)
         # probas_max = probas.max(1)[0]
         # multiplier = probas_max * (1-probas_max)
