@@ -100,12 +100,12 @@ def plot_contour(model, X, y, ax=None):
 
 # %%
 spectral_norm_params = dict(
-    norm_bound=1,
+    norm_bound=.9,
     n_power_iterations=1
 )
 gp_params = dict(
     num_inducing=1024,
-    kernel_scale=10,
+    kernel_scale=.1,
     normalize_input=False,
     random_feature_type='orf',
     scale_random_features=False,

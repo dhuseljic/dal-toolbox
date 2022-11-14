@@ -5,7 +5,13 @@ import torch.nn as nn
 
 
 class RandomFourierFeatures(nn.Module):
-    def __init__(self, in_features, num_inducing=1024, kernel_scale=1, scale_features=True, random_feature_type='orf'):
+    def __init__(self,
+                 in_features: int,
+                 num_inducing: int = 1024,
+                 kernel_scale: float = 1.,
+                 scale_features: bool = True,
+                 random_feature_type: str = 'orf',
+                 std_init: float = None):
         super().__init__()
 
         self.kernel_scale = kernel_scale
@@ -20,7 +26,8 @@ class RandomFourierFeatures(nn.Module):
 
         # He init of random features
         # see: https://github.com/google/uncertainty-baselines/issues/1217
-        self.std_init = 1  # math.sqrt(2 / in_features)
+        if std_init is None:
+            self.std_init = math.sqrt(2 / in_features)
         self.reset_parameters(random_feature_type=random_feature_type, std_init=self.std_init)
 
     def reset_parameters(self, random_feature_type='orf', std_init=1):
@@ -140,7 +147,7 @@ class RandomFeatureGaussianProcess(nn.Module):
 
     def compute_predictive_covariance(self, phi):
         if self.recompute_covariance:
-            # self.cov_mat = torch.linalg.inv(self.precision_matrix.data)
+            # self.covariance_matrix  = torch.linalg.inv(self.precision_matrix.data)
             u = torch.linalg.cholesky(self.precision_matrix.data)
             self.covariance_matrix = torch.cholesky_inverse(u)
         covariance_matrix_feature = self.covariance_matrix.data
