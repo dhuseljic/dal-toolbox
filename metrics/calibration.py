@@ -1,6 +1,21 @@
 import math
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+
+
+class BrierScore(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.mse = nn.MSELoss()
+
+    def forward(self, probas, labels):
+        N, D = probas.shape
+        assert len(labels) == N, "Probas and Labels must be of the same size"
+        assert len(labels.unique()) == D, "Missing labels?"
+        labels_onehot = F.one_hot(labels, num_classes=D)
+        score = self.mse(probas, labels_onehot)
+        return score
 
 
 class EnsembleCrossEntropy(nn.Module):
@@ -8,7 +23,7 @@ class EnsembleCrossEntropy(nn.Module):
         super().__init__()
         self.cross_entropy = nn.CrossEntropyLoss(reduction='none')
 
-    def forward(self, logits: list, labels: list):
+    def forward(self, logits: torch.Tensor, labels: torch.Tensor):
         """
         logits.shape = (EnsembleMembers, Samples, Classes)
         labels.shape = (Samples)
@@ -38,7 +53,7 @@ class GibsCrossEntropy(nn.Module):
         super().__init__()
         self.cross_entropy = nn.CrossEntropyLoss(reduction='none')
 
-    def forward(self, logits: list, labels: list):
+    def forward(self, logits: torch.Tensor, labels: torch.Tensor):
         """
         logits.shape = (EnsembleMembers, Samples, Classes)
         labels.shape = (Samples)
