@@ -15,24 +15,23 @@ from utils import write_scalar_dict, seed_everything
 @hydra.main(version_base=None, config_path="./configs", config_name="uncertainty")
 def main(args):
     logging.basicConfig(filename=os.path.join(args.output_dir, 'uncertainty.log'), filemode='w')
-    logging.info('Using config: \n %s', OmegaConf.to_yaml(args))
+    logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
     writer = SummaryWriter(log_dir=args.output_dir)
-    exp_info = {}
 
     # Load data
     train_ds, test_ds_id, ds_info = build_dataset(args)
     ood_datasets = build_ood_datasets(args, ds_info['mean'], ds_info['std'])
     if args.n_samples:
-        logging.info('Creating random training subset with %i samples.', args.n_samples)
+        logging.info('Creating random training subset with %s samples. Saving indices.', args.n_samples)
         indices_id = torch.randperm(len(train_ds))[:args.n_samples]
         train_ds = Subset(train_ds, indices=indices_id)
-        exp_info['train_indices'] = indices_id.tolist()
+        torch.save(indices_id, os.path.join(args.output_dir, 'train_indices.pth'))
 
-    logging.info('Training on %s with %i samples.', args.dataset, len(train_ds))
-    logging.info('Test in-distribution dataset %s has %i samples.', args.dataset, len(test_ds_id))
+    logging.info('Training on %s with %s samples.', args.dataset, len(train_ds))
+    logging.info('Test in-distribution dataset %s has %s samples.', args.dataset, len(test_ds_id))
     for name, test_ds_ood in ood_datasets.items():
-        logging.info('Test out-of-distribution dataset %s has %i samples.', name, len(test_ds_ood))
+        logging.info('Test out-of-distribution dataset %s has %s samples.', name, len(test_ds_ood))
 
     train_loader = DataLoader(train_ds, batch_size=args.model.batch_size, shuffle=True, drop_last=True)
     test_loader_id = DataLoader(test_ds_id, batch_size=args.test_batch_size)
@@ -59,7 +58,7 @@ def main(args):
             test_stats = evaluate(model, test_loader_id, test_loaders_ood, **model_dict['eval_kwargs'])
             history_test.append(test_stats)
             write_scalar_dict(writer, prefix='test', dict=test_stats, global_step=i_epoch)
-            logging.info("Epoch [%i] %s %s", i_epoch, train_stats, test_stats)
+            logging.info("Epoch [%s] %s %s", i_epoch, train_stats, test_stats)
 
         # Saving checkpoint
         checkpoint = {
@@ -79,7 +78,6 @@ def main(args):
     logging.info("Saving results to %s.", fname)
     torch.save(checkpoint, os.path.join(args.output_dir, "model_final.pth"))
     results = {
-        'exp_info': exp_info,
         'train_history': history_train,
         'test_history': history_test,
     }
