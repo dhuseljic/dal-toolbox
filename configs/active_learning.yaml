@@ -1,5 +1,6 @@
 defaults:
   - model: resnet18_sngp
+  - eval_model: resnet18
   - al_strategy: random
 
 al_cycle:
