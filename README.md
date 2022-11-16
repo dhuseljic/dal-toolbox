@@ -19,8 +19,8 @@ python main.py model=$MODEL output_dir=$OUTPUT_DIR
 
 ## 2D-Examples
 Examples on how to use the respective models can be found here:
-- [SNGP](notebooks/2D-Examples/ensemble.ipynb)
-- [MC-Dropout](notebooks/2D-Examples/ensemble.ipynb)
+- [SNGP](notebooks/2D-Examples/sngp.ipynb)
+- [MC-Dropout](notebooks/2D-Examples/mc-dropout.ipynb)
 - [Ensemble](notebooks/2D-Examples/ensemble.ipynb)
 
 ## References
