@@ -101,7 +101,7 @@ def main(args):
         for i_epoch in range(args.eval_model.n_epochs):
             drop_last = args.eval_model.batch_size < len(al_dataset.labeled_dataset)
             train_loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.eval_model.batch_size, shuffle=True, drop_last=drop_last)
-            train_stats = train_one_epoch(eval_model, train_loader, **eval_model_dict['train_kwargs'], epoch=i_epoch)
+            train_stats = eval_train_one_epoch(eval_model, train_loader, **eval_model_dict['train_kwargs'], epoch=i_epoch)
             if eval_lr_scheduler:
                 eval_lr_scheduler.step()
 
@@ -111,11 +111,13 @@ def main(args):
 
         # Evaluate train_model and eval_model
         #TODO: Is it still necessary to evaluate the query model on test_data?
-        print('> Evaluation.')
+        print('> Evaluation. (model)')
         val_loader = DataLoader(val_ds, batch_size=args.val_batch_size, shuffle=True)
         test_stats = evaluate(model, val_loader, dataloaders_ood={}, **model_dict['eval_kwargs'])
-        eval_test_stats = evaluate(eval_model, val_loader, dataloaders_ood={}, **eval_model_dict['eval_kwargs'])
         print(test_stats)
+        print('> Evaluation. (eval_model)')
+        eval_test_stats = eval_evaluate(eval_model, val_loader, dataloaders_ood={}, **eval_model_dict['eval_kwargs'])
+        print(eval_test_stats)
 
         # Log
         for key, value in test_stats.items():

@@ -18,6 +18,7 @@ echo "Saving results to $OUTPUT_DIR"
 srun python -u al.py \
     dataset=CIFAR10 \
     model=resnet18_mcdropout \
+    model.n_passes=30 \
     output_dir=$OUTPUT_DIR \
     random_seed=1 \
     al_cycle.n_init=1000 \
