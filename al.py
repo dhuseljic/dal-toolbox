@@ -71,7 +71,8 @@ def main(args):
         print('> Training.')
         train_history = []
         for i_epoch in range(args.model.n_epochs):
-            train_loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.model.batch_size, shuffle=True)
+            drop_last = args.model.batch_size >= len(al_dataset.labeled_dataset)
+            train_loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.model.batch_size, shuffle=True, drop_last=drop_last)
             train_stats = train_one_epoch(model, train_loader, **model_dict['train_kwargs'], epoch=i_epoch)
             if lr_scheduler:
                 lr_scheduler.step()
