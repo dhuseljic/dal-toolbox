@@ -18,6 +18,7 @@ def main(args):
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
     writer = SummaryWriter(log_dir=args.output_dir)
+    misc = {}
 
     # Load data
     train_ds, test_ds_id, ds_info = build_dataset(args)
@@ -26,7 +27,7 @@ def main(args):
         logging.info('Creating random training subset with %s samples. Saving indices.', args.n_samples)
         indices_id = torch.randperm(len(train_ds))[:args.n_samples]
         train_ds = Subset(train_ds, indices=indices_id)
-        torch.save(indices_id, os.path.join(args.output_dir, 'train_indices.pth'))
+        misc['train_indices'] = indices_id.tolist()
 
     logging.info('Training on %s with %s samples.', args.dataset, len(train_ds))
     logging.info('Test in-distribution dataset %s has %s samples.', args.dataset, len(test_ds_id))
@@ -70,7 +71,6 @@ def main(args):
             "test_history": history_test,
             "lr_scheduler": lr_scheduler.state_dict() if lr_scheduler else None,
         }
-        # torch.save(checkpoint, os.path.join(args.output_dir, f"model_{i_epoch}.pth"))
         torch.save(checkpoint, os.path.join(args.output_dir, "checkpoint.pth"))
 
     # Saving results
@@ -80,6 +80,7 @@ def main(args):
     results = {
         'train_history': history_train,
         'test_history': history_test,
+        'misc': misc
     }
     with open(fname, 'w') as f:
         json.dump(results, f)
