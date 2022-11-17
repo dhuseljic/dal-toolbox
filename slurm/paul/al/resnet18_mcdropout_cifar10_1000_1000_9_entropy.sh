@@ -12,6 +12,8 @@ conda activate torchal
 
 cd /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation
 
+git checkout al_experiments
+
 OUTPUT_DIR=/mnt/stud/work/phahn/uncertainty/output/${SLURM_JOB_NAME}/
 echo "Saving results to $OUTPUT_DIR"
 
@@ -24,4 +26,4 @@ srun python -u al.py \
     al_cycle.n_init=1000 \
     al_cycle.acq_size=1000 \
     al_cycle.n_acq=9 \
-    al_strategy=entropy 
+    al_strategy=uncertainty 

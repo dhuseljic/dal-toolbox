@@ -13,6 +13,8 @@ conda activate torchal
 
 cd /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation
 
+git checkout al_experiments
+
 OUTPUT_DIR=/mnt/stud/work/phahn/uncertainty/output/${SLURM_JOB_NAME}_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}/
 echo "Saving results to $OUTPUT_DIR"
 
