@@ -26,4 +26,4 @@ srun python -u al.py \
     al_cycle.n_init=100 \
     al_cycle.acq_size=100 \
     al_cycle.n_acq=49 \
-    al_strategy=entropy 
+    al_strategy=uncertainty 
