@@ -10,7 +10,6 @@ al_cycle:
 
 dataset: CIFAR10
 dataset_path: ./data/
-output_dir: ./output/
 device: cuda
 
 random_seed: 42
@@ -18,6 +17,7 @@ val_batch_size: 128
 print_freq_eval: 100
 print_freq_train: 100
 
+output_dir: ./output/
 hydra:
   run:
     dir: ${output_dir}

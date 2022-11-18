@@ -14,6 +14,8 @@ device: "cuda"
 # Define output dir
 output_dir: "./output/"
 hydra:
+  run:
+    dir: ${output_dir}
   job_logging:
     handlers:
       file:
