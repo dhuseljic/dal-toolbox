@@ -1,5 +1,5 @@
 defaults:
-  - model: resnet18_sngp
+  - model: resnet18
   - al_strategy: random
 
 al_cycle:
@@ -21,3 +21,7 @@ print_freq_train: 100
 hydra:
   run:
     dir: ${output_dir}
+  job_logging:
+    handlers:
+      file:
+        mode: w
