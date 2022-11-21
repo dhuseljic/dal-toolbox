@@ -5,7 +5,13 @@ import torch.nn as nn
 
 
 class RandomFourierFeatures(nn.Module):
-    def __init__(self, in_features, num_inducing=1024, kernel_scale=1, scale_features=True, random_feature_type='orf'):
+    def __init__(self,
+                 in_features: int,
+                 num_inducing: int = 1024,
+                 kernel_scale: float = 1.,
+                 scale_features: bool = True,
+                 random_feature_type: str = 'orf',
+                 std_init: float = None):
         super().__init__()
 
         self.kernel_scale = kernel_scale
@@ -17,19 +23,22 @@ class RandomFourierFeatures(nn.Module):
         self.random_feature_linear = nn.Linear(in_features, num_inducing)
         self.random_feature_linear.weight.requires_grad = False
         self.random_feature_linear.bias.requires_grad = False
-        self.reset_parameters(random_feature_type=random_feature_type)
 
-    def reset_parameters(self, random_feature_type='orf'):
+        # He init of random features
+        # see: https://github.com/google/uncertainty-baselines/issues/1217
+        if std_init is None:
+            self.std_init = math.sqrt(2 / in_features)
+        self.reset_parameters(random_feature_type=random_feature_type, std_init=self.std_init)
+
+    def reset_parameters(self, random_feature_type='orf', std_init=1):
         # https://github.com/google/uncertainty-baselines/blob/main/uncertainty_baselines/models/resnet50_sngp.py#L55
-        # nn.init.normal_(self.random_feature_linear.weight, std=std_init)
+        nn.init.uniform_(self.random_feature_linear.bias, 0, 2*math.pi)
         if random_feature_type == 'rff':
-            nn.init.normal_(self.random_feature_linear.weight)
+            nn.init.normal_(self.random_feature_linear.weight, std=std_init)
         elif random_feature_type == 'orf':
-            orthogonal_random_(self.random_feature_linear.weight)
+            orthogonal_random_(self.random_feature_linear.weight, std=std_init)
         else:
             raise ValueError('Only Random Fourier Features `rff` and Orthogonal Random Features `orf` are supported.')
-
-        nn.init.uniform_(self.random_feature_linear.bias, 0, 2*math.pi)
 
     def forward(self, x):
         # Supports lengthscale for cutom random feature layer by directly rescaling the input.
@@ -138,7 +147,7 @@ class RandomFeatureGaussianProcess(nn.Module):
 
     def compute_predictive_covariance(self, phi):
         if self.recompute_covariance:
-            # self.cov_mat = torch.linalg.inv(self.precision_matrix.data)
+            # self.covariance_matrix  = torch.linalg.inv(self.precision_matrix.data)
             u = torch.linalg.cholesky(self.precision_matrix.data)
             self.covariance_matrix = torch.cholesky_inverse(u)
         covariance_matrix_feature = self.covariance_matrix.data
@@ -155,22 +164,27 @@ class RandomFeatureGaussianProcess(nn.Module):
         return scaled_logits
 
 
-def orthogonal_random_(tensor):
-    def sample_ortho(shape):
-        return torch.linalg.qr(torch.randn(*shape))[0]
+def orthogonal_random_(tensor, std=1):
+    def sample_ortho(shape, gain=1):
+        # https://github.com/keras-team/keras/blob/v2.10.0/keras/initializers/initializers_v2.py#L761-L770
+        q, r = torch.linalg.qr(torch.randn(*shape))
+        d = torch.diag(r)
+        q = q * torch.sign(d)
+        return gain * q
 
+    # https://github.com/google/edward2/blob/5338ae3244b90f3fdd0cf10094937c09eb40fab9/edward2/tensorflow/initializers.py#L786-L821
     num_rows, num_cols = tensor.shape
     if num_rows > num_cols:
         ortho_mat_list = []
         num_rows_sampled = 0
         while num_rows_sampled < num_rows:
-            ortho_mat_square = sample_ortho((num_cols, num_cols))
+            ortho_mat_square = sample_ortho((num_cols, num_cols), gain=std)
             ortho_mat_list.append(ortho_mat_square)
             num_rows_sampled += num_cols
         ortho_mat = torch.cat(ortho_mat_list, dim=0)
         ortho_mat = ortho_mat[:num_rows]
     else:
-        ortho_mat = sample_ortho((num_rows, num_cols))
+        ortho_mat = sample_ortho((num_rows, num_cols), gain=std)
 
     feature_norms_square = torch.randn(ortho_mat.shape)**2
     feature_norms = torch.sum(feature_norms_square, dim=1).sqrt()

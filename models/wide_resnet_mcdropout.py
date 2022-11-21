@@ -27,7 +27,7 @@ class DropoutWideBasic(nn.Module):
         super(DropoutWideBasic, self).__init__()
         self.bn1 = nn.BatchNorm2d(in_planes)
         self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, padding=1, bias=True)
-        self.conv1_dropout = ConsistentMCDropout2d(dropout_rate)
+        self.dropout = ConsistentMCDropout2d(dropout_rate)
 
         self.bn2 = nn.BatchNorm2d(planes)
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride, padding=1, bias=True)
@@ -40,7 +40,7 @@ class DropoutWideBasic(nn.Module):
 
     def forward(self, x):
         out = self.conv1(F.relu(self.bn1(x)))
-        out = self.conv1_dropout(out)
+        out = self.dropout(out)
         out = self.conv2(F.relu(self.bn2(out)))
         out += self.shortcut(x)
 
