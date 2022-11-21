@@ -13,6 +13,7 @@ dataset: CIFAR10
 dataset_path: ./data/
 output_dir: ./output/
 device: cuda
+use_eval_model: False
 
 random_seed: 42
 val_batch_size: 128
