@@ -14,7 +14,6 @@ from utils import write_scalar_dict, seed_everything
 
 @hydra.main(version_base=None, config_path="./configs", config_name="uncertainty")
 def main(args):
-    logging.basicConfig(filename=os.path.join(args.output_dir, 'uncertainty.log'), filemode='w')
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
     writer = SummaryWriter(log_dir=args.output_dir)
