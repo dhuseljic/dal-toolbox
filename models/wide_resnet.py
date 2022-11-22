@@ -45,6 +45,7 @@ class WideBasic(nn.Module):
 
         return out
 
+
 def wide_resnet_28_10(num_classes, dropout_rate=0.3):
     model = WideResNet(depth=28, widen_factor=10, dropout_rate=dropout_rate, num_classes=num_classes)
     return model
@@ -89,6 +90,16 @@ class WideResNet(nn.Module):
         out = out.view(out.size(0), -1)
         out = self.linear(out)
         return out
+
+
+    @torch.no_grad()
+    def forward_logits(self, dataloader, device):
+        self.to(device)
+        all_logits = []
+        for samples, _ in dataloader:
+            logits = self(samples.to(device))
+            all_logits.append(logits)
+        return torch.cat(all_logits)
 
 def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
     model.train()

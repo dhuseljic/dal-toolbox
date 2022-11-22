@@ -4,24 +4,26 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --job-name=RES18_ENTR_CIFAR10_10_10_99
-#SBATCH --output=/mnt/stud/work/phahn/uncertainty/logs/%x_%A_%a.log
-#SBATCH --array=1-4%4
+#SBATCH --job-name=resnet18_mcdropout_1000_1000_9
+#SBATCH --output=/mnt/stud/work/phahn/uncertainty/logs/%x.log
 source /mnt/stud/home/phahn/.zshrc
 
 conda activate torchal
 
 cd /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation
 
-OUTPUT_DIR=/mnt/stud/work/phahn/uncertainty/output/${SLURM_JOB_NAME}_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}/
+git checkout al_experiments
+
+OUTPUT_DIR=/mnt/stud/work/phahn/uncertainty/output/${SLURM_JOB_NAME}/
 echo "Saving results to $OUTPUT_DIR"
 
 srun python -u al.py \
     dataset=CIFAR10 \
-    model=resnet18 \
+    model=resnet18_mcdropout \
+    model.n_passes=30 \
     output_dir=$OUTPUT_DIR \
-    random_seed=${SLURM_ARRAY_TASK_ID} \
-    al_cycle.n_init=10 \
-    al_cycle.acq_size=10 \
-    al_cycle.n_acq=99 \
+    random_seed=1 \
+    al_cycle.n_init=1000 \
+    al_cycle.acq_size=1000 \
+    al_cycle.n_acq=9 \
     al_strategy=uncertainty 
