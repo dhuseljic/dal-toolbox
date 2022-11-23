@@ -60,6 +60,7 @@ class WideResNetSNGP(nn.Module):
                  widen_factor,
                  dropout_rate,
                  num_classes,
+                 input_shape,
                  norm_bound,
                  n_power_iterations,
                  spectral_norm=True,
@@ -76,6 +77,7 @@ class WideResNetSNGP(nn.Module):
         self.in_planes = 16
         self.depth = depth
         self.widen_factor = widen_factor
+        self.input_shape = input_shape
 
         # Spectral norm params
         self.spectral_norm = spectral_norm
@@ -108,9 +110,11 @@ class WideResNetSNGP(nn.Module):
             cov_momentum=cov_momentum,
             ridge_penalty=ridge_penalty,
         )
+        self.init_spectral_norm(input_shape=self.input_shape)
 
     @torch.no_grad()
     def init_spectral_norm(self, input_shape):
+        # Currently needed for conv layers
         dummy_input = torch.randn((1, *input_shape))
         self(dummy_input)
 

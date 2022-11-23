@@ -11,7 +11,6 @@ from .utils.spectral_normalization import SpectralConv2d
 from .utils.random_features import RandomFeatureGaussianProcess
 
 
-
 class BasicBlock(nn.Module):
     expansion = 1
 
@@ -41,6 +40,7 @@ class BasicBlock(nn.Module):
 
 
 def resnet18_sngp(num_classes,
+                  input_shape,
                   norm_bound,
                   n_power_iterations=1,
                   spectral_norm=True,
@@ -56,6 +56,7 @@ def resnet18_sngp(num_classes,
     resnet18_blocks = [2, 2, 2, 2]
     return ResNetSNGP(
         num_classes=num_classes,
+        input_shape=input_shape,
         block=BasicBlock,
         num_blocks=resnet18_blocks,
         spectral_norm=spectral_norm,
@@ -75,6 +76,7 @@ def resnet18_sngp(num_classes,
 class ResNetSNGP(nn.Module):
     def __init__(self,
                  num_classes,
+                 input_shape,
                  block,
                  num_blocks,
                  spectral_norm=True,
@@ -91,6 +93,8 @@ class ResNetSNGP(nn.Module):
                  ):
         super(ResNetSNGP, self).__init__()
         self.in_planes = 64
+        self.input_shape = input_shape
+
         self.norm_bound = norm_bound
         self.n_power_iterations = n_power_iterations
         self.spectral_norm = spectral_norm
@@ -118,6 +122,13 @@ class ResNetSNGP(nn.Module):
             cov_momentum=cov_momentum,
             ridge_penalty=ridge_penalty,
         )
+        self.init_spectral_norm(input_shape=self.input_shape)
+
+    @torch.no_grad()
+    def init_spectral_norm(self, input_shape):
+        # Currently needed for conv layers
+        dummy_input = torch.randn((1, *input_shape))
+        self(dummy_input)
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)

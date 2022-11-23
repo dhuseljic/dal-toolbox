@@ -86,6 +86,7 @@ def build_model(args, **kwargs):
     elif args.model.name == 'resnet18_sngp':
         model = resnet_sngp.resnet18_sngp(
             num_classes=10,
+            input_shape=(3, 32, 32),
             spectral_norm=args.model.spectral_norm.use_spectral_norm,
             norm_bound=args.model.spectral_norm.norm_bound,
             n_power_iterations=args.model.spectral_norm.n_power_iterations,
@@ -98,7 +99,6 @@ def build_model(args, **kwargs):
             cov_momentum=args.model.gp.cov_momentum,
             ridge_penalty=args.model.gp.ridge_penalty,
         )
-        model(torch.randn(1, 3, 32, 32))  # TODO: Forward pass to activate spectral norm
         optimizer = torch.optim.SGD(
             model.parameters(),
             lr=args.model.optimizer.lr,
@@ -342,6 +342,7 @@ def build_wide_resnet_sngp(n_classes, depth, widen_factor, dropout_rate, use_spe
         widen_factor=widen_factor,
         dropout_rate=dropout_rate,
         num_classes=n_classes,
+        input_shape=(3, 32, 32),
         spectral_norm=use_spectral_norm,
         norm_bound=norm_bound,
         n_power_iterations=n_power_iterations,
@@ -354,7 +355,6 @@ def build_wide_resnet_sngp(n_classes, depth, widen_factor, dropout_rate, use_spe
         cov_momentum=cov_momentum,
         ridge_penalty=ridge_penalty,
     )
-    model.init_spectral_norm(input_shape=(3, 32, 32))
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=True)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
     criterion = nn.CrossEntropyLoss()
