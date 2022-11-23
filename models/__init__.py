@@ -144,6 +144,7 @@ def build_model(args, **kwargs):
     elif args.model.name == 'wideresnet2810_sngp':
         model_dict = build_wide_resnet_sngp(
             n_classes=n_classes,
+            input_shape=(3, 32, 32),
             depth=28,
             widen_factor=10,
             use_spectral_norm=args.model.spectral_norm.use_spectral_norm,
@@ -334,7 +335,7 @@ def build_wide_resnet_ensemble(n_classes, n_member, dropout_rate, lr, weight_dec
     return model_dict
 
 
-def build_wide_resnet_sngp(n_classes, depth, widen_factor, dropout_rate, use_spectral_norm, norm_bound,
+def build_wide_resnet_sngp(n_classes, input_shape, depth, widen_factor, dropout_rate, use_spectral_norm, norm_bound,
                            n_power_iterations, num_inducing, kernel_scale, scale_random_features, random_feature_type,
                            mean_field_factor, cov_momentum, ridge_penalty, lr, weight_decay, momentum, n_epochs, device):
     model = wide_resnet_sngp.WideResNetSNGP(
@@ -342,7 +343,7 @@ def build_wide_resnet_sngp(n_classes, depth, widen_factor, dropout_rate, use_spe
         widen_factor=widen_factor,
         dropout_rate=dropout_rate,
         num_classes=n_classes,
-        input_shape=(3, 32, 32),
+        input_shape=input_shape,
         spectral_norm=use_spectral_norm,
         norm_bound=norm_bound,
         n_power_iterations=n_power_iterations,
