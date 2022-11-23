@@ -2,6 +2,7 @@ import copy
 import math
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class RandomFourierFeatures(nn.Module):
@@ -20,35 +21,33 @@ class RandomFourierFeatures(nn.Module):
         self.scale_features = scale_features
         self.random_feature_scale = math.sqrt(2./float(num_inducing))
 
-        self.random_feature_linear = nn.Linear(in_features, num_inducing)
-        self.random_feature_linear.weight.requires_grad = False
-        self.random_feature_linear.bias.requires_grad = False
+        self.register_buffer('random_weight', torch.zeros(num_inducing, in_features))
+        self.register_buffer('random_bias', torch.zeros(num_inducing))
 
-        # He init of random features
-        # see: https://github.com/google/uncertainty-baselines/issues/1217
+        # He-init of random features, see: https://github.com/google/uncertainty-baselines/issues/1217
         if std_init is None:
             self.std_init = math.sqrt(2 / in_features)
         self.reset_parameters(random_feature_type=random_feature_type, std_init=self.std_init)
 
     def reset_parameters(self, random_feature_type='orf', std_init=1):
         # https://github.com/google/uncertainty-baselines/blob/main/uncertainty_baselines/models/resnet50_sngp.py#L55
-        nn.init.uniform_(self.random_feature_linear.bias, 0, 2*math.pi)
+        nn.init.uniform_(self.random_bias, 0, 2*math.pi)
         if random_feature_type == 'rff':
-            nn.init.normal_(self.random_feature_linear.weight, std=std_init)
+            nn.init.normal_(self.random_weight, std=std_init)
         elif random_feature_type == 'orf':
-            orthogonal_random_(self.random_feature_linear.weight, std=std_init)
+            orthogonal_random_(self.random_weight, std=std_init)
         else:
             raise ValueError('Only Random Fourier Features `rff` and Orthogonal Random Features `orf` are supported.')
 
     def forward(self, x):
         # Supports lengthscale for cutom random feature layer by directly rescaling the input.
         x = x * self.input_scale
-        x = torch.cos(self.random_feature_linear(x))
+        x = torch.cos(F.linear(x, weight=self.random_weight, bias=self.random_bias))
 
         # https://github.com/google/uncertainty-baselines/blob/main/uncertainty_baselines/models/wide_resnet_sngp.py#L207
         if self.scale_features:
             # Scale random feature by 2. / sqrt(num_inducing).  When using GP
-            # layer as the output layer of a nerual network, it is recommended
+            # layer as the output layer of a neural network, it is recommended
             # to turn this scaling off to prevent it from changing the learning
             # rate to the hidden layers.
             x = self.random_feature_scale * x
