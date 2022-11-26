@@ -1,9 +1,12 @@
-import random
+import torch
 from .query import Query
+
+# TODO some args should not be in here:
+# see https://github.com/scikit-activeml/scikit-activeml/blob/master/skactiveml/utils/_functions.py
 
 class RandomSampling(Query):
     def query(self, dataset, acq_size, **kwargs):
-        # TODO some args should not be in here:
-        # see https://github.com/scikit-activeml/scikit-activeml/blob/master/skactiveml/utils/_functions.py
-        return random.sample(dataset.unlabeled_indices, acq_size)
+        del kwargs
+        indices = torch.randperm(len(dataset.unlabeled_indices), generator=self.rng)[:acq_size]
+        return indices.tolist()
 

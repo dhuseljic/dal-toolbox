@@ -105,7 +105,7 @@ def main(args):
 
         if args.use_eval_model:
             # Train the eval model seperatly
-            logging.info('> Training. (eval_model)')
+            logging.info('Additional training with eval model: %s', args.eval_model.name)
             eval_train_history = []
             for i_epoch in range(args.eval_model.n_epochs):
                 drop_last = args.eval_model.batch_size < len(al_dataset.labeled_dataset)
@@ -125,7 +125,7 @@ def main(args):
         logging.info(test_stats)
 
         if args.use_eval_model:
-            logging.info('> Evaluation. (eval_model)')
+            logging.info('Additional evaluation with eval model: %s', args.eval_model.name)
             eval_test_stats = eval_evaluate(eval_model, val_loader, dataloaders_ood={}, **eval_model_dict['eval_kwargs'])
             logging.info(eval_test_stats)
 
