@@ -109,8 +109,7 @@ def main(args):
                 writer.add_scalar(tag=f"cycle_{i_acq}_train/{key}", scalar_value=value, global_step=i_epoch)
             train_history.append(train_stats)
         logging.info('Training took %.2f minutes', (time.time() - t1)/60)
-        logging.info(train_stats)
-        
+        logging.info('Training stats: %s', train_stats)
 
         if use_eval_model:
             # Train the eval model seperatly
@@ -134,7 +133,7 @@ def main(args):
         logging.info('Evaluation with %s samples', len(val_ds))
         val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)
         test_stats = evaluate(model, val_loader, dataloaders_ood={}, **model_dict['eval_kwargs'])
-        logging.info(test_stats)
+        logging.info('Evaluation stats: %s', test_stats)
 
         if use_eval_model:
             logging.info('Additional evaluation with eval model: %s', args.eval_model.name)
