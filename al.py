@@ -3,6 +3,8 @@ import time
 import copy
 import json
 import logging
+
+import torch
 import hydra
 
 from torch.utils.tensorboard import SummaryWriter
@@ -130,7 +132,7 @@ def main(args):
 
         # Evaluate resulting model
         logging.info('Evaluation with %s samples', len(val_ds))
-        val_loader = DataLoader(val_ds, batch_size=args.val_batch_size, shuffle=True)
+        val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)
         test_stats = evaluate(model, val_loader, dataloaders_ood={}, **model_dict['eval_kwargs'])
         logging.info(test_stats)
 
@@ -155,6 +157,22 @@ def main(args):
         if use_eval_model:
             history[-1]["eval_train_history"] = eval_train_history
             history[-1]["eval_test_stats"] = eval_test_stats
+
+        # Save checkpoint
+        logging.info('Saving checkpoint for cycle %s', i_acq)
+        checkpoint = {
+            "args": args,
+            "model": model.state_dict(),
+            "optimizer": model_dict['train_kwargs']['optimizer'].state_dict(),
+            "train_history": train_history,
+            "test_stats": test_stats,
+            "lr_scheduler": lr_scheduler.state_dict() if lr_scheduler else None,
+            "labeled_indices": al_dataset.labeled_indices,
+            "n_labeled_samples": len(al_dataset.labeled_dataset),
+            "unlabeled_indices": al_dataset.unlabeled_indices,
+            "n_unlabeled_samples": len(al_dataset.unlabeled_dataset),
+        }
+        torch.save(checkpoint, os.path.join(args.output_dir, f'checkpoint_cycle{i_acq}.pth'))
 
     # Save results
     fname = os.path.join(args.output_dir, 'results.json')
