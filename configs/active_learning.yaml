@@ -1,6 +1,6 @@
 defaults:
   - model: resnet18
-  - eval_model: resnet18
+  - eval_model: null
   - al_strategy: random
 
 al_cycle:
@@ -12,7 +12,6 @@ al_cycle:
 dataset: CIFAR10
 dataset_path: ./data/
 device: cuda
-use_eval_model: False
 
 random_seed: 42
 val_batch_size: 128

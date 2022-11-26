@@ -40,11 +40,13 @@ def main(args):
     model_dict = build_model(args, n_classes=n_classes, train_ds=al_dataset.labeled_dataset)
     model, train_one_epoch, evaluate = model_dict['model'], model_dict['train_one_epoch'], model_dict['evaluate']
     optimizer, lr_scheduler = model_dict['optimizer'], model_dict['lr_scheduler']
+    use_eval_model = 'eval_model' in args
 
     # Setup Eval Model
-    if args.use_eval_model:
+    if use_eval_model:
         eval_model_dict = build_eval_model(args, n_classes=n_classes)
-        eval_model, eval_train_one_epoch, eval_evaluate = eval_model_dict['model'], eval_model_dict['train_one_epoch'], eval_model_dict['evaluate']
+        eval_model, eval_train_one_epoch, eval_evaluate = eval_model_dict[
+            'model'], eval_model_dict['train_one_epoch'], eval_model_dict['evaluate']
         eval_optimizer, eval_lr_scheduler = eval_model_dict['optimizer'], eval_model_dict['lr_scheduler']
 
     # Setup Query
@@ -56,7 +58,7 @@ def main(args):
     initial_optimizer_state = copy.deepcopy(optimizer.state_dict())
     initial_scheduler_state = copy.deepcopy(lr_scheduler.state_dict())
 
-    if args.use_eval_model:
+    if use_eval_model:
         initial_eval_model_state = copy.deepcopy(eval_model.state_dict())
         initial_eval_optimizer_state = copy.deepcopy(eval_optimizer.state_dict())
         initial_eval_scheduler_state = copy.deepcopy(eval_lr_scheduler.state_dict())
@@ -83,18 +85,18 @@ def main(args):
         if args.al_cycle.cold_start:
             model.load_state_dict(initial_model_state)
 
-        if args.use_eval_model:
+        if use_eval_model:
             eval_optimizer.load_state_dict(initial_eval_optimizer_state)
             eval_lr_scheduler.load_state_dict(initial_eval_scheduler_state)
             if args.al_cycle.cold_start:
                 eval_model.load_state_dict(initial_eval_model_state)
 
-
         # Train with updated annotations
         logging.info('Training on labeled pool with %s samples', len(al_dataset.labeled_dataset))
         train_history = []
         for i_epoch in range(args.model.n_epochs):
-            train_loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.model.batch_size, shuffle=True, drop_last=True)
+            train_loader = DataLoader(al_dataset.labeled_dataset,
+                                      batch_size=args.model.batch_size, shuffle=True, drop_last=True)
             train_stats = train_one_epoch(model, train_loader, **model_dict['train_kwargs'], epoch=i_epoch)
             if lr_scheduler:
                 lr_scheduler.step()
@@ -103,19 +105,22 @@ def main(args):
                 writer.add_scalar(tag=f"cycle_{i_acq}_train/{key}", scalar_value=value, global_step=i_epoch)
             train_history.append(train_stats)
 
-        if args.use_eval_model:
+        if use_eval_model:
             # Train the eval model seperatly
             logging.info('Additional training with eval model: %s', args.eval_model.name)
             eval_train_history = []
             for i_epoch in range(args.eval_model.n_epochs):
                 drop_last = args.eval_model.batch_size < len(al_dataset.labeled_dataset)
-                train_loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.eval_model.batch_size, shuffle=True, drop_last=drop_last)
-                train_stats = eval_train_one_epoch(eval_model, train_loader, **eval_model_dict['train_kwargs'], epoch=i_epoch)
+                train_loader = DataLoader(al_dataset.labeled_dataset,
+                                          batch_size=args.eval_model.batch_size, shuffle=True, drop_last=drop_last)
+                train_stats = eval_train_one_epoch(eval_model, train_loader, **
+                                                   eval_model_dict['train_kwargs'], epoch=i_epoch)
                 if eval_lr_scheduler:
                     eval_lr_scheduler.step()
 
                 for key, value in train_stats.items():
-                    writer.add_scalar(tag=f"cycle_{i_acq}_eval_model_train/{key}", scalar_value=value, global_step=i_epoch)
+                    writer.add_scalar(tag=f"cycle_{i_acq}_eval_model_train/{key}",
+                                      scalar_value=value, global_step=i_epoch)
                 eval_train_history.append(train_stats)
 
         # Evaluate resulting model
@@ -124,9 +129,10 @@ def main(args):
         test_stats = evaluate(model, val_loader, dataloaders_ood={}, **model_dict['eval_kwargs'])
         logging.info(test_stats)
 
-        if args.use_eval_model:
+        if use_eval_model:
             logging.info('Additional evaluation with eval model: %s', args.eval_model.name)
-            eval_test_stats = eval_evaluate(eval_model, val_loader, dataloaders_ood={}, **eval_model_dict['eval_kwargs'])
+            eval_test_stats = eval_evaluate(eval_model, val_loader, dataloaders_ood={},
+                                            **eval_model_dict['eval_kwargs'])
             logging.info(eval_test_stats)
 
         # Log
@@ -135,14 +141,13 @@ def main(args):
         history.append({
             "train_history": train_history,
             "test_stats": test_stats,
-            # TODO: add additional variables to test_stats
             "labeled_indices": al_dataset.labeled_indices,
             "n_labeled_samples": len(al_dataset.labeled_dataset),
             "unlabeled_indices": al_dataset.unlabeled_indices,
             "n_unlabeled_samples": len(al_dataset.unlabeled_dataset),
         })
 
-        if args.use_eval_model:
+        if use_eval_model:
             history[-1]["eval_train_history"] = eval_train_history
             history[-1]["eval_test_stats"] = eval_test_stats
 
