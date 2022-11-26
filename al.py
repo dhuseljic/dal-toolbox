@@ -36,7 +36,7 @@ def main(args):
     al_dataset.random_init(n_samples=args.al_cycle.n_init)
 
     # Setup Model #TODO: Does DUE need labels? Otherwise we can input the whole train ds instead of labeled samples
-    logging.info('Building model: \n%s', OmegaConf.to_yaml(args.model))
+    logging.info('Building model: %s', args.model.name)
     model_dict = build_model(args, n_classes=n_classes, train_ds=al_dataset.labeled_dataset)
     model, train_one_epoch, evaluate = model_dict['model'], model_dict['train_one_epoch'], model_dict['evaluate']
     optimizer, lr_scheduler = model_dict['optimizer'], model_dict['lr_scheduler']
@@ -50,7 +50,7 @@ def main(args):
         eval_optimizer, eval_lr_scheduler = eval_model_dict['optimizer'], eval_model_dict['lr_scheduler']
 
     # Setup Query
-    logging.info('Building query strategy: \n%s', OmegaConf.to_yaml(args.al_strategy))
+    logging.info('Building query strategy: %s', args.al_strategy.name)
     al_strategy = build_query(args)
 
     # Setup initial states
