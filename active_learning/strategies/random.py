@@ -1,4 +1,3 @@
-import torch
 from .query import Query
 
 # TODO some args should not be in here:
@@ -8,5 +7,5 @@ from .query import Query
 class RandomSampling(Query):
     def query(self, dataset, acq_size, **kwargs):
         del kwargs  # del unused kwargs
-        indices = torch.randperm(len(dataset.unlabeled_indices), generator=self.rng)[:acq_size]
-        return dataset.unlabeled_indices[indices]
+        indices = self.rng.sample(dataset.unlabeled_indices, k=acq_size)
+        return indices
