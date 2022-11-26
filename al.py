@@ -1,4 +1,5 @@
 import os
+import time
 import copy
 import json
 import logging
@@ -93,6 +94,7 @@ def main(args):
 
         # Train with updated annotations
         logging.info('Training on labeled pool with %s samples', len(al_dataset.labeled_dataset))
+        t1 = time.time()
         train_history = []
         for i_epoch in range(args.model.n_epochs):
             train_loader = DataLoader(al_dataset.labeled_dataset,
@@ -104,6 +106,9 @@ def main(args):
             for key, value in train_stats.items():
                 writer.add_scalar(tag=f"cycle_{i_acq}_train/{key}", scalar_value=value, global_step=i_epoch)
             train_history.append(train_stats)
+        logging.info('Training took %.2f minutes', (time.time() - t1)/60)
+        logging.info(train_stats)
+        
 
         if use_eval_model:
             # Train the eval model seperatly
