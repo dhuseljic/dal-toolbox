@@ -70,7 +70,7 @@ def main(args):
 
         # Analyse unlabeled set and query most promising data
         if i_acq != 0:
-            logging.info('Querying %s samples.', args.al_cycle.acq_size)
+            logging.info('Querying %s samples with strategy %s', args.al_cycle.acq_size, args.al_strategy.name)
             indices = al_strategy.query(
                 model=model,
                 dataset=al_dataset,
