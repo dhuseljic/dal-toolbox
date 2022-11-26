@@ -156,7 +156,7 @@ def main(args):
 
 def build_query(args):
     if args.al_strategy.name == "random":
-        query = random.RandomSampling()
+        query = random.RandomSampling(random_seed=args.random_seed)
     elif args.al_strategy.name == "uncertainty":
         query = uncertainty.UncertaintySampling(uncertainty_type=args.al_strategy.uncertainty_type)
     else:
