@@ -11,18 +11,18 @@ class UncertaintySampling(Query):
         self.uncertainty_type = uncertainty_type
 
     @torch.no_grad()
-    def query(self, model, dataset, acq_size, batch_size, device):
-        dataloader = DataLoader(dataset.unlabeled_dataset, batch_size=batch_size, shuffle=False)
-        logits = model.forward_logits(dataloader, device)
-        probas = logits.softmax(-1)
+    def query(self, model, al_dataset, acq_size, batch_size, device):
+        if not hasattr(model, 'get_probas'):
+            raise ValueError('The method `get_probas` is mandatory to use uncertainty sampling.')
+        probas = model.get_probas(DataLoader(al_dataset.unlabeled_dataset, batch_size=batch_size), device)
 
         if self.uncertainty_type == 'least_confident':
-            score, _ = probas.min(dim=-1)
+            scores, _ = probas.min(dim=-1)
         elif self.uncertainty_type == 'entropy':
-            score = ood.entropy_fn(probas)
+            scores = ood.entropy_fn(probas)
         else:
             NotImplementedError(f"{self.uncertainty_type} is not implemented!")
 
-        _, indices = score.topk(acq_size)
-        actual_indices = [dataset.unlabeled_indices[i] for i in indices]
+        _, indices = scores.topk(acq_size)
+        actual_indices = [al_dataset.unlabeled_indices[i] for i in indices]
         return actual_indices

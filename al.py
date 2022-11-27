@@ -29,7 +29,7 @@ def main(args):
     os.makedirs(args.output_dir, exist_ok=True)
 
     # Necessary for logging
-    history = []
+    results = {}
     writer = SummaryWriter(log_dir=args.output_dir)
 
     # Setup Dataset
@@ -72,10 +72,10 @@ def main(args):
 
         # Analyse unlabeled set and query most promising data
         if i_acq != 0:
-            logging.info('Querying %s samples with strategy %s', args.al_cycle.acq_size, args.al_strategy.name)
+            logging.info('Querying %s samples with strategy `%s`', args.al_cycle.acq_size, args.al_strategy.name)
             indices = al_strategy.query(
                 model=model,
-                dataset=al_dataset,
+                al_dataset=al_dataset,
                 acq_size=args.al_cycle.acq_size,
                 batch_size=args.val_batch_size,
                 device=args.device
@@ -144,18 +144,20 @@ def main(args):
         # Log
         for key, value in test_stats.items():
             writer.add_scalar(tag=f"test_stats/{key}", scalar_value=value, global_step=i_acq)
-        history.append({
+
+        results[f'cycle{i_acq}'] = {
             "train_history": train_history,
             "test_stats": test_stats,
             "labeled_indices": al_dataset.labeled_indices,
             "n_labeled_samples": len(al_dataset.labeled_dataset),
             "unlabeled_indices": al_dataset.unlabeled_indices,
             "n_unlabeled_samples": len(al_dataset.unlabeled_dataset),
-        })
+        }
 
         if use_eval_model:
-            history[-1]["eval_train_history"] = eval_train_history
-            history[-1]["eval_test_stats"] = eval_test_stats
+            # TODO
+            results[f'cycle{i_acq}']["eval_train_history"] = eval_train_history
+            results[f'cycle{i_acq}']["eval_test_stats"] = eval_test_stats
 
         # Save checkpoint
         logging.info('Saving checkpoint for cycle %s', i_acq)
@@ -178,7 +180,7 @@ def main(args):
     logging.info("Saving results to %s.", fname)
     # torch.save(checkpoint, os.path.join(args.output_dir, "model_final.pth"))
     with open(fname, 'w') as f:
-        json.dump(history, f)
+        json.dump(results, f)
 
 
 def build_query(args):
