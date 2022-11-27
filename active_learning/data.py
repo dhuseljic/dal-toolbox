@@ -74,6 +74,13 @@ class ALDataset:
     def __len__(self):
         return len(self.train_dataset)
 
+    def state_dict(self):
+        return {'unlabeled_indices': self.unlabeled_indices, 'labeled_indices': self.labeled_indices}
+
+    def load_state_dict(self, state_dict):
+        self.unlabeled_indices = state_dict['unlabeled_indices']
+        self.labeled_indices = state_dict['labeled_indices']
+
 
 def list_union(a: list, b: list):
     return list(set(a).union(set(b)))

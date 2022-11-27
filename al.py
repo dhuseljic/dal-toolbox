@@ -164,6 +164,7 @@ def main(args):
         checkpoint = {
             "args": args,
             "model": model.state_dict(),
+            "al_dataset": al_dataset.state_dict(),
             "optimizer": model_dict['train_kwargs']['optimizer'].state_dict(),
             "train_history": train_history,
             "test_stats": test_stats,
