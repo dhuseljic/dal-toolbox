@@ -78,8 +78,21 @@ class ALDataset:
         return {'unlabeled_indices': self.unlabeled_indices, 'labeled_indices': self.labeled_indices}
 
     def load_state_dict(self, state_dict):
-        self.unlabeled_indices = state_dict['unlabeled_indices']
-        self.labeled_indices = state_dict['labeled_indices']
+        necessary_keys = self.state_dict().keys()
+
+        # Check for wrong keys
+        for key in state_dict.keys():
+            if key not in necessary_keys:
+                raise ValueError(f'The key `{key}` can not be loaded.')
+        # Notify that some keys are not loaded
+        for key in necessary_keys:
+            if key not in state_dict.keys():
+                print(f'<Key `{key}` is not present and not loaded>')
+
+        for key in state_dict:
+            setattr(self, key, state_dict[key])
+        print('<All keys matched successfully>')
+
 
 
 def list_union(a: list, b: list):

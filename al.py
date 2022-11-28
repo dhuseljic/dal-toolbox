@@ -56,9 +56,11 @@ def main(args):
     # Active Learning Cycles
     for i_acq in range(0, args.al_cycle.n_acq + 1):
         logging.info('Starting AL iteration %s / %s', i_acq, args.al_cycle.n_acq)
+        cycle_results = {}
 
         # Analyse unlabeled set and query most promising data
         if i_acq != 0:
+            t1 = time.time()
             logging.info('Querying %s samples with strategy `%s`', args.al_cycle.acq_size, args.al_strategy.name)
             indices = al_strategy.query(
                 model=model,
@@ -68,6 +70,9 @@ def main(args):
                 device=args.device
             )
             al_dataset.update_annotations(indices)
+            query_time = time.time() - t1
+            logging.info('Querying took %.2f minutes', query_time/60)
+            cycle_results['query_time'] = query_time
 
         #  If cold start is set, reset the model parameters
         optimizer.load_state_dict(initial_optimizer_state)
@@ -89,27 +94,34 @@ def main(args):
             for key, value in train_stats.items():
                 writer.add_scalar(tag=f"cycle_{i_acq}_train/{key}", scalar_value=value, global_step=i_epoch)
             train_history.append(train_stats)
-        logging.info('Training took %.2f minutes', (time.time() - t1)/60)
+        training_time = (time.time() - t1)
+        logging.info('Training took %.2f minutes', training_time/60)
         logging.info('Training stats: %s', train_stats)
+        cycle_results['train_history'] = train_history
+        cycle_results['training_time'] = training_time
 
         # Evaluate resulting model
         logging.info('Evaluation with %s samples', len(val_ds))
+        t1 = time.time()
         val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)
         test_stats = evaluate(model, val_loader, dataloaders_ood={}, **model_dict['eval_kwargs'])
+        evaluation_time = time.time() - t1
+        logging.info('Evaluation took %.2f minutes', evaluation_time/60)
         logging.info('Evaluation stats: %s', test_stats)
+        cycle_results['evaluation_time'] = evaluation_time
+        cycle_results['test_stats'] = test_stats
 
         # Log
         for key, value in test_stats.items():
             writer.add_scalar(tag=f"test_stats/{key}", scalar_value=value, global_step=i_acq)
 
-        results[f'cycle{i_acq}'] = {
-            "train_history": train_history,
-            "test_stats": test_stats,
+        cycle_results.update({
             "labeled_indices": al_dataset.labeled_indices,
             "n_labeled_samples": len(al_dataset.labeled_dataset),
             "unlabeled_indices": al_dataset.unlabeled_indices,
             "n_unlabeled_samples": len(al_dataset.unlabeled_dataset),
-        }
+        })
+        results[f'cycle{i_acq}'] = cycle_results
 
         # Save checkpoint
         logging.info('Saving checkpoint for cycle %s', i_acq)

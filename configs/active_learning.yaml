@@ -1,6 +1,5 @@
 defaults:
   - model: resnet18
-  - eval_model: null
   - al_strategy: random
 
 al_cycle:
