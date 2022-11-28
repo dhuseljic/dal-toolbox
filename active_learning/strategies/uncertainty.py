@@ -14,7 +14,8 @@ class UncertaintySampling(Query):
     def query(self, model, al_dataset, acq_size, batch_size, device):
         if not hasattr(model, 'get_probas'):
             raise ValueError('The method `get_probas` is mandatory to use uncertainty sampling.')
-        probas = model.get_probas(DataLoader(al_dataset.unlabeled_dataset, batch_size=batch_size), device)
+        dataloader = DataLoader(al_dataset.unlabeled_dataset, batch_size=batch_size)
+        probas = model.get_probas(dataloader, device)
 
         if self.uncertainty_type == 'least_confident':
             scores, _ = probas.min(dim=-1)
