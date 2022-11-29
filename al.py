@@ -34,13 +34,13 @@ def main(args):
 
     # Setup Dataset
     logging.info('Building datasets. Creating random initial labeled pool with %s samples.', args.al_cycle.n_init)
-    train_ds, query_ds, val_ds, n_classes = build_al_datasets(args)
+    train_ds, query_ds, val_ds, ds_info = build_al_datasets(args)
     al_dataset = ALDataset(train_ds, query_ds)
     al_dataset.random_init(n_samples=args.al_cycle.n_init)
 
-    # Setup Model #TODO: Does DUE need labels? Otherwise we can input the whole train ds instead of labeled samples
+    # Setup Model
     logging.info('Building model: %s', args.model.name)
-    model_dict = build_model(args, n_classes=n_classes, train_ds=al_dataset.labeled_dataset)
+    model_dict = build_model(args, n_classes=ds_info['n_classes'], train_ds=al_dataset.labeled_dataset)
     model, train_one_epoch, evaluate = model_dict['model'], model_dict['train_one_epoch'], model_dict['evaluate']
     optimizer, lr_scheduler = model_dict['optimizer'], model_dict['lr_scheduler']
 

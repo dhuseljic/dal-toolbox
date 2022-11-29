@@ -19,6 +19,8 @@ def build_mnist(split, ds_path, mean=(0.1307,), std=(0.3081,), return_info=False
     ])
     if split == 'train':
         ds = torchvision.datasets.MNIST(ds_path, train=True, download=True, transform=transform)
+    elif split == 'query':
+        ds = torchvision.datasets.MNIST(ds_path, train=True, download=True, transform=transform)
     else:
         ds = torchvision.datasets.MNIST(ds_path, train=False, download=True, transform=transform)
     if return_info:
@@ -36,6 +38,8 @@ def build_fashionmnist(split, ds_path, mean=(0.5,), std=(0.5,), return_info=Fals
     ])
     if split == 'train':
         ds = torchvision.datasets.FashionMNIST(ds_path, train=True, download=True, transform=transform)
+    elif split == 'query':
+        ds = torchvision.datasets.FashionMNIST(ds_path, train=True, download=True, transform=transform)
     else:
         ds = torchvision.datasets.FashionMNIST(ds_path, train=False, download=True, transform=transform)
     if return_info:
@@ -45,20 +49,20 @@ def build_fashionmnist(split, ds_path, mean=(0.5,), std=(0.5,), return_info=Fals
 
 
 def build_cifar10(split, ds_path, mean=(0.4914, 0.4822, 0.4465), std=(0.2023, 0.1994, 0.2010), return_info=False):
+    train_transform = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean, std),
+    ])
+    eval_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean, std)])
     if split == 'train':
-        train_transform = transforms.Compose([
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean, std),
-        ])
         ds = torchvision.datasets.CIFAR10(ds_path, train=True, download=True, transform=train_transform)
+    elif split == 'query':
+        ds = torchvision.datasets.CIFAR10(ds_path, train=True, download=True, transform=eval_transform)
     elif split == 'test':
-        eval_transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(mean, std),
-        ])
         ds = torchvision.datasets.CIFAR10(ds_path, train=False, download=True, transform=eval_transform)
+
     if return_info:
         ds_info = {'n_classes': 10, 'mean': mean, 'std': std}
         return ds, ds_info
@@ -66,16 +70,18 @@ def build_cifar10(split, ds_path, mean=(0.4914, 0.4822, 0.4465), std=(0.2023, 0.
 
 
 def build_cifar100(split, ds_path, mean=(0.5071, 0.4865, 0.4409), std=(0.2673, 0.2564, 0.2762), return_info=False):
+    train_transform = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean, std),
+    ])
+    eval_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean, std)])
     if split == 'train':
-        train_transform = transforms.Compose([
-            transforms.RandomCrop(32, padding=4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(mean, std),
-        ])
         ds = torchvision.datasets.CIFAR100(ds_path, train=True, download=True, transform=train_transform)
+    elif split == 'query':
+        ds = torchvision.datasets.CIFAR100(ds_path, train=True, download=True, transform=eval_transform)
     elif split == 'test':
-        eval_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean, std)])
         ds = torchvision.datasets.CIFAR100(ds_path, train=False, download=True, transform=eval_transform)
     if return_info:
         ds_info = {'n_classes': 100, 'mean': mean, 'std': std}
@@ -84,16 +90,17 @@ def build_cifar100(split, ds_path, mean=(0.5071, 0.4865, 0.4409), std=(0.2673, 0
 
 
 def build_svhn(split, ds_path, mean=(0.4377, 0.4438, 0.4728), std=(0.1980, 0.2010, 0.1970), return_info=False):
+    train_transform = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.ToTensor(),
+        transforms.Normalize(mean, std),
+    ])
+    eval_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean, std)])
     if split == 'train':
-        train_transform = transforms.Compose([
-            transforms.RandomCrop(32, padding=4),
-            transforms.ToTensor(),
-            transforms.Normalize(mean, std),
-        ])
         ds = torchvision.datasets.SVHN(ds_path, split='train', download=True, transform=train_transform)
+    elif split == 'query':
+        ds = torchvision.datasets.SVHN(ds_path, split='train', download=True, transform=eval_transform)
     elif split == 'test':
-        eval_transform = None
-        eval_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean, std)])
         ds = torchvision.datasets.SVHN(ds_path, split='test', download=True, transform=eval_transform)
     if return_info:
         ds_info = {'n_classes': 10, 'mean': mean, 'std': std}
@@ -102,11 +109,13 @@ def build_svhn(split, ds_path, mean=(0.4377, 0.4438, 0.4728), std=(0.1980, 0.201
 
 
 def build_imagenet(split, ds_path, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), return_info=False):
+    train_transform = ClassificationPresetTrain(crop_size=32, mean=mean, std=std)
+    eval_transform = ClassificationPresetEval(crop_size=32, mean=mean, std=std)
     if split == 'train':
-        train_transform = ClassificationPresetTrain(crop_size=32, mean=mean, std=std)
         ds = torchvision.datasets.ImageNet(root=ds_path, split=split, transform=train_transform)
+    elif split == 'query':
+        ds = torchvision.datasets.ImageNet(root=ds_path, split=split, transform=eval_transform)
     elif split == 'val':
-        eval_transform = ClassificationPresetEval(crop_size=32, mean=mean, std=std)
         ds = torchvision.datasets.ImageNet(root=ds_path, split=split, transform=eval_transform)
     if return_info:
         ds_info = {'n_classes': 1000, 'mean': mean, 'std': std}
@@ -116,14 +125,16 @@ def build_imagenet(split, ds_path, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224
 
 def build_tinyimagenet(split, ds_path, mean=(120.0378, 111.3496, 106.5628), std=(73.6951, 69.0155, 69.3879), return_info=False):
     # TODO: @phahn compute mean std
+    train_transform = ClassificationPresetTrain(crop_size=32, mean=mean, std=std)
+    eval_transform = ClassificationPresetEval(crop_size=32, mean=mean, std=std)
     if split == 'train':
-        train_transform = ClassificationPresetTrain(crop_size=32, mean=mean, std=std)
         ds = TinyImageNet(root=ds_path, split='train', transform=train_transform)
         #print("Calculating mean and std...")
         #print("Mean: ",torch.mean(torch.tensor(np.array(ds.images)).float(), dim=(0,1,2)))
         #print("Std:",torch.std(torch.tensor(np.array(ds.images)).float(), dim=(0,1,2)))
+    elif split == 'query':
+        ds = TinyImageNet(root=ds_path, split='train', transform=eval_transform)
     elif split == 'test':
-        eval_transform = ClassificationPresetEval(crop_size=32, mean=mean, std=std)
         ds = TinyImageNet(root=ds_path, split='test', transform=eval_transform)
     if return_info:
         ds_info = {'n_classes': 200, 'mean': mean, 'std': std}
@@ -163,7 +174,6 @@ def build_dataset(args):
         test_ds = build_svhn('test', args.dataset_path)
 
     elif args.dataset == 'TinyImagenet':
-        # TODO: Check mean and std
         train_ds, ds_info = build_tinyimagenet('train', args.dataset_path, return_info=True)
         test_ds = build_tinyimagenet('test', args.dataset_path)
 
@@ -215,47 +225,44 @@ def build_ood_datasets(args, mean, std):
 
 def build_al_datasets(args):
     if args.dataset == 'MNIST':
-        train_ds = build_mnist('train', args.dataset_path)
+        train_ds, ds_info = build_mnist('train', args.dataset_path, return_info=True)
+        query_ds = build_mnist('query', args.dataset_path)
         test_ds_id = build_mnist('test', args.dataset_path)
-        n_classes = 10
 
     elif args.dataset == 'FashionMNIST':
-        train_ds = build_fashionmnist('train', args.dataset_path)
+        train_ds, ds_info = build_fashionmnist('train', args.dataset_path, return_info=True)
+        query_ds = build_fashionmnist('query', args.dataset_path)
         test_ds_id = build_fashionmnist('test', args.dataset_path)
-        n_classes = 10
 
     elif args.dataset == 'CIFAR10':
-        train_ds = build_cifar10('train', args.dataset_path)
+        train_ds, ds_info = build_cifar10('train', args.dataset_path, return_info=True)
+        query_ds = build_cifar10('query', args.dataset_path)
         test_ds_id = build_cifar10('test', args.dataset_path)
-        n_classes = 10
 
     elif args.dataset == 'CIFAR100':
-        train_ds = build_cifar100('train', args.dataset_path)
+        train_ds, ds_info = build_cifar100('train', args.dataset_path, return_info=True)
+        query_ds = build_cifar100('query', args.dataset_path)
         test_ds_id = build_cifar100('test', args.dataset_path)
-        n_classes = 100
 
     elif args.dataset == 'SVHN':
-        train_ds = build_svhn('train', args.dataset_path)
+        train_ds, ds_info = build_svhn('train', args.dataset_path, return_info=True)
+        query_ds = build_svhn('query', args.dataset_path)
         test_ds_id = build_svhn('test', args.dataset_path)
-        n_classes = 10
 
     elif args.dataset == 'TinyImagenet':
-        train_ds = build_tinyimagenet('train', args.dataset_path)
+        train_ds, ds_info = build_tinyimagenet('train', args.dataset_path, return_info=True)
+        query_ds = build_tinyimagenet('query', args.dataset_path)
         test_ds_id = build_tinyimagenet('test', args.dataset_path)
-        n_classes = 200
 
     elif args.dataset == 'Imagenet':
-        train_ds = build_imagenet('train', args.dataset_path)
+        train_ds, ds_info = build_imagenet('train', args.dataset_path, return_info=True)
+        query_ds = build_imagenet('query', args.dataset_path)
         test_ds_id = build_imagenet('val', args.dataset_path)
-        n_classes = 1000
 
     else:
         raise NotImplementedError
 
-    # TODO: add query_ds
-    query_ds = train_ds
-
-    return train_ds, query_ds, test_ds_id, n_classes
+    return train_ds, query_ds, test_ds_id, ds_info
 
 
 def equal_set_sizes(ds_id, ds_ood):
