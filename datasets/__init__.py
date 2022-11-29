@@ -48,7 +48,8 @@ def build_fashionmnist(split, ds_path, mean=(0.5,), std=(0.5,), return_info=Fals
     return ds
 
 
-def build_cifar10(split, ds_path, mean=(0.4914, 0.4822, 0.4465), std=(0.2023, 0.1994, 0.2010), return_info=False):
+ 
+def build_cifar10(split, ds_path, mean=(0.4914, 0.4822, 0.4465), std=(0.247, 0.243, 0.262), return_info=False):
     train_transform = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
