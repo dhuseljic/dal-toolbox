@@ -158,7 +158,10 @@ def build_query(args):
             'batch_size': None,  # TODO to init method
             'acq_size': None,  # TODO to init method
         }
-        query = uncertainty.UncertaintySampling(uncertainty_type=args.al_strategy.uncertainty_type)
+        query = uncertainty.UncertaintySampling(
+            uncertainty_type=args.al_strategy.uncertainty_type,
+            subset_size=args.al_strategy.subset_size,
+        )
     else:
         raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
     return query
