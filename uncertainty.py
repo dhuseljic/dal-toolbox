@@ -6,7 +6,7 @@ import torch
 
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader, Subset
-# TODO: from torch.utils.tensorboard import SummaryWriter 
+from torch.utils.tensorboard import SummaryWriter 
 from datasets import build_dataset, build_ood_datasets
 from models import build_model
 from utils import write_scalar_dict, seed_everything
@@ -16,7 +16,7 @@ from utils import write_scalar_dict, seed_everything
 def main(args):
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
-    # writer = SummaryWriter(log_dir=args.output_dir)
+    writer = SummaryWriter(log_dir=args.output_dir)
     misc = {}
 
     # Load data
@@ -51,13 +51,13 @@ def main(args):
         if lr_scheduler:
             lr_scheduler.step()
         history_train.append(train_stats)
-        # write_scalar_dict(writer, prefix='train', dict=train_stats, global_step=i_epoch)
+        write_scalar_dict(writer, prefix='train', dict=train_stats, global_step=i_epoch)
 
         # Eval
         if (i_epoch+1) % args.eval_interval == 0 or (i_epoch+1) == args.model.n_epochs:
             test_stats = evaluate(model, test_loader_id, test_loaders_ood, **model_dict['eval_kwargs'])
             history_test.append(test_stats)
-            # write_scalar_dict(writer, prefix='test', dict=test_stats, global_step=i_epoch)
+            write_scalar_dict(writer, prefix='test', dict=test_stats, global_step=i_epoch)
             logging.info("Epoch [%s] %s %s", i_epoch, train_stats, test_stats)
 
             # TODO
