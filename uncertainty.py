@@ -1,12 +1,14 @@
 import os
-import logging
 import json
+import time
+import logging
+
 import hydra
 import torch
 
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader, Subset
-from torch.utils.tensorboard import SummaryWriter 
+from torch.utils.tensorboard import SummaryWriter
 from datasets import build_dataset, build_ood_datasets
 from models import build_model
 from utils import write_scalar_dict, seed_everything
@@ -60,8 +62,9 @@ def main(args):
             write_scalar_dict(writer, prefix='test', dict=test_stats, global_step=i_epoch)
             logging.info("Epoch [%s] %s %s", i_epoch, train_stats, test_stats)
 
-            # TODO
             # Saving checkpoint
+            t1 = time.time()
+            logging.info('Saving checkpoint')
             checkpoint = {
                 "args": args,
                 "model": model.state_dict(),
@@ -72,6 +75,7 @@ def main(args):
                 "lr_scheduler": lr_scheduler.state_dict() if lr_scheduler else None,
             }
             torch.save(checkpoint, os.path.join(args.output_dir, "checkpoint.pth"))
+            logging.info('Saving took %.2f minutes', (time.time() - t1)/60)
 
     # Saving results
     fname = os.path.join(args.output_dir, 'results_final.json')
