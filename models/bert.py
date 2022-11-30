@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import transformers
+from transformers import AutoModel
 from utils import MetricLogger, SmoothedValue
 from metrics import generalization
 
@@ -23,16 +24,32 @@ class ClassificationHead(nn.Module):
         return out_logits
 
 
-class BertModel(nn.Module):
-    def __init__(self, model_name, num_classes):
+class BertClassifier(nn.Module):
+    def __init__(self, model_name, num_classes, mode='non_static'):
+        super(BertClassifier, self).__init__()
+
+        self.mode = mode
         self.model_name = model_name
         self.num_classes = num_classes
 
-        self.bert = transformers.Automodel.from_pretrained(self.model_name)
+        # no pre-training
+        if self.mode == 'random':
+            self.encoder = AutoModel.from_config(config=transformers.DistilBertConfig())
+        
+        # pre-training with freezed weights
+        if self.mode == 'static':
+            self.encoder = AutoModel.from_pretrained(self.model_name)
+            for param in self.encoder.parameters():
+                param.required_grad = False
+        
+        # pre-training and training of all layers
+        if self.mode == 'non-static':
+            self.encoder = AutoModel.from_pretrained(self.model_name)
+      
         self.head = ClassificationHead(768, self.num_classes)
 
     def forward(self, input_ids, attention_mask):
-        output = self.bert(
+        output = self.encoder(
             input_ids,
             attention_mask,
             return_dict=False
@@ -43,27 +60,39 @@ class BertModel(nn.Module):
         out_logits = self.head(out_pooled)
 
         return out_logits
+    
+    @torch.no_grad()
+    def forward_logits(self, dataloader, device):
+        self.to(device)
+        all_logits = []
+        for samples, _ in dataloader:
+            logits = self(samples.to(device))
+            all_logits.append(logits)
+        return torch.cat(all_logits)
 
 
 def train_one_epoch(model,
                     dataloader,
-                    criterion,
+                    epoch,
                     optimizer,
+                    scheduler,
+                    criterion,
                     tokenizer,
                     device,
-                    epoch,
-                    print_freq):
+                    print_freq=25):
     model.train()
     model.to(device)
 
     metric_logger = MetricLogger(delimiter=" ")
-    metric_logger.add_meter("lr", SmoothedValue(
-        window_size=1, fmt="{value:.8f}"))
+    metric_logger.add_meter(
+        "lr", 
+        SmoothedValue(window_size=1, 
+        fmt="{value:.8f}")
+    )
     header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
-    for index, batch in enumerate(metric_logger.log_every(dataloader, print_freq, header)):
-        y_batch = batch["label"].to(device)
-
+    for batch in metric_logger.log_every(dataloader, print_freq, header):
+        
         # single sentences as inputs
         if "text" in list(batch.keys()):
             encoding = tokenizer(
@@ -79,24 +108,24 @@ def train_one_epoch(model,
                 padding="longest",
                 truncation="longest_first",
                 return_tensors='pt')
-                
+
+        targets = batch["label"].to(device)
         input_ids = encoding["input_ids"].to(device)
         attention_mask = encoding["attention_mask"].to(device)
 
         logits = model(input_ids, attention_mask)
 
-        loss = criterion(logits, y_batch)
-
+        loss = criterion(logits, targets)
         optimizer.zero_grad()
         loss.backward()
+
         torch.nn.utils.clip_grad_norm(model.parameters(), 3)
         optimizer.step()
         #!TODO! check
         scheduler.step()
 
-        batch_size = y_batch.size(0)
-
-        batch_acc, = generalization.accuracy(logits, y_batch)
+        batch_size = targets.size(0)
+        batch_acc, = generalization.accuracy(logits, targets, topk=(1,))
         metric_logger.update(loss=loss.item(), lr=optimizer.param_groups[0]["lr"])
         metric_logger.meters["batch_acc"].update(batch_acc.item(), n=batch_size)
 

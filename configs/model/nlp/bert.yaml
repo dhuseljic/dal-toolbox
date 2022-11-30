@@ -1,0 +1,14 @@
+type: BERT
+name: bert-base-uncased
+n_epochs: 3
+optimizer:
+  name: AdamW
+  lr: 3e-5
+  lr_scheduler: linear_warmup
+  warmup_steps: 200
+  weight_decay: 0.01
+structure:
+  hidden_size: 768
+  dropout: 0.2
+  mode: non-static
+

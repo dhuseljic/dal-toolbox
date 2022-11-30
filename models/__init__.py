@@ -1,10 +1,15 @@
+import copy
 import torch
 import torch.nn as nn
+from transformers import AutoTokenizer
 
 from models.wideresnet_due import WideResNet
 
 from . import resnet, resnet_mcdropout, resnet_sngp, wide_resnet, wide_resnet_mcdropout, wide_resnet_sngp
 from . import wideresnet_due, ensemble
+from . import bert
+
+
 
 from gpytorch.mlls import VariationalELBO
 from gpytorch.likelihoods import SoftmaxLikelihood
@@ -12,6 +17,7 @@ from gpytorch.likelihoods import SoftmaxLikelihood
 
 def build_model(args, **kwargs):
     n_classes, train_ds = kwargs['n_classes'], kwargs['train_ds']
+
     if args.model.name == 'resnet18_deterministic':
         model = resnet.ResNet18(n_classes)
         optimizer = torch.optim.SGD(
@@ -231,8 +237,63 @@ def build_model(args, **kwargs):
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, likelihood=likelihood, device=args.device),
             'eval_kwargs': dict(criterion=criterion, likelihood=likelihood, device=args.device),
         }
+    elif args.model.type == "BERT":
+        model = bert.BertClassifier(
+            model_name=args.model.name,
+            num_classes = n_classes
+        )
+        tokenizer = AutoTokenizer.from_pretrained(
+            args.model.name, 
+            use_fast=False
+        )
+
+        if args.model.optimizer.name == 'Adam':
+           optimizer = torch.optim.AdamW(
+                model.parameters(),
+                lr=args.model.optimizer.lr,
+                weight_decay=args.model.optimizer.weight_decay,
+            )
+        
+        elif args.model.optimizer.name == 'AdamW':
+            optimizer = torch.optim.AdamW(
+                model.parameters(),
+                lr=args.model.optimizer.lr,
+                weight_decay=args.model.optimizer.weight_decay
+            )
+        
+        else:
+            raise NotImplementedError(f'{args.model.optimizer.name} not implemented')
+        
+        criterion = nn.CrossEntropyLoss()
+        train_kwargs = {
+            'optimizer': optimizer,
+            'criterion': criterion,
+            'tokenizer': tokenizer,
+            'device': args.device
+        }
+        eval_kwargs = {
+            'criterion': criterion, 
+            'tokenizer': tokenizer,
+            'device': args.device
+        }
+        initial_states = {
+            'model': copy.deepcopy(model.state_dict()),
+            'optimizer': copy.deepcopy(optimizer.state_dict())
+        }
+
+        model_dict = {
+            'model': model,
+            'tokenizer':tokenizer,
+            'train': bert.train_one_epoch,
+            'eval': bert.eval_one_epoch,
+            'train_kwargs': train_kwargs,
+            'eval_kwargs': eval_kwargs,
+            'initial_states': initial_states
+        }
+
     else:
         NotImplementedError(f'Model {args.model} not implemented.')
+
     return model_dict
 
 

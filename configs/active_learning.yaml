@@ -1,5 +1,5 @@
 defaults:
-  - model: resnet18_sngp
+  - model: nlp/bert
   - al_strategy: random
 
 al_cycle:
@@ -8,7 +8,7 @@ al_cycle:
   n_acq: 10
   cold_start: True
 
-dataset: CIFAR10
+dataset: imdb
 dataset_path: ./data/
 output_dir: ./output/
 device: cuda
