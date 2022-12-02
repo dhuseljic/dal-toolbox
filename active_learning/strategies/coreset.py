@@ -5,6 +5,7 @@ from sklearn.metrics import pairwise_distances
 from torch.utils.data import DataLoader
 from .query import Query
 
+
 class CoreSet(Query):
     def __init__(self, subset_size=None):
         super().__init__()
@@ -35,7 +36,7 @@ class CoreSet(Query):
     def query(self, model, al_dataset, acq_size, batch_size, device):
         if not hasattr(model, 'get_representation'):
             raise ValueError('The method `get_representation` is mandatory to use core set sampling.')
-        
+
         unlabeled_indices = al_dataset.unlabeled_indices
         labeled_indices = al_dataset.labeled_indices
         query_dataset = al_dataset.query_dataset
@@ -51,4 +52,3 @@ class CoreSet(Query):
 
         chosen = self.furthest_first(features_unlabeled, features_labeled, acq_size)
         return [unlabeled_indices[idx] for idx in chosen]
-
