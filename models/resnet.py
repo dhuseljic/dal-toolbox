@@ -85,6 +85,17 @@ class ResNet18(nn.Module):
         probas = logits.softmax(-1)
         return probas
 
+    @torch.inference_mode()
+    def get_representation(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_features = []
+        for samples, _ in dataloader:
+            _, features = self(samples.to(device), return_features=True)
+            all_features.append(features.cpu())
+        features = torch.cat(all_features)
+        return features
+
 
 def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
     model.train()

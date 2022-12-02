@@ -17,7 +17,7 @@ from utils import seed_everything
 from datasets import build_al_datasets
 
 
-from active_learning.strategies import random, uncertainty, bayesian_uncertainty
+from active_learning.strategies import random, uncertainty, bayesian_uncertainty, coreset
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
@@ -161,6 +161,8 @@ def build_query(args):
             uncertainty_type=args.al_strategy.uncertainty_type,
             subset_size=args.al_strategy.subset_size,
         )
+    elif args.al_strategy.name == "coreset":
+        query = coreset.CoreSet(subset_size=args.al_strategy.subset_size)
     else:
         raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
     return query
