@@ -1,6 +1,4 @@
 import torch
-import numpy as np
-from sklearn.metrics import pairwise_distances
 
 from torch.utils.data import DataLoader
 from .query import Query
@@ -12,22 +10,18 @@ class CoreSet(Query):
         self.subset_size = subset_size
 
     def kcenter_greedy(self, features_unlabeled: torch.Tensor, features_labeled: torch.Tensor, acq_size: int):
-        features_labeled = features_labeled.numpy()
-        features_unlabeled = features_unlabeled.numpy()
-
         n_unlabeled = len(features_unlabeled)
 
-        distances = pairwise_distances(features_unlabeled, features_labeled)
-        min_dist = np.min(distances, axis=1)
+        distances = torch.cdist(features_unlabeled, features_labeled)
+        min_dist, _ = torch.min(distances, axis=1)
 
         idxs = []
         for _ in range(acq_size):
             idx = min_dist.argmax()
             idxs.append(idx)
-            dist_new_ctr = pairwise_distances(features_unlabeled, features_unlabeled[[idx]])
+            dist_new_ctr = torch.cdist(features_unlabeled, features_unlabeled[idx].unsqueeze(0))
             for j in range(n_unlabeled):
-                min_dist[j] = np.min((min_dist[j], dist_new_ctr[j, 0]))
-
+                min_dist[j] = torch.min(min_dist[j], dist_new_ctr[j, 0])
         return idxs
 
     def query(self, model, al_dataset, acq_size, batch_size, device):
