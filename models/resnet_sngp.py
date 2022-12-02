@@ -157,6 +157,18 @@ class ResNetSNGP(nn.Module):
             out = self.output_layer(out, return_cov=return_cov)
         return out
 
+    @torch.inference_mode()
+    def get_probas(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_logits = []
+        for samples, _ in dataloader:
+            logits = self(samples.to(device), mean_field=True)
+            all_logits.append(logits)
+        logits = torch.cat(all_logits)
+        probas = logits.softmax(-1)
+        return probas
+
 
 def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
     model.train()
