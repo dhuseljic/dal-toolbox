@@ -11,25 +11,22 @@ class CoreSet(Query):
         super().__init__()
         self.subset_size = subset_size
 
-    def furthest_first(self, features_unlabeled: torch.Tensor, features_labeled: torch.Tensor, acq_size: int):
+    def kcenter_greedy(self, features_unlabeled: torch.Tensor, features_labeled: torch.Tensor, acq_size: int):
         features_labeled = features_labeled.numpy()
         features_unlabeled = features_unlabeled.numpy()
-        # TODO: port to torch?
-        m = np.shape(features_unlabeled)[0]
-        if np.shape(features_labeled)[0] == 0:
-            min_dist = np.tile(float("inf"), m)
-        else:
-            dist_ctr = pairwise_distances(features_unlabeled, features_labeled)
-            min_dist = np.amin(dist_ctr, axis=1)
+
+        n_unlabeled = len(features_unlabeled)
+
+        distances = pairwise_distances(features_unlabeled, features_labeled)
+        min_dist = np.min(distances, axis=1)
 
         idxs = []
-
         for _ in range(acq_size):
             idx = min_dist.argmax()
             idxs.append(idx)
-            dist_new_ctr = pairwise_distances(features_unlabeled, features_unlabeled[[idx], :])
-            for j in range(m):
-                min_dist[j] = min(min_dist[j], dist_new_ctr[j, 0])
+            dist_new_ctr = pairwise_distances(features_unlabeled, features_unlabeled[[idx]])
+            for j in range(n_unlabeled):
+                min_dist[j] = np.min((min_dist[j], dist_new_ctr[j, 0]))
 
         return idxs
 
@@ -50,5 +47,5 @@ class CoreSet(Query):
         labeled_dataloader = DataLoader(query_dataset, batch_size=batch_size, sampler=labeled_indices)
         features_labeled = model.get_representation(labeled_dataloader, device)
 
-        chosen = self.furthest_first(features_unlabeled, features_labeled, acq_size)
+        chosen = self.kcenter_greedy(features_unlabeled, features_labeled, acq_size)
         return [unlabeled_indices[idx] for idx in chosen]
