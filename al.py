@@ -37,6 +37,7 @@ def main(args):
     train_ds, query_ds, val_ds, ds_info = build_al_datasets(args)
     al_dataset = ALDataset(train_ds, query_ds)
     al_dataset.random_init(n_samples=args.al_cycle.n_init)
+    val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)
 
     # Setup Model
     logging.info('Building model: %s', args.model.name)
@@ -84,9 +85,8 @@ def main(args):
         logging.info('Training on labeled pool with %s samples', len(al_dataset.labeled_dataset))
         t1 = time.time()
         train_history = []
+        train_loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.model.batch_size, shuffle=True, drop_last=True)
         for i_epoch in range(args.model.n_epochs):
-            train_loader = DataLoader(al_dataset.labeled_dataset,
-                                      batch_size=args.model.batch_size, shuffle=True, drop_last=True)
             train_stats = train_one_epoch(model, train_loader, **model_dict['train_kwargs'], epoch=i_epoch)
             if lr_scheduler:
                 lr_scheduler.step()
@@ -103,7 +103,6 @@ def main(args):
         # Evaluate resulting model
         logging.info('Evaluation with %s samples', len(val_ds))
         t1 = time.time()
-        val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)
         test_stats = evaluate(model, val_loader, dataloaders_ood={}, **model_dict['eval_kwargs'])
         evaluation_time = time.time() - t1
         logging.info('Evaluation took %.2f minutes', evaluation_time/60)
