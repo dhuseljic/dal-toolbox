@@ -1,6 +1,7 @@
-type: BERT
 name: bert-base-uncased
+type: BERT
 n_epochs: 3
+batch_size: 8
 optimizer:
   name: AdamW
   lr: 3e-5

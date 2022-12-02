@@ -9,6 +9,8 @@ from omegaconf import OmegaConf
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 from transformers import get_linear_schedule_with_warmup
+from transformers import logging
+logging.set_verbosity_error()
 
 from active_learning.data import ALDataset
 from active_learning.strategies import random, uncertainty
@@ -28,6 +30,7 @@ def main(args):
     writer = SummaryWriter(log_dir=args.output_dir)
 
     train_ds, query_ds, test_ds, n_classes = build_al_datasets(args)
+    test_ds = test_ds.shuffle(seed=42).select(range(500))
     al_dataset = ALDataset(train_ds, query_ds)
     al_dataset.random_init(n_samples=args.al_cycle.n_init)
 
@@ -45,12 +48,14 @@ def main(args):
     al_strategy = build_query(args)
     test_loader = DataLoader(
         test_ds, 
-        batch_size=args.val_batch_size, 
-        shuffle=True
+        batch_size=args.model.batch_size*4, 
+        shuffle=False
     )
 
     for i_acq in range(0, args.al_cycle.n_acq + 1):
         print(f'Starting Al iteration {i_acq}')
+        print(f'Train Dataset: {len(al_dataset.labeled_indices)}')
+        print(f'Pool Dataset available: {len(al_dataset.unlabeled_dataset)}')
 
         if i_acq != 0:
             print('> Querying.')
@@ -59,7 +64,7 @@ def main(args):
                 model=model, 
                 dataset=al_dataset, 
                 acq_size=args.al_cycle.acq_size,
-                batch_size=args.val_batch_size,
+                batch_size=args.model.batch_size*4,
                 device=args.device
             )
 
@@ -69,17 +74,18 @@ def main(args):
         optimizer.load_state_dict(initial_states['optimizer'])
         lr_scheduler = get_linear_schedule_with_warmup(
             optimizer=optimizer,
-            num_warmup_steps=math.ceil(len(al_dataset.labeled_dataset) * args.n_epochs * 0.1),
-            num_trainings_steps = len(al_dataset.labeled_dataset) * args.n_epochs
+            num_warmup_steps=math.ceil(len(al_dataset.labeled_dataset) * args.model.n_epochs * 0.1),
+            num_training_steps = len(al_dataset.labeled_dataset) * args.model.n_epochs
         )
         if args.al_cycle.cold_start:
             model.load_state_dict(initial_states['model'])
 
         print('> Training.')
         train_history = []
+
         train_loader = DataLoader(
             al_dataset.labeled_dataset, 
-            batch_size=args.dataset.batch_size,
+            batch_size=args.model.batch_size,
             shuffle=True          
         )
         #TODO: wird hier nicht der falsche optimizer übergeben?
@@ -118,13 +124,13 @@ def main(args):
             'train_history': train_history,
             'test_stats': test_stats,
             'labeled_indices': al_dataset.labeled_indices,
-            'n_labeled_samples': int(len(al_dataset.labeled_dataset)),
+            'n_labeled_samples': len(al_dataset.labeled_dataset),
             'unlabeled_indices': al_dataset.unlabeled_indices, 
-            'n_unlabeled_indices': int(len(al_dataset.unlabeled_indices))
+            'n_unlabeled_indices': len(al_dataset.unlabeled_indices)
         })
         writer.close()
         savepath = os.path.join(args.output_dir, 'results.json')
-        print(f'Savubg results to {savepath}.')
+        print(f'Saving results to {savepath}.')
         with open(savepath, 'w') as f:
             json.dump(history, f)
 

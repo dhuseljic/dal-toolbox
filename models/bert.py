@@ -25,7 +25,7 @@ class ClassificationHead(nn.Module):
 
 
 class BertClassifier(nn.Module):
-    def __init__(self, model_name, num_classes, mode='non_static'):
+    def __init__(self, model_name, num_classes, mode='non-static'):
         super(BertClassifier, self).__init__()
 
         self.mode = mode
@@ -37,14 +37,17 @@ class BertClassifier(nn.Module):
             self.encoder = AutoModel.from_config(config=transformers.DistilBertConfig())
         
         # pre-training with freezed weights
-        if self.mode == 'static':
+        elif self.mode == 'static':
             self.encoder = AutoModel.from_pretrained(self.model_name)
             for param in self.encoder.parameters():
                 param.required_grad = False
         
         # pre-training and training of all layers
-        if self.mode == 'non-static':
+        elif self.mode == 'non-static':
             self.encoder = AutoModel.from_pretrained(self.model_name)
+        
+        else:
+            raise NotImplementedError("f{self.mode} is not available")
       
         self.head = ClassificationHead(768, self.num_classes)
 
@@ -66,6 +69,7 @@ class BertClassifier(nn.Module):
         self.to(device)
         all_logits = []
         for samples, _ in dataloader:
+            
             logits = self(samples.to(device))
             all_logits.append(logits)
         return torch.cat(all_logits)
@@ -119,7 +123,7 @@ def train_one_epoch(model,
         optimizer.zero_grad()
         loss.backward()
 
-        torch.nn.utils.clip_grad_norm(model.parameters(), 3)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 3)
         optimizer.step()
         #!TODO! check
         scheduler.step()
@@ -137,13 +141,12 @@ def train_one_epoch(model,
 
 
 @torch.no_grad()
-def eval_one_epoch(model, dataloader, epoch, criterion, tokenizer, print_freq, device):
+def eval_one_epoch(model, dataloader, epoch, criterion, tokenizer, device, print_freq=25):
     model.eval()
     model.to(device)
 
     metric_logger = MetricLogger(delimiter=" ")
-    header = f"Testing:"
-
+    header = "Testing:"
     for batch in metric_logger.log_every(dataloader, print_freq, header):
         y_batch = batch["label"].to(device)
 
