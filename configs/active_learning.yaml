@@ -1,6 +1,6 @@
 defaults:
-  - model: nlp/bert
-  - al_strategy: uncertainty
+  - model: resnet18_sngp
+  - al_strategy: random
 
 al_cycle:
   n_init: 100
@@ -10,7 +10,6 @@ al_cycle:
 
 dataset: imdb
 dataset_path: ./data/
-output_dir: ./output/
 device: cuda
 
 random_seed: 42
@@ -18,8 +17,9 @@ val_batch_size: 128
 print_freq_eval: 25
 print_freq_train: 25
 
+output_dir: ./output/
 hydra:
   job:
     chdir: True
   run:
-    dir: ${output_dir}/${dataset}/${model.name}/${now:%Y-%m-%d_%H%M%S}
+    dir: ${output_dir}

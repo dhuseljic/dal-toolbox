@@ -1,2 +1,3 @@
 name: uncertainty
 uncertainty_type: entropy
+subset_size: 10_000

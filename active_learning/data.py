@@ -54,27 +54,50 @@ class ALDataset:
             Args:
                 n_samples (int): Size of the initial labeld pool.    
         """
-        assert len(self.labeled_indices) == 0, 'Pools already initialized.'
+        if len(self.labeled_indices) != 0:
+            raise ValueError('Pools already initialized.')
         buy_idx = random.sample(self.unlabeled_indices, k=n_samples)
-        self.labeled_indices = self.union(self.labeled_indices, buy_idx)
-        self.unlabeled_indices = self.diff(self.unlabeled_indices, buy_idx)
+        self.labeled_indices = list_union(self.labeled_indices, buy_idx)
+        self.unlabeled_indices = list_diff(self.unlabeled_indices, buy_idx)
 
     def update_annotations(self, buy_idx: list):
         """
-            Updates the labeld pool with newly annotated samples.
+            Updates the labeled pool with newly annotated samples.
 
             Args:
                 buy_idx (list): List of indices which identify samples of the unlabeled pool that should be
                                 transfered to the labeld pool.
         """
-        self.labeled_indices = self.union(self.labeled_indices, buy_idx)
-        self.unlabeled_indices = self.diff(self.unlabeled_indices, buy_idx)
-
-    def union(self, a: list, b: list):
-        return list(set(a).union(set(b)))
-
-    def diff(self, a: list, b: list):
-        return list(set(a).difference(set(b)))
+        self.labeled_indices = list_union(self.labeled_indices, buy_idx)
+        self.unlabeled_indices = list_diff(self.unlabeled_indices, buy_idx)
 
     def __len__(self):
         return len(self.train_dataset)
+
+    def state_dict(self):
+        return {'unlabeled_indices': self.unlabeled_indices, 'labeled_indices': self.labeled_indices}
+
+    def load_state_dict(self, state_dict):
+        necessary_keys = self.state_dict().keys()
+
+        # Check for wrong keys
+        for key in state_dict.keys():
+            if key not in necessary_keys:
+                raise ValueError(f'The key `{key}` can not be loaded.')
+        # Notify that some keys are not loaded
+        for key in necessary_keys:
+            if key not in state_dict.keys():
+                print(f'<Key `{key}` is not present and not loaded>')
+
+        for key in state_dict:
+            setattr(self, key, state_dict[key])
+        print('<All keys matched successfully>')
+
+
+
+def list_union(a: list, b: list):
+    return list(set(a).union(set(b)))
+
+
+def list_diff(a: list, b: list):
+    return list(set(a).difference(set(b)))

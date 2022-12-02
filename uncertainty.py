@@ -1,6 +1,8 @@
 import os
-import logging
 import json
+import time
+import logging
+
 import hydra
 import torch
 
@@ -14,10 +16,10 @@ from utils import write_scalar_dict, seed_everything
 
 @hydra.main(version_base=None, config_path="./configs", config_name="uncertainty")
 def main(args):
-    logging.basicConfig(filename=os.path.join(args.output_dir, 'uncertainty.log'), filemode='w')
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
     writer = SummaryWriter(log_dir=args.output_dir)
+    misc = {}
 
     # Load data
     train_ds, test_ds_id, ds_info = build_dataset(args)
@@ -26,7 +28,7 @@ def main(args):
         logging.info('Creating random training subset with %s samples. Saving indices.', args.n_samples)
         indices_id = torch.randperm(len(train_ds))[:args.n_samples]
         train_ds = Subset(train_ds, indices=indices_id)
-        torch.save(indices_id, os.path.join(args.output_dir, 'train_indices.pth'))
+        misc['train_indices'] = indices_id.tolist()
 
     logging.info('Training on %s with %s samples.', args.dataset, len(train_ds))
     logging.info('Test in-distribution dataset %s has %s samples.', args.dataset, len(test_ds_id))
@@ -60,18 +62,20 @@ def main(args):
             write_scalar_dict(writer, prefix='test', dict=test_stats, global_step=i_epoch)
             logging.info("Epoch [%s] %s %s", i_epoch, train_stats, test_stats)
 
-        # Saving checkpoint
-        checkpoint = {
-            "args": args,
-            "model": model.state_dict(),
-            "optimizer": model_dict['train_kwargs']['optimizer'].state_dict(),
-            "epoch": i_epoch,
-            "train_history": history_train,
-            "test_history": history_test,
-            "lr_scheduler": lr_scheduler.state_dict() if lr_scheduler else None,
-        }
-        # torch.save(checkpoint, os.path.join(args.output_dir, f"model_{i_epoch}.pth"))
-        torch.save(checkpoint, os.path.join(args.output_dir, "checkpoint.pth"))
+            # Saving checkpoint
+            t1 = time.time()
+            logging.info('Saving checkpoint')
+            checkpoint = {
+                "args": args,
+                "model": model.state_dict(),
+                "optimizer": model_dict['train_kwargs']['optimizer'].state_dict(),
+                "epoch": i_epoch,
+                "train_history": history_train,
+                "test_history": history_test,
+                "lr_scheduler": lr_scheduler.state_dict() if lr_scheduler else None,
+            }
+            torch.save(checkpoint, os.path.join(args.output_dir, "checkpoint.pth"))
+            logging.info('Saving took %.2f minutes', (time.time() - t1)/60)
 
     # Saving results
     fname = os.path.join(args.output_dir, 'results_final.json')
@@ -80,6 +84,7 @@ def main(args):
     results = {
         'train_history': history_train,
         'test_history': history_test,
+        'misc': misc
     }
     with open(fname, 'w') as f:
         json.dump(results, f)

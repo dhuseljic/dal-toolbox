@@ -73,14 +73,17 @@ class ResNet18(nn.Module):
             out = (out, features)
         return out
 
-    @torch.no_grad()
-    def forward_logits(self, dataloader, device):
+    @torch.inference_mode()
+    def get_probas(self, dataloader, device):
         self.to(device)
+        self.eval()
         all_logits = []
         for samples, _ in dataloader:
             logits = self(samples.to(device))
             all_logits.append(logits)
-        return torch.cat(all_logits)
+        logits = torch.cat(all_logits)
+        probas = logits.softmax(-1)
+        return probas
 
 
 def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):

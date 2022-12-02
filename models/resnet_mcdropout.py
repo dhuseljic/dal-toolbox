@@ -50,6 +50,17 @@ class DropoutResNet18(BayesianModule):
     def mc_forward_impl(self, mc_input_BK: torch.Tensor):
         return self.forward(mc_input_BK)
 
+    @torch.no_grad()
+    def forward_logits(self, dataloader, device):
+        #TODO: Should logits for querying be the mean of mc forward logits?
+        self.to(device)
+        self.eval()
+        all_logits = []
+        for samples, _ in dataloader:
+            logits = torch.mean(self.mc_forward(samples.to(device), k=self.k), dim=1)
+            all_logits.append(logits)
+        return torch.cat(all_logits)
+
 
 class DropoutBasicBlock(nn.Module):
     expansion = 1
@@ -82,6 +93,7 @@ class DropoutBasicBlock(nn.Module):
         out = F.relu(out)
         out = self.conv2_dropout(out)
         return out
+
 
 
 @torch.no_grad()
