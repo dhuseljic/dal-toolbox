@@ -73,6 +73,7 @@ def main(args):
             al_dataset.update_annotations(indices)
             query_time = time.time() - t1
             logging.info('Querying took %.2f minutes', query_time/60)
+            cycle_results['query_indices'] = indices
             cycle_results['query_time'] = query_time
 
         #  If cold start is set, reset the model parameters
