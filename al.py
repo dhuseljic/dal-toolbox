@@ -130,15 +130,10 @@ def main(args):
             "model": model.state_dict(),
             "al_dataset": al_dataset.state_dict(),
             "optimizer": model_dict['train_kwargs']['optimizer'].state_dict(),
-            "train_history": train_history,
-            "test_stats": test_stats,
             "lr_scheduler": lr_scheduler.state_dict() if lr_scheduler else None,
-            "labeled_indices": al_dataset.labeled_indices,
-            "n_labeled_samples": len(al_dataset.labeled_dataset),
-            "unlabeled_indices": al_dataset.unlabeled_indices,
-            "n_unlabeled_samples": len(al_dataset.unlabeled_dataset),
+            "cycle_results": cycle_results,
         }
-        torch.save(checkpoint, os.path.join(args.output_dir, f'checkpoint_cycle{i_acq}.pth'))
+        torch.save(checkpoint, os.path.join(args.output_dir, f'checkpoint.pth'))
 
     # Save results
     fname = os.path.join(args.output_dir, 'results.json')
