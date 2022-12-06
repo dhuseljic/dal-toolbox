@@ -6,7 +6,6 @@ from utils import MetricLogger, SmoothedValue
 
 
 class LeNet(nn.Module):
-
     def __init__(self, in_features=3, num_classes=10):
         super(LeNet, self).__init__()
 
