@@ -5,8 +5,8 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
 #SBATCH --job-name=resnet18_sngp_cifar10
-#SBATCH --output=/mnt/work/dhuseljic/logs/uncertainty_evaluation/%x_%A_%a.log
-#SBATCH --array=1-5%10
+#SBATCH --output=/mnt/work/dhuseljic/logs/uncertainty_evaluation/sngp/norm_bound/%x_%A_%a.log
+#SBATCH --array=1-10%10
 date;hostname;pwd
 source /mnt/home/dhuseljic/.zshrc
 conda activate uncertainty_evaluation
@@ -18,19 +18,17 @@ export HYDRA_FULL_ERROR=1
 MODEL=resnet18_sngp 
 DATASET=CIFAR10
 OOD_DATASETS=['SVHN']
-KERNEL_SCALE=100
-N_SAMPLES=10000
-OUTPUT_DIR=/mnt/work/dhuseljic/results/uncertainty_evaluation/ablations/${DATASET}__${MODEL}_${N_SAMPLES}samples/seed${SLURM_ARRAY_TASK_ID}/
+
+RESULT_DIR=/mnt/work/dhuseljic/results/uncertainty_evaluation/ablations
+OUTPUT_DIR=$RESULT_DIR/sngp/bound${NORM_BOUND}_samples${N_SAMPLES}/seed${SLURM_ARRAY_TASK_ID}/
 echo "Writing results to ${OUTPUT_DIR}"
 
-srun python -u main.py \
+srun python -u uncertainty.py \
 	model=$MODEL \
 	dataset=$DATASET \
 	ood_datasets=$OOD_DATASETS \
 	output_dir=$OUTPUT_DIR \
     	random_seed=$SLURM_ARRAY_TASK_ID \
-	eval_interval=50 \
-	model.gp.kernel_scale=$KERNEL_SCALE \
-	model.gp.random_feature_type=orf \
 	n_samples=$N_SAMPLES \
-	n_epochs=250
+	model.spectral_norm.norm_bound=$NORM_BOUND \
+	eval_interval=50 

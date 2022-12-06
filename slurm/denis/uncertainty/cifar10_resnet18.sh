@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
 #SBATCH --job-name=resnet18_cifar10
-#SBATCH --output=/mnt/work/dhuseljic/logs/uncertainty_evaluation/%x_%A_%a.log
+#SBATCH --output=/mnt/work/dhuseljic/logs/uncertainty_evaluation/%x_%a.log
 #SBATCH --array=1-5%10
 date;hostname;pwd
 source /mnt/home/dhuseljic/.zshrc
@@ -21,7 +21,7 @@ OOD_DATASETS=['SVHN']
 OUTPUT_DIR=/mnt/work/dhuseljic/results/uncertainty_evaluation/${DATASET}__${MODEL}/seed${SLURM_ARRAY_TASK_ID}/
 echo "Writing results to ${OUTPUT_DIR}"
 
-srun python -u main.py \
+srun python -u uncertainty.py \
 	model=$MODEL \
 	dataset=$DATASET \
 	ood_datasets=$OOD_DATASETS \
