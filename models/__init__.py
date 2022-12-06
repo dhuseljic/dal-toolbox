@@ -3,7 +3,7 @@ import torch.nn as nn
 
 from models.wideresnet_due import WideResNet
 
-from . import resnet, resnet_mcdropout, resnet_sngp, wide_resnet, wide_resnet_mcdropout, wide_resnet_sngp
+from . import resnet, resnet_mcdropout, resnet_sngp, wide_resnet, wide_resnet_mcdropout, wide_resnet_sngp, lenet
 from . import wideresnet_due, ensemble
 
 from gpytorch.mlls import VariationalELBO
@@ -11,7 +11,7 @@ from gpytorch.likelihoods import SoftmaxLikelihood
 
 
 def build_model(args, **kwargs):
-    n_classes, train_ds = kwargs['n_classes'], kwargs['train_ds']
+    n_classes = kwargs['n_classes']
     if args.model.name == 'resnet18_deterministic':
         model = resnet.ResNet18(n_classes)
         optimizer = torch.optim.SGD(
@@ -177,102 +177,36 @@ def build_model(args, **kwargs):
             device=args.device
         )
 
-    elif args.model.name == 'wideresnet2810_due':
-
-        if args.dataset == 'CIFAR10':
-            input_size = 32
-
-        feature_extractor = wideresnet_due.WideResNet(
-            input_size=input_size,
-            spectral_conv=args.model.spectral_norm.spectral_conv,
-            spectral_bn=args.model.spectral_norm.spectral_bn,
-            dropout_rate=args.model.dropout_rate,
-            coeff=args.model.spectral_norm.coeff,
-            n_power_iterations=args.model.spectral_norm.n_power_iterations,
-        )
-
-        initial_inducing_points, initial_lengthscale = wideresnet_due.initial_values(
-            train_ds, feature_extractor, args.model.n_inducing_points
-        )
-
-        gp = wideresnet_due.GP(
-            num_outputs=n_classes,
-            initial_lengthscale=initial_lengthscale,
-            initial_inducing_points=initial_inducing_points,
-            kernel=args.model.kernel,
-        )
-
-        model = wideresnet_due.DKL(feature_extractor, gp)
-
-        likelihood = SoftmaxLikelihood(num_classes=n_classes, mixing_weights=False)
-        likelihood = likelihood.cuda()
-
-        elbo_fn = VariationalELBO(likelihood, gp, num_data=len(train_ds))
-        def criterion(x, y): return -elbo_fn(x, y)
-
-        optimizer = torch.optim.SGD(
-            model.parameters(),
+    elif args.model.name == 'lenet_deterministic':
+        model_dict = build_lenet_deterministic(
+            n_classes=n_classes,
             lr=args.model.optimizer.lr,
-            momentum=0.9,
             weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+            n_epochs=args.model.n_epochs,
+            device=args.device
         )
 
-        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
-            optimizer=optimizer,
-            milestones=args.model.lr_scheduler.step_epochs,
-            gamma=args.model.lr_scheduler.gamma
-        )
-
-        model_dict = {
-            'model': model,
-            'optimizer': optimizer,
-            'train_one_epoch': wideresnet_due.train_one_epoch,
-            'evaluate': wideresnet_due.evaluate,
-            'lr_scheduler': lr_scheduler,
-            'train_kwargs': dict(optimizer=optimizer, criterion=criterion, likelihood=likelihood, device=args.device),
-            'eval_kwargs': dict(criterion=criterion, likelihood=likelihood, device=args.device),
-        }
     else:
         NotImplementedError(f'Model {args.model} not implemented.')
     return model_dict
 
 
-def build_eval_model(args, **kwargs):
-    n_classes = kwargs['n_classes']
-    if args.eval_model.name == 'resnet18_deterministic':
-        eval_model = resnet.ResNet18(n_classes)
-        optimizer = torch.optim.SGD(
-            eval_model.parameters(),
-            lr=args.eval_model.optimizer.lr,
-            weight_decay=args.eval_model.optimizer.weight_decay,
-            momentum=args.eval_model.optimizer.momentum,
-            nesterov=True
-        )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.eval_model.n_epochs)
-        criterion = nn.CrossEntropyLoss()
-        eval_model_dict = {
-            'model': eval_model,
-            'optimizer': optimizer,
-            'train_one_epoch': resnet.train_one_epoch,
-            'evaluate': resnet.evaluate,
-            'lr_scheduler': lr_scheduler,
-            'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
-            'eval_kwargs': dict(criterion=criterion, device=args.device),
-        }
-
-    elif args.eval_model.name == 'wideresnet2810_deterministic':
-        eval_model_dict = build_wide_resnet_deterministic(
-            n_classes=n_classes,
-            dropout_rate=args.eval_model.dropout_rate,
-            lr=args.eval_model.optimizer.lr,
-            weight_decay=args.eval_model.optimizer.weight_decay,
-            momentum=args.eval_model.optimizer.momentum,
-            n_epochs=args.eval_model.n_epochs,
-            device=args.device,
-        )
-    else:
-        NotImplementedError(f'Model {args.eval_model} not implemented.')
-    return eval_model_dict
+def build_lenet_deterministic(n_classes, lr, weight_decay, momentum, n_epochs, device):
+    model = lenet.LeNet(num_classes=n_classes)
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=True)
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
+    criterion = nn.CrossEntropyLoss()
+    model_dict = {
+        'model': model,
+        'optimizer': optimizer,
+        'train_one_epoch': lenet.train_one_epoch,
+        'evaluate': lenet.evaluate,
+        'lr_scheduler': lr_scheduler,
+        'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=device),
+        'eval_kwargs': dict(criterion=criterion, device=device),
+    }
+    return model_dict
 
 
 def build_wide_resnet_deterministic(n_classes, dropout_rate, lr, weight_decay, momentum, n_epochs, device):
@@ -313,7 +247,8 @@ def build_wide_resnet_ensemble(n_classes, n_member, dropout_rate, lr, weight_dec
     members, lr_schedulers, optimizers = [], [], []
     for _ in range(n_member):
         member = wide_resnet.wide_resnet_28_10(num_classes=n_classes, dropout_rate=dropout_rate)
-        optimizer = torch.optim.SGD(member.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=True)
+        optimizer = torch.optim.SGD(member.parameters(), lr=lr, weight_decay=weight_decay,
+                                    momentum=momentum, nesterov=True)
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
         members.append(member)
         optimizers.append(optimizer)
