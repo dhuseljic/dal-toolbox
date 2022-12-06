@@ -41,13 +41,13 @@ def main(args):
 
     # Setup Model
     logging.info('Building model: %s', args.model.name)
-    model_dict = build_model(args, n_classes=ds_info['n_classes'], train_ds=al_dataset.labeled_dataset)
+    model_dict = build_model(args, n_classes=ds_info['n_classes'])
     model, train_one_epoch, evaluate = model_dict['model'], model_dict['train_one_epoch'], model_dict['evaluate']
     optimizer, lr_scheduler = model_dict['optimizer'], model_dict['lr_scheduler']
 
     # Setup Query
     logging.info('Building query strategy: %s', args.al_strategy.name)
-    al_strategy = build_query(args)
+    al_strategy = build_query(args, device=args.device)
 
     # Setup initial states
     initial_model_state = copy.deepcopy(model.state_dict())
@@ -65,10 +65,10 @@ def main(args):
             logging.info('Querying %s samples with strategy `%s`', args.al_cycle.acq_size, args.al_strategy.name)
             indices = al_strategy.query(
                 model=model,
-                al_dataset=al_dataset,
-                acq_size=args.al_cycle.acq_size,
-                batch_size=args.val_batch_size,
-                device=args.device
+                dataset=al_dataset.query_dataset,
+                unlabeled_indices=al_dataset.unlabeled_indices,
+                labeled_indices=al_dataset.labeled_indices,
+                acq_size=args.al_cycle.acq_size
             )
             al_dataset.update_annotations(indices)
             query_time = time.time() - t1
@@ -86,7 +86,8 @@ def main(args):
         logging.info('Training on labeled pool with %s samples', len(al_dataset.labeled_dataset))
         t1 = time.time()
         train_history = []
-        train_loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.model.batch_size, shuffle=True, drop_last=True)
+        train_loader = DataLoader(al_dataset.labeled_dataset,
+                                  batch_size=args.model.batch_size, shuffle=True, drop_last=True)
         for i_epoch in range(args.model.n_epochs):
             train_stats = train_one_epoch(model, train_loader, **model_dict['train_kwargs'], epoch=i_epoch)
             if lr_scheduler:
@@ -133,7 +134,7 @@ def main(args):
             "lr_scheduler": lr_scheduler.state_dict() if lr_scheduler else None,
             "cycle_results": cycle_results,
         }
-        torch.save(checkpoint, os.path.join(args.output_dir, f'checkpoint.pth'))
+        torch.save(checkpoint, os.path.join(args.output_dir, 'checkpoint.pth'))
 
     # Save results
     fname = os.path.join(args.output_dir, 'results.json')
@@ -143,22 +144,19 @@ def main(args):
         json.dump(results, f)
 
 
-def build_query(args):
+def build_query(args, **kwargs):
     if args.al_strategy.name == "random":
         query = random.RandomSampling(random_seed=args.random_seed)
     elif args.al_strategy.name == "uncertainty":
-        al_kwargs = {
-            'model': None,
-            'al_dataset': None,
-            'batch_size': None,  # TODO to init method
-            'acq_size': None,  # TODO to init method
-        }
+        device = kwargs['device']
         query = uncertainty.UncertaintySampling(
             uncertainty_type=args.al_strategy.uncertainty_type,
             subset_size=args.al_strategy.subset_size,
+            device=device,
         )
     elif args.al_strategy.name == "coreset":
-        query = coreset.CoreSet(subset_size=args.al_strategy.subset_size)
+        device = kwargs['device']
+        query = coreset.CoreSet(subset_size=args.al_strategy.subset_size, device=device)
     else:
         raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
     return query

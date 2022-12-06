@@ -5,9 +5,11 @@ from .query import Query
 
 
 class CoreSet(Query):
-    def __init__(self, subset_size=None):
+    def __init__(self, subset_size=None, batch_size=128, device='cuda'):
         super().__init__()
         self.subset_size = subset_size
+        self.batch_size = batch_size
+        self.device = device
 
     def kcenter_greedy(self, features_unlabeled: torch.Tensor, features_labeled: torch.Tensor, acq_size: int):
         n_unlabeled = len(features_unlabeled)
@@ -24,22 +26,18 @@ class CoreSet(Query):
                 min_dist[j] = torch.min(min_dist[j], dist_new_ctr[j, 0])
         return idxs
 
-    def query(self, model, al_dataset, acq_size, batch_size, device):
+    def query(self, model, dataset, unlabeled_indices, labeled_indices, acq_size, **kwargs):
+        del kwargs
         if not hasattr(model, 'get_representation'):
             raise ValueError('The method `get_representation` is mandatory to use core set sampling.')
-
-        unlabeled_indices = al_dataset.unlabeled_indices
-        labeled_indices = al_dataset.labeled_indices
-        query_dataset = al_dataset.query_dataset
-
         if self.subset_size:
             unlabeled_indices = self.rng.sample(unlabeled_indices, k=self.subset_size)
 
-        unlabeled_dataloader = DataLoader(query_dataset, batch_size=batch_size, sampler=unlabeled_indices)
-        features_unlabeled = model.get_representation(unlabeled_dataloader, device)
+        unlabeled_dataloader = DataLoader(dataset, batch_size=self.batch_size, sampler=unlabeled_indices)
+        features_unlabeled = model.get_representation(unlabeled_dataloader, self.device)
 
-        labeled_dataloader = DataLoader(query_dataset, batch_size=batch_size, sampler=labeled_indices)
-        features_labeled = model.get_representation(labeled_dataloader, device)
+        labeled_dataloader = DataLoader(dataset, batch_size=self.batch_size, sampler=labeled_indices)
+        features_labeled = model.get_representation(labeled_dataloader, self.device)
 
         chosen = self.kcenter_greedy(features_unlabeled, features_labeled, acq_size)
         return [unlabeled_indices[idx] for idx in chosen]
