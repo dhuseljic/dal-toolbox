@@ -24,14 +24,41 @@ class LeNet(nn.Module):
             nn.Tanh(),
             nn.Linear(120, 84),
             nn.Tanh(),
-            nn.Linear(84, num_classes)
         )
+        self.last = nn.Linear(84, num_classes)
 
-    def forward(self, x):
+    def forward(self, x, return_features=False):
         x = self.conv_block(x)
         x = torch.flatten(x, 1)
         x = self.linear_block(x)
-        return x
+        features = x.detach()
+        out = self.last(x)
+        if return_features:
+            out = (out, features)
+        return out
+
+    @torch.inference_mode()
+    def get_probas(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_logits = []
+        for samples, _ in dataloader:
+            logits = self(samples.to(device))
+            all_logits.append(logits)
+        logits = torch.cat(all_logits)
+        probas = logits.softmax(-1)
+        return probas
+
+    @torch.inference_mode()
+    def get_representation(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_features = []
+        for samples, _ in dataloader:
+            _, features = self(samples.to(device), return_features=True)
+            all_features.append(features.cpu())
+        features = torch.cat(all_features)
+        return features
 
 
 def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
