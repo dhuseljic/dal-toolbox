@@ -13,6 +13,14 @@ class UncertaintySampling(Query):
         self.batch_size = batch_size
         self.device = device
 
+    def get_scores(self, probas):
+        if self.uncertainty_type == 'least_confident':
+            scores, _ = probas.min(dim=-1)
+        elif self.uncertainty_type == 'entropy':
+            scores = ood.entropy_fn(probas)
+        else:
+            NotImplementedError(f"{self.uncertainty_type} is not implemented!")
+        return scores
 
     @torch.no_grad()
     def query(self, model, dataset, unlabeled_indices, acq_size, **kwargs):
@@ -25,14 +33,12 @@ class UncertaintySampling(Query):
 
         dataloader = DataLoader(dataset, batch_size=self.batch_size, sampler=unlabeled_indices)
         probas = model.get_probas(dataloader, device=self.device)
-
-        if self.uncertainty_type == 'least_confident':
-            scores, _ = probas.min(dim=-1)
-        elif self.uncertainty_type == 'entropy':
-            scores = ood.entropy_fn(probas)
-        else:
-            NotImplementedError(f"{self.uncertainty_type} is not implemented!")
+        scores = self.get_scores(probas)
 
         _, indices = scores.topk(acq_size)
         actual_indices = [unlabeled_indices[i] for i in indices]
         return actual_indices
+
+class CertaintySampling(UncertaintySampling):
+    def get_scores(self, probas):
+        return -super().get_scores(probas)
