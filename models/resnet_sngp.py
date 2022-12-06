@@ -169,6 +169,26 @@ class ResNetSNGP(nn.Module):
         probas = logits.softmax(-1)
         return probas
 
+    def forward_feature(self, x):
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.layer1(out)
+        out = self.layer2(out)
+        out = self.layer3(out)
+        out = self.layer4(out)
+        features = F.avg_pool2d(out, 4)
+        return features.squeeze()
+
+    @torch.inference_mode()
+    def get_representation(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_features = []
+        for samples, _ in dataloader:
+            logits = self.forward_feature(samples.to(device))
+            all_features.append(logits)
+        features = torch.cat(all_features)
+        return features
+
 
 def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
     model.train()
