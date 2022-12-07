@@ -194,6 +194,7 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None,
     model.train()
     model.reset_precision_matrix()
     model.to(device)
+    criterion.to(device)
 
     metric_logger = MetricLogger(delimiter=" ")
     metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))

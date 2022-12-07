@@ -100,6 +100,7 @@ class ResNet18(nn.Module):
 def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
     model.train()
     model.to(device)
+    criterion.to(device)
 
     metric_logger = MetricLogger(delimiter=" ")
     metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
