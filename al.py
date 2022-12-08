@@ -89,7 +89,8 @@ def main(args):
         train_loader = DataLoader(al_dataset.labeled_dataset,
                                   batch_size=args.model.batch_size, shuffle=True, drop_last=True)
 
-        if True:
+        # TODO: set hyperparameters method?
+        if False:
             loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.model.batch_size)
             all_targets = torch.cat([y for _, y in loader])
             class_weights = 100 / (10 * torch.bincount(all_targets))
