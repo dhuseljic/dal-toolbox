@@ -51,7 +51,7 @@ class Badge(Query):
     def query(self, model, dataset, unlabeled_indices, acq_size, **kwargs):
         del kwargs
         if not hasattr(model, 'get_grad_embedding'):
-            raise ValueError('The method `get_representation` is mandatory to use core set sampling.')
+            raise ValueError('The method `get_grad_embedding` is mandatory to use badge sampling.')
 
         if self.subset_size:
             unlabeled_indices = self.rng.sample(unlabeled_indices, k=self.subset_size)
