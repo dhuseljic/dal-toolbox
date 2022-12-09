@@ -14,7 +14,7 @@ from dal_toolbox.models import build_model
 from dal_toolbox.utils import write_scalar_dict, seed_everything
 
 
-@hydra.main(version_base=None, config_path="./configs", config_name="uncertainty")
+@hydra.main(version_base=None, config_path="../configs", config_name="uncertainty")
 def main(args):
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
