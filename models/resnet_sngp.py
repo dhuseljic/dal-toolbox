@@ -86,7 +86,7 @@ class ResNetSNGP(nn.Module):
                  kernel_scale=1,
                  normalize_input=False,
                  random_feature_type='orf',
-                 scale_random_features=True,
+                 scale_random_features=False,
                  mean_field_factor=math.pi/8,
                  cov_momentum=-1,
                  ridge_penalty=1,
