@@ -18,7 +18,7 @@ from dal_toolbox.datasets import build_al_datasets
 from dal_toolbox.active_learning.strategies import random, uncertainty, coreset
 
 
-@hydra.main(version_base=None, config_path="../configs", config_name="active_learning")
+@hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
 def main(args):
     # logging.basicConfig(filename=os.path.join(args.output_dir, 'active_learning.log'), filemode='w')
     # logging.basicConfig(filename=os.path.join(args.output_dir, 'active_learning.log'), filemode='w')
