@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
 
-from models.wideresnet_due import WideResNet
-
 from . import resnet, resnet_mcdropout, resnet_sngp, wide_resnet, wide_resnet_mcdropout, wide_resnet_sngp, lenet
 from . import wideresnet_due, ensemble
 

@@ -6,8 +6,8 @@ import torch.nn as nn
 import torch.nn.init as init
 import torch.nn.functional as F
 
-from utils import MetricLogger, SmoothedValue
-from metrics import generalization, calibration, ood
+from ..utils import MetricLogger, SmoothedValue
+from ..metrics import generalization, calibration, ood
 from .utils.spectral_normalization import SpectralConv2d
 from .utils.random_features import RandomFeatureGaussianProcess
 

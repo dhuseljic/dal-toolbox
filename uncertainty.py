@@ -9,9 +9,9 @@ import torch
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader, Subset
 from torch.utils.tensorboard import SummaryWriter
-from datasets import build_dataset, build_ood_datasets
-from models import build_model
-from utils import write_scalar_dict, seed_everything
+from dal_toolbox.datasets import build_dataset, build_ood_datasets
+from dal_toolbox.models import build_model
+from dal_toolbox.utils import write_scalar_dict, seed_everything
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="uncertainty")

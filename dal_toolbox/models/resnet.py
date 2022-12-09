@@ -1,7 +1,7 @@
 import torch
 
-from metrics import generalization, ood, calibration
-from utils import MetricLogger, SmoothedValue
+from ..metrics import generalization, ood, calibration
+from ..utils import MetricLogger, SmoothedValue
 
 import torch.nn as nn
 import torch.nn.functional as F

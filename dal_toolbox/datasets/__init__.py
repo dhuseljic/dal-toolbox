@@ -4,8 +4,8 @@ import numpy as np
 
 from torch.utils.data import Subset
 from torchvision import transforms
-from datasets.presets import ClassificationPresetTrain, ClassificationPresetEval
-from datasets.tinyImageNet import TinyImageNet
+from .presets import ClassificationPresetTrain, ClassificationPresetEval
+from .tinyImageNet import TinyImageNet
 
 from .corruptions import GaussianNoise
 

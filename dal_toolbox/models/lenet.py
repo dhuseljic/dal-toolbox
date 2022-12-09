@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 
-from metrics import generalization, ood, calibration
-from utils import MetricLogger, SmoothedValue
+from ..metrics import generalization, ood, calibration
+from ..utils import MetricLogger, SmoothedValue
 
 
 class LeNet(nn.Module):

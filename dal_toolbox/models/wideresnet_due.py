@@ -8,8 +8,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from .utils.due_spectral_layers import spectral_norm_conv, spectral_norm_fc, SpectralBatchNorm2d
 
-from utils import MetricLogger, SmoothedValue
-from metrics import generalization, calibration, ood
+from ..utils import MetricLogger, SmoothedValue
+from ..metrics import generalization, calibration, ood
 
 import gpytorch
 from gpytorch.distributions import MultivariateNormal
