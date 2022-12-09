@@ -26,11 +26,12 @@ def init_centers(X, K):
                 if D2[i] > newD[i]:
                     centInds[i] = cent
                     D2[i] = newD[i]
-        print(str(len(mu)) + '\t' + str(sum(D2)), flush=True)
-        if sum(D2) == 0.0:
-            pdb.set_trace()
+        print(str(len(mu)) + '\t' + str(np.sum(D2)), flush=True)
+        # if sum(D2) == 0.0:
+        #     pdb.set_trace()
         D2 = D2.ravel().astype(float)
-        Ddist = (D2 ** 2) / sum(D2 ** 2)
+        eps = 1e-9
+        Ddist = (D2 ** 2) / np.sum(D2 ** 2) + eps
         customDist = stats.rv_discrete(name='custm', values=(np.arange(len(D2)), Ddist))
         ind = customDist.rvs(size=1)[0]
         while ind in indsAll:
