@@ -11,13 +11,11 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 from omegaconf import OmegaConf
 
-from active_learning.data import ALDataset
-from models import build_model
-from utils import seed_everything
-from datasets import build_al_datasets
-
-
-from active_learning.strategies import random, uncertainty, bayesian_uncertainty, coreset
+from dal_toolbox.active_learning.data import ALDataset
+from dal_toolbox.models import build_model
+from dal_toolbox.utils import seed_everything
+from dal_toolbox.datasets import build_al_datasets
+from dal_toolbox.active_learning.strategies import random, uncertainty, coreset
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")

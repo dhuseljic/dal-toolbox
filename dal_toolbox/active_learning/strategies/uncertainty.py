@@ -1,8 +1,9 @@
 import torch
 
 from torch.utils.data import DataLoader
-from metrics import ood
+
 from .query import Query
+from ...metrics import ood
 
 
 class UncertaintySampling(Query):
