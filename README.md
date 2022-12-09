@@ -7,6 +7,12 @@ Framework for uncertainty-based neural networks and active learning.
 conda env create -f environment.yml
 ```
 
+### Development
+In order to develop it is best to use :
+```
+pip install -e .
+```
+
 ## Running Uncertainty Experiments
 For detailed parameter choices and reproducing results take a look at the slurm folder.
 ```
