@@ -109,6 +109,7 @@ class ResNet18(nn.Module):
             probas = logits.softmax(-1)
             max_indices = probas.argmax(-1)
 
+            # TODO: optimize code
             # for each sample in a batch and for each class
             for n in range(len(inputs)):
                 for c in range(self.num_classes):
