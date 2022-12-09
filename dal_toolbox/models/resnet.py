@@ -101,12 +101,8 @@ class ResNet18(nn.Module):
         feature_dim = 512
 
         embedding = torch.zeros([n_samples, feature_dim * self.num_classes])
-        import tqdm 
-        for inputs, targets in tqdm.tqdm(dataloader):
-            inputs = inputs.to(device)
-            targets = targets.to(device)
-
-            logits, features = self(inputs, return_features=True)
+        for inputs, _ in dataloader:
+            logits, features = self(inputs.to(device), return_features=True).cpu()
             probas = logits.softmax(-1)
             max_indices = probas.argmax(-1)
 
