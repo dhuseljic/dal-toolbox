@@ -31,9 +31,10 @@ TODO
 
 ## Examples Notebooks
 Examples on how to use the respective models can be found here:
-- [SNGP](notebooks/2D-Examples/sngp.ipynb)
-- [MC-Dropout](notebooks/2D-Examples/mc-dropout.ipynb)
-- [Ensemble](notebooks/2D-Examples/ensemble.ipynb)
+- [Deterministic](experiments/notebooks/2D-Examples/deterministic.ipynb)
+- [Ensemble](experiments/notebooks/2D-Examples/ensemble.ipynb)
+- [MC-Dropout](experiments/notebooks/2D-Examples/mc-dropout.ipynb)
+- [SNGP](experiments/notebooks/2D-Examples/sngp.ipynb)
 
 
 ## References
