@@ -11,7 +11,7 @@ date;hostname;pwd
 source /mnt/home/dhuseljic/.zshrc
 conda activate uncertainty_evaluation
 
-cd /mnt/home/dhuseljic/projects/uncertainty-evaluation/
+cd /mnt/home/dhuseljic/projects/uncertainty-evaluation/experiments/active_learning/
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 

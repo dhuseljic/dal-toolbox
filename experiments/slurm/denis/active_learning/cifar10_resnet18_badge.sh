@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --job-name=al_uncertainty_resnet18sngp_cifar10
+#SBATCH --job-name=al_badge_resnet18_cifar10
 #SBATCH --output=/mnt/work/dhuseljic/logs/active_learning/%x_%a.log
 #SBATCH --array=1-10%10
 date;hostname;pwd
@@ -16,10 +16,9 @@ export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
 # ARGS
-MODEL=resnet18_sngp
+MODEL=resnet18
 DATASET=CIFAR10
-STRATEGY=uncertainty
-OOD_DATASETS=['SVHN']
+STRATEGY=badge
 
 N_INIT=100
 ACQ_SIZE=100
