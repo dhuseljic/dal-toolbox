@@ -4,7 +4,6 @@ from scipy import stats
 from torch.utils.data import DataLoader
 from sklearn.metrics import pairwise_distances
 
-import scipy.sparse as sp
 from sklearn.metrics.pairwise import _euclidean_distances
 from sklearn.utils.extmath import stable_cumsum, row_norms
 
@@ -88,24 +87,25 @@ class Badge(Query):
             device=self.device
         )
         # chosen = init_centers(grad_embedding.numpy(), acq_size)
-        chosen = kmeans_plusplus(grad_embedding.numpy(), acq_size)
+        chosen = kmeans_plusplus(grad_embedding.numpy(), acq_size, rng=self.np_rng)
+        # TODO: Random sample the rest??
         return [unlabeled_indices[idx] for idx in chosen]
 
 
-def kmeans_plusplus(X, n_clusters, random_state=42):
+def kmeans_plusplus(X, n_clusters, rng):
     _, indices = _kmeans_plusplus(
         X,
         n_clusters=n_clusters,
         x_squared_norms=row_norms(X, squared=True),
-        random_state=np.random.RandomState(random_state),
-        n_local_trials=None
+        random_state=rng,
     )
+    indices = np.unique(indices).tolist()
     return indices
 
 
-def _kmeans_plusplus(X, n_clusters, x_squared_norms, random_state, n_local_trials=None):
-    """Computational component for initialization of n_clusters by
-    k-means++. Prior validation of data is assumed.
+def _kmeans_plusplus(X, n_clusters, x_squared_norms, random_state):
+    """Computational component for initialization of n_clusters by k-means++ base on sklearn.
+
     Parameters
     ----------
     X : {ndarray, sparse matrix} of shape (n_samples, n_features)
@@ -117,11 +117,7 @@ def _kmeans_plusplus(X, n_clusters, x_squared_norms, random_state, n_local_trial
     random_state : RandomState instance
         The generator used to initialize the centers.
         See :term:`Glossary <random_state>`.
-    n_local_trials : int, default=None
-        The number of seeding trials for each center (except the first),
-        of which the one reducing inertia the most is greedily chosen.
-        Set to None to make the number of trials depend logarithmically
-        on the number of seeds (2+log(k)); this is the default.
+
     Returns
     -------
     centers : ndarray of shape (n_clusters, n_features)
@@ -131,29 +127,21 @@ def _kmeans_plusplus(X, n_clusters, x_squared_norms, random_state, n_local_trial
         given index and center, X[index] = center.
     """
     n_samples, n_features = X.shape
-
     centers = np.empty((n_clusters, n_features), dtype=X.dtype)
 
-    # Set the number of local seeding trials if none is given
-    if n_local_trials is None:
-        # This is what Arthur/Vassilvitskii tried, but did not report
-        # specific results for other than mentioning in the conclusion
-        # that it helped.
-        n_local_trials = 2 + int(np.log(n_clusters))
+    # Set the number of local seeding trials
+    # This is what Arthur/Vassilvitskii tried, but did not report
+    # specific results for other than mentioning in the conclusion
+    # that it helped.
+    n_local_trials = 2 + int(np.log(n_clusters))
 
     # Pick first center randomly and track index of point
     center_id = random_state.randint(n_samples)
     indices = np.full(n_clusters, -1, dtype=int)
-    if sp.issparse(X):
-        centers[0] = X[center_id].toarray()
-    else:
-        centers[0] = X[center_id]
     indices[0] = center_id
 
     # Initialize list of closest distances and calculate current potential
-    closest_dist_sq = _euclidean_distances(
-        centers[0, np.newaxis], X, Y_norm_squared=x_squared_norms, squared=True
-    )
+    closest_dist_sq = _euclidean_distances(centers[0, np.newaxis], X, Y_norm_squared=x_squared_norms, squared=True)
     current_pot = closest_dist_sq.sum()
 
     # Pick the remaining n_clusters-1 points
@@ -166,9 +154,7 @@ def _kmeans_plusplus(X, n_clusters, x_squared_norms, random_state, n_local_trial
         np.clip(candidate_ids, None, closest_dist_sq.size - 1, out=candidate_ids)
 
         # Compute distances to center candidates
-        distance_to_candidates = _euclidean_distances(
-            X[candidate_ids], X, Y_norm_squared=x_squared_norms, squared=True
-        )
+        distance_to_candidates = _euclidean_distances(X[candidate_ids], X, Y_norm_squared=x_squared_norms, squared=True)
 
         # update closest distances squared and potential for each candidate
         np.minimum(closest_dist_sq, distance_to_candidates, out=distance_to_candidates)
@@ -181,10 +167,6 @@ def _kmeans_plusplus(X, n_clusters, x_squared_norms, random_state, n_local_trial
         best_candidate = candidate_ids[best_candidate]
 
         # Permanently add best center candidate found in local tries
-        if sp.issparse(X):
-            centers[c] = X[best_candidate].toarray()
-        else:
-            centers[c] = X[best_candidate]
         indices[c] = best_candidate
 
     return centers, indices
