@@ -23,10 +23,13 @@ class FullDataset(Subset):
 
 
 class ALDataset:
-    def __init__(self, train_dataset, query_dataset):
+    def __init__(self, train_dataset, query_dataset=None):
         # Differenciating between train and query, since train can contain additional transformations
         # for optimal training performance
         self.train_dataset = train_dataset
+        if query_dataset is None:
+            print('Using train_dataset for queries. Make sure that there are no augmentations used.')
+            query_dataset = train_dataset
         self.query_dataset = query_dataset
 
         # Set up the indices for unlabeled and labeled pool

@@ -98,6 +98,7 @@ class ResNet18(nn.Module):
     @torch.inference_mode()
     def get_grad_embedding(self, dataloader, n_samples, device):
         self.eval()
+        self.to(device)
         feature_dim = 512
 
         embedding = torch.zeros([n_samples, feature_dim * self.num_classes])
