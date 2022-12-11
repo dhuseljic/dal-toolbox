@@ -81,14 +81,9 @@ class Badge(Query):
             unlabeled_indices = self.rng.sample(unlabeled_indices, k=self.subset_size)
 
         unlabeled_dataloader = DataLoader(dataset, batch_size=self.batch_size, sampler=unlabeled_indices)
-        grad_embedding = model.get_grad_embedding(
-            unlabeled_dataloader,
-            n_samples=len(unlabeled_indices),
-            device=self.device
-        )
+        grad_embedding = model.get_grad_embedding(unlabeled_dataloader, device=self.device)
         # chosen = init_centers(grad_embedding.numpy(), acq_size)
         chosen = kmeans_plusplus(grad_embedding.numpy(), acq_size, rng=self.np_rng)
-        # TODO: Random sample the rest??
         return [unlabeled_indices[idx] for idx in chosen]
 
 

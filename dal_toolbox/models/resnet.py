@@ -96,13 +96,14 @@ class ResNet18(nn.Module):
         return features
 
     @torch.inference_mode()
-    def get_grad_embedding(self, dataloader, n_samples, device):
+    def get_grad_embedding(self, dataloader, device):
         self.eval()
         self.to(device)
         feature_dim = 512
 
-        embedding = torch.zeros([n_samples, feature_dim * self.num_classes])
+        embedding = []
         for inputs, _ in dataloader:
+            embedding_batch = torch.empty([len(inputs), feature_dim * self.num_classes])
             logits, features = self(inputs.to(device), return_features=True)
             logits = logits.cpu()
             features = features.cpu()
@@ -111,14 +112,17 @@ class ResNet18(nn.Module):
             max_indices = probas.argmax(-1)
 
             # TODO: optimize code
-            # for each sample in a batch and for each class
+            # for each sample in a batch and for each class, compute the gradient wrt to weights
             for n in range(len(inputs)):
                 for c in range(self.num_classes):
                     if c == max_indices[n]:
-                        embedding[n, feature_dim * c: feature_dim * (c+1)] = features[n] * (1 - probas[n, c])
+                        embedding_batch[n, feature_dim * c: feature_dim * (c+1)] = features[n] * (1 - probas[n, c])
                     else:
-                        embedding[n, feature_dim * c: feature_dim * (c+1)] = features[n] * (-1 * probas[n, c])
-        return torch.Tensor(embedding)
+                        embedding_batch[n, feature_dim * c: feature_dim * (c+1)] = features[n] * (-1 * probas[n, c])
+            embedding.append(embedding_batch)
+        # Concat all embeddings
+        embedding = torch.cat(embedding)
+        return embedding
 
 
 def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
