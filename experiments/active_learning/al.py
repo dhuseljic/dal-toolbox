@@ -15,7 +15,7 @@ from dal_toolbox.active_learning.data import ALDataset
 from dal_toolbox.models import build_model
 from dal_toolbox.utils import seed_everything
 from dal_toolbox.datasets import build_al_datasets
-from dal_toolbox.active_learning.strategies import random, uncertainty, coreset
+from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
@@ -163,6 +163,9 @@ def build_query(args, **kwargs):
     elif args.al_strategy.name == "coreset":
         device = kwargs['device']
         query = coreset.CoreSet(subset_size=args.al_strategy.subset_size, device=device)
+    elif args.al_strategy.name == "badge":
+        device = kwargs['device']
+        query = badge.Badge(subset_size=args.al_strategy.subset_size, device=device)
     else:
         raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
     return query

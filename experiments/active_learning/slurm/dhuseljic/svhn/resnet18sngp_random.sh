@@ -4,22 +4,21 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --job-name=al_random_lenet_cifar10
+#SBATCH --job-name=al_random_resnet18sngp_cifar10
 #SBATCH --output=/mnt/work/dhuseljic/logs/active_learning/%x_%a.log
 #SBATCH --array=1-10%10
 date;hostname;pwd
 source /mnt/home/dhuseljic/.zshrc
 conda activate uncertainty_evaluation
 
-cd /mnt/home/dhuseljic/projects/uncertainty-evaluation/
+cd /mnt/home/dhuseljic/projects/uncertainty-evaluation/experiments/active_learning/
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
 # ARGS
-MODEL=lenet
-DATASET=CIFAR10
+MODEL=resnet18_sngp
+DATASET=SVHN
 STRATEGY=random
-OOD_DATASETS=['SVHN']
 
 N_INIT=100
 ACQ_SIZE=100
@@ -36,4 +35,5 @@ srun python -u al.py \
 	al_strategy=$STRATEGY \
 	al_cycle.n_init=$N_INIT \
 	al_cycle.acq_size=$ACQ_SIZE \
-	al_cycle.n_acq=$N_ACQ
+	al_cycle.n_acq=$N_ACQ \
+	model.optimizer.lr=1e-2

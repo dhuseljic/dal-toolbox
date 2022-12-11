@@ -38,6 +38,7 @@ class ResNet18(nn.Module):
         self.in_planes = 64
         self.block = BasicBlock
         self.num_blocks = [2, 2, 2, 2]
+        self.num_classes = num_classes
 
         # Init layer does not have a kernel size of 7 since cifar has a smaller
         # size of 32x32
@@ -47,8 +48,7 @@ class ResNet18(nn.Module):
         self.layer2 = self._make_layer(self.block, 128, self.num_blocks[1], stride=2)
         self.layer3 = self._make_layer(self.block, 256, self.num_blocks[2], stride=2)
         self.layer4 = self._make_layer(self.block, 512, self.num_blocks[3], stride=2)
-        self.linear = nn.Linear(512*self.block.expansion, num_classes)
-
+        self.linear = nn.Linear(512*self.block.expansion, self.num_classes)
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)
@@ -57,7 +57,6 @@ class ResNet18(nn.Module):
             layers.append(block(self.in_planes, planes, stride))
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
-
 
     def forward(self, x, return_features=False):
         out = F.relu(self.bn1(self.conv1(x)))
@@ -95,6 +94,35 @@ class ResNet18(nn.Module):
             all_features.append(features.cpu())
         features = torch.cat(all_features)
         return features
+
+    @torch.inference_mode()
+    def get_grad_embedding(self, dataloader, device):
+        self.eval()
+        self.to(device)
+        feature_dim = 512
+
+        embedding = []
+        for inputs, _ in dataloader:
+            embedding_batch = torch.empty([len(inputs), feature_dim * self.num_classes])
+            logits, features = self(inputs.to(device), return_features=True)
+            logits = logits.cpu()
+            features = features.cpu()
+
+            probas = logits.softmax(-1)
+            max_indices = probas.argmax(-1)
+
+            # TODO: optimize code
+            # for each sample in a batch and for each class, compute the gradient wrt to weights
+            for n in range(len(inputs)):
+                for c in range(self.num_classes):
+                    if c == max_indices[n]:
+                        embedding_batch[n, feature_dim * c: feature_dim * (c+1)] = features[n] * (1 - probas[n, c])
+                    else:
+                        embedding_batch[n, feature_dim * c: feature_dim * (c+1)] = features[n] * (-1 * probas[n, c])
+            embedding.append(embedding_batch)
+        # Concat all embeddings
+        embedding = torch.cat(embedding)
+        return embedding
 
 
 def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
@@ -159,12 +187,12 @@ def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
     mce = calibration.MarginalCalibrationError()(probas_id, targets_id).item()
 
     metrics = {
-        "acc1":acc1,
-        "prec":prec,
-        "loss":loss,
-        "nll":nll,
-        "tce":tce,
-        "mce":mce
+        "acc1": acc1,
+        "prec": prec,
+        "loss": loss,
+        "nll": nll,
+        "tce": tce,
+        "mce": mce
     }
 
     for name, dataloader_ood in dataloaders_ood.items():
@@ -179,7 +207,7 @@ def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
         probas_ood = logits_ood.softmax(-1)
         conf_ood, _ = probas_ood.max(-1)
         entropy_ood = ood.entropy_fn(probas_ood)
-        
+
         # Area under the Precision-Recall-Curve
         entropy_aupr = ood.ood_aupr(entropy_id, entropy_ood)
         conf_aupr = ood.ood_aupr(1-conf_id, 1-conf_ood)
