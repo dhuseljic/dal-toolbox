@@ -52,21 +52,8 @@ class ALDataset:
             Randomly buys samples from the unlabeled pool and adds them to the labeled one.
 
             Args:
-                n_samples (int): Size of the initial labeld pool.    
-        """name: bert-base-uncased
-type: BERT
-n_epochs: 3
-batch_size: 8
-optimizer:
-  name: AdamW
-  lr: 3e-5
-  lr_scheduler: linear_warmup
-  warmup_steps: 200
-  weight_decay: 0.01
-structure:
-  hidden_size: 768
-  dropout: 0.2
-  mode: non-static
+                n_samples (int): Size of the initial labeld pool.   
+        """
 
         if len(self.labeled_indices) != 0:
             raise ValueError('Pools already initialized.')

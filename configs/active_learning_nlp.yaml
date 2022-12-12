@@ -1,6 +1,6 @@
 defaults:
   - model: bert
-  - al_strategy: random
+  - al_strategy: uncertainty
   - _self_
 
 al_cycle:
@@ -18,9 +18,9 @@ val_batch_size: 128
 print_freq_eval: 25
 print_freq_train: 25
 
-output_dir: ./output/
+output_dir: /output/
 hydra:
   job:
     chdir: True
   run:
-    dir: ${output_dir}
+    dir: ${output_dir}/${dataset.name}/${model.name}/${now:%Y-%m-%d_%H%M%S}
