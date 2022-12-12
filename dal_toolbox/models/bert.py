@@ -3,8 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import transformers
 from transformers import AutoModel
-from utils import MetricLogger, SmoothedValue
-from metrics import generalization
+from ..metrics import generalization 
+from ..utils import MetricLogger, SmoothedValue
 
 
 class ClassificationHead(nn.Module):

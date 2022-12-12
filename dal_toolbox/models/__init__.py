@@ -14,12 +14,8 @@ from gpytorch.likelihoods import SoftmaxLikelihood
 
 
 def build_model(args, **kwargs):
-<<<<<<< HEAD:models/__init__.py
     n_classes, train_ds = kwargs['n_classes'], kwargs['train_ds']
 
-=======
-    n_classes = kwargs['n_classes']
->>>>>>> main:dal_toolbox/models/__init__.py
     if args.model.name == 'resnet18_deterministic':
         model = resnet.ResNet18(n_classes)
         optimizer = torch.optim.SGD(
@@ -195,7 +191,6 @@ def build_model(args, **kwargs):
             device=args.device
         )
 
-<<<<<<< HEAD:models/__init__.py
         lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
             optimizer=optimizer,
             milestones=args.model.lr_scheduler.step_epochs,
@@ -265,8 +260,6 @@ def build_model(args, **kwargs):
             'initial_states': initial_states
         }
 
-=======
->>>>>>> main:dal_toolbox/models/__init__.py
     else:
         NotImplementedError(f'Model {args.model} not implemented.')
 

@@ -12,4 +12,3 @@ structure:
   hidden_size: 768
   dropout: 0.2
   mode: non-static
-

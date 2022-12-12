@@ -5,22 +5,22 @@ import math
 import json
 import hydra
 from omegaconf import OmegaConf
-                                                                                                                                                                    
+import sys
+sys.path.append('.') #?
+
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 from transformers import get_linear_schedule_with_warmup
 from transformers import logging
 logging.set_verbosity_error()
+from dal_toolbox.active_learning.data import ALDataset
+from dal_toolbox.active_learning.strategies import random, uncertainty
 
-from active_learning.data import ALDataset
-from active_learning.strategies import random, uncertainty
+from dal_toolbox.models import build_model
+from dal_toolbox.utils import seed_everything
+from dal_toolbox.datasets import build_al_datasets
 
-from models import build_model
-from utils import seed_everything
-from data import build_al_datasets
-from active_learning import build_query
-
-@hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
+@hydra.main(version_base=None, config_path="./configs", config_name="active_learning_nlp")
 def main(args):
     print(OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
@@ -29,7 +29,7 @@ def main(args):
     history = []
     writer = SummaryWriter(log_dir=args.output_dir)
 
-    train_ds, query_ds, test_ds, n_classes = build_al_datasets(args)
+    train_ds, query_ds, test_ds, ds_info = build_al_datasets(args)
     test_ds = test_ds.shuffle(seed=42).select(range(500))
     al_dataset = ALDataset(train_ds, query_ds)
     al_dataset.random_init(n_samples=args.al_cycle.n_init)
@@ -133,6 +133,26 @@ def main(args):
         print(f'Saving results to {savepath}.')
         with open(savepath, 'w') as f:
             json.dump(history, f)
+
+def build_query(args, **kwargs):
+    if args.al_strategy.name == "random":
+        query = random.RandomSampling(random_seed=args.random_seed)
+    elif args.al_strategy.name == "uncertainty":
+        device = kwargs['device']
+        query = uncertainty.UncertaintySampling(
+            uncertainty_type=args.al_strategy.uncertainty_type,
+            subset_size=args.al_strategy.subset_size,
+            device=device,
+        )
+    elif args.al_strategy.name == "coreset":
+        device = kwargs['device']
+        query = coreset.CoreSet(subset_size=args.al_strategy.subset_size, device=device)
+    elif args.al_strategy.name == "badge":
+        device = kwargs['device']
+        query = badge.Badge(subset_size=args.al_strategy.subset_size, device=device)
+    else:
+        raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
+    return query
 
 if __name__ == "__main__":
     main()

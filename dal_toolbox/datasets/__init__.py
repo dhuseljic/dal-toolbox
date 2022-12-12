@@ -1,9 +1,10 @@
 import torch
 import torchvision
+from datasets import load_dataset
 import numpy as np
 
 from torch.utils.data import Subset
-from . import mnist, fashion_mnist, svhn, cifar, tiny_imagenet, imagenet
+from . import mnist, fashion_mnist, svhn, cifar, tiny_imagenet, imagenet, imdb
 
 
 def build_dataset(args):
@@ -112,7 +113,12 @@ def build_al_datasets(args):
         train_ds, ds_info = imagenet.build_imagenet('train', args.dataset_path, return_info=True)
         query_ds = imagenet.build_imagenet('query', args.dataset_path)
         test_ds_id = imagenet.build_imagenet('val', args.dataset_path)
-
+    
+    elif args.dataset == 'imdb':
+        raw_ds = load_dataset('imdb')
+        train_ds, ds_info = imdb.build_imdb('train', raw_ds, args)
+        query_ds = imdb.build_imdb('query', raw_ds, args)
+        test_ds_id = imdb.build_imdb('test', raw_ds, args)
     else:
         raise NotImplementedError
 
