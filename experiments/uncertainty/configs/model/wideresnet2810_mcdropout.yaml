@@ -1,0 +1,9 @@
+name: wideresnet2810_mcdropout
+n_epochs: 200
+batch_size: 64
+dropout_rate: 0.1
+n_passes: 10
+optimizer:
+  lr: 0.05
+  weight_decay: 3e-4
+  momentum: 0.9

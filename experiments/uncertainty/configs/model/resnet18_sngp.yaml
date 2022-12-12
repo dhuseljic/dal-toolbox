@@ -1,0 +1,20 @@
+name : resnet18_sngp
+batch_size: 64
+n_epochs: 250
+spectral_norm:
+  use_spectral_norm: True
+  norm_bound: 6
+  n_power_iterations: 1
+gp:
+  kernel_scale: 1
+  num_inducing: 1024
+  normalize_input: False
+  random_feature_type: orf
+  scale_random_features: False
+  cov_momentum: -1
+  ridge_penalty: 1
+  mean_field_factor: 75
+optimizer:
+  lr: 0.08
+  weight_decay: 3e-4
+  momentum: .9

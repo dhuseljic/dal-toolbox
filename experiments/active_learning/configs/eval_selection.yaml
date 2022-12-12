@@ -1,0 +1,25 @@
+result_json: ./output/finished_experiment/results.json
+
+defaults:
+  - model: resnet18
+
+al_cycle:
+  cold_start: True
+
+dataset: CIFAR10
+dataset_path: ./data/
+device: cuda
+
+random_seed: 42
+val_batch_size: 128
+print_freq_eval: 100
+print_freq_train: 100
+
+output_dir: ./output/
+hydra:
+  run:
+    dir: ${output_dir}
+  job_logging:
+    handlers:
+      file:
+        mode: w
