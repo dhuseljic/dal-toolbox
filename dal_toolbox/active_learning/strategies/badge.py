@@ -54,7 +54,7 @@ def kmeans_plusplus(X, n_clusters, np_rng):
         idx = np_rng.choice(range(len(X)), p=p.squeeze())
         indices.append(idx)
         centers.append(X[idx])
-        return indices
+    return indices
 
 # kmeans ++ initialization
 def init_centers(X, K):
