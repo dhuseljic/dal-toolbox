@@ -10,7 +10,7 @@ al_cycle:
   cold_start: True
 
 dataset: imdb
-dataset_path: ./data/
+dataset_path: /home/lrauch/.cache/huggingface/datasets
 device: cuda
 
 random_seed: 42

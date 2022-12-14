@@ -1,24 +1,19 @@
 from transformers import AutoTokenizer, DataCollatorWithPadding
 from datasets import load_dataset 
 
-def build_imdb(split, ds, args, return_info=False):
-
-    ds = load_dataset('imdb')
-    checkpoint = args.model.name
-    tokenizer = AutoTokenizer.from_pretrained(checkpoint, use_fast=False)
-
-    def tokenize_function(batch):
-        tokenizer(batch["text"], truncation=True)
-
-    tokenized_ds = ds.map(tokenize_function, batched=True)
+def build_imdb(split, ds, return_info=False):
 
     if split == 'train':
-        ds = tokenized_ds['train']
+        ds = ds['train']
 
     elif split == 'query':
-        ds = tokenized_ds['test']
+        ds = ds['test']
     
     elif split == 'test':
-        ds = tokenized_ds['test']
+        ds = ds['test']
+
+    if return_info == True:
+        ds_info = {'n_classes': 2}
+        return ds, ds_info
 
     return ds

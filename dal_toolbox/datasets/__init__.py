@@ -1,6 +1,7 @@
 import torch
 import torchvision
 from datasets import load_dataset
+from transformers import AutoTokenizer
 import numpy as np
 
 from torch.utils.data import Subset
@@ -113,12 +114,19 @@ def build_al_datasets(args):
         train_ds, ds_info = imagenet.build_imagenet('train', args.dataset_path, return_info=True)
         query_ds = imagenet.build_imagenet('query', args.dataset_path)
         test_ds_id = imagenet.build_imagenet('val', args.dataset_path)
-    
+
+    #TODO: cache dir allgemein funktionsfähig
     elif args.dataset == 'imdb':
-        raw_ds = load_dataset('imdb')
-        train_ds, ds_info = imdb.build_imdb('train', raw_ds, args)
-        query_ds = imdb.build_imdb('query', raw_ds, args)
-        test_ds_id = imdb.build_imdb('test', raw_ds, args)
+        ds = load_dataset('imdb')
+        print('>> Tokenization starts')
+        tokenizer = AutoTokenizer.from_pretrained(args.model.name, use_fast=False)
+        ds = ds.map(lambda batch: tokenizer(batch["text"], truncation=True))
+        ds = ds.remove_columns(["text", "token_type_ids"])
+
+        train_ds, ds_info = imdb.build_imdb('train', ds, return_info=True)
+        query_ds = imdb.build_imdb('query', ds)
+        test_ds_id = imdb.build_imdb('test', ds)
+
     else:
         raise NotImplementedError
 

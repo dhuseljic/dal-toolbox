@@ -5,7 +5,7 @@ import transformers
 from transformers import AutoModel
 from ..metrics import generalization 
 from ..utils import MetricLogger, SmoothedValue
-
+from tqdm.auto import tqdm
 
 class ClassificationHead(nn.Module):
     def __init__(self, hidden_dim, num_classes):
@@ -69,10 +69,24 @@ class BertClassifier(nn.Module):
         self.to(device)
         all_logits = []
         for samples, _ in dataloader:
-            
             logits = self(samples.to(device))
             all_logits.append(logits)
         return torch.cat(all_logits)
+
+    
+    @torch.inference_mode()
+    def get_probas(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_logits = []
+        for batch in tqdm(dataloader):
+            input_ids = batch["input_ids"].to(device)
+            attention_mask = batch["attention_mask"].to(device)
+            logits = self(input_ids, attention_mask)
+            all_logits.append(logits)
+        logits = torch.cat(all_logits)
+        probas = logits.softmax(-1)
+        return probas
 
 
 def train_one_epoch(model,
@@ -97,25 +111,9 @@ def train_one_epoch(model,
 
     for batch in metric_logger.log_every(dataloader, print_freq, header):
         
-        # single sentences as inputs
-        if "text" in list(batch.keys()):
-            encoding = tokenizer(
-                batch["text"], 
-                padding="longest", 
-                truncation=True,
-                return_tensors='pt'
-            )
-        else:
-            encoding = tokenizer(
-                batch["premise"], 
-                batch["hypothesis"], 
-                padding="longest",
-                truncation="longest_first",
-                return_tensors='pt')
-
-        targets = batch["label"].to(device)
-        input_ids = encoding["input_ids"].to(device)
-        attention_mask = encoding["attention_mask"].to(device)
+        targets = batch["labels"].to(device)
+        input_ids = batch["input_ids"].to(device)
+        attention_mask = batch["attention_mask"].to(device)
 
         logits = model(input_ids, attention_mask)
 
@@ -148,33 +146,17 @@ def eval_one_epoch(model, dataloader, epoch, criterion, tokenizer, device, print
     metric_logger = MetricLogger(delimiter=" ")
     header = "Testing:"
     for batch in metric_logger.log_every(dataloader, print_freq, header):
-        y_batch = batch["label"].to(device)
 
-        # single sentences as inputs
-        if "text" in list(batch.keys()):
-            encoding = tokenizer(
-                batch["text"], 
-                padding="longest", 
-                truncation=True,
-                return_tensors='pt'
-            )
-        else:
-            encoding = tokenizer(
-                batch["premise"], 
-                batch["hypothesis"], 
-                padding="longest",
-                truncation="longest_first",
-                return_tensors='pt') 
+        targets = batch["labels"].to(device)
+        input_ids = batch["input_ids"].to(device)
+        attention_mask = batch["attention_mask"].to(device)
         
-        input_ids = encoding["input_ids"].to(device)
-        attention_mask = encoding["attention_mask"].to(device)
-
         logits = model(input_ids, attention_mask)
-        loss = criterion(logits, y_batch)
+        loss = criterion(logits, targets)
 
-        batch_size = y_batch.size(0)
+        batch_size = targets.size(0)
 
-        batch_acc, = generalization.accuracy(logits, y_batch)
+        batch_acc, = generalization.accuracy(logits, targets)
         metric_logger.update(loss=loss.item())
         metric_logger.meters["batch_acc"].update(batch_acc.item(), n=batch_size)
     test_stats = {f"test_{name}_epoch": meter.global_avg for name, meter, in metric_logger.meters.items()}

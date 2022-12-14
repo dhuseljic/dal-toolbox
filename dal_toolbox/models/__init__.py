@@ -14,7 +14,7 @@ from gpytorch.likelihoods import SoftmaxLikelihood
 
 
 def build_model(args, **kwargs):
-    n_classes, train_ds = kwargs['n_classes'], kwargs['train_ds']
+    n_classes = kwargs['n_classes']
 
     if args.model.name == 'resnet18_deterministic':
         model = resnet.ResNet18(n_classes)
