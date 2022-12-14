@@ -491,3 +491,13 @@ def set_weight_decay(
         if len(params[key]) > 0:
             param_groups.append({"params": params[key], "weight_decay": params_weight_decay[key]})
     return param_groups
+
+def get_tensorboard_params(args):
+    params = "lr" + str(args.model.optimizer.lr)  + \
+             "-bs" + str(args.model.batch_size) + \
+             "-seed" + str(args.random_seed) + \
+             "-" + str(args.al_strategy.name) + \
+             "-n_init" + str(args.al_cycle.n_init) + \
+             "-acq_size" + str(args.al_cycle.acq_size) + \
+             "-n_acq" + str(args.al_cycle.n_acq)   
+    return params

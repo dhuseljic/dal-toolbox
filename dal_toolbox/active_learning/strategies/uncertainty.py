@@ -7,7 +7,7 @@ from ...metrics import ood
 
 
 class UncertaintySampling(Query):
-    def __init__(self, batch_size=128, uncertainty_type='entropy', subset_size=None, device='cuda'):
+    def __init__(self, batch_size=16, uncertainty_type='entropy', subset_size=None, device='cuda'):
         super().__init__()
         self.uncertainty_type = uncertainty_type
         self.subset_size = subset_size

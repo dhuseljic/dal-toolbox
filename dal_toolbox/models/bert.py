@@ -83,7 +83,7 @@ class BertClassifier(nn.Module):
             input_ids = batch["input_ids"].to(device)
             attention_mask = batch["attention_mask"].to(device)
             logits = self(input_ids, attention_mask)
-            all_logits.append(logits)
+            all_logits.append(logits.to("cpu"))
         logits = torch.cat(all_logits)
         probas = logits.softmax(-1)
         return probas
