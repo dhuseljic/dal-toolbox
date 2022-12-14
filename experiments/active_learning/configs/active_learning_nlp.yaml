@@ -1,6 +1,6 @@
 defaults:
   - model: bert
-  - al_strategy: uncertainty
+  - al_strategy: random
   - _self_
 
 al_cycle:
@@ -23,4 +23,4 @@ hydra:
   job:
     chdir: True
   run:
-    dir: ${output_dir}/${dataset}/${model.name}/${now:%Y-%m-%d_%H%M%S}
+    dir: ${output_dir}/${dataset}/${al_strategy.name}/${model.name}/${now:%Y-%m-%d_%H%M%S}

@@ -1,7 +1,7 @@
 #%%
 import os 
 import logging
-import copy
+#import copy
 import math
 import torch 
 import json
@@ -10,7 +10,12 @@ import hydra
 import transformers
 from omegaconf import OmegaConf
 import sys
-sys.path.append('.') #?
+
+# change working directory to current file 
+os.chdir(sys.path[0])
+
+# append parent folders 
+sys.path.append('../../')
 
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
@@ -23,6 +28,7 @@ from dal_toolbox.active_learning.strategies import random, uncertainty
 
 from dal_toolbox.models import build_model
 from dal_toolbox.utils import seed_everything
+from dal_toolbox.utils import get_tensorboard_params
 from dal_toolbox.datasets import build_al_datasets
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning_nlp")
@@ -33,7 +39,8 @@ def main(args):
     os.makedirs(args.output_dir, exist_ok=True)
 
     results = {}
-    writer = SummaryWriter(log_dir=args.output_dir)
+    writer = SummaryWriter('runs/' + get_tensorboard_params(args))  
+    #writer = SummaryWriter(log_dir=args.output_dir)
 
     # Setup Datasets
     logging.info('Building datasets. Creating random initial labeled pool with %s samples.',
@@ -177,8 +184,7 @@ def main(args):
             "lr_scheduler": lr_scheduler.state_dict() if lr_scheduler else None,
             "cycle_results": cycle_results,
         }
-
-        torch.save(checkpoint, os.path.join(args.output_dir, 'checkpoint.pth'))       
+        torch.save(checkpoint, os.path.join(os.getcwd(), f"check{i_acq}.pth"))      
         # history.append({
         #     'train_history': train_history,
         #     'test_stats': test_stats,
@@ -188,7 +194,7 @@ def main(args):
         #     'n_unlabeled_indices': len(al_dataset.unlabeled_indices)
         # })
     writer.close()
-    savepath = os.path.join(args.output_dir, 'results.json')
+    savepath = os.path.join(os.getcwd(), 'results.json')
     logging.info('Saving results to %s', savepath)
     print(f'Saving results to {savepath}.')
     with open(savepath, 'w') as f:
