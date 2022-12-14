@@ -1,12 +1,8 @@
 import numpy as np
 
-from scipy import stats
 from torch.utils.data import DataLoader
-from sklearn.metrics import pairwise_distances
 
 from .query import Query
-
-
 
 
 class Badge(Query):
@@ -57,35 +53,35 @@ def kmeans_plusplus(X, n_clusters, np_rng):
     return indices
 
 # kmeans ++ initialization
-def init_centers(X, K):
-    # Code from: https://github.com/JordanAsh/badge/blob/master/query_strategies/badge_sampling.py
-    # first center is the one with highest gradient
-    ind = np.argmax([np.linalg.norm(s, 2) for s in X])
-    mu = [X[ind]]
-    indsAll = [ind]
-    centInds = [0.] * len(X)
-    cent = 0
-    print('#Samps\tTotal Distance')
-    while len(mu) < K:
-        if len(mu) == 1:
-            D2 = pairwise_distances(X, mu).ravel().astype(float)
-        else:
-            newD = pairwise_distances(X, [mu[-1]]).ravel().astype(float)
-            for i in range(len(X)):
-                if D2[i] > newD[i]:
-                    centInds[i] = cent
-                    D2[i] = newD[i]
-        print(str(len(mu)) + '\t' + str(np.sum(D2)), flush=True)
-        # if sum(D2) == 0.0:
-        #     pdb.set_trace()
-        D2 = D2.ravel().astype(float)
-        Ddist = (D2 ** 2) / np.sum(D2 ** 2)
-        customDist = stats.rv_discrete(name='custm', values=(np.arange(len(D2)), Ddist))
-        ind = customDist.rvs(size=1)[0]
-        while ind in indsAll:
-            raise ValueError('All distances to the centers are zero!')
-            ind = customDist.rvs(size=1)[0]
-        mu.append(X[ind])
-        indsAll.append(ind)
-        cent += 1
-    return indsAll
+# def init_centers(X, K):
+#     # Code from: https://github.com/JordanAsh/badge/blob/master/query_strategies/badge_sampling.py
+#     # first center is the one with highest gradient
+#     ind = np.argmax([np.linalg.norm(s, 2) for s in X])
+#     mu = [X[ind]]
+#     indsAll = [ind]
+#     centInds = [0.] * len(X)
+#     cent = 0
+#     print('#Samps\tTotal Distance')
+#     while len(mu) < K:
+#         if len(mu) == 1:
+#             D2 = pairwise_distances(X, mu).ravel().astype(float)
+#         else:
+#             newD = pairwise_distances(X, [mu[-1]]).ravel().astype(float)
+#             for i in range(len(X)):
+#                 if D2[i] > newD[i]:
+#                     centInds[i] = cent
+#                     D2[i] = newD[i]
+#         print(str(len(mu)) + '\t' + str(np.sum(D2)), flush=True)
+#         # if sum(D2) == 0.0:
+#         #     pdb.set_trace()
+#         D2 = D2.ravel().astype(float)
+#         Ddist = (D2 ** 2) / np.sum(D2 ** 2)
+#         customDist = stats.rv_discrete(name='custm', values=(np.arange(len(D2)), Ddist))
+#         ind = customDist.rvs(size=1)[0]
+#         while ind in indsAll:
+#             raise ValueError('All distances to the centers are zero!')
+#             ind = customDist.rvs(size=1)[0]
+#         mu.append(X[ind])
+#         indsAll.append(ind)
+#         cent += 1
+#     return indsAll
