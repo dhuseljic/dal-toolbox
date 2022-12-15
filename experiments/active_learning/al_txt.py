@@ -10,10 +10,8 @@ import hydra
 import transformers
 from omegaconf import OmegaConf
 import sys
-
 # change working directory to current file 
 os.chdir(sys.path[0])
-
 # append parent folders 
 sys.path.append('../../')
 

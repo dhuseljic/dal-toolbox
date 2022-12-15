@@ -10,7 +10,7 @@ al_cycle:
   cold_start: True
 
 dataset: imdb
-dataset_path: /home/lrauch/.cache/huggingface/datasets
+dataset_path: $HOME/.cache/huggingface/datasets
 device: cuda
 
 random_seed: 42
@@ -18,7 +18,7 @@ val_batch_size: 128
 print_freq_eval: 25
 print_freq_train: 25
 
-output_dir: /home/lrauch/projects/uncertainty-evaluation/output/
+output_dir: ../output/
 hydra:
   job:
     chdir: True
