@@ -1,6 +1,6 @@
 name: albert-base-v2
 type: BERT
-n_epochs: 3
+n_epochs: 5
 batch_size: 32
 optimizer:
   name: AdamW

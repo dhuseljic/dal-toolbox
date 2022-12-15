@@ -1,4 +1,4 @@
-def build_wikitalk(split, ds, return_info=False):
+def build_yelp5(split, ds, return_info=False):
 
     if split == 'train':
         ds = ds['train']

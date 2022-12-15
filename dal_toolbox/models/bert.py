@@ -118,13 +118,12 @@ def train_one_epoch(model,
         logits = model(input_ids, attention_mask)
 
         loss = criterion(logits, targets)
-        optimizer.zero_grad()
         loss.backward()
 
         torch.nn.utils.clip_grad_norm_(model.parameters(), 3)
         optimizer.step()
-        #!TODO! check
         scheduler.step()
+        optimizer.zero_grad()
 
         batch_size = targets.size(0)
         batch_acc, = generalization.accuracy(logits, targets, topk=(1,))

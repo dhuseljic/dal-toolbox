@@ -35,6 +35,7 @@ def main(args):
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
     os.makedirs(args.output_dir, exist_ok=True)
+    #TODO: Mode to not save e.g. in debug mode
 
     results = {}
     writer = SummaryWriter('runs/' + get_tensorboard_params(args))  
@@ -46,8 +47,7 @@ def main(args):
     train_ds, query_ds, test_ds, ds_info = build_al_datasets(args)
     al_dataset = ALDataset(train_ds, query_ds)
     al_dataset.random_init(n_samples=args.al_cycle.n_init)
-    test_ds = test_ds.shuffle(seed=42).select(range(500))
-
+    #test_ds = test_ds.shuffle(seed=42).select(range(500))
 
     # Setup Model
     logging.info('Building model: %s', args.model.name)
@@ -99,15 +99,6 @@ def main(args):
             cycle_results['query_indices'] = indices
             cycle_results['query_time'] = query_time
 
-        optimizer.load_state_dict(initial_states['optimizer'])
-        lr_scheduler = get_linear_schedule_with_warmup(
-            optimizer=optimizer,
-            num_warmup_steps=math.ceil(len(al_dataset.labeled_dataset) * args.model.n_epochs * 0.1),
-            num_training_steps = len(al_dataset.labeled_dataset) * args.model.n_epochs
-        )
-        if args.al_cycle.cold_start:
-            model.load_state_dict(initial_states['model'])
-
         logging.info('Training on labeled pool with %s samples', len(al_dataset.labeled_dataset))
         print('> Training.')
         t = time.time()
@@ -118,6 +109,14 @@ def main(args):
             shuffle=True,
             collate_fn=data_collator          
         )
+        optimizer.load_state_dict(initial_states['optimizer'])
+        lr_scheduler = get_linear_schedule_with_warmup(
+            optimizer=optimizer,
+            num_warmup_steps=math.ceil(args.model.n_epochs * len(train_loader) * 0.1),
+            num_training_steps=args.model.n_epochs * len(train_loader)
+        )
+        if args.al_cycle.cold_start:
+            model.load_state_dict(initial_states['model'])
         #TODO: wird hier nicht der falsche optimizer übergeben?
         for i_epoch in range(args.model.n_epochs):
             train_stats = train_one_epoch(
@@ -161,7 +160,7 @@ def main(args):
             writer.add_scalar(
                 tag=f"test_stats/{key}", 
                 scalar_value=value, 
-                global_step=i_acq)
+                global_step=len(al_dataset.labeled_indices))
         
         cycle_results.update({
             "labeled_indices": al_dataset.labeled_indices,
@@ -183,14 +182,7 @@ def main(args):
             "cycle_results": cycle_results,
         }
         torch.save(checkpoint, os.path.join(os.getcwd(), f"check{i_acq}.pth"))      
-        # history.append({
-        #     'train_history': train_history,
-        #     'test_stats': test_stats,
-        #     'labeled_indices': al_dataset.labeled_indices,
-        #     'n_labeled_samples': len(al_dataset.labeled_dataset),
-        #     'unlabeled_indices': al_dataset.unlabeled_indices, 
-        #     'n_unlabeled_indices': len(al_dataset.unlabeled_indices)
-        # })
+        
     writer.close()
     savepath = os.path.join(os.getcwd(), 'results.json')
     logging.info('Saving results to %s', savepath)

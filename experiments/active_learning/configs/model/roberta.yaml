@@ -1,7 +1,7 @@
-name: albert-base-v2
+name: roberta-base
 type: BERT
-n_epochs: 3
-batch_size: 32
+n_epochs: 5
+batch_size: 16
 optimizer:
   name: AdamW
   lr: 3e-5

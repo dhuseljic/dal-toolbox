@@ -63,6 +63,7 @@ class ALDataset:
         buy_idx = random.sample(self.unlabeled_indices, k=n_samples)
         self.labeled_indices = list_union(self.labeled_indices, buy_idx)
         self.unlabeled_indices = list_diff(self.unlabeled_indices, buy_idx)
+        #TODO: update annotations? redudanter code?
 
     def update_annotations(self, buy_idx: list):
         """

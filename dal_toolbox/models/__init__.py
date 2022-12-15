@@ -249,6 +249,7 @@ def build_model(args, **kwargs):
             'model': copy.deepcopy(model.state_dict()),
             'optimizer': copy.deepcopy(optimizer.state_dict())
         }
+        #TODO: LR SCHEDULER?
 
         model_dict = {
             'model': model,
