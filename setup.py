@@ -16,7 +16,7 @@ setup(
     author='Denis Huseljic',
     author_email='dhuselijc@uni-kassel.de',
     url='https://git.ies.uni-kassel.de/dhuseljic/uncertainty-evaluation',
-    license='Apache 2.0',
+    license='BSD 3-Clause',
     packages=find_packages(),
     install_requires=[ ],
     extras_require={
@@ -25,7 +25,7 @@ setup(
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',
         'Intended Audience :: Science/Research',
-        'License :: OSI Approved :: Apache Software License',
+        'License :: OSI Approved :: BSD 3-Clause License',
         'Topic :: Scientific/Engineering :: Artificial Intelligence',
     ],
     keywords='deep active learning machine learning probabilistic modeling',
