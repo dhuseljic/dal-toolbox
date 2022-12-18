@@ -9,9 +9,11 @@
 #SBATCH --array=1-8%8
 source /mnt/stud/home/phahn/.zshrc
 
-conda activate torchal
+conda activate uncertainty_evaluation
 
-cd /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation/experiments/semi_supervised_learning/
+git checkout phahn_ssl_new
+
+cd /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation/experiments/semi_supervised_learning
 
 OUTPUT_DIR=/mnt/stud/work/phahn/uncertainty/output/${SLURM_JOB_NAME}_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}/
 echo "Saving results to $OUTPUT_DIR"
