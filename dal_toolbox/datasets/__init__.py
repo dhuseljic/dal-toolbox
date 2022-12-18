@@ -134,8 +134,8 @@ def equal_set_sizes(ds_id, ds_ood):
 
 def build_ssl_dataset(args):
     if args.dataset == 'CIFAR10':
-        train_ds, ds_info = cifar.build_cifar10('train', args.dataset_path, return_info=True)
-        query_ds = cifar.build_cifar10('query', args.dataset_path)
+        train_ds, ds_info = cifar.build_cifar10('ssl_weak', args.dataset_path, return_info=True)
+        query_ds = cifar.build_cifar10('ssl_weak', args.dataset_path)
         test_ds_id = cifar.build_cifar10('test', args.dataset_path)
 
         lb_idx, ulb_idx = sample_labeled_unlabeled_data(

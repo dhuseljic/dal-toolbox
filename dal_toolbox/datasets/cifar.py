@@ -10,11 +10,20 @@ def build_cifar10(split, ds_path, mean=(0.4914, 0.4822, 0.4465), std=(0.247, 0.2
         transforms.ToTensor(),
         transforms.Normalize(mean, std),
     ])
+    ssl_transform_weak = transforms.Compose([
+        transforms.Resize(32),
+        transforms.RandomCrop(32, padding=int(32 * (1 - 0.875)), padding_mode='reflect'),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean, std),
+    ])
     eval_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean, std)])
     if split == 'train':
         ds = torchvision.datasets.CIFAR10(ds_path, train=True, download=True, transform=train_transform)
     elif split == 'query':
         ds = torchvision.datasets.CIFAR10(ds_path, train=True, download=True, transform=eval_transform)
+    elif split == 'ssl_weak':
+        ds = torchvision.datasets.CIFAR10(ds_path, train=True, download=True, transform=ssl_transform_weak)
     elif split == 'test':
         ds = torchvision.datasets.CIFAR10(ds_path, train=False, download=True, transform=eval_transform)
 

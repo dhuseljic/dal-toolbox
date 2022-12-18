@@ -6,7 +6,7 @@ dataset_path: ./data/
 n_labeled_samples: 40
 n_unlabeled_samples: 60000
 u_ratio: 1
-use_hard_labels: True
+use_hard_labels: False
 
 device: cuda
 random_seed: 42
