@@ -13,12 +13,12 @@ conda activate uncertainty_evaluation
 
 git checkout phahn_ssl_new
 
-cd /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation/experiments/semi_supervised_learning
+cd /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation/
 
 OUTPUT_DIR=/mnt/stud/work/phahn/uncertainty/output/${SLURM_JOB_NAME}_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}/
 echo "Saving results to $OUTPUT_DIR"
 
-srun python -u ssl.py \
+srun python -u experiments/semi_supervised_learning/pseudolabels_main.py \
     dataset=CIFAR10 \
     model=wideresnet2810_pseudolabels \
     output_dir=$OUTPUT_DIR \

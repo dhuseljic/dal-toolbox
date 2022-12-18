@@ -11,8 +11,7 @@ def build_cifar10(split, ds_path, mean=(0.4914, 0.4822, 0.4465), std=(0.247, 0.2
         transforms.Normalize(mean, std),
     ])
     ssl_transform_weak = transforms.Compose([
-        transforms.Resize(32),
-        transforms.RandomCrop(32, padding=int(32 * (1 - 0.875)), padding_mode='reflect'),
+        transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize(mean, std),
