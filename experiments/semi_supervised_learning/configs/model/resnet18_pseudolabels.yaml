@@ -1,0 +1,10 @@
+name: resnet18_pseudolabels
+n_epochs: 1024
+unsup_warmup: 0.4
+lambda_u: 1
+p_cutoff: 0.95
+batch_size: 64
+optimizer:
+  lr: 0.03
+  weight_decay: 5e-4
+  momentum: 0.9
