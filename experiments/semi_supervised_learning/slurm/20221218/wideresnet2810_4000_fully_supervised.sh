@@ -20,7 +20,7 @@ echo "Saving results to $OUTPUT_DIR"
 
 srun python -u experiments/semi_supervised_learning/fully_supervised_main.py \
     dataset=CIFAR10 \
-    model=wideresnet2810_pseudolabels \
+    model=wideresnet2810 \
     output_dir=$OUTPUT_DIR \
     n_labeled_samples=4000 \
     random_seed=${SLURM_ARRAY_TASK_ID}

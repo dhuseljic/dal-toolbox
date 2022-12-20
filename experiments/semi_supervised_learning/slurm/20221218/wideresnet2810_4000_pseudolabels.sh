@@ -4,14 +4,14 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --job-name=WRS2810-4000-HL
+#SBATCH --job-name=WRS2810-4000-PL
 #SBATCH --output=/mnt/stud/work/phahn/uncertainty/logs/%x_%A_%a.log
 #SBATCH --array=1-8%8
 source /mnt/stud/home/phahn/.zshrc
 
 conda activate uncertainty_evaluation
 
-git checkout phahn_ssl_new
+git checkout feature_pi-model
 
 cd /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation/
 
