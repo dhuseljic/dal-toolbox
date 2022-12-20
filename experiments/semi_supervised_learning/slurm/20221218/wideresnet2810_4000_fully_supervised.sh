@@ -11,6 +11,8 @@ source /mnt/stud/home/phahn/.zshrc
 
 conda activate uncertainty_evaluation
 
+rm -f /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation/.git/index.lock
+
 git checkout feature_pi-model
 
 cd /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation/
