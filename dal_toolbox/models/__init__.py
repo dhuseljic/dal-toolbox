@@ -31,30 +31,6 @@ def build_model(args, **kwargs):
             'eval_kwargs': dict(criterion=criterion, device=args.device),
         }
 
-    elif args.model.name == 'resnet18_pseudolabels':
-        model = resnet_pseudolabel.ResNet18(n_classes)
-        optimizer = torch.optim.SGD(
-            model.parameters(),
-            lr=args.model.optimizer.lr,
-            weight_decay=args.model.optimizer.weight_decay,
-            momentum=args.model.optimizer.momentum,
-            nesterov=True
-        )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
-        criterion = nn.CrossEntropyLoss()
-        model_dict = {
-            'model': model,
-            'optimizer': optimizer,
-            'train_one_epoch': resnet_pseudolabel.train_one_epoch,
-            'evaluate': resnet_pseudolabel.evaluate,
-            'lr_scheduler': lr_scheduler,
-            'train_kwargs': dict(
-                optimizer=optimizer, criterion=criterion, device=args.device, n_epochs=args.model.n_epochs, 
-                lambda_u=args.model.lambda_u, p_cutoff=args.model.p_cutoff,
-                unsup_warmup=args.model.unsup_warmup, use_hard_labels=args.use_hard_labels),
-            'eval_kwargs': dict(criterion=criterion, device=args.device),
-        }
-
     elif args.model.name == 'resnet18_mcdropout':
         model = resnet_mcdropout.DropoutResNet18(n_classes, args.model.n_passes, args.model.dropout_rate)
         optimizer = torch.optim.SGD(
