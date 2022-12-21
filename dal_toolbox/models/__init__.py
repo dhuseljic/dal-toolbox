@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from . import resnet, resnet_pseudolabel, resnet_mcdropout, resnet_sngp, wide_resnet, wide_resnet_pseudolabel, wide_resnet_mcdropout, wide_resnet_sngp, lenet
+from . import resnet, resnet_mcdropout, resnet_sngp, wide_resnet, wide_resnet_pseudolabel, wide_resnet_mcdropout, wide_resnet_sngp, lenet
 from . import wideresnet_due, ensemble, wide_resnet_pimodel
 
 from gpytorch.mlls import VariationalELBO
