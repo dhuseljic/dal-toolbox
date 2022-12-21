@@ -1,0 +1,8 @@
+name: fnc1
+name_hf: nid989/FNC-1
+n_classes: 4
+
+# 49k samples
+# 40k train
+# 5k test
+# 5k val

@@ -1,0 +1,3 @@
+name: qnli
+name_hf: qnli
+n_classes: 2

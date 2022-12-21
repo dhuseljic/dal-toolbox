@@ -1,2 +1,6 @@
-name: yelp_review_full
-n_classes: 4
+name: yelp5
+name_hf: yelp_review_full
+n_classes: 5
+
+#650k training
+#50k testing

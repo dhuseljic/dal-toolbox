@@ -1,16 +1,16 @@
-def build_banks77(split, ds, return_info=False):
+def build_sst2(split, ds, return_info=False):
 
     if split == 'train':
         ds = ds['train']
 
     elif split == 'query':
-        ds = ds['test']
+        ds = ds['train']
     
     elif split == 'test':
-        ds = ds['test']
+        ds = ds['validation']
 
     if return_info == True:
-        ds_info = {'n_classes': 77}
+        ds_info = {'n_classes': 2}
         return ds, ds_info
 
     return ds

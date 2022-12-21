@@ -1,47 +1,68 @@
 import torch
 import torch.nn as nn
-from transformers import AutoModelForSequenceClassification
+import transformers
+from transformers import AutoModel
 from tqdm.auto import tqdm
 from ..metrics import generalization 
 from ..utils import MetricLogger, SmoothedValue
 
-class BertSequenceClassifier(nn.Module):
-    def __init__(self, checkpoint, num_classes):
-        super(BertSequenceClassifier, self).__init__()
-
-        self.checkpoint = checkpoint
+class ClassificationHead(nn.Module):
+    def __init__(self, hidden_dim, num_classes):
+        super(ClassificationHead, self).__init__()
+        self.hidden_dim = hidden_dim
         self.num_classes = num_classes
-        self.bert = AutoModelForSequenceClassification.from_pretrained(
-            self.checkpoint, 
-            num_labels=self.num_classes)
-            
-    def forward(
-        self,
-        input_ids=None,
-        attention_mask=None,
-        token_type_ids=None,
-        position_ids=None,
-        head_mask=None,
-        inputs_embeds=None,
-        labels=None,
-        output_attentions=None,
-        output_hidden_states=None,
-    ):
-        outputs = self.bert(
-            input_ids, 
+
+        self.layer1 = nn.Linear(hidden_dim, hidden_dim)
+        self.layer2 = nn.Linear(hidden_dim, num_classes)
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(0.2)
+
+    def forward(self, X):
+        hidden_logits = self.dropout(self.relu(self.layer1(X)))
+        out_logits = self.layer2(hidden_logits)
+        return out_logits
+
+
+class BertClassifier(nn.Module):
+    def __init__(self, model_name, num_classes, mode='non-static'):
+        super(BertClassifier, self).__init__()
+
+        self.mode = mode
+        self.model_name = model_name
+        self.num_classes = num_classes
+
+        # no pre-training
+        if self.mode == 'random':
+            self.encoder = AutoModel.from_config(config=transformers.DistilBertConfig())
+        
+        # pre-training with freezed weights
+        elif self.mode == 'static':
+            self.encoder = AutoModel.from_pretrained(self.model_name)
+            for param in self.encoder.parameters():
+                param.required_grad = False
+        
+        # pre-training and training of all layers
+        elif self.mode == 'non-static':
+            self.encoder = AutoModel.from_pretrained(self.model_name)
+        
+        else:
+            raise NotImplementedError("f{self.mode} is not available")
+      
+        self.head = ClassificationHead(768, self.num_classes)
+
+    def forward(self, input_ids, attention_mask):
+        output = self.encoder(
+            input_ids,
             attention_mask,
-            token_type_ids,
-            position_ids,
-            head_mask,
-            inputs_embeds,
-            labels,
-            output_attentions,
-            output_hidden_states)
+            return_dict=False
+        )
 
-        logits = outputs['logits']
+        last_hidden_state = output[0]
+        out_pooled = last_hidden_state[:, 0]
+        out_logits = self.head(out_pooled)
 
-        return logits
-
+        return out_logits
+    
     @torch.no_grad()
     def forward_logits(self, dataloader, device):
         self.to(device)
@@ -51,7 +72,7 @@ class BertSequenceClassifier(nn.Module):
             all_logits.append(logits)
         return torch.cat(all_logits)
 
-
+    
     @torch.inference_mode()
     def get_probas(self, dataloader, device):
         self.to(device)
@@ -64,7 +85,8 @@ class BertSequenceClassifier(nn.Module):
             all_logits.append(logits.to("cpu"))
         logits = torch.cat(all_logits)
         probas = logits.softmax(-1)
-        return probas   
+        return probas
+
 
 def train_one_epoch(model,
                     dataloader,
@@ -72,6 +94,7 @@ def train_one_epoch(model,
                     optimizer,
                     scheduler,
                     criterion,
+                    tokenizer,
                     device,
                     print_freq=25):
     model.train()
@@ -86,10 +109,11 @@ def train_one_epoch(model,
     header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
     for batch in metric_logger.log_every(dataloader, print_freq, header):
-        batch = batch.to(device)
-        targets = batch['labels']
-       
-        logits = model(**batch)
+        targets = batch["labels"].to(device)
+        input_ids = batch["input_ids"].to(device)
+        attention_mask = batch["attention_mask"].to(device)
+
+        logits = model(input_ids, attention_mask)
 
         loss = criterion(logits, targets)
         loss.backward()
@@ -112,18 +136,19 @@ def train_one_epoch(model,
 
 
 @torch.no_grad()
-def eval_one_epoch(model, dataloader, epoch, criterion, device, print_freq=25):
+def eval_one_epoch(model, dataloader, epoch, criterion, tokenizer, device, print_freq=25):
     model.eval()
     model.to(device)
 
     metric_logger = MetricLogger(delimiter=" ")
     header = "Testing:"
     for batch in metric_logger.log_every(dataloader, print_freq, header):
-        batch = batch.to(device)
-        targets = batch['labels']
-       
-        logits = model(**batch)
 
+        targets = batch["labels"].to(device)
+        input_ids = batch["input_ids"].to(device)
+        attention_mask = batch["attention_mask"].to(device)
+        
+        logits = model(input_ids, attention_mask)
         loss = criterion(logits, targets)
 
         batch_size = targets.size(0)

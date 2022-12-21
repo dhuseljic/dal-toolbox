@@ -1,7 +1,7 @@
 defaults:
-  - model: albert
+  - model: bert
   - al_strategy: uncertainty
-  - dataset: agnews
+  - dataset: fnc1
   - _self_
 
 al_cycle:
@@ -18,7 +18,7 @@ val_batch_size: 128
 print_freq_eval: 25
 print_freq_train: 25
 
-output_dir: ../output/
+output_dir: ./output/
 hydra:
   job:
     chdir: True

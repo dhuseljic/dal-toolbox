@@ -1,3 +1,3 @@
 name: agnews
-hf_name: ag_news
+name_hf: ag_news
 n_classes: 4

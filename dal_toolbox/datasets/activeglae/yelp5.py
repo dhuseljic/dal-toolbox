@@ -1,16 +1,16 @@
-def build_wikitalk(split, ds, return_info=False):
+def build_yelp5(split, ds, return_info=False):
 
     if split == 'train':
         ds = ds['train']
 
     elif split == 'query':
-        ds = ds['test']
+        ds = ds['train']
     
     elif split == 'test':
         ds = ds['test']
 
     if return_info == True:
-        ds_info = {'n_classes': 2}
+        ds_info = {'n_classes': 5}
         return ds, ds_info
 
     return ds

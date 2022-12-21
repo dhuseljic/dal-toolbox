@@ -1,12 +1,7 @@
 import torch
-import torchvision
-from datasets import load_dataset
-from transformers import AutoTokenizer
-import numpy as np
-
 from torch.utils.data import Subset
 from . import mnist, fashion_mnist, svhn, cifar, tiny_imagenet, imagenet, imdb
-from .ActiveGLAE import agnews, banks77, dbpedia, mnli, qnli, sst2, trec6, wikitalk, yelp5
+from .activeglae import agnews, banks77, dbpedia, fnc1, mnli, qnli, sst2, trec6, wikitalk, yelp5
 
 def build_dataset(args):
     if args.dataset == 'MNIST':
@@ -116,65 +111,71 @@ def build_al_datasets(args):
         test_ds_id = imagenet.build_imagenet('val', args.dataset_path)
 
     #TODO: cache dir allgemein funktionsfähig
-    elif args.dataset == 'imdb':
-        ds = tokenize_ds(args)
-        train_ds, ds_info = imdb.build_imdb('train', ds, return_info=True)
-        query_ds = imdb.build_imdb('query', ds)
-        test_ds_id = imdb.build_imdb('test', ds)
+    elif args.dataset.name == 'imdb':
+        ds, ds_info = imdb.build_imdb(args)
+        train_ds = ds['train']
+        query_ds = ds['train']
+        test_ds_id = ds['test']
 
     elif args.dataset.name == 'agnews':
-        ds = tokenize_ds(args)
-        train_ds, ds_info = agnews.build_agnews('train', ds, return_info=True)
-        query_ds = agnews.build_agnews('query', ds)
-        test_ds_id = agnews.build_agnews('test', ds)
+        ds, ds_info = agnews.build_agnews(args)
+        train_ds = ds['train']
+        query_ds = ds['train']
+        test_ds_id = ds['test']
     
-    elif args.dataset.name == 'banking77':
-        ds = tokenize_ds(args)
-        train_ds, ds_info = banks77.build_banks77('train', ds, return_info=True)
-        query_ds = banks77.build_banks77('query', ds)
-        test_ds_id = banks77.build_banks77('test', ds)
+    elif args.dataset.name == 'banks77':
+        ds, ds_info = banks77.build_banks77(args)
+        train_ds = ds['train']
+        query_ds = ds['train']
+        test_ds_id = ds['test']
 
     elif args.dataset.name == 'dbpedia':
-        ds = tokenize_ds(args)
-        train_ds, ds_info = dbpedia.build_dbpedia('train', ds, return_info=True)
-        query_ds = dbpedia.build_dbpedia('query', ds)
-        test_ds_id = dbpedia.build_dbpedia('test', ds)
+        ds, ds_info = dbpedia.build_dbpedia(args)
+        train_ds = ds['train']
+        query_ds = ds['train']
+        test_ds_id = ds['test']
+    
+    elif args.dataset.name == 'fnc1':
+        ds, ds_info = fnc1.build_fnc1(args)
+        train_ds = ds['train']
+        query_ds = ds['train']
+        test_ds_id = ds['test']
 
     elif args.dataset.name == 'mnli':
-        ds = tokenize_ds(args)
-        train_ds, ds_info = mnli.build_mnli('train', ds, return_info=True)
-        query_ds = mnli.build_mnli('query', ds)
-        test_ds_id = mnli.build_mnli('test', ds)
+        ds, ds_info = mnli.build_mnli(args)
+        train_ds = ds['train']
+        query_ds = ds['train']
+        test_ds_id = ds['test']
 
     elif args.dataset.name == 'qnli':
-        ds = tokenize_ds(args)
-        train_ds, ds_info = qnli.build_qnli('train', ds, return_info=True)
-        query_ds = qnli.build_qnli('query', ds)
-        test_ds_id = qnli.build_qnli('test', ds)
+        ds, ds_info = qnli.build_qnli(args)
+        train_ds = ds['train']
+        query_ds = ds['train']
+        test_ds_id = ds['test']
 
     elif args.dataset.name == 'sst2':
-        ds = tokenize_ds(args)
-        train_ds, ds_info = sst2.build_sst2('train', ds, return_info=True)
-        query_ds = sst2.build_sst2('query', ds)
-        test_ds_id = sst2.build_sst2('test', ds)
+        ds, ds_info = sst2.build_sst2(args)
+        train_ds = ds['train']
+        query_ds = ds['train']
+        test_ds_id = ds['test']
     
     elif args.dataset.name == 'trec6':
-        ds = tokenize_ds(args)
-        train_ds, ds_info = trec6.build_trec6('train', ds, return_info=True)
-        query_ds = trec6.build_trec6('query', ds)
-        test_ds_id = trec6.build_trec6('test', ds)
+        ds, ds_info = trec6.build_trec6(args)
+        train_ds = ds['train']
+        query_ds = ds['train']
+        test_ds_id = ds['test']
 
     elif args.dataset.name == 'wikitalk':
-        ds = tokenize_ds(args)
-        train_ds, ds_info = wikitalk.build_wikitalk('train', ds, return_info=True)
-        query_ds = wikitalk.build_wikitalk('query', ds)
-        test_ds_id = wikitalk.build_wikitalk('test', ds)
+        ds, ds_info = wikitalk.build_wikitalk(args)
+        train_ds = ds['train']
+        query_ds = ds['train']
+        test_ds_id = ds['test']
 
     elif args.dataset.name == 'yelp5':
-        ds = tokenize_ds(args)
-        train_ds, ds_info = yelp5.build_yelp5('train', ds, return_info=True)
-        query_ds = yelp5.build_yelp5('query', ds)
-        test_ds_id = yelp5.build_yelp5('test', ds)
+        ds, ds_info = yelp5.build_yelp5(args)
+        train_ds = ds['train']
+        query_ds = ds['train']
+        test_ds_id = ds['test']
 
     else:
         raise NotImplementedError('Dataset not available')
@@ -194,12 +195,3 @@ def equal_set_sizes(ds_id, ds_ood):
         ds_id = Subset(ds_id, indices=rnd_indices)
     return ds_id, ds_ood
 
-#TODO: schönere auslagerung
-def tokenize_ds(args):
-    print('>> Loading dataset')
-    ds = load_dataset(args.dataset.hf_name)
-    print('>> Starting tokenization')
-    tokenizer = AutoTokenizer.from_pretrained(args.model.name, use_fast=False)
-    ds = ds.map(lambda batch: tokenizer(batch["text"], truncation=True))
-    ds = ds.remove_columns(["text", "token_type_ids"])
-    return ds

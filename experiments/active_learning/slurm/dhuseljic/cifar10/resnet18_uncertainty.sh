@@ -31,7 +31,7 @@ srun python -u al.py \
 	model=$MODEL \
 	dataset=$DATASET \
 	output_dir=$OUTPUT_DIR \
-    	random_seed=$SLURM_ARRAY_TASK_ID \
+    random_seed=$SLURM_ARRAY_TASK_ID \
 	al_strategy=$STRATEGY \
 	al_cycle.n_init=$N_INIT \
 	al_cycle.acq_size=$ACQ_SIZE \

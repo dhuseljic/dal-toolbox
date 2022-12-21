@@ -1,10 +1,10 @@
-def build_yelp5(split, ds, return_info=False):
+def build_qnli(split, ds, return_info=False):
 
     if split == 'train':
         ds = ds['train']
 
     elif split == 'query':
-        ds = ds['test']
+        ds = ds['train']
     
     elif split == 'test':
         ds = ds['test']

@@ -5,7 +5,7 @@ from transformers import AutoTokenizer
 
 from . import resnet, resnet_mcdropout, resnet_sngp, wide_resnet, wide_resnet_mcdropout, wide_resnet_sngp, lenet
 from . import wideresnet_due, ensemble
-from . import bert
+from . import bert, distilbert, distilroberta, roberta
 
 
 
@@ -206,18 +206,14 @@ def build_model(args, **kwargs):
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, likelihood=likelihood, device=args.device),
             'eval_kwargs': dict(criterion=criterion, likelihood=likelihood, device=args.device),
         }
-    elif args.model.type == "BERT":
-        model = bert.BertClassifier(
-            model_name=args.model.name,
-            num_classes = n_classes
-        )
-        tokenizer = AutoTokenizer.from_pretrained(
-            args.model.name, 
-            use_fast=False
+    elif args.model.name == 'bert':
+        model = bert.BertSequenceClassifier(
+            checkpoint=args.model.name_hf,
+            num_classes=n_classes
         )
 
         if args.model.optimizer.name == 'Adam':
-           optimizer = torch.optim.AdamW(
+            optimizer = torch.optim.AdamW(
                 model.parameters(),
                 lr=args.model.optimizer.lr,
                 weight_decay=args.model.optimizer.weight_decay,
@@ -237,12 +233,10 @@ def build_model(args, **kwargs):
         train_kwargs = {
             'optimizer': optimizer,
             'criterion': criterion,
-            'tokenizer': tokenizer,
             'device': args.device
         }
         eval_kwargs = {
             'criterion': criterion, 
-            'tokenizer': tokenizer,
             'device': args.device
         }
         initial_states = {
@@ -253,7 +247,6 @@ def build_model(args, **kwargs):
 
         model_dict = {
             'model': model,
-            'tokenizer':tokenizer,
             'train': bert.train_one_epoch,
             'eval': bert.eval_one_epoch,
             'train_kwargs': train_kwargs,

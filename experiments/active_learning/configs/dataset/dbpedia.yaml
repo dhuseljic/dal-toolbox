@@ -1,2 +1,7 @@
-name: dbpedia_14
+name: dbpedia
+name_hf: dbpedia_14
 n_classes: 14
+
+
+#560k training
+#70k testing

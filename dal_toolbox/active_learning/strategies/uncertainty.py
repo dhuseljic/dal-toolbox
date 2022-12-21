@@ -28,10 +28,11 @@ class UncertaintySampling(Query):
         #TODO: Wieso del kwargs und wie mitnahme von collator
         if not hasattr(model, 'get_probas'):
             raise ValueError('The method `get_probas` is mandatory to use uncertainty sampling.')
-
-        if self.subset_size:
+        #TODO: bei Datensätzen, die kleiner als 10k sind, muss hier eine condition rein
+        if (self.subset_size) and (len(unlabeled_indices) > self.subset_size):
             unlabeled_indices = self.rng.sample(unlabeled_indices, k=self.subset_size)
-
+            print(f'Subset of size: {self.subset_size}')
+    
         if "collator" in list(kwargs.keys()):
             dataloader = DataLoader(
                 dataset, 

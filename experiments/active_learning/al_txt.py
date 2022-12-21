@@ -1,4 +1,3 @@
-#%%
 import os 
 import logging
 #import copy
@@ -11,14 +10,11 @@ import transformers
 from omegaconf import OmegaConf
 import sys
 # change working directory to current file 
-os.chdir(sys.path[0])
-# append parent folders 
-sys.path.append('../../')
+#os.chdir(sys.path[0])
 
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 from transformers import get_linear_schedule_with_warmup
-transformers.logging.set_verbosity_error()
 from transformers import DataCollatorWithPadding
 
 from dal_toolbox.active_learning.data import ALDataset
@@ -29,6 +25,7 @@ from dal_toolbox.utils import seed_everything
 from dal_toolbox.utils import get_tensorboard_params
 from dal_toolbox.datasets import build_al_datasets
 
+transformers.logging.set_verbosity_error()
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning_nlp")
 def main(args):
     print(OmegaConf.to_yaml(args))
@@ -48,6 +45,7 @@ def main(args):
     al_dataset = ALDataset(train_ds, query_ds)
     al_dataset.random_init(n_samples=args.al_cycle.n_init)
     #test_ds = test_ds.shuffle(seed=42).select(range(500))
+    #TODO: Add sample dataset
 
     # Setup Model
     logging.info('Building model: %s', args.model.name)
@@ -58,7 +56,7 @@ def main(args):
     optimizer = model_dict['train_kwargs']['optimizer']
     initial_states = model_dict['initial_states']
     data_collator = DataCollatorWithPadding(
-        tokenizer=model_dict['tokenizer'], 
+        tokenizer=ds_info['tokenizer'], 
         padding = 'longest',
         return_tensors="pt",
         )
@@ -146,7 +144,7 @@ def main(args):
         test_stats = eval_one_epoch(
             model=model,
             dataloader=test_loader,
-            epoch = i_epoch,
+            epoch=i_epoch,
             **model_dict['eval_kwargs']
         )
 
