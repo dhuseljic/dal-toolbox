@@ -5,6 +5,7 @@ from tqdm.auto import tqdm
 from ..metrics import generalization 
 from ..utils import MetricLogger, SmoothedValue
 
+#!TODO: CHECK TOKEN TYPE ID ENTRY FOR BERT MODEL??
 class BertSequenceClassifier(nn.Module):
     def __init__(self, checkpoint, num_classes):
         super(BertSequenceClassifier, self).__init__()

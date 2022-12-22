@@ -1,3 +1,6 @@
 name: agnews
 name_hf: ag_news
 n_classes: 4
+
+# train: 120k
+# test: 7600

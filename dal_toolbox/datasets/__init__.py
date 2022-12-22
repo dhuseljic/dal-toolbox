@@ -145,19 +145,20 @@ def build_al_datasets(args):
         ds, ds_info = mnli.build_mnli(args)
         train_ds = ds['train']
         query_ds = ds['train']
-        test_ds_id = ds['test']
+        test_ds_id = ds['validation_matched']
 
     elif args.dataset.name == 'qnli':
         ds, ds_info = qnli.build_qnli(args)
         train_ds = ds['train']
         query_ds = ds['train']
-        test_ds_id = ds['test']
+        test_ds_id = ds['validation']
+        #!TODO: wieso ist das test set nur mit -1? (basierend nur auf glue)
 
     elif args.dataset.name == 'sst2':
         ds, ds_info = sst2.build_sst2(args)
         train_ds = ds['train']
         query_ds = ds['train']
-        test_ds_id = ds['test']
+        test_ds_id = ds['validation']
     
     elif args.dataset.name == 'trec6':
         ds, ds_info = trec6.build_trec6(args)

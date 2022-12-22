@@ -1,16 +1,11 @@
-def build_trec6(split, ds, return_info=False):
+from . import tokenize_ds
 
-    if split == 'train':
-        ds = ds['train']
-
-    elif split == 'query':
-        ds = ds['train']
-    
-    elif split == 'test':
-        ds = ds['test']
-
-    if return_info == True:
-        ds_info = {'n_classes': 2}
-        return ds, ds_info
-
-    return ds
+def build_trec6(args):
+    ds, tokenizer = tokenize_ds(args)
+    ds = ds.map(lambda batch: tokenizer(batch['text'], truncation=True))
+    ds = ds.rename_column('coarse_label', 'label')
+    ds = ds.remove_columns(
+            list(set(ds['train'].column_names)-set(['label', 'input_ids', 'attention_mask']))
+    )
+    ds_info = {'n_classes': 6, 'tokenizer': tokenizer}
+    return ds, ds_info

@@ -8,7 +8,6 @@ import time
 import hydra
 import transformers
 from omegaconf import OmegaConf
-import sys
 # change working directory to current file 
 #os.chdir(sys.path[0])
 
@@ -34,6 +33,8 @@ def main(args):
     os.makedirs(args.output_dir, exist_ok=True)
     #TODO: Mode to not save e.g. in debug mode
 
+
+    t0 = time.time()
     results = {}
     writer = SummaryWriter('runs/' + get_tensorboard_params(args))  
     #writer = SummaryWriter(log_dir=args.output_dir)
@@ -187,6 +188,9 @@ def main(args):
     print(f'Saving results to {savepath}.')
     with open(savepath, 'w') as f:
         json.dump(results, f)
+
+    time_overall = time.time()- t0
+    logging.info('Experiment took %.2f minutes', time_overall/60)
 
 def build_query(args, **kwargs):
     if args.al_strategy.name == "random":

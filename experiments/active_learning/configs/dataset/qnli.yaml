@@ -1,3 +1,6 @@
 name: qnli
 name_hf: qnli
 n_classes: 2
+
+#eval: 5.5k
+#train: 100k

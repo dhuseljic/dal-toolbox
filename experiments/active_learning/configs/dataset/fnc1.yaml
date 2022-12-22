@@ -6,3 +6,4 @@ n_classes: 4
 # 40k train
 # 5k test
 # 5k val
+#!TODO: check huggingface not all rows? 40k vs 70k

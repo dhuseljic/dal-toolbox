@@ -1,7 +1,7 @@
 defaults:
   - model: bert
-  - al_strategy: uncertainty
-  - dataset: fnc1
+  - al_strategy: random
+  - dataset: agnews
   - _self_
 
 al_cycle:
