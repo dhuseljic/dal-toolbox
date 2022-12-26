@@ -35,7 +35,8 @@ def main(args):
 
     t0 = time.time()
     results = {}
-    writer = SummaryWriter('runs/' + get_tensorboard_params(args))  
+    #writer = SummaryWriter('runs/' + get_tensorboard_params(args)) 
+    writer =  SummaryWriter(log_dir=args.output_dir)
     #writer = SummaryWriter(log_dir=args.output_dir)
 
     # Setup Datasets
@@ -180,7 +181,8 @@ def main(args):
         torch.save(checkpoint, os.path.join(os.getcwd(), f"check{i_acq}.pth"))      
         
     writer.close()
-    savepath = os.path.join(os.getcwd(), 'results.json')
+    savepath = os.path.join(args.output_dir, 'results.json')
+    #savepath = os.path.join(os.getcwd(), 'results.json')
     logging.info('Saving results to %s', savepath)
     print(f'Saving results to {savepath}.')
     with open(savepath, 'w') as f:
