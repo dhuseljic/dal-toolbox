@@ -34,4 +34,4 @@ srun python -u al_txt.py \
 	al_cycle.n_init=$N_INIT \
 	al_cycle.acq_size=$ACQ_SIZE \
 	al_cycle.n_acq=$N_ACQ \
-	model.optimizer.lr=1e-2
+	model.optimizer.lr=3e-2
