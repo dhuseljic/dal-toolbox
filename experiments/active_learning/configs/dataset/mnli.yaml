@@ -1,6 +1,8 @@
 name: mnli
 name_hf: multi_nli
 n_classes: 3
+train_subset: 10000
+test_subset: 0
 
 #433k sentence pairs (premise / hypothesis)
 #392k train

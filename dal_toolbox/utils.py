@@ -494,10 +494,13 @@ def set_weight_decay(
 
 def get_tensorboard_params(args):
     params = "lr" + str(args.model.optimizer.lr)  + \
+             "ep" + str(args.model.n_epochs) + \
              "-bs" + str(args.model.batch_size) + \
              "-seed" + str(args.random_seed) + \
              "-" + str(args.al_strategy.name) + \
              "-n_init" + str(args.al_cycle.n_init) + \
              "-acq_size" + str(args.al_cycle.acq_size) + \
-             "-n_acq" + str(args.al_cycle.n_acq)   
+             "-n_acq" + str(args.al_cycle.n_acq) + \
+             "-train_subs" + str(args.dataset.train_subset) + \
+             "-test_subs" + str(args.dataset.test_subset)
     return params

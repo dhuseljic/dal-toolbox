@@ -9,7 +9,7 @@ import hydra
 import transformers
 from omegaconf import OmegaConf
 # change working directory to current file 
-#os.chdir(sys.path[0])
+# os.chdir(sys.path[0])
 
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
@@ -25,14 +25,13 @@ from dal_toolbox.utils import get_tensorboard_params
 from dal_toolbox.datasets import build_al_datasets
 
 transformers.logging.set_verbosity_error()
-@hydra.main(version_base=None, config_path="./configs", config_name="active_learning_nlp")
+@hydra.main(version_base=None, config_path="./configs", config_name="active_learning_nlp_slurm")
 def main(args):
     print(OmegaConf.to_yaml(args))
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
     os.makedirs(args.output_dir, exist_ok=True)
     #TODO: Mode to not save e.g. in debug mode
-
 
     t0 = time.time()
     results = {}
@@ -45,8 +44,6 @@ def main(args):
     train_ds, query_ds, test_ds, ds_info = build_al_datasets(args)
     al_dataset = ALDataset(train_ds, query_ds)
     al_dataset.random_init(n_samples=args.al_cycle.n_init)
-    #test_ds = test_ds.shuffle(seed=42).select(range(500))
-    #TODO: Add sample dataset
 
     # Setup Model
     logging.info('Building model: %s', args.model.name)

@@ -115,68 +115,104 @@ def build_al_datasets(args):
         ds, ds_info = imdb.build_imdb(args)
         train_ds = ds['train']
         query_ds = ds['train']
+        
+        if args.dataset.test_subset:
+            test_ds_id = ds['test'].shuffle(seed=args.random_seed).select(range(args.dataset.test_subset))
+        else:
+            test_ds_id = ds['test']
+
         test_ds_id = ds['test']
 
     elif args.dataset.name == 'agnews':
         ds, ds_info = agnews.build_agnews(args)
         train_ds = ds['train']
         query_ds = ds['train']
-        test_ds_id = ds['test']
+
+        if args.dataset.test_subset:
+            test_ds_id = ds['test'].shuffle(seed=args.random_seed).select(range(args.dataset.test_subset))
+        else:
+            test_ds_id = ds['test']
     
     elif args.dataset.name == 'banks77':
         ds, ds_info = banks77.build_banks77(args)
         train_ds = ds['train']
         query_ds = ds['train']
-        test_ds_id = ds['test']
+        if args.dataset.test_subset:
+            test_ds_id = ds['test'].shuffle(seed=args.random_seed).select(range(args.dataset.test_subset))
+        else:
+            test_ds_id = ds['test']      
 
     elif args.dataset.name == 'dbpedia':
         ds, ds_info = dbpedia.build_dbpedia(args)
         train_ds = ds['train']
         query_ds = ds['train']
-        test_ds_id = ds['test']
+        if args.dataset.test_subset:
+            test_ds_id = ds['test'].shuffle(seed=args.random_seed).select(range(args.dataset.test_subset))
+        else:
+            test_ds_id = ds['test'] 
     
     elif args.dataset.name == 'fnc1':
         ds, ds_info = fnc1.build_fnc1(args)
         train_ds = ds['train']
         query_ds = ds['train']
-        test_ds_id = ds['test']
+        if args.dataset.test_subset:
+            test_ds_id = ds['test'].shuffle(seed=args.random_seed).select(range(args.dataset.test_subset))
+        else:
+            test_ds_id = ds['test'] 
 
     elif args.dataset.name == 'mnli':
         ds, ds_info = mnli.build_mnli(args)
         train_ds = ds['train']
         query_ds = ds['train']
-        test_ds_id = ds['validation_matched']
+        if args.dataset.test_subset:
+            test_ds_id = ds['validation_matched'].shuffle(seed=args.random_seed).select(range(args.dataset.test_subset))
+        else:
+            test_ds_id = ds['validation_matched'] 
 
     elif args.dataset.name == 'qnli':
         ds, ds_info = qnli.build_qnli(args)
         train_ds = ds['train']
         query_ds = ds['train']
-        test_ds_id = ds['validation']
-        #!TODO: wieso ist das test set nur mit -1? (basierend nur auf glue)
+        if args.dataset.test_subset:
+            test_ds_id = ds['validation'].shuffle(seed=args.random_seed).select(range(args.dataset.test_subset))
+        else:
+            test_ds_id = ds['validation'] 
 
     elif args.dataset.name == 'sst2':
         ds, ds_info = sst2.build_sst2(args)
         train_ds = ds['train']
         query_ds = ds['train']
-        test_ds_id = ds['validation']
+        if args.dataset.test_subset:
+            test_ds_id = ds['validation'].shuffle(seed=args.random_seed).select(range(args.dataset.test_subset))
+        else:
+            test_ds_id = ds['validation'] 
     
     elif args.dataset.name == 'trec6':
         ds, ds_info = trec6.build_trec6(args)
         train_ds = ds['train']
         query_ds = ds['train']
-        test_ds_id = ds['test']
+        if args.dataset.test_subset:
+            test_ds_id = ds['test'].shuffle(seed=args.random_seed).select(range(args.dataset.test_subset))
+        else:
+            test_ds_id = ds['test'] 
 
     elif args.dataset.name == 'wikitalk':
         ds, ds_info = wikitalk.build_wikitalk(args)
         train_ds = ds['train']
         query_ds = ds['train']
-        test_ds_id = ds['test']
+        if args.dataset.test_subset:
+            test_ds_id = ds['test'].shuffle(seed=args.random_seed).select(range(args.dataset.test_subset))
+        else:
+            test_ds_id = ds['test'] 
 
     elif args.dataset.name == 'yelp5':
         ds, ds_info = yelp5.build_yelp5(args)
         train_ds = ds['train']
         query_ds = ds['train']
-        test_ds_id = ds['test']
+        if args.dataset.test_subset:
+            test_ds_id = ds['test'].shuffle(seed=args.random_seed).select(range(args.dataset.test_subset))
+        else:
+            test_ds_id = ds['test'] 
 
     else:
         raise NotImplementedError('Dataset not available')
