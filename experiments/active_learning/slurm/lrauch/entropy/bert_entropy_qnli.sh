@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --job-name=glae
+#SBATCH --job-name=glae_qnli
 #SBATCH --output=/mnt/work/lrauch/logs/active_learning/%x_%a.log
 #SBATCH --array=1-5%5
 date;hostname;pwd
@@ -16,7 +16,7 @@ export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
 MODEL=bert
-DATASET=agnews
+DATASET=qnli
 STRATEGY=uncertainty
 
 N_INIT=100

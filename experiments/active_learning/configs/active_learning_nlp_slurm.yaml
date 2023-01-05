@@ -7,7 +7,7 @@ defaults:
 al_cycle:
   n_init: 100
   acq_size: 100
-  n_acq: 10
+  n_acq: 15
   cold_start: True
 
 dataset_path: $HOME/.cache/huggingface/datasets
