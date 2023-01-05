@@ -21,7 +21,7 @@ from dal_toolbox.active_learning.strategies import random, uncertainty
 
 from dal_toolbox.models import build_model
 from dal_toolbox.utils import seed_everything
-from dal_toolbox.utils import get_tensorboard_params
+#from dal_toolbox.utils import get_tensorboard_params
 from dal_toolbox.datasets import build_al_datasets
 
 transformers.logging.set_verbosity_error()

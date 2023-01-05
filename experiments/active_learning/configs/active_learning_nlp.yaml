@@ -1,7 +1,7 @@
 defaults:
   - model: bert
   - al_strategy: uncertainty
-  - dataset: agnews
+  - dataset: wikitalk
   - _self_
 
 al_cycle:
@@ -13,7 +13,7 @@ al_cycle:
 dataset_path: $HOME/.cache/huggingface/datasets
 device: cuda
 
-random_seed: 42
+random_seed: 0
 val_batch_size: 128
 print_freq_eval: 25
 print_freq_train: 25

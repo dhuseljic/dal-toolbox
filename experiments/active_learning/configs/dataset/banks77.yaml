@@ -2,4 +2,6 @@ name: banks77
 name_hf: banking77
 n_classes: 77
 train_subset: 10000
-test_subset: 10000
+test_subset: 0
+
+# test subset:3080
