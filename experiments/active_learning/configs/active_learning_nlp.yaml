@@ -1,7 +1,7 @@
 defaults:
-  - model: bert
+  - model: distilbert
   - al_strategy: uncertainty
-  - dataset: wikitalk
+  - dataset: agnews
   - _self_
 
 al_cycle:

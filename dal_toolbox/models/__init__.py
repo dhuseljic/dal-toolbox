@@ -254,6 +254,102 @@ def build_model(args, **kwargs):
             'initial_states': initial_states
         }
 
+    elif args.model.name == 'roberta':
+        model = roberta.RoBertaSequenceClassifier(
+            checkpoint=args.model.name_hf,
+            num_classes=n_classes
+        )
+
+        if args.model.optimizer.name == 'Adam':
+            optimizer = torch.optim.AdamW(
+                model.parameters(),
+                lr=args.model.optimizer.lr,
+                weight_decay=args.model.optimizer.weight_decay,
+            )
+        
+        elif args.model.optimizer.name == 'AdamW':
+            optimizer = torch.optim.AdamW(
+                model.parameters(),
+                lr=args.model.optimizer.lr,
+                weight_decay=args.model.optimizer.weight_decay
+            )
+        
+        else:
+            raise NotImplementedError(f'{args.model.optimizer.name} not implemented')
+        
+        criterion = nn.CrossEntropyLoss()
+        train_kwargs = {
+            'optimizer': optimizer,
+            'criterion': criterion,
+            'device': args.device
+        }
+        eval_kwargs = {
+            'criterion': criterion, 
+            'device': args.device
+        }
+        initial_states = {
+            'model': copy.deepcopy(model.state_dict()),
+            'optimizer': copy.deepcopy(optimizer.state_dict())
+        }
+        #TODO: LR SCHEDULER?
+
+        model_dict = {
+            'model': model,
+            'train': bert.train_one_epoch,
+            'eval': bert.eval_one_epoch,
+            'train_kwargs': train_kwargs,
+            'eval_kwargs': eval_kwargs,
+            'initial_states': initial_states
+        }
+
+    elif args.model.name == 'distilbert':
+        model = distilbert.DistilbertSequenceClassifier(
+            checkpoint=args.model.name_hf,
+            num_classes=n_classes
+        )
+
+        if args.model.optimizer.name == 'Adam':
+            optimizer = torch.optim.AdamW(
+                model.parameters(),
+                lr=args.model.optimizer.lr,
+                weight_decay=args.model.optimizer.weight_decay,
+            )
+        
+        elif args.model.optimizer.name == 'AdamW':
+            optimizer = torch.optim.AdamW(
+                model.parameters(),
+                lr=args.model.optimizer.lr,
+                weight_decay=args.model.optimizer.weight_decay
+            )
+        
+        else:
+            raise NotImplementedError(f'{args.model.optimizer.name} not implemented')
+        
+        criterion = nn.CrossEntropyLoss()
+        train_kwargs = {
+            'optimizer': optimizer,
+            'criterion': criterion,
+            'device': args.device
+        }
+        eval_kwargs = {
+            'criterion': criterion, 
+            'device': args.device
+        }
+        initial_states = {
+            'model': copy.deepcopy(model.state_dict()),
+            'optimizer': copy.deepcopy(optimizer.state_dict())
+        }
+        #TODO: LR SCHEDULER?
+
+        model_dict = {
+            'model': model,
+            'train': bert.train_one_epoch,
+            'eval': bert.eval_one_epoch,
+            'train_kwargs': train_kwargs,
+            'eval_kwargs': eval_kwargs,
+            'initial_states': initial_states
+        }
+
     else:
         NotImplementedError(f'Model {args.model} not implemented.')
 

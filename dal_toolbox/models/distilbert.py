@@ -4,7 +4,6 @@ from transformers import AutoModelForSequenceClassification
 from tqdm.auto import tqdm
 from ..metrics import generalization 
 from ..utils import MetricLogger, SmoothedValue
-#!TODO: muss noch gemacht werden
 
 class DistilbertSequenceClassifier(nn.Module):
     def __init__(self, checkpoint, num_classes):
@@ -12,7 +11,7 @@ class DistilbertSequenceClassifier(nn.Module):
 
         self.checkpoint = checkpoint
         self.num_classes = num_classes
-        self.roberta = AutoModelForSequenceClassification.from_pretrained(
+        self.distilbert = AutoModelForSequenceClassification.from_pretrained(
             self.checkpoint, 
             num_labels=self.num_classes)
             
@@ -26,16 +25,13 @@ class DistilbertSequenceClassifier(nn.Module):
         output_attentions=None,
         output_hidden_states=None,
     ):
-        outputs = self.roberta(
-            input_ids, 
-            attention_mask,
-            token_type_ids,
-            position_ids,
-            head_mask,
-            inputs_embeds,
-            labels,
-            output_attentions,
-            output_hidden_states)
+        outputs = self.distilbert(
+            input_ids=input_ids, 
+            attention_mask=attention_mask,
+            head_mask=head_mask,
+            inputs_embeds=inputs_embeds,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states)
 
         logits = outputs['logits']
 
