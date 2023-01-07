@@ -5,7 +5,7 @@ import torch
 import hydra
 
 from torch.utils.tensorboard import SummaryWriter
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, RandomSampler
 from omegaconf import OmegaConf
 
 from dal_toolbox.datasets import build_ssl_dataset
@@ -26,8 +26,11 @@ def main(args):
         unlabeled pool with %s samples.', args.n_labeled_samples, args.n_unlabeled_samples)
     lb_ds, ulb_ds_weak, ulb_ds_strong, val_ds, ds_info = build_ssl_dataset(args)
     supervised_loader = DataLoader(lb_ds, batch_size=args.model.batch_size, shuffle=True)
-    unsupervised_loader_weak = DataLoader(ulb_ds_weak, batch_size=int(args.model.batch_size*args.u_ratio), shuffle=True)
-    unsupervised_loader_strong = DataLoader(ulb_ds_strong, batch_size=int(args.model.batch_size*args.u_ratio), shuffle=True)
+    # Force Same Data Permutation through using a random sampler with the same generator
+    random_sampler_weak = RandomSampler(ulb_ds_weak, generator=torch.Generator().manual_seed(args.random_seed))
+    random_sampler_strong = RandomSampler(ulb_ds_strong, generator=torch.Generator().manual_seed(args.random_seed))
+    unsupervised_loader_weak = DataLoader(ulb_ds_weak, batch_size=int(args.model.batch_size*args.u_ratio), sampler=random_sampler_weak)
+    unsupervised_loader_strong = DataLoader(ulb_ds_strong, batch_size=int(args.model.batch_size*args.u_ratio), sampler=random_sampler_strong)
     val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)
     dataloaders = {
         "train_sup": supervised_loader,
