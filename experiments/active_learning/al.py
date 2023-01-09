@@ -15,13 +15,11 @@ from dal_toolbox.active_learning.data import ALDataset
 from dal_toolbox.models import build_model
 from dal_toolbox.utils import seed_everything
 from dal_toolbox.datasets import build_al_datasets
-from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge
+from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, predefined
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
 def main(args):
-    # logging.basicConfig(filename=os.path.join(args.output_dir, 'active_learning.log'), filemode='w')
-    # logging.basicConfig(filename=os.path.join(args.output_dir, 'active_learning.log'), filemode='w')
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
     os.makedirs(args.output_dir, exist_ok=True)
@@ -33,9 +31,12 @@ def main(args):
     # Setup Dataset
     logging.info('Building datasets. Creating random initial labeled pool with %s samples.', args.al_cycle.n_init)
     train_ds, query_ds, val_ds, ds_info = build_al_datasets(args)
-    al_dataset = ALDataset(train_ds, query_ds)
-    al_dataset.random_init(n_samples=args.al_cycle.n_init)
     val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)
+    al_dataset = ALDataset(train_ds, query_ds)
+    if args.al_strategy.name == 'predefined':
+        al_dataset.load_init(result_json=args.al_strategy.result_json)
+    else:
+        al_dataset.random_init(n_samples=args.al_cycle.n_init)
 
     # Setup Model
     logging.info('Building model: %s', args.model.name)
@@ -166,6 +167,8 @@ def build_query(args, **kwargs):
     elif args.al_strategy.name == "badge":
         device = kwargs['device']
         query = badge.Badge(subset_size=args.al_strategy.subset_size, device=device)
+    elif args.al_strategy.name == "predefined":
+        query = predefined.PredefinedSampling(result_json=args.al_strategy.result_json)
     else:
         raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
     return query
