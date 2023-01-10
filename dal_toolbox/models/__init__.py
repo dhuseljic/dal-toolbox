@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
 
-from . import resnet, resnet_mcdropout, resnet_sngp, wide_resnet, wide_resnet_pseudolabel, wide_resnet_mcdropout, wide_resnet_sngp, lenet
-from . import wideresnet_due, ensemble, wide_resnet_pimodel
+from . import resnet, resnet_mcdropout, resnet_sngp, wide_resnet, wide_resnet_mcdropout, wide_resnet_sngp, lenet
+from . import wideresnet_due, ensemble
+from .ssl_train_methods import pimodel, pseudolabel
 
 from gpytorch.mlls import VariationalELBO
 from gpytorch.likelihoods import SoftmaxLikelihood
@@ -256,15 +257,15 @@ def build_wide_resnet_deterministic(n_classes, dropout_rate, lr, weight_decay, m
 
 def build_wide_resnet_pseudolabels(n_classes, dropout_rate, lr, weight_decay, momentum, n_epochs, device,
 lambda_u, p_cutoff, unsup_warmup, use_hard_labels):
-    model = wide_resnet_pseudolabel.wide_resnet_28_10(num_classes=n_classes, dropout_rate=dropout_rate)
+    model = wide_resnet.wide_resnet_28_10(num_classes=n_classes, dropout_rate=dropout_rate)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=True)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
     criterion = nn.CrossEntropyLoss()
     model_dict = {
         'model': model,
         'optimizer': optimizer,
-        'train_one_epoch': wide_resnet_pseudolabel.train_one_epoch,
-        'evaluate': wide_resnet_pseudolabel.evaluate,
+        'train_one_epoch': pseudolabel.train_one_epoch,
+        'evaluate': wide_resnet.evaluate,
         'lr_scheduler': lr_scheduler,
         'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=device, 
                 lambda_u=lambda_u, p_cutoff=p_cutoff, n_epochs=n_epochs,
@@ -276,15 +277,15 @@ lambda_u, p_cutoff, unsup_warmup, use_hard_labels):
 
 def build_wide_resnet_pimodel(n_classes, dropout_rate, lr, weight_decay, momentum, n_epochs, device,
 lambda_u, unsup_warmup):
-    model = wide_resnet_pimodel.wide_resnet_28_10(num_classes=n_classes, dropout_rate=dropout_rate)
+    model = wide_resnet.wide_resnet_28_10(num_classes=n_classes, dropout_rate=dropout_rate)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=True)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
     criterion = nn.CrossEntropyLoss()
     model_dict = {
         'model': model,
         'optimizer': optimizer,
-        'train_one_epoch': wide_resnet_pimodel.train_one_epoch,
-        'evaluate': wide_resnet_pimodel.evaluate,
+        'train_one_epoch': pimodel.train_one_epoch,
+        'evaluate': wide_resnet.evaluate,
         'lr_scheduler': lr_scheduler,
         'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=device, 
                 lambda_u=lambda_u, n_epochs=n_epochs,
