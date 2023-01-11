@@ -23,7 +23,7 @@ from dal_toolbox.datasets import build_al_datasets
 transformers.logging.set_verbosity_error()
 
 
-@hydra.main(version_base=None, config_path="./configs", config_name="al_nlp_slrm")
+@hydra.main(version_base=None, config_path="./configs", config_name="al_nlp")
 def main(args):
     print(OmegaConf.to_yaml(args))
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
