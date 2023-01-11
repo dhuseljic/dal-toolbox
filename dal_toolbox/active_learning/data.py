@@ -53,7 +53,6 @@ class ALDataset:
         # For e.g., semi-supervised learning
         return FullDataset(self.train_dataset, unlabeled_indices=self.unlabeled_indices)
 
-
     def update_annotations(self, buy_idx: list):
         """
             Updates the labeled pool with newly annotated samples.
@@ -96,23 +95,7 @@ class ALDataset:
         if len(self.labeled_indices) != 0:
             raise ValueError('Pools already initialized.')
         indices = self.rng.sample(self.unlabeled_indices, k=n_samples)
-        self.labeled_indices = list_union(self.labeled_indices, indices)
-        self.unlabeled_indices = list_diff(self.unlabeled_indices, indices)
-
-    def load_init(self, result_json: str):
-        """Initializes the unlabeled pool using the one used in an already run experiment.
-
-            Args:
-                result_json (str): The result json file from the already run experiment.
-        """
-        with open(result_json, 'r') as f:
-            loaded_results = json.load(f)
-        cycle_results = loaded_results['cycle0']
-        indices = cycle_results['labeled_indices']
-        self.labeled_indices = list_union(self.labeled_indices, indices)
-        self.unlabeled_indices = list_diff(self.unlabeled_indices, indices)
-
-
+        self.update_annotations(indices)
 
 
 def list_union(a: list, b: list):

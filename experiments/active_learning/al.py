@@ -30,13 +30,18 @@ def main(args):
     writer = SummaryWriter(log_dir=args.output_dir)
 
     # Setup Dataset
-    logging.info('Building datasets. Creating random initial labeled pool with %s samples.', args.al_cycle.n_init)
+    logging.info('Building datasets.')
     train_ds, query_ds, val_ds, ds_info = build_al_datasets(args)
     val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)
     al_dataset = ALDataset(train_ds, query_ds)
     if args.al_strategy.name == 'predefined':
-        al_dataset.load_init(result_json=args.al_strategy.result_json)
+        logging.info('Using initial labeled pool from %s.', args.al_strategy.queried_indices_json)
+        with open(args.al_strategy.queried_indices_json, 'r', encoding='utf-8') as f:
+            queried_indices_json = json.load(f)
+        indices  = queried_indices_json['cycle0']
+        al_dataset.update_annotations(indices)
     else:
+        logging.info('Creating random initial labeled pool with %s samples.', args.al_cycle.n_init)
         al_dataset.random_init(n_samples=args.al_cycle.n_init)
     queried_indices['cycle0'] = al_dataset.labeled_indices
 
@@ -150,13 +155,13 @@ def main(args):
     # Save results
     file_name = os.path.join(args.output_dir, 'results.json')
     logging.info("Saving queried indices to %s.", file_name)
-    with open(file_name, 'w') as f:
+    with open(file_name, 'w', encoding='utf-8') as f:
         json.dump(results, f)
 
     # Save indices
     file_name = os.path.join(args.output_dir, 'queried_indices.json')
     logging.info("Saving results to %s.", file_name)
-    with open(file_name, 'w') as f:
+    with open(file_name, 'w', encoding='utf-8') as f:
         json.dump(queried_indices, f, sort_keys=False)
 
     # Save Model
@@ -183,7 +188,7 @@ def build_query(args, **kwargs):
         device = kwargs['device']
         query = badge.Badge(subset_size=args.al_strategy.subset_size, device=device)
     elif args.al_strategy.name == "predefined":
-        query = predefined.PredefinedSampling(result_json=args.al_strategy.result_json)
+        query = predefined.PredefinedSampling(queried_indices_json=args.al_strategy.queried_indices_json)
     else:
         raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
     return query
