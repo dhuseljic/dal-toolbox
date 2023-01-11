@@ -12,7 +12,7 @@ class RoBertaSequenceClassifier(nn.Module):
         self.checkpoint = checkpoint
         self.num_classes = num_classes
         self.roberta = AutoModelForSequenceClassification.from_pretrained(
-            self.checkpoint, 
+            self.checkpoint,
             num_labels=self.num_classes)
             
     def forward(
@@ -28,7 +28,7 @@ class RoBertaSequenceClassifier(nn.Module):
         output_hidden_states=None,
     ):
         outputs = self.roberta(
-            input_ids, 
+            input_ids,
             attention_mask,
             token_type_ids,
             position_ids,
@@ -64,25 +64,14 @@ class RoBertaSequenceClassifier(nn.Module):
             all_logits.append(logits.to("cpu"))
         logits = torch.cat(all_logits)
         probas = logits.softmax(-1)
-        return probas   
+        return probas  
 
-def train_one_epoch(model,
-                    dataloader,
-                    epoch,
-                    optimizer,
-                    scheduler,
-                    criterion,
-                    device,
-                    print_freq=25):
+def train_one_epoch(model, dataloader, epoch, optimizer, scheduler, criterion, device, print_freq=25):
     model.train()
     model.to(device)
 
     metric_logger = MetricLogger(delimiter=" ")
-    metric_logger.add_meter(
-        "lr", 
-        SmoothedValue(window_size=1, 
-        fmt="{value:.8f}")
-    )
+    metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.8f}"))
     header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
     for batch in metric_logger.log_every(dataloader, print_freq, header):
@@ -104,9 +93,10 @@ def train_one_epoch(model,
         metric_logger.update(loss=loss.item(), lr=optimizer.param_groups[0]["lr"])
         metric_logger.meters["batch_acc"].update(batch_acc.item(), n=batch_size)
 
-    # save global (epoch) stats: take average of all the saved batch 
+    # save global (epoch) stats: take average of all the saved batch
     train_stats = {f"train_{name}_epoch": meter.global_avg for name, meter, in metric_logger.meters.items()}
-    print(f"Epoch [{epoch}]: Train Loss: {train_stats['train_loss_epoch']:.4f}, Train Accuracy: {train_stats['train_batch_acc_epoch']:.4f}")
+    print(f"Epoch [{epoch}]: Train Loss: {train_stats['train_loss_epoch']:.4f}, \
+        Train Accuracy: {train_stats['train_batch_acc_epoch']:.4f}")
     print("--"*40)
     return train_stats
 
@@ -132,6 +122,7 @@ def eval_one_epoch(model, dataloader, epoch, criterion, device, print_freq=25):
         metric_logger.update(loss=loss.item())
         metric_logger.meters["batch_acc"].update(batch_acc.item(), n=batch_size)
     test_stats = {f"test_{name}_epoch": meter.global_avg for name, meter, in metric_logger.meters.items()}
-    print(f"Epoch [{epoch}]: Test Loss: {test_stats['test_loss_epoch']:.4f}, Test Accuracy: {test_stats['test_batch_acc_epoch']:.4f}")
+    print(f"Epoch [{epoch}]: Test Loss: {test_stats['test_loss_epoch']:.4f}, \
+        Test Accuracy: {test_stats['test_batch_acc_epoch']:.4f}")
     print("--"*40)
     return test_stats

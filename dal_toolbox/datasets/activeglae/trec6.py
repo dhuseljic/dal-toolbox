@@ -9,3 +9,4 @@ def build_trec6(args):
     )
     ds_info = {'n_classes': 6, 'tokenizer': tokenizer}
     return ds, ds_info
+    
