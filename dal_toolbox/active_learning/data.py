@@ -37,6 +37,7 @@ class ALDataset:
         # Set up the indices for unlabeled and labeled pool
         self.unlabeled_indices = range(len(self.train_dataset))
         self.labeled_indices = []
+        self.rng = random.Random(0)
 
     @property
     def unlabeled_dataset(self):
@@ -94,7 +95,7 @@ class ALDataset:
         """
         if len(self.labeled_indices) != 0:
             raise ValueError('Pools already initialized.')
-        indices = random.sample(self.unlabeled_indices, k=n_samples)
+        indices = self.rng.sample(self.unlabeled_indices, k=n_samples)
         self.labeled_indices = list_union(self.labeled_indices, indices)
         self.unlabeled_indices = list_diff(self.unlabeled_indices, indices)
 

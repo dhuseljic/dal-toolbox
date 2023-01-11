@@ -26,6 +26,7 @@ def main(args):
 
     # Necessary for logging
     results = {}
+    queried_indices = {}
     writer = SummaryWriter(log_dir=args.output_dir)
 
     # Setup Dataset
@@ -37,6 +38,7 @@ def main(args):
         al_dataset.load_init(result_json=args.al_strategy.result_json)
     else:
         al_dataset.random_init(n_samples=args.al_cycle.n_init)
+    queried_indices['cycle0'] = al_dataset.labeled_indices
 
     # Setup Model
     logging.info('Building model: %s', args.model.name)
@@ -74,6 +76,7 @@ def main(args):
             logging.info('Querying took %.2f minutes', query_time/60)
             cycle_results['query_indices'] = indices
             cycle_results['query_time'] = query_time
+            queried_indices[f'cycle{i_acq}'] = indices
 
         #  If cold start is set, reset the model parameters
         optimizer.load_state_dict(initial_optimizer_state)
@@ -143,12 +146,24 @@ def main(args):
         }
         torch.save(checkpoint, os.path.join(args.output_dir, 'checkpoint.pth'))
 
+    # Saving
     # Save results
-    fname = os.path.join(args.output_dir, 'results.json')
-    logging.info("Saving results to %s.", fname)
-    # torch.save(checkpoint, os.path.join(args.output_dir, "model_final.pth"))
-    with open(fname, 'w') as f:
+    file_name = os.path.join(args.output_dir, 'results.json')
+    logging.info("Saving queried indices to %s.", file_name)
+    with open(file_name, 'w') as f:
         json.dump(results, f)
+
+    # Save indices
+    file_name = os.path.join(args.output_dir, 'queried_indices.json')
+    logging.info("Saving results to %s.", file_name)
+    with open(file_name, 'w') as f:
+        json.dump(queried_indices, f, sort_keys=False)
+
+    # Save Model
+    file_name = os.path.join(args.output_dir, "model_final.pth")
+    logging.info("Saving final model to %s.", file_name)
+    torch.save(checkpoint, file_name)
+
 
 
 def build_query(args, **kwargs):
