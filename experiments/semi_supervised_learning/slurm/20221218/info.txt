@@ -1,0 +1,3 @@
+These experiments try to reproduce the results of https://github.com/microsoft/Semi-supervised-learning for pseudo labeling with
+WRS2810. Since Flag Value is unknown, the experiment will be run twice, once using hard labels and
+once using soft labels.

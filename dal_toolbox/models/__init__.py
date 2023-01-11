@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from transformers import AutoTokenizer
 
-from . import resnet, resnet_mcdropout, resnet_sngp, wide_resnet, wide_resnet_mcdropout, wide_resnet_sngp, lenet
+from . import resnet, resnet_pseudolabel, resnet_mcdropout, resnet_sngp, wide_resnet, wide_resnet_pseudolabel, wide_resnet_mcdropout, wide_resnet_sngp, lenet
 from . import wideresnet_due, ensemble
 from . import bert, distilbert, distilroberta, roberta
 
@@ -34,6 +34,30 @@ def build_model(args, **kwargs):
             'evaluate': resnet.evaluate,
             'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
+            'eval_kwargs': dict(criterion=criterion, device=args.device),
+        }
+
+    elif args.model.name == 'resnet18_pseudolabels':
+        model = resnet_pseudolabel.ResNet18(n_classes)
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+            nesterov=True
+        )
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        criterion = nn.CrossEntropyLoss()
+        model_dict = {
+            'model': model,
+            'optimizer': optimizer,
+            'train_one_epoch': resnet_pseudolabel.train_one_epoch,
+            'evaluate': resnet_pseudolabel.evaluate,
+            'lr_scheduler': lr_scheduler,
+            'train_kwargs': dict(
+                optimizer=optimizer, criterion=criterion, device=args.device, n_epochs=args.model.n_epochs, 
+                lambda_u=args.model.lambda_u, p_cutoff=args.model.p_cutoff,
+                unsup_warmup=args.model.unsup_warmup, use_hard_labels=args.use_hard_labels),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
         }
 
@@ -131,6 +155,21 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             n_epochs=args.model.n_epochs,
             device=args.device,
+        )
+
+    elif args.model.name == 'wideresnet2810_pseudolabels':
+        model_dict = build_wide_resnet_pseudolabels(
+            n_classes=n_classes,
+            dropout_rate=args.model.dropout_rate,
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+            n_epochs=args.model.n_epochs,
+            device=args.device,
+            lambda_u=args.model.lambda_u,
+            p_cutoff=args.model.p_cutoff,
+            unsup_warmup=args.model.unsup_warmup,
+            use_hard_labels=args.use_hard_labels
         )
 
     elif args.model.name == 'wideresnet2810_mcdropout':
@@ -385,6 +424,26 @@ def build_wide_resnet_deterministic(n_classes, dropout_rate, lr, weight_decay, m
         'evaluate': wide_resnet.evaluate,
         'lr_scheduler': lr_scheduler,
         'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=device),
+        'eval_kwargs': dict(criterion=criterion, device=device),
+    }
+    return model_dict
+
+
+def build_wide_resnet_pseudolabels(n_classes, dropout_rate, lr, weight_decay, momentum, n_epochs, device,
+lambda_u, p_cutoff, unsup_warmup, use_hard_labels):
+    model = wide_resnet_pseudolabel.wide_resnet_28_10(num_classes=n_classes, dropout_rate=dropout_rate)
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=True)
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
+    criterion = nn.CrossEntropyLoss()
+    model_dict = {
+        'model': model,
+        'optimizer': optimizer,
+        'train_one_epoch': wide_resnet_pseudolabel.train_one_epoch,
+        'evaluate': wide_resnet_pseudolabel.evaluate,
+        'lr_scheduler': lr_scheduler,
+        'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=device, 
+                lambda_u=lambda_u, p_cutoff=p_cutoff, n_epochs=n_epochs,
+                unsup_warmup=unsup_warmup, use_hard_labels=use_hard_labels),
         'eval_kwargs': dict(criterion=criterion, device=device),
     }
     return model_dict
