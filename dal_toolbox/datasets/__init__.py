@@ -1,6 +1,6 @@
 import torch
 from torch.utils.data import Subset
-from . import mnist, fashion_mnist, svhn, cifar, tiny_imagenet, imagenet, imdb
+from . import mnist, fashion_mnist, svhn, cifar, tiny_imagenet, imagenet
 from .activeglae import agnews, banks77, dbpedia, fnc1, mnli, qnli, sst2, trec6, wikitalk, yelp5
 
 def build_dataset(args):

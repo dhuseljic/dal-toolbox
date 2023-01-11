@@ -21,6 +21,7 @@ class DistilbertSequenceClassifier(nn.Module):
         attention_mask=None,
         head_mask=None,
         inputs_embeds=None,
+        labels=None,
         output_attentions=None,
         output_hidden_states=None,
     ):
