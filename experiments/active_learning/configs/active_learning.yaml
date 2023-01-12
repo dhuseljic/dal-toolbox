@@ -2,11 +2,9 @@ defaults:
   - model: resnet18
   - al_strategy: random
 
-al_cycle:
-  n_init: 100
-  acq_size: 100
-  n_acq: 10
-  cold_start: True
+defaults:
+  - model: resnet18
+  - al_strategy: random
 
 dataset: CIFAR10
 dataset_path: ./data/
@@ -25,3 +23,4 @@ hydra:
     handlers:
       file:
         mode: w
+
