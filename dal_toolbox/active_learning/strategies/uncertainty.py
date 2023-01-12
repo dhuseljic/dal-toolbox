@@ -28,7 +28,7 @@ class UncertaintySampling(Query):
         if not hasattr(model, 'get_probas'):
             raise ValueError('The method `get_probas` is mandatory to use uncertainty sampling.')
 
-        if (self.subset_size):
+        if self.subset_size:
             unlabeled_indices = self.rng.sample(unlabeled_indices, k=self.subset_size)
             
         if "collator" in list(kwargs.keys()):
