@@ -1,6 +1,6 @@
 defaults:
-  - model: distilbert
-  - al_strategy: uncertainty
+  - model: bert
+  - al_strategy: coreset
   - dataset: agnews
   - _self_
 
