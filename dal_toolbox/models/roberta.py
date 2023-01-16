@@ -15,32 +15,17 @@ class RoBertaSequenceClassifier(nn.Module):
             self.checkpoint,
             num_labels=self.num_classes)
             
-    def forward(
-        self,
-        input_ids=None,
-        attention_mask=None,
-        token_type_ids=None,
-        position_ids=None,
-        head_mask=None,
-        inputs_embeds=None,
-        labels=None,
-        output_attentions=None,
-        output_hidden_states=None,
-    ):
-        outputs = self.roberta(
-            input_ids,
-            attention_mask,
-            token_type_ids,
-            position_ids,
-            head_mask,
-            inputs_embeds,
-            labels,
-            output_attentions,
-            output_hidden_states)
-
+    def forward(self, input_ids, attention_mask, return_cls=False):
+        outputs = self.roberta(input_ids, attention_mask, labels=None, output_hidden_states=True)
         logits = outputs['logits']
 
-        return logits
+        hidden_state = outputs['hidden_states'][0]
+        cls_state = hidden_state[:,0,:]
+        if return_cls:
+            output = (logits, cls_state)
+        else:
+            output = logits
+        return output
 
     @torch.no_grad()
     def forward_logits(self, dataloader, device):
@@ -50,7 +35,6 @@ class RoBertaSequenceClassifier(nn.Module):
             logits = self(samples.to(device))
             all_logits.append(logits)
         return torch.cat(all_logits)
-
 
     @torch.inference_mode()
     def get_probas(self, dataloader, device):
@@ -65,6 +49,19 @@ class RoBertaSequenceClassifier(nn.Module):
         logits = torch.cat(all_logits)
         probas = logits.softmax(-1)
         return probas  
+    
+    @torch.inference_mode()
+    def get_representation(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_features = []
+        for batch in tqdm(dataloader):
+            input_ids = batch["input_ids"].to(device)
+            attention_mask = batch["attention_mask"].to(device)
+            _, cls_state = self(input_ids, attention_mask, return_cls=True)
+            all_features.append(cls_state.to("cpu"))
+        features = torch.cat(all_features)
+        return features
 
 def train_one_epoch(model, dataloader, epoch, optimizer, scheduler, criterion, device, print_freq=25):
     model.train()
@@ -78,8 +75,7 @@ def train_one_epoch(model, dataloader, epoch, optimizer, scheduler, criterion, d
         batch = batch.to(device)
         targets = batch['labels']
        
-        logits = model(**batch)
-
+        logits = model(batch['input_ids'], batch['attention_mask'])
         loss = criterion(logits, targets)
         loss.backward()
 
@@ -112,8 +108,7 @@ def eval_one_epoch(model, dataloader, epoch, criterion, device, print_freq=25):
         batch = batch.to(device)
         targets = batch['labels']
        
-        logits = model(**batch)
-
+        logits = model(batch['input_ids'], batch['attention_mask'])
         loss = criterion(logits, targets)
 
         batch_size = targets.size(0)

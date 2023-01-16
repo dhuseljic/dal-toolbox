@@ -37,7 +37,6 @@ class BertSequenceClassifier(nn.Module):
             all_logits.append(logits)
         return torch.cat(all_logits)
 
-
     @torch.inference_mode()
     def get_probas(self, dataloader, device):
         self.to(device)
@@ -111,7 +110,6 @@ def eval_one_epoch(model, dataloader, epoch, criterion, device, print_freq=25):
         targets = batch['labels']
        
         logits = model(batch['input_ids'], batch['attention_mask'])
-
         loss = criterion(logits, targets)
 
         batch_size = targets.size(0)

@@ -1,5 +1,5 @@
 defaults:
-  - model: bert
+  - model: distilbert
   - al_strategy: coreset
   - dataset: agnews
   - _self_
