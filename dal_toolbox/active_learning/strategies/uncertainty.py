@@ -7,7 +7,7 @@ from ...metrics import ood
 
 
 class UncertaintySampling(Query):
-    def __init__(self, batch_size=128, uncertainty_type='entropy', subset_size=None, device='cuda'):
+    def __init__(self, batch_size=16, uncertainty_type='entropy', subset_size=None, device='cuda'):
         super().__init__()
         self.uncertainty_type = uncertainty_type
         self.subset_size = subset_size
@@ -25,14 +25,22 @@ class UncertaintySampling(Query):
 
     @torch.no_grad()
     def query(self, model, dataset, unlabeled_indices, acq_size, **kwargs):
-        del kwargs
         if not hasattr(model, 'get_probas'):
             raise ValueError('The method `get_probas` is mandatory to use uncertainty sampling.')
 
         if self.subset_size:
             unlabeled_indices = self.rng.sample(unlabeled_indices, k=self.subset_size)
+            
+        if "collator" in list(kwargs.keys()):
+            dataloader = DataLoader(
+                dataset, 
+                batch_size=self.batch_size*2, 
+                collate_fn=kwargs['collator'],
+                sampler=unlabeled_indices)
+        else:
+            dataloader = DataLoader(dataset, batch_size=self.batch_size, sampler=unlabeled_indices)
 
-        dataloader = DataLoader(dataset, batch_size=self.batch_size, sampler=unlabeled_indices)
+        del kwargs
         probas = model.get_probas(dataloader, device=self.device)
         scores = self.get_scores(probas)
 

@@ -1,0 +1,7 @@
+name: agnews
+name_hf: ag_news
+n_classes: 4
+train_subset: 10000
+test_subset: 0
+# train: 120k
+# test: 7600
