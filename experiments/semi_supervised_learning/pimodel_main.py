@@ -3,9 +3,10 @@ import json
 import logging
 import torch
 import hydra
+import copy
 
 from torch.utils.tensorboard import SummaryWriter
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, RandomSampler
 from omegaconf import OmegaConf
 
 from dal_toolbox.datasets import build_ssl_dataset
@@ -24,13 +25,19 @@ def main(args):
     # Setup Dataset
     logging.info('Building datasets. Creating labeled pool with %s samples and \
         unlabeled pool with %s samples.', args.n_labeled_samples, args.n_unlabeled_samples)
-    lb_ds, ulb_ds, _, val_ds, ds_info = build_ssl_dataset(args)
+    lb_ds, ulb_ds_weak, _, val_ds, ds_info = build_ssl_dataset(args)
     supervised_loader = DataLoader(lb_ds, batch_size=args.model.batch_size, shuffle=True)
-    unsupervised_loader = DataLoader(ulb_ds, batch_size=int(args.model.batch_size*args.u_ratio), shuffle=True)
+    
+    # TODO: Deepcopy of sampler doesn't work because of generator -> different solution?
+    random_sampler_weak_1 = RandomSampler(ulb_ds_weak, generator=torch.Generator().manual_seed(args.random_seed))
+    random_sampler_weak_2 = RandomSampler(ulb_ds_weak, generator=torch.Generator().manual_seed(args.random_seed))
+    unsupervised_loader_weak_1 = DataLoader(ulb_ds_weak, batch_size=int(args.model.batch_size*args.u_ratio), sampler=random_sampler_weak_1)
+    unsupervised_loader_weak_2 = DataLoader(ulb_ds_weak, batch_size=int(args.model.batch_size*args.u_ratio), sampler=random_sampler_weak_2)
     val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)
     dataloaders = {
         "train_sup": supervised_loader,
-        "train_unsup": unsupervised_loader
+        "train_unsup_weak_1": unsupervised_loader_weak_1,
+        "train_unsup_weak_2": unsupervised_loader_weak_2
     }
 
     # Setup Model
@@ -67,7 +74,7 @@ def main(args):
     # Indices of torchvision dset are int64 which are not json compatible
     misc = {
         "labeled_indices": [int(i) for i in lb_ds.indices],
-        "unlabeled_indices": [int(i) for i in ulb_ds.indices]
+        "unlabeled_indices": [int(i) for i in ulb_ds_weak.indices]
     }
 
     results = {
