@@ -20,18 +20,16 @@ def train_one_epoch(model, dataloaders, criterion, optimizer, device, use_hard_l
         x_ulb_weak = x_ulb_weak.to(device)
         x_ulb_strong = x_ulb_strong.to(device)
 
-        # Outputs of labeled data
-        logits_lb = model(x_lb)
+        # Forward Propagation
+        num_lb = x_lb.shape[0]
+        outputs = model(torch.cat((x_lb, x_ulb_weak, x_ulb_strong)))
+
+        # Untangle outputs
+        logits_lb = outputs[:num_lb]
+        logits_ulb_weak, logits_ulb_strong = outputs[num_lb:].chunk(2)
 
         # Supervised loss
         sup_loss = criterion(logits_lb, y_lb)
-
-        # Outputs of strongly augmented data
-        logits_ulb_strong = model(x_ulb_strong)
-
-        # Outputs of weakly augmented data that should not influence the model-parameters
-        with torch.no_grad():
-            logits_ulb_weak = model(x_ulb_weak)
 
         # Generate mask
         mask = generate_mask(logits_ulb_weak, p_cutoff)
