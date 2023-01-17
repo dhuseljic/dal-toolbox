@@ -2,9 +2,11 @@ defaults:
   - model: resnet18
   - al_strategy: random
 
-defaults:
-  - model: resnet18
-  - al_strategy: random
+al_cycle:
+  n_init: 100
+  acq_size: 100
+  n_acq: 10
+  cold_start: True
 
 dataset: CIFAR10
 dataset_path: ./data/

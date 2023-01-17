@@ -52,21 +52,6 @@ class ALDataset:
         # For e.g., semi-supervised learning
         return FullDataset(self.train_dataset, unlabeled_indices=self.unlabeled_indices)
 
-    def random_init(self, n_samples: int):
-        """
-            Randomly buys samples from the unlabeled pool and adds them to the labeled one.
-
-            Args:
-                n_samples (int): Size of the initial labeld pool.   
-        """
-
-        if len(self.labeled_indices) != 0:
-            raise ValueError('Pools already initialized.')
-        buy_idx = random.sample(self.unlabeled_indices, k=n_samples)
-        self.labeled_indices = list_union(self.labeled_indices, buy_idx)
-        self.unlabeled_indices = list_diff(self.unlabeled_indices, buy_idx)
-        #TODO: update annotations? redudanter code?
-
     def update_annotations(self, buy_idx: list):
         """
             Updates the labeled pool with newly annotated samples.
