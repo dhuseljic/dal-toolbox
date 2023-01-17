@@ -5,7 +5,7 @@ from transformers import AutoTokenizer
 
 from . import resnet, resnet_mcdropout, resnet_sngp, wide_resnet, wide_resnet_mcdropout, wide_resnet_sngp, lenet
 from . import wideresnet_due, ensemble
-from .ssl_train_methods import pimodel, pseudolabel
+from .ssl_train_methods import pimodel, pseudolabel, fixmatch
 from . import bert, distilbert, distilroberta, roberta
 
 
@@ -160,6 +160,22 @@ def build_model(args, **kwargs):
             device=args.device,
             lambda_u=args.model.lambda_u,
             unsup_warmup=args.model.unsup_warmup
+        )
+
+
+    elif args.model.name == 'wideresnet2810_fixmatch':
+        model_dict = build_wide_resnet_fixmatch(
+            n_classes=n_classes,
+            dropout_rate=args.model.dropout_rate,
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+            n_epochs=args.model.n_epochs,
+            device=args.device,
+            lambda_u=args.model.lambda_u,
+            p_cutoff=args.model.p_cutoff,
+            T=args.model.T,
+            use_hard_labels=args.use_hard_labels
         )
 
 
@@ -440,6 +456,25 @@ lambda_u, unsup_warmup):
         'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=device, 
                 lambda_u=lambda_u, n_epochs=n_epochs,
                 unsup_warmup=unsup_warmup),
+        'eval_kwargs': dict(criterion=criterion, device=device),
+    }
+    return model_dict
+
+
+def build_wide_resnet_fixmatch(n_classes, dropout_rate, lr, weight_decay, momentum, n_epochs, device, p_cutoff,
+lambda_u, T, use_hard_labels):
+    model = wide_resnet.wide_resnet_28_10(num_classes=n_classes, dropout_rate=dropout_rate)
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=True)
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
+    criterion = nn.CrossEntropyLoss()
+    model_dict = {
+        'model': model,
+        'optimizer': optimizer,
+        'train_one_epoch': fixmatch.train_one_epoch,
+        'evaluate': wide_resnet.evaluate,
+        'lr_scheduler': lr_scheduler,
+        'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=device, 
+                lambda_u=lambda_u, T=T, p_cutoff=p_cutoff, use_hard_labels=use_hard_labels),
         'eval_kwargs': dict(criterion=criterion, device=device),
     }
     return model_dict
