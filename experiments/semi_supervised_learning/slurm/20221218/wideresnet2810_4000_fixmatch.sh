@@ -26,4 +26,5 @@ srun python -u experiments/semi_supervised_learning/fixmatch_main.py \
     output_dir=$OUTPUT_DIR \
     use_hard_labels=True \
     random_seed=${SLURM_ARRAY_TASK_ID} \
-    n_labeled_samples=4000
+    n_labeled_samples=4000 \
+    u_ratio=7

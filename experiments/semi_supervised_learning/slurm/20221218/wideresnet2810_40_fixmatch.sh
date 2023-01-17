@@ -25,4 +25,5 @@ srun python -u experiments/semi_supervised_learning/fixmatch_main.py \
     model=wideresnet2810_fixmatch \
     output_dir=$OUTPUT_DIR \
     use_hard_labels=True \
-    random_seed=${SLURM_ARRAY_TASK_ID}
+    random_seed=${SLURM_ARRAY_TASK_ID} \
+    u_ratio=7
