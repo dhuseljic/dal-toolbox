@@ -6,6 +6,7 @@ from .query import Query
 
 class PredefinedSampling(Query):
     def __init__(self, queried_indices_json):
+        # TODO: Add checks for init pool and acq size ...
         super().__init__()
         self.queried_indices_json = queried_indices_json
 
