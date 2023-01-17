@@ -188,7 +188,10 @@ def build_query(args, **kwargs):
         query = badge.Badge(subset_size=args.al_strategy.subset_size, device=device)
     elif args.al_strategy.name == "predefined":
         query = predefined.PredefinedSampling(
-            queried_indices_json=args.al_strategy.queried_indices_json
+            queried_indices_json=args.al_strategy.queried_indices_json,
+            n_acq=args.al_cycle.n_acq,
+            n_init=args.al_cycle.n_init,
+            acq_size=args.al_cycle.acq_size,
         )
     else:
         raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
