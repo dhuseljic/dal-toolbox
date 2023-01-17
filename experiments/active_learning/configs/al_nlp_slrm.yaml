@@ -1,0 +1,26 @@
+defaults:
+  - model: bert
+  - al_strategy: uncertainty
+  - dataset: agnews
+  - _self_
+
+al_cycle:
+  n_init: 100
+  acq_size: 100
+  n_acq: 15
+  cold_start: True
+
+dataset_path: $HOME/.cache/huggingface/datasets
+device: cuda
+
+random_seed: 42
+val_batch_size: 128
+print_freq_eval: 25
+print_freq_train: 25
+
+output_dir: ./output/
+hydra:
+  job:
+    chdir: True
+  run:
+    dir: ${output_dir}

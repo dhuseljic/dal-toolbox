@@ -1,0 +1,11 @@
+name: bert
+name_hf: bert-base-cased
+n_epochs: 5
+batch_size: 24
+optimizer:
+  name: AdamW
+  lr: 3e-5
+  lr_scheduler: linear_warmup
+  warmup_steps: 200
+  weight_decay: 0.01
+

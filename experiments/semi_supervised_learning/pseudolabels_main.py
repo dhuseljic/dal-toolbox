@@ -12,8 +12,6 @@ from dal_toolbox.datasets import build_ssl_dataset
 from dal_toolbox.models import build_model
 from dal_toolbox.utils import seed_everything
 
-#TODO: Is unlabeled data with or without data augmentation?
-
 @hydra.main(version_base=None, config_path="./configs", config_name="semi_supervised_learning")
 def main(args):
     # Initial Setup (Seed, create output folder, SummaryWriter and results-container init)
@@ -26,7 +24,7 @@ def main(args):
     # Setup Dataset
     logging.info('Building datasets. Creating labeled pool with %s samples and \
         unlabeled pool with %s samples.', args.n_labeled_samples, args.n_unlabeled_samples)
-    lb_ds, ulb_ds, val_ds, ds_info = build_ssl_dataset(args)
+    lb_ds, ulb_ds, _, val_ds, ds_info = build_ssl_dataset(args)
     supervised_loader = DataLoader(lb_ds, batch_size=args.model.batch_size, shuffle=True)
     unsupervised_loader = DataLoader(ulb_ds, batch_size=int(args.model.batch_size*args.u_ratio), shuffle=True)
     val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)

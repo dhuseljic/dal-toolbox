@@ -1,0 +1,10 @@
+name: wideresnet2810_pimodel
+n_epochs: 1024
+unsup_warmup: 0.4
+lambda_u: 10
+batch_size: 64
+dropout_rate: 0.0
+optimizer:
+  lr: 0.03
+  weight_decay: 5e-4
+  momentum: .9
