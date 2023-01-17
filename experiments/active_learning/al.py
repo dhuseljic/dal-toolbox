@@ -38,7 +38,7 @@ def main(args):
         logging.info('Using initial labeled pool from %s.', args.al_strategy.queried_indices_json)
         with open(args.al_strategy.queried_indices_json, 'r', encoding='utf-8') as f:
             queried_indices_json = json.load(f)
-        indices  = queried_indices_json['cycle0']
+        indices = queried_indices_json['cycle0']
         al_dataset.update_annotations(indices)
     else:
         logging.info('Creating random initial labeled pool with %s samples.', args.al_cycle.n_init)
@@ -170,7 +170,6 @@ def main(args):
     torch.save(checkpoint, file_name)
 
 
-
 def build_query(args, **kwargs):
     if args.al_strategy.name == "random":
         query = random.RandomSampling(random_seed=args.random_seed)
@@ -188,7 +187,9 @@ def build_query(args, **kwargs):
         device = kwargs['device']
         query = badge.Badge(subset_size=args.al_strategy.subset_size, device=device)
     elif args.al_strategy.name == "predefined":
-        query = predefined.PredefinedSampling(queried_indices_json=args.al_strategy.queried_indices_json)
+        query = predefined.PredefinedSampling(
+            queried_indices_json=args.al_strategy.queried_indices_json
+        )
     else:
         raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
     return query
