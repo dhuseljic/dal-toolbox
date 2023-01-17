@@ -1,0 +1,5 @@
+project: glae
+entity: lura
+group: default
+reinit: True
+mode: online

@@ -79,7 +79,7 @@ def train_one_epoch(model, dataloader, epoch, optimizer, scheduler, criterion, d
         loss = criterion(logits, targets)
         loss.backward()
 
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 3)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad()
