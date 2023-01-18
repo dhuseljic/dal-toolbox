@@ -1,10 +1,11 @@
 defaults:
-  - model: resnet18
+  - model: wideresnet2810
 
 dataset: CIFAR10
 dataset_path: ./data/
 n_labeled_samples: 40
 n_unlabeled_samples: 0
+eval_interval: 1
 
 device: cuda
 random_seed: 42
