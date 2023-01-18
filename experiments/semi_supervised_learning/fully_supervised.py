@@ -18,7 +18,6 @@ def main(args):
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
     os.makedirs(args.output_dir, exist_ok=True)
-    misc = {}
     writer = SummaryWriter(log_dir=args.output_dir)
 
     # Setup Dataset
