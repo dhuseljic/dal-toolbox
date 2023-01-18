@@ -475,7 +475,7 @@ lambda_u, T, use_hard_labels, use_cat):
         'evaluate': wide_resnet.evaluate,
         'lr_scheduler': lr_scheduler,
         'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=device, 
-                lambda_u=lambda_u, T=T, p_cutoff=p_cutoff, use_hard_labels=use_hard_labels, cat=use_cat),
+                lambda_u=lambda_u, T=T, p_cutoff=p_cutoff, use_hard_labels=use_hard_labels, use_cat=use_cat),
         'eval_kwargs': dict(criterion=criterion, device=device),
     }
     return model_dict
