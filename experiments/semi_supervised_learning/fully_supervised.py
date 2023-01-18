@@ -1,7 +1,6 @@
 import os
 import json
 import logging
-import torch
 import hydra
 
 from torch.utils.tensorboard import SummaryWriter
@@ -13,7 +12,7 @@ from dal_toolbox.models import build_model
 from dal_toolbox.utils import seed_everything
 
 
-@hydra.main(version_base=None, config_path="./configs", config_name="fully_supervised_learning")
+@hydra.main(version_base=None, config_path="./configs", config_name="fully_supervised")
 def main(args):
     # Initial Setup (Seed, create output folder, SummaryWriter and results-container init)
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))

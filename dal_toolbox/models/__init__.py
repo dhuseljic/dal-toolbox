@@ -133,34 +133,6 @@ def build_model(args, **kwargs):
             device=args.device,
         )
 
-    elif args.model.name == 'wideresnet2810_pseudolabels':
-        model_dict = build_wide_resnet_pseudolabels(
-            n_classes=n_classes,
-            dropout_rate=args.model.dropout_rate,
-            lr=args.model.optimizer.lr,
-            weight_decay=args.model.optimizer.weight_decay,
-            momentum=args.model.optimizer.momentum,
-            n_epochs=args.model.n_epochs,
-            device=args.device,
-            lambda_u=args.model.lambda_u,
-            p_cutoff=args.model.p_cutoff,
-            unsup_warmup=args.model.unsup_warmup,
-            use_hard_labels=args.use_hard_labels
-        )
-
-    elif args.model.name == 'wideresnet2810_pimodel':
-        model_dict = build_wide_resnet_pimodel(
-            n_classes=n_classes,
-            dropout_rate=args.model.dropout_rate,
-            lr=args.model.optimizer.lr,
-            weight_decay=args.model.optimizer.weight_decay,
-            momentum=args.model.optimizer.momentum,
-            n_epochs=args.model.n_epochs,
-            device=args.device,
-            lambda_u=args.model.lambda_u,
-            unsup_warmup=args.model.unsup_warmup
-        )
-
     elif args.model.name == 'wideresnet2810_mcdropout':
         model_dict = build_wide_resnet_mcdropout(
             n_classes=n_classes,
@@ -549,8 +521,8 @@ def build_ssl_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             n_epochs=args.model.n_epochs,
             device=args.device,
-            lambda_u=args.model.lambda_u,
-            unsup_warmup=args.model.unsup_warmup
+            lambda_u=args.ssl_algorithm.lambda_u,
+            unsup_warmup=args.ssl_algorithm.unsup_warmup
         )
     else:
         raise NotImplementedError()
