@@ -20,6 +20,7 @@ from dal_toolbox.active_learning.strategies import random, uncertainty, coreset,
 from dal_toolbox.models import build_model
 from dal_toolbox.utils import seed_everything
 from dal_toolbox.datasets import build_al_datasets
+from dal_toolbox.metrics.generalization import area_under_curve
 
 transformers.logging.set_verbosity_error()
 
@@ -206,6 +207,21 @@ def main(args):
             torch.save(checkpoint, os.path.join(os.getcwd(), f"check{i_acq}.pth"))   
         
     writer.close()
+    acc = [cycles['test_stats']['test_batch_acc_epoch'] for cycles in results.values()]
+    f1 = [cycles['test_stats']['test_batch_f1_epoch'] for cycles in results.values()]
+    acc_blc = [cycles['test_stats']['test_batch_acc_balanced_epoch'] for cycles in results.values()]
+    auc_acc = area_under_curve(acc)
+    auc_f1 = area_under_curve(f1)
+    auc_acc_blc = area_under_curve(acc_blc)
+    results[f'cycle{i_acq}']['test_stats']['auc_acc'] = auc_acc
+    results[f'cycle{i_acq}']['test_stats']['auc_f1'] = auc_f1
+    results[f'cycle{i_acq}']['test_stats']['auc_acc_blc'] = auc_acc_blc
+
+    wandb.log({
+        'final_auc_acc':auc_acc,
+        'final_auc_f1': auc_f1,
+        'final_auc_acc_blc': auc_acc_blc
+        })
     savepath = os.path.join(args.output_dir, 'results.json')
     logging.info('Saving results to %s', savepath)
     print(f'Saving results to {savepath}.')
