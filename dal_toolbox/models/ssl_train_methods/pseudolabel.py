@@ -3,7 +3,7 @@ import torch.nn.functional as F
 
 from ...metrics import generalization
 from ...utils import MetricLogger, SmoothedValue
-from ..utils.pseudo_labels import generate_mask, generate_pseudo_labels, freeze_bn, unfreeze_bn
+from .utils import generate_mask, generate_pseudo_labels, freeze_bn, unfreeze_bn
 
 
 def train_one_epoch(model, dataloaders, criterion, optimizer, device, n_epochs, unsup_warmup, 

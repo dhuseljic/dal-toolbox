@@ -1,13 +1,12 @@
 import torch
 
-from ..utils.pseudo_labels import generate_mask, generate_pseudo_labels
-from ..utils.pimodel import consistency_loss
 from ...metrics import generalization
 from ...utils import MetricLogger, SmoothedValue
+from .utils import ce_loss, consistency_loss, generate_mask, generate_pseudo_labels
 
 
 def train_one_epoch(model, dataloaders, criterion, optimizer, device, use_hard_labels,
-                    lambda_u, p_cutoff, T):
+                    lambda_u, p_cutoff, use_cat, T):
     model.train()
     model.to(device)
     criterion.to(device)
@@ -20,16 +19,22 @@ def train_one_epoch(model, dataloaders, criterion, optimizer, device, use_hard_l
         x_ulb_weak = x_ulb_weak.to(device)
         x_ulb_strong = x_ulb_strong.to(device)
 
-        # Forward Propagation
-        num_lb = x_lb.shape[0]
-        outputs = model(torch.cat((x_lb, x_ulb_weak, x_ulb_strong)))
-
-        # Untangle outputs
-        logits_lb = outputs[:num_lb]
-        logits_ulb_weak, logits_ulb_strong = outputs[num_lb:].chunk(2)
+        # Forward Propagation of all samples
+        if use_cat:
+            num_lb = x_lb.shape[0]
+            outputs = model(torch.cat((x_lb, x_ulb_weak, x_ulb_strong)))
+            logits_lb = outputs[:num_lb]
+            logits_ulb_weak, logits_ulb_strong = outputs[num_lb:].chunk(2)
+        else:
+            logits_lb = model(x_lb) 
+            logits_ulb_strong = model(x_ulb_strong)
+            with torch.no_grad():
+               logits_ulb_weak = model(x_ulb_weak)
 
         # Supervised loss
-        sup_loss = criterion(logits_lb, y_lb)
+        sup_loss = ce_loss(logits_lb, y_lb, reduction='mean')
+
+        probs_ulb_weak = torch.softmax(logits_ulb_weak, dim=-1)
 
         # Generate mask
         mask = generate_mask(logits_ulb_weak, p_cutoff)

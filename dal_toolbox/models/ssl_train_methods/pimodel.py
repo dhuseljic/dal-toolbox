@@ -1,7 +1,6 @@
 import torch
 
-from ..utils.pseudo_labels import freeze_bn, unfreeze_bn
-from ..utils.pimodel import consistency_loss
+from .utils import consistency_loss, freeze_bn, unfreeze_bn
 from ...metrics import generalization
 from ...utils import MetricLogger, SmoothedValue
 
