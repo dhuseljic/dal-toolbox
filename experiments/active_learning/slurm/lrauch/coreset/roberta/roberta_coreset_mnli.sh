@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --job-name=glae_mnli_entropy_bert
+#SBATCH --job-name=glae_mnli_coreset_roberta
 #SBATCH --output=/mnt/work/lrauch/logs/active_learning/%x_%a.log
 #SBATCH --array=1-5%5
 date;hostname;pwd
