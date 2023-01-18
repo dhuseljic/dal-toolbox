@@ -1,7 +1,7 @@
 import torch
+import torch.nn.functional as F
 
-from ..utils.pseudo_labels import freeze_bn, unfreeze_bn
-from ..utils.pimodel import consistency_loss
+from ..utils import freeze_bn, unfreeze_bn
 from ...metrics import generalization
 from ...utils import MetricLogger, SmoothedValue
 
@@ -23,23 +23,23 @@ def train_one_epoch(model, dataloaders, criterion, optimizer, device, n_epochs, 
     for x_lb, y_lb in metric_logger.log_every(labeled_loader, print_freq=print_freq, header=header):
         x_lb, y_lb = x_lb.to(device), y_lb.to(device)
 
-        # Outputs of labeled data
+        # Supervised
         logits_lb = model(x_lb)
         sup_loss = criterion(logits_lb, y_lb)
 
+        # Unsupervised Loss
         x_ulb_weak_1, _ = next(unlabeled_iter1)
         x_ulb_weak_1 = x_ulb_weak_1.to(device)
         x_ulb_weak_2, _ = next(unlabeled_iter2)
         x_ulb_weak_2 = x_ulb_weak_2.to(device)
 
-        # Outputs of unlabeled data but without batch norm
+        # Outputs of unlabeled data without batch norm
         bn_backup = freeze_bn(model)
         logits_ulb_weak_1 = model(x_ulb_weak_1)
         logits_ulb_weak_2 = model(x_ulb_weak_2)
         unfreeze_bn(model, bn_backup)
 
-        unsup_loss = consistency_loss(logits_ulb_weak_2, torch.softmax(logits_ulb_weak_1.detach(), dim=-1), 'mse')
-        # Calculate SSL Warm Up Factor
+        unsup_loss = F.mse_loss(logits_ulb_weak_2.softmax(-1), logits_ulb_weak_1.detach().softmax(-1))
         unsup_warmup_ = torch.clip(torch.tensor(epoch / (unsup_warmup * n_epochs)),  min=0.0, max=1.0)
 
         # Loss thats used for backpropagation

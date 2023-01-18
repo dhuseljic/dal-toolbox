@@ -1,9 +1,9 @@
 import torch
 import torch.nn.functional as F
 
+from ..utils import freeze_bn, unfreeze_bn
 from ...metrics import generalization
 from ...utils import MetricLogger, SmoothedValue
-from ..utils.pseudo_labels import generate_mask, generate_pseudo_labels, freeze_bn, unfreeze_bn
 
 
 def train_one_epoch(model, dataloaders, criterion, optimizer, device, n_epochs, p_cutoff, lambda_u,
@@ -23,9 +23,11 @@ def train_one_epoch(model, dataloaders, criterion, optimizer, device, n_epochs, 
     for (x_lb, y_lb) in metric_logger.log_every(labeled_loader, print_freq=print_freq, header=header):
         x_lb, y_lb = x_lb.to(device), y_lb.to(device)
 
+        # Supervised
         logits_lb = model(x_lb)
         sup_loss = criterion(logits_lb, y_lb)
 
+        # Unsupervised
         x_ulb, _ = next(unlabeled_iter)
         x_ulb = x_ulb.to(device)
 
@@ -34,15 +36,18 @@ def train_one_epoch(model, dataloaders, criterion, optimizer, device, n_epochs, 
         logits_ulb = model(x_ulb)
         unfreeze_bn(model, bn_backup)
 
-        # Generate pseudo labels in form of argmax of probas
-        ps_lb = generate_pseudo_labels(logits_ulb, use_hard_labels)
-        # Generate a mask in Form of a boolean tensor that is true if argmax of probas is > p_cutoff
-        mask = generate_mask(logits_ulb, p_cutoff)
-        # Unsupervised Loss for highly certain pseudo labels
-        unsup_loss = (F.cross_entropy(logits_ulb, ps_lb, reduction='none') * mask).mean()
+        # Generate pseudo labels and mask
+        if use_hard_labels:
+            probas_ulb = torch.softmax(logits_ulb.detach(), dim=-1)
+        else:
+            T = 1.0
+            probas_ulb = torch.softmax(logits_ulb.detach()/T, dim=-1)
+        max_probas, pseudo_label = torch.max(probas_ulb, dim=-1)
+        mask = max_probas.ge(p_cutoff)
 
-        # Calculate SSL Warm Up Factor
+        unsup_loss = (F.cross_entropy(logits_ulb, pseudo_label, reduction='none') * mask).mean()
         unsup_warmup = torch.clip(torch.tensor(epoch / (unsup_warmup * n_epochs)),  min=0.0, max=1.0)
+
         # Loss thats used for backpropagation
         loss = sup_loss + unsup_warmup * lambda_u * unsup_loss
 
