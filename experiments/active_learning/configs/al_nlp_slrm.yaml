@@ -11,7 +11,7 @@ al_cycle:
   cold_start: True
 
 wandb:
-  project: glae
+  project: active_glae
   entity: lura
   group: default
   reinit: True
