@@ -175,7 +175,8 @@ def build_model(args, **kwargs):
             lambda_u=args.model.lambda_u,
             p_cutoff=args.model.p_cutoff,
             T=args.model.T,
-            use_hard_labels=args.use_hard_labels
+            use_hard_labels=args.use_hard_labels,
+            use_cat=args.model.use_cat
         )
 
 
@@ -462,7 +463,7 @@ lambda_u, unsup_warmup):
 
 
 def build_wide_resnet_fixmatch(n_classes, dropout_rate, lr, weight_decay, momentum, n_epochs, device, p_cutoff,
-lambda_u, T, use_hard_labels):
+lambda_u, T, use_hard_labels, use_cat):
     model = wide_resnet.wide_resnet_28_10(num_classes=n_classes, dropout_rate=dropout_rate)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=True)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
@@ -474,7 +475,7 @@ lambda_u, T, use_hard_labels):
         'evaluate': wide_resnet.evaluate,
         'lr_scheduler': lr_scheduler,
         'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=device, 
-                lambda_u=lambda_u, T=T, p_cutoff=p_cutoff, use_hard_labels=use_hard_labels),
+                lambda_u=lambda_u, T=T, p_cutoff=p_cutoff, use_hard_labels=use_hard_labels, use_cat=use_cat),
         'eval_kwargs': dict(criterion=criterion, device=device),
     }
     return model_dict

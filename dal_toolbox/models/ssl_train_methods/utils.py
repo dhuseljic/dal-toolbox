@@ -18,11 +18,14 @@ def generate_pseudo_labels(logits, use_hard_label=True, T=1.0, softmax=True):
         return pseudo_label
 
 
-def generate_mask(logits_x_ulb, p_cutoff):
+def generate_mask(logits_x_ulb, p_cutoff, softmax=True):
     """
         Returns: A boolean tensor that is True where input is greater than or equal to p_cutoff and False elsewhere
     """
-    probs_x_ulb = torch.softmax(logits_x_ulb.detach(), dim=-1)
+    if softmax:
+        probs_x_ulb = torch.softmax(logits_x_ulb.detach(), dim=-1)
+    else:
+        probs_x_ulb = logits_x_ulb
     max_probs, _ = torch.max(probs_x_ulb, dim=-1)
     mask = max_probs.ge(p_cutoff)
     return mask
@@ -44,7 +47,7 @@ def unfreeze_bn(model, backup):
             module.running_mean.data = backup[name + '.running_mean']
             module.running_var.data = backup[name + '.running_var']
             module.num_batches_tracked.data = backup[name + '.num_batches_tracked']
-            
+
 
 def ce_loss(logits, targets, reduction='none'):
     """

@@ -35,20 +35,19 @@ def train_one_epoch(model, dataloaders, criterion, optimizer, device, use_hard_l
         sup_loss = ce_loss(logits_lb, y_lb, reduction='mean')
 
         probs_ulb_weak = torch.softmax(logits_ulb_weak, dim=-1)
+        mask = generate_mask(probs_ulb_weak, p_cutoff, softmax=False)
 
-        # Generate mask
-        mask = generate_mask(logits_ulb_weak, p_cutoff)
+        # generate unlabeled targets using pseudo label hook
+        pseudo_labels = generate_pseudo_labels(logits=probs_ulb_weak,
+                                      use_hard_label=use_hard_labels,
+                                      T=T,
+                                      softmax=False)
 
-        # Generate pseudolabels
-        ps_lb = generate_pseudo_labels(logits_ulb_weak, use_hard_labels, T=T)
-
-        # Unsupervised Loss
         unsup_loss = consistency_loss(logits_ulb_strong,
-                                          ps_lb,
-                                          'ce',
-                                          mask=mask)
+                                        pseudo_labels,
+                                        'ce',
+                                        mask=mask)
 
-        # Loss thats used for backpropagation
         total_loss = sup_loss + lambda_u * unsup_loss
 
         # Update Model Weights
