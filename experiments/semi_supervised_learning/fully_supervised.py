@@ -12,6 +12,7 @@ from dal_toolbox.datasets import build_ssl_dataset
 from dal_toolbox.models import build_model
 from dal_toolbox.utils import seed_everything
 
+
 @hydra.main(version_base=None, config_path="./configs", config_name="fully_supervised_learning")
 def main(args):
     # Initial Setup (Seed, create output folder, SummaryWriter and results-container init)
@@ -46,27 +47,22 @@ def main(args):
         for key, value in train_stats.items():
             writer.add_scalar(tag=f"train/{key}", scalar_value=value, global_step=i_epoch)
         logging.info('Training stats: %s', train_stats)
+        history_train.append(train_stats)
 
         # Evaluate model on test set
-        logging.info('Evaluation epoch %s', i_epoch)
-        test_stats = evaluate(model, val_loader, dataloaders_ood={}, **model_dict['eval_kwargs'])
-        for key, value in test_stats.items():
-            writer.add_scalar(tag=f"test/{key}", scalar_value=value, global_step=i_epoch)
-        logging.info('Evaluation stats: %s', test_stats)
-
-        # Save results
-        history_train.append(train_stats)
-        history_test.append(test_stats)
+        if (i_epoch+1) % args.eval_interval == 0 or (i_epoch+1) == args.model.n_epochs:
+            logging.info('Evaluation epoch %s', i_epoch)
+            test_stats = evaluate(model, val_loader, dataloaders_ood={}, **model_dict['eval_kwargs'])
+            for key, value in test_stats.items():
+                writer.add_scalar(tag=f"test/{key}", scalar_value=value, global_step=i_epoch)
+            logging.info('Evaluation stats: %s', test_stats)
+            history_test.append(test_stats)
 
     # Indices of torchvision dset are int64 which are not json compatible
-    misc = {
-        "labeled_indices": [int(i) for i in lb_ds.indices],
-    }
-
     results = {
         'train_history': history_train,
         'test_history': history_test,
-        'misc': misc
+        "labeled_indices": [int(i) for i in lb_ds.indices],
     }
 
     fname = os.path.join(args.output_dir, 'results.json')
