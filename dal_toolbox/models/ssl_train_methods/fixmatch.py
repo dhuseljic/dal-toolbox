@@ -1,9 +1,8 @@
 import torch
+import torch.nn.functional as F
 
 from ...metrics import generalization
 from ...utils import MetricLogger, SmoothedValue
-from .utils import ce_loss, consistency_loss, generate_mask, generate_pseudo_labels
-
 
 def train_one_epoch(model, dataloaders, criterion, optimizer, device, use_hard_labels,
                     lambda_u, p_cutoff, use_cat, T):
@@ -31,23 +30,18 @@ def train_one_epoch(model, dataloaders, criterion, optimizer, device, use_hard_l
             with torch.no_grad():
                logits_ulb_weak = model(x_ulb_weak)
 
-        # Supervised loss
-        sup_loss = ce_loss(logits_lb, y_lb, reduction='mean')
+        # Generate pseudo labels and mask
+        if use_hard_labels:
+            probas_ulb_weak = torch.softmax(logits_ulb_weak.detach(), dim=-1)
+        else:
+            T = 1.0
+            probas_ulb_weak = torch.softmax(logits_ulb_weak.detach()/T, dim=-1)
+        max_probas_weak, pseudo_labels = torch.max(probas_ulb_weak, dim=-1)
+        mask = max_probas_weak.ge(p_cutoff)
 
-        probs_ulb_weak = torch.softmax(logits_ulb_weak, dim=-1)
-        mask = generate_mask(probs_ulb_weak, p_cutoff, softmax=False)
-
-        # generate unlabeled targets using pseudo label hook
-        pseudo_labels = generate_pseudo_labels(logits=probs_ulb_weak,
-                                      use_hard_label=use_hard_labels,
-                                      T=T,
-                                      softmax=False)
-
-        unsup_loss = consistency_loss(logits_ulb_strong,
-                                        pseudo_labels,
-                                        'ce',
-                                        mask=mask)
-
+        # Loss
+        sup_loss = criterion(logits_lb, y_lb)
+        unsup_loss = (F.cross_entropy(logits_ulb_strong, pseudo_labels, reduction='none') * mask).mean()
         total_loss = sup_loss + lambda_u * unsup_loss
 
         # Update Model Weights

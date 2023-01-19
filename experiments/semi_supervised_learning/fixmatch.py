@@ -9,10 +9,10 @@ from torch.utils.data import DataLoader, RandomSampler
 from omegaconf import OmegaConf
 
 from dal_toolbox.datasets import build_ssl_dataset
-from dal_toolbox.models import build_model
+from dal_toolbox.models import build_ssl_model
 from dal_toolbox.utils import seed_everything
 
-@hydra.main(version_base=None, config_path="./configs", config_name="semi_supervised_learning")
+@hydra.main(version_base=None, config_path="./configs", config_name="fixmatch")
 def main(args):
     # Initial Setup (Seed, create output folder, SummaryWriter and results-container init)
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
@@ -40,7 +40,7 @@ def main(args):
 
     # Setup Model
     logging.info('Building model: %s', args.model.name)
-    model_dict = build_model(args, n_classes=ds_info['n_classes'])
+    model_dict = build_ssl_model(args, n_classes=ds_info['n_classes'])
     model, train_one_epoch, evaluate = model_dict['model'], model_dict['train_one_epoch'], model_dict['evaluate']
     lr_scheduler = model_dict['lr_scheduler']
 

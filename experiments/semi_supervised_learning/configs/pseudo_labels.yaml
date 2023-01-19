@@ -4,7 +4,7 @@ defaults:
 dataset: CIFAR10
 dataset_path: ./data/
 n_labeled_samples: 40
-n_unlabeled_samples: 40_000
+n_unlabeled_samples: 50_000
 eval_interval: 1
 
 device: cuda

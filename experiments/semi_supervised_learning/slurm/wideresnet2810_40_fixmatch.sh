@@ -4,9 +4,9 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --job-name=WRS2810-40-FM
+#SBATCH --job-name=fixmatch-40
 #SBATCH --output=/mnt/stud/work/phahn/uncertainty/logs/%x_%A_%a.log
-#SBATCH --array=1-8%8
+#SBATCH --array=1-4%4
 source /mnt/stud/home/phahn/.zshrc
 
 conda activate uncertainty_evaluation
@@ -20,11 +20,8 @@ cd /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation/
 OUTPUT_DIR=/mnt/stud/work/phahn/uncertainty/output/${SLURM_JOB_NAME}_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}/
 echo "Saving results to $OUTPUT_DIR"
 
-srun python -u experiments/semi_supervised_learning/fixmatch_main.py \
+srun python -u experiments/semi_supervised_learning/fixmatch.py \
     dataset=CIFAR10 \
-    model=wideresnet2810_fixmatch \
     output_dir=$OUTPUT_DIR \
-    use_hard_labels=True \
     random_seed=${SLURM_ARRAY_TASK_ID} \
-    u_ratio=7 \
-    use_hard_labels=True
+    u_ratio=7
