@@ -179,7 +179,6 @@ def build_model(args, **kwargs):
             use_cat=args.model.use_cat
         )
 
-
     elif args.model.name == 'wideresnet2810_mcdropout':
         model_dict = build_wide_resnet_mcdropout(
             n_classes=n_classes,
@@ -250,17 +249,17 @@ def build_model(args, **kwargs):
                 lr=args.model.optimizer.lr,
                 weight_decay=args.model.optimizer.weight_decay,
             )
-        
+
         elif args.model.optimizer.name == 'AdamW':
             optimizer = torch.optim.AdamW(
                 model.parameters(),
                 lr=args.model.optimizer.lr,
                 weight_decay=args.model.optimizer.weight_decay
             )
-        
+
         else:
             raise NotImplementedError(f'{args.model.optimizer.name} not implemented')
-        
+
         criterion = nn.CrossEntropyLoss()
         train_kwargs = {
             'optimizer': optimizer,
@@ -268,14 +267,14 @@ def build_model(args, **kwargs):
             'device': args.device
         }
         eval_kwargs = {
-            'criterion': criterion, 
+            'criterion': criterion,
             'device': args.device
         }
         initial_states = {
             'model': copy.deepcopy(model.state_dict()),
             'optimizer': copy.deepcopy(optimizer.state_dict())
         }
-        #TODO: LR SCHEDULER?
+        # TODO: LR SCHEDULER?
 
         model_dict = {
             'model': model,
@@ -298,17 +297,17 @@ def build_model(args, **kwargs):
                 lr=args.model.optimizer.lr,
                 weight_decay=args.model.optimizer.weight_decay,
             )
-        
+
         elif args.model.optimizer.name == 'AdamW':
             optimizer = torch.optim.AdamW(
                 model.parameters(),
                 lr=args.model.optimizer.lr,
                 weight_decay=args.model.optimizer.weight_decay
             )
-        
+
         else:
             raise NotImplementedError(f'{args.model.optimizer.name} not implemented')
-        
+
         criterion = nn.CrossEntropyLoss()
         train_kwargs = {
             'optimizer': optimizer,
@@ -316,14 +315,14 @@ def build_model(args, **kwargs):
             'device': args.device
         }
         eval_kwargs = {
-            'criterion': criterion, 
+            'criterion': criterion,
             'device': args.device
         }
         initial_states = {
             'model': copy.deepcopy(model.state_dict()),
             'optimizer': copy.deepcopy(optimizer.state_dict())
         }
-        #TODO: LR SCHEDULER?
+        # TODO: LR SCHEDULER?
 
         model_dict = {
             'model': model,
@@ -346,17 +345,17 @@ def build_model(args, **kwargs):
                 lr=args.model.optimizer.lr,
                 weight_decay=args.model.optimizer.weight_decay,
             )
-        
+
         elif args.model.optimizer.name == 'AdamW':
             optimizer = torch.optim.AdamW(
                 model.parameters(),
                 lr=args.model.optimizer.lr,
                 weight_decay=args.model.optimizer.weight_decay
             )
-        
+
         else:
             raise NotImplementedError(f'{args.model.optimizer.name} not implemented')
-        
+
         criterion = nn.CrossEntropyLoss()
         train_kwargs = {
             'optimizer': optimizer,
@@ -364,14 +363,14 @@ def build_model(args, **kwargs):
             'device': args.device
         }
         eval_kwargs = {
-            'criterion': criterion, 
+            'criterion': criterion,
             'device': args.device
         }
         initial_states = {
             'model': copy.deepcopy(model.state_dict()),
             'optimizer': copy.deepcopy(optimizer.state_dict())
         }
-        #TODO: LR SCHEDULER?
+        # TODO: LR SCHEDULER?
 
         model_dict = {
             'model': model,
@@ -423,7 +422,7 @@ def build_wide_resnet_deterministic(n_classes, dropout_rate, lr, weight_decay, m
 
 
 def build_wide_resnet_pseudolabels(n_classes, dropout_rate, lr, weight_decay, momentum, n_epochs, device,
-lambda_u, p_cutoff, unsup_warmup, use_hard_labels):
+                                   lambda_u, p_cutoff, unsup_warmup, use_hard_labels):
     model = wide_resnet.wide_resnet_28_10(num_classes=n_classes, dropout_rate=dropout_rate)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=True)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
@@ -434,16 +433,16 @@ lambda_u, p_cutoff, unsup_warmup, use_hard_labels):
         'train_one_epoch': pseudolabel.train_one_epoch,
         'evaluate': wide_resnet.evaluate,
         'lr_scheduler': lr_scheduler,
-        'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=device, 
-                lambda_u=lambda_u, p_cutoff=p_cutoff, n_epochs=n_epochs,
-                unsup_warmup=unsup_warmup, use_hard_labels=use_hard_labels),
+        'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=device,
+                             lambda_u=lambda_u, p_cutoff=p_cutoff, n_epochs=n_epochs,
+                             unsup_warmup=unsup_warmup, use_hard_labels=use_hard_labels),
         'eval_kwargs': dict(criterion=criterion, device=device),
     }
     return model_dict
 
 
 def build_wide_resnet_pimodel(n_classes, dropout_rate, lr, weight_decay, momentum, n_epochs, device,
-lambda_u, unsup_warmup):
+                              lambda_u, unsup_warmup):
     model = wide_resnet.wide_resnet_28_10(num_classes=n_classes, dropout_rate=dropout_rate)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=True)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
@@ -454,9 +453,9 @@ lambda_u, unsup_warmup):
         'train_one_epoch': pimodel.train_one_epoch,
         'evaluate': wide_resnet.evaluate,
         'lr_scheduler': lr_scheduler,
-        'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=device, 
-                lambda_u=lambda_u, n_epochs=n_epochs,
-                unsup_warmup=unsup_warmup),
+        'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=device,
+                             lambda_u=lambda_u, n_epochs=n_epochs,
+                             unsup_warmup=unsup_warmup),
         'eval_kwargs': dict(criterion=criterion, device=device),
     }
     return model_dict
@@ -558,4 +557,38 @@ def build_wide_resnet_sngp(n_classes, input_shape, depth, widen_factor, dropout_
         'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=device),
         'eval_kwargs': dict(criterion=criterion, device=device),
     }
+    return model_dict
+
+
+def build_ssl_model(args, **kwargs):
+    n_classes = kwargs['n_classes']
+    if args.model.name == 'wideresnet2810_deterministic' and args.ssl_algorithm.name == 'pseudo_labels':
+        model_dict = build_wide_resnet_pseudolabels(
+            n_classes=n_classes,
+            dropout_rate=args.model.dropout_rate,
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+            n_epochs=args.model.n_epochs,
+            device=args.device,
+            # SSL args
+            lambda_u=args.ssl_algorithm.lambda_u,
+            p_cutoff=args.ssl_algorithm.p_cutoff,
+            unsup_warmup=args.ssl_algorithm.unsup_warmup,
+            use_hard_labels=args.ssl_algorithm.use_hard_labels
+        )
+    elif args.model.name == 'wideresnet2810_deterministic' and args.ssl_algorithm.name == 'pi_model':
+        model_dict = build_wide_resnet_pimodel(
+            n_classes=n_classes,
+            dropout_rate=args.model.dropout_rate,
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+            n_epochs=args.model.n_epochs,
+            device=args.device,
+            lambda_u=args.ssl_algorithm.lambda_u,
+            unsup_warmup=args.ssl_algorithm.unsup_warmup
+        )
+    else:
+        raise NotImplementedError()
     return model_dict

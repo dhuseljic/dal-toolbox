@@ -4,6 +4,7 @@ from torch.utils.data import Subset
 from . import mnist, fashion_mnist, svhn, cifar, tiny_imagenet, imagenet
 from .activeglae import agnews, banks77, dbpedia, fnc1, mnli, qnli, sst2, trec6, wikitalk, yelp5
 
+
 def build_dataset(args):
     if args.dataset == 'MNIST':
         train_ds, ds_info = mnist.build_mnist('train', args.dataset_path, return_info=True)
@@ -134,7 +135,7 @@ def build_al_datasets(args):
         train_ds = complete_ds['train']
         query_ds = complete_ds['train']
         test_ds_id = create_testsubset(complete_ds, args, "test")
- 
+
     elif args.dataset.name == 'fnc1':
         complete_ds, ds_info = fnc1.build_fnc1(args)
         train_ds = complete_ds['train']
@@ -195,12 +196,14 @@ def equal_set_sizes(ds_id, ds_ood):
         ds_id = Subset(ds_id, indices=rnd_indices)
     return ds_id, ds_ood
 
+
 def create_testsubset(complete_ds, args, hf_name):
     if args.dataset.test_subset:
         test_ds_id = complete_ds[hf_name].shuffle(seed=args.random_seed.select).select(range(args.dataset.test_subset))
-    else: 
+    else:
         test_ds_id = complete_ds[hf_name]
     return test_ds_id
+
 
 def build_ssl_dataset(args):
     if args.dataset == 'CIFAR10':
@@ -215,7 +218,6 @@ def build_ssl_dataset(args):
     else:
         raise NotImplementedError
     return Subset(train_ds, lb_idx), Subset(query_ds_weak, ulb_idx), Subset(query_ds_strong, ulb_idx), test_ds_id, ds_info
-
 
 
 def sample_labeled_unlabeled_data(target, num_classes,
@@ -234,7 +236,6 @@ def sample_labeled_unlabeled_data(target, num_classes,
         # imbalanced setting, lb_num_labels is the maximum number of labels for class 1
         lb_samples_per_class = make_imbalance_data(lb_num_labels, num_classes, lb_imbalance_ratio)
 
-
     if ulb_imbalance_ratio == 1.0:
         # balanced setting
         if ulb_num_labels is not None and ulb_num_labels != 'None':
@@ -249,7 +250,7 @@ def sample_labeled_unlabeled_data(target, num_classes,
 
     lb_idx = []
     ulb_idx = []
-    
+
     for c in range(num_classes):
         idx = np.array([i for i in range(len(target)) if target[i] == c])
         np.random.shuffle(idx)
@@ -258,7 +259,7 @@ def sample_labeled_unlabeled_data(target, num_classes,
             ulb_idx.extend(idx[lb_samples_per_class[c]:])
         else:
             ulb_idx.extend(idx[lb_samples_per_class[c]:lb_samples_per_class[c]+ulb_samples_per_class[c]])
-    
+
     return lb_idx, ulb_idx
 
 

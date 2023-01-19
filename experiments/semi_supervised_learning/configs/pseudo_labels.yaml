@@ -1,12 +1,11 @@
 defaults:
-  - model: resnet18_pseudolabels
+  - model: wideresnet2810
 
 dataset: CIFAR10
 dataset_path: ./data/
 n_labeled_samples: 40
-n_unlabeled_samples: 60000
-u_ratio: 1
-use_hard_labels: False
+n_unlabeled_samples: 40_000
+eval_interval: 1
 
 device: cuda
 random_seed: 42
@@ -22,3 +21,11 @@ hydra:
     handlers:
       file:
         mode: w
+
+u_ratio: 1
+ssl_algorithm:
+  name: pseudo_labels
+  unsup_warmup: 0.4
+  use_hard_labels: True
+  lambda_u: 1
+  p_cutoff: 0.95
