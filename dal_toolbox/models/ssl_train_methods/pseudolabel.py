@@ -6,7 +6,7 @@ from ...metrics import generalization
 from ...utils import MetricLogger, SmoothedValue
 
 
-def train_one_epoch(model, dataloaders, criterion, optimizer, device, n_epochs, p_cutoff, lambda_u,
+def train_one_epoch(model, dataloaders, criterion, optimizer, device, n_iter, p_cutoff, lambda_u,
                     use_hard_labels=True, unsup_warmup=.4, epoch=None, print_freq=200):
     model.train()
     model.to(device)
@@ -19,6 +19,8 @@ def train_one_epoch(model, dataloaders, criterion, optimizer, device, n_epochs, 
     labeled_loader = dataloaders['train_sup']
     unlabeled_loader = dataloaders['train_unsup']
     unlabeled_iter = iter(unlabeled_loader)
+
+    i_iter = epoch*len(labeled_loader)
 
     for (x_lb, y_lb) in metric_logger.log_every(labeled_loader, print_freq=print_freq, header=header):
         x_lb, y_lb = x_lb.to(device), y_lb.to(device)
@@ -46,8 +48,9 @@ def train_one_epoch(model, dataloaders, criterion, optimizer, device, n_epochs, 
             probas = torch.softmax(logits_ulb.detach()/T, dim=-1)
             pseudo_label, _ = probas.max(-1)
 
-        unsup_loss = (F.cross_entropy(logits_ulb, pseudo_label, reduction='none') * mask).mean()
-        unsup_warmup = torch.clip(torch.tensor(epoch / (unsup_warmup * n_epochs)),  min=0.0, max=1.0)
+        unsup_loss = torch.mean(F.cross_entropy(logits_ulb, pseudo_label, reduction='none') * mask)
+        unsup_warmup = torch.clip(torch.tensor(i_iter / (unsup_warmup * n_iter)),  min=0.0, max=1.0)
+        i_iter+=1
 
         # Loss thats used for backpropagation
         loss = sup_loss + unsup_warmup * lambda_u * unsup_loss
