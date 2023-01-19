@@ -27,3 +27,4 @@ ssl_algorithm:
   u_ratio: 1
   lambda_u: 1
   unsup_warmup: 0.4
+  n_iter: 1048576
