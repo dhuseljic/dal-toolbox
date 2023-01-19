@@ -25,7 +25,7 @@ from dal_toolbox.metrics.generalization import area_under_curve
 transformers.logging.set_verbosity_error()
 
 
-@hydra.main(version_base=None, config_path="./configs", config_name="al_nlp")
+@hydra.main(version_base=None, config_path="./configs", config_name="al_nlp_slrm")
 def main(args):
     print(OmegaConf.to_yaml(args))
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
