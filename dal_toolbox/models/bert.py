@@ -19,9 +19,9 @@ class BertSequenceClassifier(nn.Module):
         outputs = self.bert(input_ids, attention_mask, labels=None, output_hidden_states=True)
         logits = outputs['logits']
         
-        # huggingface sequence classifier takes [1] for classifier head
-        hidden_state = outputs['hidden_states'][1] # (batch, sequence, dim)
-        cls_state = hidden_state[:,0,:] # (batch, dim)     #not in bert, taken from distilbert and roberta
+        # huggingface takes pooler output for classification (not accessible here anymore, would need bert model)
+        last_hidden_state = outputs['hidden_states'][-1] # (batch, sequence, dim)
+        cls_state = last_hidden_state[:,0,:] # (batch, dim)     #not in bert, taken from distilbert and roberta
         if return_cls:
             output = (logits, cls_state)
         else:

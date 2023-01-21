@@ -19,8 +19,8 @@ class DistilbertSequenceClassifier(nn.Module):
         outputs = self.distilbert(input_ids, attention_mask, labels=None, output_hidden_states=True)
         logits = outputs['logits']
 
-        hidden_state = outputs['hidden_states'][0]
-        cls_state = hidden_state[:,0,:]
+        last_hidden_state = outputs['hidden_states'][-1]
+        cls_state = last_hidden_state[:,0,:]
         if return_cls:
             output = (logits, cls_state)
         else:

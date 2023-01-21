@@ -1,6 +1,6 @@
 defaults:
-  - model: distilbert
-  - al_strategy: random
+  - model: bert
+  - al_strategy: coreset
   - dataset: trec6
   - _self_
 
