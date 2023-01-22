@@ -36,5 +36,5 @@ srun python -u al_txt.py \
     al_strategy=$STRATEGY \
     al_cycle.n_init=$N_INIT \
     al_cycle.acq_size=$ACQ_SIZE \
-    al_cycle.n_acq=$N_ACQ \ 
+    al_cycle.n_acq=$N_ACQ \
     wandb.group=$GROUP
