@@ -63,6 +63,37 @@ class RoBertaSequenceClassifier(nn.Module):
         features = torch.cat(all_features)
         return features
 
+    @torch.inference_mode()
+    def get_grad_embedding(self, dataloader, device):
+        self.eval()
+        self.to(device)
+        feature_dim = 768
+
+        embedding = []
+        for batch in tqdm(dataloader):
+            input_ids = batch["input_ids"].to(device)
+            attention_mask = batch["attention_mask"].to(device)           
+            embedding_batch = torch.empty([len(input_ids), feature_dim * self.num_classes])
+            logits, cls_state = self(input_ids, attention_mask, return_cls=True)
+            logits = logits.cpu()
+            features = cls_state.cpu()
+
+            probas = logits.softmax(-1)
+            max_indices = probas.argmax(-1)
+
+            # TODO: optimize code
+            # for each sample in a batch and for each class, compute the gradient wrt to weights
+            for n in range(len(input_ids)):
+                for c in range(self.num_classes):
+                    if c == max_indices[n]:
+                        embedding_batch[n, feature_dim * c: feature_dim * (c+1)] = features[n] * (1 - probas[n, c])
+                    else:
+                        embedding_batch[n, feature_dim * c: feature_dim * (c+1)] = features[n] * (-1 * probas[n, c])
+            embedding.append(embedding_batch)
+        # Concat all embeddings
+        embedding = torch.cat(embedding)
+        return embedding
+
 def train_one_epoch(model, dataloader, epoch, optimizer, scheduler, criterion, device, print_freq=25):
     model.train()
     model.to(device)
