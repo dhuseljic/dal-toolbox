@@ -23,6 +23,8 @@ N_INIT=100
 ACQ_SIZE=100
 N_ACQ=15
 
+GROUP=bert_entropy_qnli
+
 OUTPUT_DIR=/mnt/work/lrauch/glae-results/${DATASET}/$MODEL/${STRATEGY}/N_INIT${N_INIT}__ACQ_SIZE${ACQ_SIZE}__N_ACQ${N_ACQ}/seed${SLURM_ARRAY_TASK_ID}
 echo "Writing results to ${OUTPUT_DIR}"
 
@@ -35,4 +37,5 @@ srun python -u al_txt.py \
     al_strategy=$STRATEGY \
     al_cycle.n_init=$N_INIT \
     al_cycle.acq_size=$ACQ_SIZE \
-    al_cycle.n_acq=$N_ACQ
+    al_cycle.n_acq=$N_ACQ \
+    wandb.group=$GROUP

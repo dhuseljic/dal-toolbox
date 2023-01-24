@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --job-name=glae_trec6_rndm_bert
+#SBATCH --job-name=glae_trec6_entropy_bert
 #SBATCH --output=/mnt/work/lrauch/logs/active_learning/%x_%a.log
 #SBATCH --array=1-5%5
 date;hostname;pwd
@@ -23,6 +23,8 @@ N_INIT=100
 ACQ_SIZE=100
 N_ACQ=15
 
+GROUP=bert_random_trec6
+
 OUTPUT_DIR=/mnt/work/lrauch/glae-results/${DATASET}/$MODEL/${STRATEGY}/N_INIT${N_INIT}__ACQ_SIZE${ACQ_SIZE}__N_ACQ${N_ACQ}/seed${SLURM_ARRAY_TASK_ID}
 echo "Writing results to ${OUTPUT_DIR}"
 
@@ -35,4 +37,5 @@ srun python -u al_txt.py \
     al_strategy=$STRATEGY \
     al_cycle.n_init=$N_INIT \
     al_cycle.acq_size=$ACQ_SIZE \
-    al_cycle.n_acq=$N_ACQ
+    al_cycle.n_acq=$N_ACQ \
+    wandb.group=$GROUP
