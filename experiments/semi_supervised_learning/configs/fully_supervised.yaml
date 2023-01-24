@@ -1,17 +1,13 @@
 defaults:
-  - model: resnet18
-  - al_strategy: random
-
-al_cycle:
-  n_init: 100
-  acq_size: 100
-  n_acq: 10
-  cold_start: True
+  - model: wideresnet2810
 
 dataset: CIFAR10
 dataset_path: ./data/
-device: cuda
+n_labeled_samples: 40
+n_unlabeled_samples: 0
+eval_interval: 1
 
+device: cuda
 random_seed: 42
 val_batch_size: 128
 print_freq_eval: 100
@@ -25,4 +21,3 @@ hydra:
     handlers:
       file:
         mode: w
-

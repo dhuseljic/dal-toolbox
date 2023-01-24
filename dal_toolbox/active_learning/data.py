@@ -1,4 +1,3 @@
-import json
 import random
 
 import torch
@@ -37,6 +36,7 @@ class ALDataset:
         # Set up the indices for unlabeled and labeled pool
         self.unlabeled_indices = range(len(self.train_dataset))
         self.labeled_indices = []
+        self.rng = random.Random(0)
 
     @property
     def unlabeled_dataset(self):
@@ -51,21 +51,6 @@ class ALDataset:
         # TODO: Is the train or query dataset required here?
         # For e.g., semi-supervised learning
         return FullDataset(self.train_dataset, unlabeled_indices=self.unlabeled_indices)
-
-    def random_init(self, n_samples: int):
-        """
-            Randomly buys samples from the unlabeled pool and adds them to the labeled one.
-
-            Args:
-                n_samples (int): Size of the initial labeld pool.   
-        """
-
-        if len(self.labeled_indices) != 0:
-            raise ValueError('Pools already initialized.')
-        buy_idx = random.sample(self.unlabeled_indices, k=n_samples)
-        self.labeled_indices = list_union(self.labeled_indices, buy_idx)
-        self.unlabeled_indices = list_diff(self.unlabeled_indices, buy_idx)
-        #TODO: update annotations? redudanter code?
 
     def update_annotations(self, buy_idx: list):
         """
@@ -108,24 +93,8 @@ class ALDataset:
         """
         if len(self.labeled_indices) != 0:
             raise ValueError('Pools already initialized.')
-        indices = random.sample(self.unlabeled_indices, k=n_samples)
-        self.labeled_indices = list_union(self.labeled_indices, indices)
-        self.unlabeled_indices = list_diff(self.unlabeled_indices, indices)
-
-    def load_init(self, result_json: str):
-        """Initializes the unlabeled pool using the one used in an already run experiment.
-
-            Args:
-                result_json (str): The result json file from the already run experiment.
-        """
-        with open(result_json, 'r') as f:
-            loaded_results = json.load(f)
-        cycle_results = loaded_results['cycle0']
-        indices = cycle_results['labeled_indices']
-        self.labeled_indices = list_union(self.labeled_indices, indices)
-        self.unlabeled_indices = list_diff(self.unlabeled_indices, indices)
-
-
+        indices = self.rng.sample(self.unlabeled_indices, k=n_samples)
+        self.update_annotations(indices)
 
 
 def list_union(a: list, b: list):
