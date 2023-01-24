@@ -12,7 +12,6 @@ from omegaconf import OmegaConf
 from dal_toolbox.datasets import build_ssl_dataset
 from dal_toolbox.utils import seed_everything
 from dal_toolbox.models import wide_resnet
-from dal_toolbox.models.ssl_train_methods.pseudolabel import train_one_epoch
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="pseudo_labels")
@@ -55,7 +54,7 @@ def main(args):
     logging.info('Starting training.')
     history_train, history_test = [], []
     for i_epoch in range(args.model.n_epochs):
-        train_stats = train_one_epoch(
+        train_stats = wide_resnet.train_one_epoch_pseudolabel(
             model=model,
             dataloaders=dataloaders,
             criterion=criterion,
