@@ -1,9 +1,6 @@
 import torch
 import torch.nn as nn
 
-from ..metrics import generalization, ood, calibration
-from ...utils import MetricLogger, SmoothedValue
-
 
 class LeNet(nn.Module):
     def __init__(self, in_features=3, num_classes=10):
