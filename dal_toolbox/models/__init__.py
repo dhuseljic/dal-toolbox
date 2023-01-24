@@ -6,15 +6,17 @@ from .deterministic import lenet, resnet, wide_resnet
 from .deterministic import train as train_deterministic
 from .deterministic import evaluate as eval_deterministic
 
-from .mc_dropout import resnet_mcdropout, wide_resnet_mcdropout
-from .mc_dropout import train as train_mc_dropout
-from .mc_dropout import evaluate as eval_mc_dropout
+from .mc_dropout import resnet as resnet_mcdropout
+from .mc_dropout import wide_resnet as wide_resnet_mcdropout
+from .mc_dropout import train as train_mcdropout
+from .mc_dropout import evaluate as eval_mcdropout
 
 from .ensemble import voting_ensemble
 from .ensemble import train as train_ensemble
 from .ensemble import evaluate as eval_ensemble
 
-from .sngp import resnet_sngp, wide_resnet_sngp
+from .sngp import resnet as resnet_sngp
+from .sngp import wide_resnet as wide_resnet_sngp
 from .sngp import train as train_sngp
 from .sngp import evaluate as eval_sngp
 
@@ -59,8 +61,8 @@ def build_model(args, **kwargs):
         model_dict = {
             'model': model,
             'optimizer': optimizer,
-            'train_one_epoch': train_mc_dropout.train_one_epoch,
-            'evaluate': eval_mc_dropout.evaluate,
+            'train_one_epoch': train_mcdropout.train_one_epoch,
+            'evaluate': eval_mcdropout.evaluate,
             'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
