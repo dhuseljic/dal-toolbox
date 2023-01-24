@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 
-from ..utils import MetricLogger
-from ..metrics import generalization, calibration, ood
+from ...utils import MetricLogger
+from ...metrics import generalization, calibration, ood
 
 
 class Ensemble(nn.Module):

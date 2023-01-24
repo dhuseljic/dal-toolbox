@@ -1,10 +1,13 @@
 import copy
 import torch
 import torch.nn as nn
-from transformers import AutoTokenizer
 
-from . import resnet, resnet_mcdropout, resnet_sngp, wide_resnet, wide_resnet_mcdropout, wide_resnet_sngp, lenet, ensemble
-from .ssl_train_methods import pimodel, pseudolabel
+from . import deterministic
+from .deterministic import lenet, resnet, wide_resnet
+from .mc_dropout import resnet_mcdropout, wide_resnet_mcdropout
+from .ensemble import voting_ensemble
+from .sngp import resnet_sngp, wide_resnet_sngp
+
 from . import bert, distilbert, distilroberta, roberta
 
 
@@ -25,8 +28,8 @@ def build_model(args, **kwargs):
         model_dict = {
             'model': model,
             'optimizer': optimizer,
-            'train_one_epoch': resnet.train_one_epoch,
-            'evaluate': resnet.evaluate,
+            'train_one_epoch': deterministic.train.train_one_epoch,
+            'evaluate': deterministic.evaluate.evaluate,
             'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
@@ -68,15 +71,15 @@ def build_model(args, **kwargs):
             members.append(mem)
             optimizers.append(opt)
             lr_schedulers.append(lrs)
-        model = ensemble.Ensemble(members)
-        optimizer = ensemble.EnsembleOptimizer(optimizers)
-        lr_scheduler = ensemble.EnsembleLRScheduler(lr_schedulers)
+        model = voting_ensemble.Ensemble(members)
+        optimizer = voting_ensemble.EnsembleOptimizer(optimizers)
+        lr_scheduler = voting_ensemble.EnsembleLRScheduler(lr_schedulers)
         criterion = nn.CrossEntropyLoss()
         model_dict = {
             'model': model,
             'optimizer': optimizer,
-            'train_one_epoch': ensemble.train_one_epoch,
-            'evaluate': ensemble.evaluate,
+            'train_one_epoch': voting_ensemble.train_one_epoch,
+            'evaluate': voting_ensemble.evaluate,
             'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
@@ -438,15 +441,15 @@ def build_wide_resnet_ensemble(n_classes, n_member, dropout_rate, lr, weight_dec
         optimizers.append(optimizer)
         lr_schedulers.append(lr_scheduler)
 
-    model = ensemble.Ensemble(members)
-    optimizer = ensemble.EnsembleOptimizer(optimizers)
-    lr_scheduler = ensemble.EnsembleLRScheduler(lr_schedulers)
+    model = voting_ensemble.Ensemble(members)
+    optimizer = voting_ensemble.EnsembleOptimizer(optimizers)
+    lr_scheduler = voting_ensemble.EnsembleLRScheduler(lr_schedulers)
     criterion = nn.CrossEntropyLoss()
     model_dict = {
         'model': model,
         'optimizer': optimizer,
-        'train_one_epoch': ensemble.train_one_epoch,
-        'evaluate': ensemble.evaluate,
+        'train_one_epoch': voting_ensemble.train_one_epoch,
+        'evaluate': voting_ensemble.evaluate,
         'lr_scheduler': lr_scheduler,
         'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=device),
         'eval_kwargs': dict(criterion=criterion, device=device),
