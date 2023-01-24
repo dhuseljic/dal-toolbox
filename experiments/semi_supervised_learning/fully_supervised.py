@@ -4,12 +4,13 @@ import logging
 import hydra
 
 from torch.utils.tensorboard import SummaryWriter
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, RandomSampler
 from omegaconf import OmegaConf
 
 from dal_toolbox.datasets import build_ssl_dataset
 from dal_toolbox.models import build_model
 from dal_toolbox.utils import seed_everything
+from dal_toolbox.models.resnet import Trainer
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="fully_supervised")
@@ -23,7 +24,10 @@ def main(args):
     # Setup Dataset
     logging.info('Building datasets. Creating labeled pool with %s samples.', args.n_labeled_samples)
     lb_ds, _, _, val_ds, ds_info = build_ssl_dataset(args)
-    train_loader = DataLoader(lb_ds, batch_size=args.model.batch_size, shuffle=True)
+
+    n_iter_per_epoch = args.model.n_iter // args.model.n_epochs
+    sampler = RandomSampler(lb_ds, num_samples=(n_iter_per_epoch * args.model.batch_size))
+    train_loader = DataLoader(lb_ds, sampler=sampler, batch_size=args.model.batch_size)
     val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)
 
     # Setup Model

@@ -1,5 +1,6 @@
 name: wideresnet2810_deterministic
 n_epochs: 1024
+n_iter: 1048576
 batch_size: 64
 dropout_rate: 0.0
 optimizer:
