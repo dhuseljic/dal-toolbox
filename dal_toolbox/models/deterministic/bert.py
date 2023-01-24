@@ -3,7 +3,7 @@ import torch.nn as nn
 from transformers import AutoModelForSequenceClassification
 from tqdm.auto import tqdm
 from ..metrics import generalization
-from ..utils import MetricLogger, SmoothedValue
+from ...utils import MetricLogger, SmoothedValue
 
 class BertSequenceClassifier(nn.Module):
     def __init__(self, checkpoint, num_classes):

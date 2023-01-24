@@ -2,7 +2,7 @@ import copy
 import torch
 import torch.nn as nn
 
-from .deterministic import lenet, resnet, wide_resnet
+from .deterministic import bert, lenet, resnet, wide_resnet
 from .deterministic import train as train_deterministic
 from .deterministic import evaluate as eval_deterministic
 
@@ -20,7 +20,7 @@ from .sngp import wide_resnet as wide_resnet_sngp
 from .sngp import train as train_sngp
 from .sngp import evaluate as eval_sngp
 
-from . import bert, distilbert, distilroberta, roberta
+from . import distilbert, distilroberta, roberta
 
 
 def build_model(args, **kwargs):
