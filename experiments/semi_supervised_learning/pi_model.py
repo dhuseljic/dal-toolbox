@@ -10,7 +10,9 @@ from torch.utils.data import DataLoader, RandomSampler
 from omegaconf import OmegaConf
 
 from dal_toolbox.datasets import build_ssl_dataset
-from dal_toolbox.models import wide_resnet
+from dal_toolbox.models.deterministic import wide_resnet
+from dal_toolbox.models.deterministic.train import train_one_epoch_pimodel as train_one_epoch
+from dal_toolbox.models.deterministic.evaluate import evaluate 
 from dal_toolbox.utils import seed_everything
 
 
@@ -65,7 +67,7 @@ def main(args):
     history_train, history_test = [], []
     for i_epoch in range(args.model.n_epochs):
         # Train model for one epoch
-        train_stats = wide_resnet.train_one_epoch_pimodel(
+        train_stats = train_one_epoch(
             model=model,
             dataloaders=dataloaders,
             criterion=criterion,
@@ -85,8 +87,7 @@ def main(args):
         if (i_epoch+1) % args.eval_interval == 0 or (i_epoch+1) == args.model.n_epochs:
             # Evaluate model on test set
             logging.info('Evaluation epoch %s', i_epoch)
-            test_stats = wide_resnet.evaluate(model, val_loader, dataloaders_ood={},
-                                              criterion=criterion, device=args.device)
+            test_stats = evaluate(model, val_loader, dataloaders_ood={}, criterion=criterion, device=args.device)
             for key, value in test_stats.items():
                 writer.add_scalar(tag=f"test/{key}", scalar_value=value, global_step=i_epoch)
             logging.info('Evaluation stats: %s', test_stats)

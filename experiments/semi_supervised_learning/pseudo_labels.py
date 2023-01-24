@@ -75,8 +75,7 @@ def main(args):
         if (i_epoch+1) % args.eval_interval == 0 or (i_epoch+1) == args.model.n_epochs:
             # Evaluate model on test set
             logging.info('Evaluation epoch %s', i_epoch)
-            test_stats = evaluate(model, val_loader, dataloaders_ood={},
-                                              criterion=criterion, device=args.device)
+            test_stats = evaluate(model, val_loader, dataloaders_ood={}, criterion=criterion, device=args.device)
             for key, value in test_stats.items():
                 writer.add_scalar(tag=f"test/{key}", scalar_value=value, global_step=i_epoch)
             logging.info('Evaluation stats: %s', test_stats)
