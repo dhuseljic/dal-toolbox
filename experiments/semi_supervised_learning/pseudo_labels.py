@@ -28,10 +28,11 @@ def main(args):
                  args.n_labeled_samples, args.n_unlabeled_samples)
     lb_ds, ulb_ds, _, val_ds, ds_info = build_ssl_dataset(args)
 
+    # Setup dataloaders
     n_iter_per_epoch = args.model.n_iter // args.model.n_epochs
     supervised_sampler = RandomSampler(lb_ds, num_samples=(n_iter_per_epoch * args.model.batch_size))
     supervised_loader = DataLoader(lb_ds, batch_size=args.model.batch_size, sampler=supervised_sampler)
-    unsupervised_sampler = RandomSampler(lb_ds, num_samples=(n_iter_per_epoch * args.model.batch_size*args.u_ratio))
+    unsupervised_sampler = RandomSampler(ulb_ds, num_samples=(n_iter_per_epoch * args.model.batch_size * args.u_ratio))
     unsupervised_loader = DataLoader(ulb_ds, batch_size=int(
         args.model.batch_size*args.u_ratio), sampler=unsupervised_sampler)
     val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)

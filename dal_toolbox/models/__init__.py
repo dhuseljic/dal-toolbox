@@ -3,14 +3,9 @@ import torch
 import torch.nn as nn
 from transformers import AutoTokenizer
 
-from . import resnet, resnet_mcdropout, resnet_sngp, wide_resnet, wide_resnet_mcdropout, wide_resnet_sngp, lenet
-from . import wideresnet_due, ensemble
+from . import resnet, resnet_mcdropout, resnet_sngp, wide_resnet, wide_resnet_mcdropout, wide_resnet_sngp, lenet, ensemble
 from .ssl_train_methods import pimodel, pseudolabel
 from . import bert, distilbert, distilroberta, roberta
-
-
-from gpytorch.mlls import VariationalELBO
-from gpytorch.likelihoods import SoftmaxLikelihood
 
 
 def build_model(args, **kwargs):

@@ -1,3 +1,5 @@
+import numpy as np
+
 import torch
 import torch.nn.functional as F
 
@@ -49,11 +51,11 @@ def train_one_epoch(model, dataloaders, criterion, optimizer, n_iter, p_cutoff, 
             pseudo_label, _ = probas.max(-1)
 
         unsup_loss = torch.mean(F.cross_entropy(logits_ulb, pseudo_label, reduction='none') * mask)
-        unsup_warmup = torch.clip(torch.tensor(i_iter / (unsup_warmup * n_iter)),  min=0.0, max=1.0)
+        unsup_warmup_factor = np.clip(i_iter / (unsup_warmup*n_iter), a_min=0, a_max=1)
         i_iter += 1
 
         # Loss thats used for backpropagation
-        loss = sup_loss + unsup_warmup * lambda_u * unsup_loss
+        loss = sup_loss + unsup_warmup_factor * lambda_u * unsup_loss
 
         # Update Model Weights
         optimizer.zero_grad()
@@ -64,7 +66,7 @@ def train_one_epoch(model, dataloaders, criterion, optimizer, n_iter, p_cutoff, 
         batch_size = x_lb.shape[0]
         acc1, = generalization.accuracy(logits_lb, y_lb, topk=(1,))
         metric_logger.update(loss=loss.item(), sup_loss=sup_loss.item(), unsup_loss=unsup_loss.item(),
-                             mask_ratio=mask.float().mean().item(), lr=optimizer.param_groups[0]["lr"])
+                             mask_ratio=mask.float().mean().item(), unsup_warmup_factor=unsup_warmup_factor, lr=optimizer.param_groups[0]["lr"])
         metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
     train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
 
