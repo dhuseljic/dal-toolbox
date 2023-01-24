@@ -23,18 +23,6 @@ def accuracy(output, target, topk=(1,)):
         res.append(correct_k * (100.0 / batch_size))
     return res
 
-# @torch.inference_mode()
-# def f1(output, target, num_classes, device):
-#     _, pred = output.topk(1, 1, True, True)
-#     pred = pred.t()
-#     if num_classes <= 2:
-#         f1_score = F1Score('binary', num_classes=num_classes, average='macro').to(device) 
-#         f1_score = f1_score(pred.squeeze(0), target)
-#     else:
-#         f1_score = F1Score('multiclass', num_classes=num_classes, average='macro').to(device) 
-#         f1_score = f1_score(pred.squeeze(0), target)
-#     return f1_score
-
 # !TODO: Sklearn and torchmetrics scores do not align 
 def f1_macro(output, target, num_classes, device):
     _, pred = output.topk(1, 1, True, True)
@@ -65,7 +53,7 @@ def avg_precision(output, targets):
     return precision_score(targets, pred, average='weighted', zero_division=0)
 
 def area_under_curve(metric):
-    auc_x = np.array(range(len(metric)))
+    auc_x = np.arange(len(metric))
     auc_y = np.array(metric)
     span_x = (auc_x[-1] - auc_x[0]) # taken from: revisiting uncertainty dalnlp 
     return (auc(auc_x, auc_y) / span_x).round(3)
