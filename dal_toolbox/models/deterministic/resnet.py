@@ -1,8 +1,4 @@
 import torch
-
-from ..utils import MetricLogger, SmoothedValue
-from ...metrics import generalization, ood, calibration
-
 import torch.nn as nn
 import torch.nn.functional as F
 

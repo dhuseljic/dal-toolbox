@@ -2,8 +2,9 @@ import copy
 import torch
 import torch.nn as nn
 
-from . import deterministic
 from .deterministic import lenet, resnet, wide_resnet
+from .deterministic import train as train_deterministic
+from .deterministic import evaluate as eval_deterministic
 from .mc_dropout import resnet_mcdropout, wide_resnet_mcdropout
 from .ensemble import voting_ensemble
 from .sngp import resnet_sngp, wide_resnet_sngp
@@ -28,8 +29,8 @@ def build_model(args, **kwargs):
         model_dict = {
             'model': model,
             'optimizer': optimizer,
-            'train_one_epoch': deterministic.train.train_one_epoch,
-            'evaluate': deterministic.evaluate.evaluate,
+            'train_one_epoch': train_deterministic.train_one_epoch,
+            'evaluate': eval_deterministic.evaluate,
             'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
