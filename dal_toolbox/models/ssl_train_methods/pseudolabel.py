@@ -6,7 +6,7 @@ from ...metrics import generalization
 from ...utils import MetricLogger, SmoothedValue
 
 
-def train_one_epoch(model, dataloaders, criterion, optimizer, device, n_iter, p_cutoff, lambda_u,
+def train_one_epoch(model, dataloaders, criterion, optimizer, n_iter, p_cutoff, lambda_u, device,
                     use_hard_labels=True, unsup_warmup=.4, epoch=None, print_freq=200):
     model.train()
     model.to(device)
@@ -50,7 +50,7 @@ def train_one_epoch(model, dataloaders, criterion, optimizer, device, n_iter, p_
 
         unsup_loss = torch.mean(F.cross_entropy(logits_ulb, pseudo_label, reduction='none') * mask)
         unsup_warmup = torch.clip(torch.tensor(i_iter / (unsup_warmup * n_iter)),  min=0.0, max=1.0)
-        i_iter+=1
+        i_iter += 1
 
         # Loss thats used for backpropagation
         loss = sup_loss + unsup_warmup * lambda_u * unsup_loss
