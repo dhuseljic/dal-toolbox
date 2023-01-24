@@ -3,14 +3,15 @@ import json
 import logging
 import hydra
 
+import torch
+import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader, RandomSampler
 from omegaconf import OmegaConf
 
 from dal_toolbox.datasets import build_ssl_dataset
-from dal_toolbox.models import build_model
+from dal_toolbox.models import wide_resnet
 from dal_toolbox.utils import seed_everything
-from dal_toolbox.models.resnet import Trainer
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="fully_supervised")
@@ -32,17 +33,24 @@ def main(args):
 
     # Setup Model
     logging.info('Building model: %s', args.model.name)
-    model_dict = build_model(args, n_classes=ds_info['n_classes'])
-    model, train_one_epoch, evaluate = model_dict['model'], model_dict['train_one_epoch'], model_dict['evaluate']
-    lr_scheduler = model_dict['lr_scheduler']
+    model = wide_resnet.WideResNet(28, 2, dropout_rate=0, num_classes=10)
+    optimizer = torch.optim.SGD(
+        model.parameters(),
+        lr=args.model.optimizer.lr,
+        weight_decay=args.model.optimizer.weight_decay,
+        momentum=args.model.optimizer.momentum,
+        nesterov=True
+    )
+    criterion = nn.CrossEntropyLoss()
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
 
     # Training Process
     history_train, history_test = [], []
     for i_epoch in range(args.model.n_epochs):
         # Train model for one epoch
         logging.info('Training epoch %s', i_epoch)
-        train_stats = train_one_epoch(
-            model, train_loader, **model_dict['train_kwargs'], epoch=i_epoch
+        train_stats = wide_resnet.train_one_epoch(
+            model, train_loader, criterion, optimizer, device=args.device, epoch=i_epoch
         )
         if lr_scheduler:
             lr_scheduler.step()
@@ -54,7 +62,8 @@ def main(args):
         # Evaluate model on test set
         if (i_epoch+1) % args.eval_interval == 0 or (i_epoch+1) == args.model.n_epochs:
             logging.info('Evaluation epoch %s', i_epoch)
-            test_stats = evaluate(model, val_loader, dataloaders_ood={}, **model_dict['eval_kwargs'])
+            test_stats = wide_resnet.evaluate(
+                model, val_loader, dataloaders_ood={}, criterion=criterion, device=args.device)
             for key, value in test_stats.items():
                 writer.add_scalar(tag=f"test/{key}", scalar_value=value, global_step=i_epoch)
             logging.info('Evaluation stats: %s', test_stats)
