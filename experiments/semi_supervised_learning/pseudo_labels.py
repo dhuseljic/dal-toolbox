@@ -37,14 +37,13 @@ def main(args):
     lr_scheduler = model_dict['lr_scheduler']
 
     # Training Process
+    logging.info('Starting training.')
     history_train, history_test = [], []
     for i_epoch in range(args.model.n_epochs):
-        logging.info('Training epoch %s', i_epoch)
         train_stats = train_one_epoch(model, dataloaders, **model_dict['train_kwargs'], epoch=i_epoch)
         lr_scheduler.step()
         for key, value in train_stats.items():
             writer.add_scalar(tag=f"train/{key}", scalar_value=value, global_step=i_epoch)
-        logging.info('Training stats: %s', train_stats)
         history_train.append(train_stats)
 
         if (i_epoch+1) % args.eval_interval == 0 or (i_epoch+1) == args.model.n_epochs:
@@ -55,6 +54,7 @@ def main(args):
                 writer.add_scalar(tag=f"test/{key}", scalar_value=value, global_step=i_epoch)
             logging.info('Evaluation stats: %s', test_stats)
             history_test.append(test_stats)
+    # logging.info('Training stats: %s', train_stats)
 
 
     # Indices of torchvision dset are int64 which are not json compatible

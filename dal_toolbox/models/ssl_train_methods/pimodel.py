@@ -6,7 +6,7 @@ from ...metrics import generalization
 from ...utils import MetricLogger, SmoothedValue
 
 
-def train_one_epoch(model, dataloaders, criterion, optimizer, device, n_epochs, lambda_u, unsup_warmup=.4,
+def train_one_epoch(model, dataloaders, criterion, optimizer, device, n_iter, lambda_u, unsup_warmup=.4,
                     epoch=None, print_freq=200):
     model.train()
     model.to(device)
@@ -20,6 +20,7 @@ def train_one_epoch(model, dataloaders, criterion, optimizer, device, n_epochs, 
     unlabeled_iter1 = iter(dataloaders['train_unsup_weak_1'])
     unlabeled_iter2 = iter(dataloaders['train_unsup_weak_2'])
 
+    i_iter = epoch*len(labeled_loader)
     for x_lb, y_lb in metric_logger.log_every(labeled_loader, print_freq=print_freq, header=header):
         x_lb, y_lb = x_lb.to(device), y_lb.to(device)
 
@@ -40,7 +41,8 @@ def train_one_epoch(model, dataloaders, criterion, optimizer, device, n_epochs, 
         unfreeze_bn(model, bn_backup)
 
         unsup_loss = F.mse_loss(logits_ulb_weak_2.softmax(-1), logits_ulb_weak_1.detach().softmax(-1))
-        unsup_warmup_ = torch.clip(torch.tensor(epoch / (unsup_warmup * n_epochs)),  min=0.0, max=1.0)
+        unsup_warmup_ = torch.clip(torch.tensor(i_iter / (unsup_warmup * n_iter)),  min=0.0, max=1.0)
+        i_iter+=1
 
         # Loss thats used for backpropagation
         loss = sup_loss + unsup_warmup_ * lambda_u * unsup_loss
