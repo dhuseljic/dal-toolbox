@@ -70,38 +70,7 @@ def area_under_curve(metric):
     span_x = (auc_x[-1] - auc_x[0]) # taken from: revisiting uncertainty dalnlp 
     return (auc(auc_x, auc_y) / span_x).round(3)
 
-def binary_stat_scores(output, target):
-    _, pred = output.topk(1, 1, True, True)
-    pred = pred.t()
 
-    tp = ((target == pred) & (target == 1)).sum([0,1]).squeeze()
-    fn = ((target != pred) & (target == 1)).sum([0,1]).squeeze()
-    fp = ((target != pred) & (target == 0)).sum([0,1]).squeeze()
-    tn = ((target == pred) & (target == 0)).sum([0,1]).squeeze()
-    return tp, fp, tn, fn
-
-def multiclass_stat_scores(output, target, num_classes, average='micro'):
-    _, pred = output.topk(1, 1, True, True)
-    pred = pred.t()
-
-    if average == 'macro':
-        unique_mapping = (target * num_classes + pred).to(torch.long)    
-        bins = torch.bincount(unique_mapping)
-        confmat = bins.reshape(num_classes, num_classes)
-        tp = confmat.diag()
-        fp = confmat.sum(0) - tp
-        fn = confmat.sum(1) - tp
-        tn = confmat.sum() - (fp + fn + tp)
-        return tp, fp, tn, fn
-    
-    elif average == 'micro':
-        tp = (pred == target).sum()
-        fp = (pred != target).sum()
-        fn = (pred != target).sum()
-        tn = num_classes * pred.numel() - (fp + fn + tp)
-    
-    return tp, fp, tn, fn
-    
 
 
 
