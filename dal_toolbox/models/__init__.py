@@ -2,7 +2,7 @@ import copy
 import torch
 import torch.nn as nn
 
-from .deterministic import bert, lenet, resnet, wide_resnet
+from .deterministic import bert, distilbert, roberta, lenet, resnet, wide_resnet
 from .deterministic import train as train_deterministic
 from .deterministic import evaluate as eval_deterministic
 
@@ -19,9 +19,6 @@ from .sngp import resnet as resnet_sngp
 from .sngp import wide_resnet as wide_resnet_sngp
 from .sngp import train as train_sngp
 from .sngp import evaluate as eval_sngp
-
-from . import distilbert, distilroberta, roberta
-
 
 def build_model(args, **kwargs):
     n_classes = kwargs['n_classes']
@@ -242,8 +239,8 @@ def build_model(args, **kwargs):
 
         model_dict = {
             'model': model,
-            'train': bert.train_one_epoch,
-            'eval': bert.eval_one_epoch,
+            'train': train_deterministic.train_one_epoch_bertmodel,
+            'eval': eval_deterministic.evaluate_bertmodel,
             'train_kwargs': train_kwargs,
             'eval_kwargs': eval_kwargs,
             'initial_states': initial_states
@@ -290,8 +287,8 @@ def build_model(args, **kwargs):
 
         model_dict = {
             'model': model,
-            'train': bert.train_one_epoch,
-            'eval': bert.eval_one_epoch,
+            'train': train_deterministic.train_one_epoch_bertmodel,
+            'eval': eval_deterministic.evaluate_bertmodel,
             'train_kwargs': train_kwargs,
             'eval_kwargs': eval_kwargs,
             'initial_states': initial_states
@@ -338,8 +335,8 @@ def build_model(args, **kwargs):
 
         model_dict = {
             'model': model,
-            'train': bert.train_one_epoch,
-            'eval': bert.eval_one_epoch,
+            'train': train_deterministic.train_one_epoch_bertmodel,
+            'eval': eval_deterministic.evaluate_bertmodel,
             'train_kwargs': train_kwargs,
             'eval_kwargs': eval_kwargs,
             'initial_states': initial_states

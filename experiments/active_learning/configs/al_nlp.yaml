@@ -1,13 +1,13 @@
 defaults:
-  - model: bert
-  - al_strategy: coreset
-  - dataset: trec6
+  - model: distilbert
+  - al_strategy: uncertainty
+  - dataset: agnews
   - _self_
 
 al_cycle:
   n_init: 100
-  acq_size: 100
-  n_acq: 15
+  acq_size: 20
+  n_acq: 5
   cold_start: True
 
 wandb:
@@ -15,7 +15,7 @@ wandb:
   entity: lura
   group: default
   reinit: True
-  mode: online
+  mode: disabled
 
 dataset_path: $HOME/.cache/huggingface/datasets
 device: cuda

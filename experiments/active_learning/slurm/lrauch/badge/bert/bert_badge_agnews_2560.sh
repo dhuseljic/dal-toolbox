@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --job-name=glae_dbpedia_entropy_distilbert
+#SBATCH --job-name=glae_agnews_badge_bert_2560
 #SBATCH --output=/mnt/work/lrauch/logs/active_learning/%x_%a.log
 #SBATCH --array=1-5%5
 date;hostname;pwd
@@ -15,14 +15,15 @@ cd /mnt/home/lrauch/projects/dal-toolbox/experiments/active_learning/
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
-MODEL=distilbert
-DATASET=dbpedia
-STRATEGY=uncertainty
+MODEL=bert
+DATASET=agnews
+STRATEGY=badge
 
 N_INIT=100
-ACQ_SIZE=100
-N_ACQ=15
-GROUP=distilbert_entropy_dbpedia
+ACQ_SIZE=25
+N_ACQ=60
+
+GROUP=bert_badge_agnews_2560
 
 OUTPUT_DIR=/mnt/work/lrauch/glae-results/${DATASET}/$MODEL/${STRATEGY}/N_INIT${N_INIT}__ACQ_SIZE${ACQ_SIZE}__N_ACQ${N_ACQ}/seed${SLURM_ARRAY_TASK_ID}
 echo "Writing results to ${OUTPUT_DIR}"
@@ -31,7 +32,6 @@ srun python -u al_txt.py \
     model=$MODEL \
     dataset=$DATASET \
     output_dir=$OUTPUT_DIR \
-    al_strategy=$STRATEGY \
     random_seed=$SLURM_ARRAY_TASK_ID \
     al_strategy=$STRATEGY \
     al_cycle.n_init=$N_INIT \

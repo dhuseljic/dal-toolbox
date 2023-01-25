@@ -4,7 +4,7 @@ import transformers
 from transformers import AutoModel
 from tqdm.auto import tqdm
 from ..metrics import generalization 
-from ..utils import MetricLogger, SmoothedValue
+from ...utils import MetricLogger, SmoothedValue
 
 class ClassificationHead(nn.Module):
     def __init__(self, hidden_dim, num_classes):
