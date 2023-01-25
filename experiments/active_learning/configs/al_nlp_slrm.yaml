@@ -11,8 +11,8 @@ al_cycle:
   cold_start: True
 
 wandb:
-  project: active_glae
-  entity: lura
+  project: active-glae
+  entity: dal-nlp
   group: default
   reinit: True
   mode: online

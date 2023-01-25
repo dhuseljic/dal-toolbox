@@ -22,7 +22,7 @@ STRATEGY=badge
 N_INIT=100
 ACQ_SIZE=100
 N_ACQ=15
-GROUP=bert_badge_bert
+GROUP=bert_badge_dbpedia
 
 OUTPUT_DIR=/mnt/work/lrauch/glae-results/${DATASET}/$MODEL/${STRATEGY}/N_INIT${N_INIT}__ACQ_SIZE${ACQ_SIZE}__N_ACQ${N_ACQ}/seed${SLURM_ARRAY_TASK_ID}
 echo "Writing results to ${OUTPUT_DIR}"
