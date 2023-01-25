@@ -27,10 +27,19 @@ def main(args):
     lb_ds, ulb_ds_weak, ulb_ds_strong, val_ds, ds_info = build_ssl_dataset(args)
     supervised_loader = DataLoader(lb_ds, batch_size=args.model.batch_size, shuffle=True)
     
-    random_sampler_weak = RandomSampler(ulb_ds_weak, generator=torch.Generator().manual_seed(args.random_seed))
-    random_sampler_strong = RandomSampler(ulb_ds_strong, generator=torch.Generator().manual_seed(args.random_seed))
-    unsupervised_loader_weak = DataLoader(ulb_ds_weak, batch_size=int(args.model.batch_size*args.u_ratio), sampler=random_sampler_weak)
-    unsupervised_loader_strong = DataLoader(ulb_ds_strong, batch_size=int(args.model.batch_size*args.u_ratio), sampler=random_sampler_strong)
+    # Setup dataloaders
+    n_iter_per_epoch = args.model.n_iter // args.model.n_epochs
+    supervised_sampler = RandomSampler(lb_ds, num_samples=(n_iter_per_epoch * args.model.batch_size))
+    supervised_loader = DataLoader(lb_ds, batch_size=args.model.batch_size, sampler=supervised_sampler)
+
+    random_sampler_weak = RandomSampler(ulb_ds_weak, num_samples=int(n_iter_per_epoch * args.model.batch_size *
+                                          args.ssl_algorithm.u_ratio), generator=torch.Generator().manual_seed(args.random_seed))
+    random_sampler_strong = RandomSampler(ulb_ds_strong, num_samples=int(n_iter_per_epoch * args.model.batch_size *
+                                          args.ssl_algorithm.u_ratio), generator=torch.Generator().manual_seed(args.random_seed))
+    unsupervised_loader_weak = DataLoader(ulb_ds_weak, batch_size=int(
+        args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=random_sampler_weak)
+    unsupervised_loader_strong = DataLoader(ulb_ds_weak, batch_size=int(
+        args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=random_sampler_strong)
     val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)
     dataloaders = {
         "train_sup": supervised_loader,

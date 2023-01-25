@@ -6,12 +6,13 @@ import time
 import hydra
 import transformers
 import torch
+import wandb
 from omegaconf import OmegaConf
 # os.chdir(sys.path[0])
 
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
-from transformers import get_linear_schedule_with_warmup
+from transformers import get_linear_schedule_with_warmup, get_constant_schedule_with_warmup
 from transformers import DataCollatorWithPadding
 
 from dal_toolbox.active_learning.data import ALDataset
@@ -19,20 +20,32 @@ from dal_toolbox.active_learning.strategies import random, uncertainty, coreset,
 from dal_toolbox.models import build_model
 from dal_toolbox.utils import seed_everything
 from dal_toolbox.datasets import build_al_datasets
+from dal_toolbox.metrics.generalization import area_under_curve
 
 transformers.logging.set_verbosity_error()
 
 
-@hydra.main(version_base=None, config_path="./configs", config_name="al_nlp")
+@hydra.main(version_base=None, config_path="./configs", config_name="al_nlp_slrm")
 def main(args):
     print(OmegaConf.to_yaml(args))
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
     os.makedirs(args.output_dir, exist_ok=True)
-    # TODO: Mode to not save e.g. in debug mode
 
     t_init = time.time()
     results = {}
+    wandb.init(
+        project=args.wandb.project,
+        entity=args.wandb.entity,
+        group=args.wandb.group,
+        reinit=args.wandb.reinit,
+        mode=args.wandb.mode,
+        name=args.model.name+'_'+args.al_strategy.name+'_'+args.dataset.name+'#'+str(args.random_seed),
+        config = OmegaConf.to_container(
+            args, 
+            resolve=True, 
+            throw_on_missing=True
+    ))
     # writer = SummaryWriter('runs/' + get_tensorboard_params(args))
     writer =  SummaryWriter(log_dir=args.output_dir)
 
@@ -101,14 +114,25 @@ def main(args):
             al_dataset.labeled_dataset,
             batch_size=args.model.batch_size,
             shuffle=True,
-            collate_fn=data_collator         
+            collate_fn=data_collator,
+            drop_last=True      
         )
         optimizer.load_state_dict(initial_states['optimizer'])
-        lr_scheduler = get_linear_schedule_with_warmup(
-            optimizer=optimizer,
-            num_warmup_steps=math.ceil(args.model.n_epochs * len(train_loader) * 0.1),
-            num_training_steps=args.model.n_epochs * len(train_loader)
-        )
+
+        #TODO: find a way to outsource the trainloader (does not work in model because of num_train_steps)
+        if args.model.optimizer.lr_scheduler == "linear_warmup":
+            lr_scheduler = get_linear_schedule_with_warmup(
+                optimizer=optimizer,
+                num_warmup_steps=math.ceil(args.model.n_epochs * len(train_loader) * args.model.optimizer.warmup_ratio),
+                num_training_steps=args.model.n_epochs * len(train_loader)
+            )
+
+        elif args.model.optimizer.lr_scheduler == "constant_warmup":        
+            lr_scheduler = get_constant_schedule_with_warmup(
+                optimizer=optimizer,
+                num_warmup_steps=0,
+            )
+
         if args.al_cycle.cold_start:
             model.load_state_dict(initial_states['model'])
         #TODO: wird hier nicht der falsche optimizer übergeben?
@@ -151,6 +175,10 @@ def main(args):
         cycle_results['test_stats'] = test_stats
 
         for key, value in test_stats.items():
+            wandb.log(
+                {key: value},
+                step=len(al_dataset.labeled_indices)
+            )
             writer.add_scalar(
                 tag=f"test_stats/{key}",
                 scalar_value=value,
@@ -167,19 +195,34 @@ def main(args):
 
         # checkpoint
         logging.info('Saving checkpoint for cycle %s', i_acq)
-        checkpoint = {
-            "args": args,
-            "model": model.state_dict(),
-            "al_dataset": al_dataset.state_dict(),
-            "optimizer": model_dict['train_kwargs']['optimizer'].state_dict(),
-            "lr_scheduler": lr_scheduler.state_dict() if lr_scheduler else None,
-            "cycle_results": cycle_results,
-        }
-        torch.save(checkpoint, os.path.join(os.getcwd(), f"check{i_acq}.pth"))   
+        if i_acq % args.check_freq_model == 0:
+            checkpoint = {
+                "args": args,
+                "model": model.state_dict(),
+                "al_dataset": al_dataset.state_dict(),
+                "optimizer": model_dict['train_kwargs']['optimizer'].state_dict(),
+                "lr_scheduler": lr_scheduler.state_dict() if lr_scheduler else None,
+                "cycle_results": cycle_results,
+            }
+            torch.save(checkpoint, os.path.join(os.getcwd(), f"check{i_acq}.pth"))   
         
     writer.close()
+    acc = [cycles['test_stats']['test_batch_acc_epoch'] for cycles in results.values()]
+    f1 = [cycles['test_stats']['test_batch_f1_epoch'] for cycles in results.values()]
+    acc_blc = [cycles['test_stats']['test_batch_acc_balanced_epoch'] for cycles in results.values()]
+    auc_acc = area_under_curve(acc)
+    auc_f1 = area_under_curve(f1)
+    auc_acc_blc = area_under_curve(acc_blc)
+    results[f'cycle{i_acq}']['test_stats']['auc_acc'] = auc_acc
+    results[f'cycle{i_acq}']['test_stats']['auc_f1'] = auc_f1
+    results[f'cycle{i_acq}']['test_stats']['auc_acc_blc'] = auc_acc_blc
+
+    wandb.log({
+        'final_auc_acc':auc_acc,
+        'final_auc_f1': auc_f1,
+        'final_auc_acc_blc': auc_acc_blc
+        })
     savepath = os.path.join(args.output_dir, 'results.json')
-    #savepath = os.path.join(os.getcwd(), 'results.json')
     logging.info('Saving results to %s', savepath)
     print(f'Saving results to {savepath}.')
     with open(savepath, 'w', encoding='utf8') as file:
@@ -195,15 +238,15 @@ def build_query(args, **kwargs):
         device = kwargs['device']
         query = uncertainty.UncertaintySampling(
             uncertainty_type=args.al_strategy.uncertainty_type,
-            subset_size=args.al_strategy.subset_size,
+            subset_size=args.dataset.train_subset,
             device=device,
         )
     elif args.al_strategy.name == "coreset":
         device = kwargs['device']
-        query = coreset.CoreSet(subset_size=args.al_strategy.subset_size, device=device)
+        query = coreset.CoreSet(subset_size=args.dataset.train_subset, device=device)
     elif args.al_strategy.name == "badge":
         device = kwargs['device']
-        query = badge.Badge(subset_size=args.al_strategy.subset_size, device=device)
+        query = badge.Badge(subset_size=args.dataset.train_subset, device=device)
     else:
         raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
     return query

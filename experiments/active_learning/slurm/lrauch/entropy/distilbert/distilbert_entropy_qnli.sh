@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --job-name=glae_qnli_entropy_distilbert
+#SBATCH --job-name=glae_qnli_entropy_bert
 #SBATCH --output=/mnt/work/lrauch/logs/active_learning/%x_%a.log
 #SBATCH --array=1-5%5
 date;hostname;pwd
@@ -23,6 +23,8 @@ N_INIT=100
 ACQ_SIZE=100
 N_ACQ=15
 
+GROUP=distilbert_entropy_qnli
+
 OUTPUT_DIR=/mnt/work/lrauch/glae-results/${DATASET}/$MODEL/${STRATEGY}/N_INIT${N_INIT}__ACQ_SIZE${ACQ_SIZE}__N_ACQ${N_ACQ}/seed${SLURM_ARRAY_TASK_ID}
 echo "Writing results to ${OUTPUT_DIR}"
 
@@ -30,8 +32,10 @@ srun python -u al_txt.py \
     model=$MODEL \
     dataset=$DATASET \
     output_dir=$OUTPUT_DIR \
+    al_strategy=$STRATEGY \
     random_seed=$SLURM_ARRAY_TASK_ID \
     al_strategy=$STRATEGY \
     al_cycle.n_init=$N_INIT \
     al_cycle.acq_size=$ACQ_SIZE \
-    al_cycle.n_acq=$N_ACQ
+    al_cycle.n_acq=$N_ACQ \
+    wandb.group=$GROUP

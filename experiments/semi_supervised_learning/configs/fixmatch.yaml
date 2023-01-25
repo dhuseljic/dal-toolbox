@@ -22,8 +22,8 @@ hydra:
       file:
         mode: w
 
-u_ratio: 1
 ssl_algorithm:
+  u_ratio: 1
   name: fixmatch
   T: 0.5
   lambda_u: 1

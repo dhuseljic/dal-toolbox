@@ -15,32 +15,18 @@ class BertSequenceClassifier(nn.Module):
             self.checkpoint,
             num_labels=self.num_classes)
             
-    def forward(
-        self,
-        input_ids=None,
-        attention_mask=None,
-        token_type_ids=None,
-        position_ids=None,
-        head_mask=None,
-        inputs_embeds=None,
-        labels=None,
-        output_attentions=None,
-        output_hidden_states=None,
-    ):
-        outputs = self.bert(
-            input_ids, 
-            attention_mask,
-            token_type_ids,
-            position_ids,
-            head_mask,
-            inputs_embeds,
-            labels,
-            output_attentions,
-            output_hidden_states)
-
+    def forward(self, input_ids, attention_mask, return_cls=False):
+        outputs = self.bert(input_ids, attention_mask, labels=None, output_hidden_states=True)
         logits = outputs['logits']
-
-        return logits
+        
+        # huggingface takes pooler output for classification (not accessible here anymore, would need bert model)
+        last_hidden_state = outputs['hidden_states'][-1] # (batch, sequence, dim)
+        cls_state = last_hidden_state[:,0,:] # (batch, dim)     #not in bert, taken from distilbert and roberta
+        if return_cls:
+            output = (logits, cls_state)
+        else:
+            output = logits
+        return output
 
     @torch.no_grad()
     def forward_logits(self, dataloader, device):
@@ -50,7 +36,6 @@ class BertSequenceClassifier(nn.Module):
             logits = self(samples.to(device))
             all_logits.append(logits)
         return torch.cat(all_logits)
-
 
     @torch.inference_mode()
     def get_probas(self, dataloader, device):
@@ -65,6 +50,50 @@ class BertSequenceClassifier(nn.Module):
         logits = torch.cat(all_logits)
         probas = logits.softmax(-1)
         return probas
+    
+    @torch.inference_mode()
+    def get_representation(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_features = []
+        for batch in tqdm(dataloader):
+            input_ids = batch["input_ids"].to(device)
+            attention_mask = batch["attention_mask"].to(device)
+            _, cls_state = self(input_ids, attention_mask, return_cls=True)
+            all_features.append(cls_state.to("cpu"))
+        features = torch.cat(all_features)
+        return features
+
+    @torch.inference_mode()
+    def get_grad_embedding(self, dataloader, device):
+        self.eval()
+        self.to(device)
+        feature_dim = 768
+
+        embedding = []
+        for batch in tqdm(dataloader):
+            input_ids = batch["input_ids"].to(device)
+            attention_mask = batch["attention_mask"].to(device)           
+            embedding_batch = torch.empty([len(input_ids), feature_dim * self.num_classes])
+            logits, cls_state = self(input_ids, attention_mask, return_cls=True)
+            logits = logits.cpu()
+            features = cls_state.cpu()
+
+            probas = logits.softmax(-1)
+            max_indices = probas.argmax(-1)
+
+            # TODO: optimize code
+            # for each sample in a batch and for each class, compute the gradient wrt to weights
+            for n in range(len(input_ids)):
+                for c in range(self.num_classes):
+                    if c == max_indices[n]:
+                        embedding_batch[n, feature_dim * c: feature_dim * (c+1)] = features[n] * (1 - probas[n, c])
+                    else:
+                        embedding_batch[n, feature_dim * c: feature_dim * (c+1)] = features[n] * (-1 * probas[n, c])
+            embedding.append(embedding_batch)
+        # Concat all embeddings
+        embedding = torch.cat(embedding)
+        return embedding
 
 def train_one_epoch(model, dataloader, epoch, optimizer, scheduler, criterion, device, print_freq=25):
     model.train()
@@ -78,17 +107,18 @@ def train_one_epoch(model, dataloader, epoch, optimizer, scheduler, criterion, d
         batch = batch.to(device)
         targets = batch['labels']
 
-        logits = model(**batch)
+        logits = model(batch['input_ids'], batch['attention_mask'])
         loss = criterion(logits, targets)
         loss.backward()
 
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 3)
+        nn.utils.clip_grad_norm_(model.parameters(), 1)
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad()
 
         batch_size = targets.size(0)
         batch_acc, = generalization.accuracy(logits, targets, topk=(1,))
+
         metric_logger.update(loss=loss.item(), lr=optimizer.param_groups[0]["lr"])
         metric_logger.meters["batch_acc"].update(batch_acc.item(), n=batch_size)
 
@@ -111,15 +141,20 @@ def eval_one_epoch(model, dataloader, epoch, criterion, device, print_freq=25):
         batch = batch.to(device)
         targets = batch['labels']
        
-        logits = model(**batch)
-
+        logits = model(batch['input_ids'], batch['attention_mask'])
         loss = criterion(logits, targets)
 
         batch_size = targets.size(0)
 
         batch_acc, = generalization.accuracy(logits, targets)
+        batch_f1 = generalization.f1_macro(logits, targets, model.num_classes, device)
+        batch_acc_balanced = generalization.balanced_acc(logits, targets, device)
+
         metric_logger.update(loss=loss.item())
-        metric_logger.meters["batch_acc"].update(batch_acc.item(), n=batch_size)
+        metric_logger.meters['batch_acc'].update(batch_acc.item(), n=batch_size)
+        metric_logger.meters['batch_f1'].update(batch_f1.item(), n=batch_size)
+        metric_logger.meters['batch_acc_balanced'].update(batch_acc_balanced.item(), n=batch_size)
+
     test_stats = {f"test_{name}_epoch": meter.global_avg for name, meter, in metric_logger.meters.items()}
     print(f"Epoch [{epoch}]: Test Loss: {test_stats['test_loss_epoch']:.4f}, \
         Test Accuracy: {test_stats['test_batch_acc_epoch']:.4f}")
