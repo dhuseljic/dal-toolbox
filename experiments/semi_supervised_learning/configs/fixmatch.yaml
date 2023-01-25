@@ -23,7 +23,10 @@ hydra:
         mode: w
 
 ssl_algorithm:
-  name: pi_model
   u_ratio: 1
+  name: fixmatch
+  T: 0.5
   lambda_u: 1
-  unsup_warmup: 0.4
+  use_hard_labels: True
+  use_cat: True
+  p_cutoff: 0.95

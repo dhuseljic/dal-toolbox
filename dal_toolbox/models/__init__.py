@@ -143,6 +143,7 @@ def build_model(args, **kwargs):
             device=args.device,
         )
 
+
     elif args.model.name == 'wideresnet2810_mcdropout':
         model_dict = build_wide_resnet_mcdropout(
             n_classes=n_classes,
@@ -425,6 +426,25 @@ def build_wide_resnet_pimodel(n_classes, dropout_rate, lr, weight_decay, momentu
     return model_dict
 
 
+def build_wide_resnet_fixmatch(n_classes, dropout_rate, lr, weight_decay, momentum, n_epochs, device, p_cutoff,
+lambda_u, T, use_hard_labels, use_cat):
+    model = wide_resnet.wide_resnet_28_10(num_classes=n_classes, dropout_rate=dropout_rate)
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=True)
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
+    criterion = nn.CrossEntropyLoss()
+    model_dict = {
+        'model': model,
+        'optimizer': optimizer,
+        'train_one_epoch': train_deterministic.train_one_epoch_fixmatch,
+        'evaluate': eval_deterministic.evaluate,
+        'lr_scheduler': lr_scheduler,
+        'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=device, 
+                lambda_u=lambda_u, T=T, p_cutoff=p_cutoff, use_hard_labels=use_hard_labels, use_cat=use_cat),
+        'eval_kwargs': dict(criterion=criterion, device=device),
+    }
+    return model_dict
+
+
 def build_wide_resnet_mcdropout(n_classes, n_mc_passes, dropout_rate, lr, weight_decay, momentum, n_epochs, device):
     model = wide_resnet_mcdropout.dropout_wide_resnet_28_10(n_classes, n_mc_passes, dropout_rate)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=True)
@@ -535,6 +555,22 @@ def build_ssl_model(args, **kwargs):
             lambda_u=args.ssl_algorithm.lambda_u,
             n_iter=args.ssl_algorithm.n_iter,
             unsup_warmup=args.ssl_algorithm.unsup_warmup
+        )
+    elif args.model.name == 'wideresnet2810_deterministic' and args.ssl_algorithm.name == 'fixmatch':
+        model_dict = build_wide_resnet_fixmatch(
+            n_classes=n_classes,
+            dropout_rate=args.model.dropout_rate,
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+            n_epochs=args.model.n_epochs,
+            device=args.device,
+            # SSL Parameters
+            lambda_u=args.ssl_algorithm.lambda_u,
+            p_cutoff=args.ssl_algorithm.p_cutoff,
+            T=args.ssl_algorithm.T,
+            use_hard_labels=args.ssl_algorithm.use_hard_labels,
+            use_cat=args.ssl_algorithm.use_cat
         )
     else:
         raise NotImplementedError()
