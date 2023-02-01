@@ -32,7 +32,7 @@ echo "Starting script. Writing results to ${output_dir}"
 srun python -u al.py \
 	model=$model \
 	dataset=$dataset \
-    random_seed=$random_seed \
+	random_seed=$random_seed \
 	al_strategy=$al_strat \
 	al_cycle.n_init=$n_init \
 	al_cycle.acq_size=$acq_size \
