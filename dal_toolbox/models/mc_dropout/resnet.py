@@ -72,7 +72,7 @@ class DropoutBasicBlock(nn.Module):
         self.bn1 = nn.BatchNorm2d(planes)
 
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
-        self.conv2_dropout = ConsistentMCDropout2d(dropout_rate)
+        # self.conv2_dropout = ConsistentMCDropout2d(dropout_rate)
         self.bn2 = nn.BatchNorm2d(planes)
 
         self.shortcut = nn.Sequential()
@@ -90,5 +90,5 @@ class DropoutBasicBlock(nn.Module):
         out = self.bn2(self.conv2(out))
         out += self.shortcut(x)
         out = F.relu(out)
-        out = self.conv2_dropout(out)
+        # out = self.conv2_dropout(out)
         return out
