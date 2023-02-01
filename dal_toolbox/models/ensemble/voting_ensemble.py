@@ -7,6 +7,13 @@ class Ensemble(nn.Module):
         super().__init__()
         self.models = nn.ModuleList(models)
 
+    def __iter__(self):
+        for m in self.models:
+            yield m
+
+    def __len__(self):
+        return len(self.models)
+
     def forward(self, x):
         raise ValueError('Forward method should only be used on ensemble members.')
 
@@ -16,12 +23,17 @@ class Ensemble(nn.Module):
             logits.append(m(x))
         return torch.stack(logits)
 
-    def __iter__(self):
-        for m in self.models:
-            yield m
-
-    def __len__(self):
-        return len(self.models)
+    @torch.inference_mode()
+    def get_probas(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        mc_logits_list = []
+        for samples, _ in dataloader:
+            mc_logits = self.forward_sample(samples.to(device))
+            mc_logits_list.append(mc_logits.cpu())
+        mc_logits = torch.cat(mc_logits_list, dim=1)
+        probas = mc_logits.softmax(-1).mean(0)
+        return probas
 
 
 class EnsembleLRScheduler:
