@@ -48,16 +48,17 @@ class DropoutResNet18(BayesianModule):
     def mc_forward_impl(self, mc_input_BK: torch.Tensor):
         return self.forward(mc_input_BK)
 
-    @torch.no_grad()
-    def forward_logits(self, dataloader, device):
-        # TODO: Should logits for querying be the mean of mc forward logits?
+    @torch.inference_mode()
+    def get_probas(self, dataloader, device):
         self.to(device)
         self.eval()
-        all_logits = []
+        mc_logits_list = []
         for samples, _ in dataloader:
-            logits = torch.mean(self.mc_forward(samples.to(device), k=self.k), dim=1)
-            all_logits.append(logits)
-        return torch.cat(all_logits)
+            mc_logits = self.mc_forward(samples.to(device), k=self.k)
+            mc_logits_list.append(mc_logits.cpu())
+        mc_logits = torch.cat(mc_logits_list)
+        probas = mc_logits.softmax(-1).mean(1)
+        return probas
 
 
 class DropoutBasicBlock(nn.Module):
