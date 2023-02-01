@@ -15,7 +15,6 @@ cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/active_learning/
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
-# ARGS
 model=resnet18
 al_strat=uncertainty
 dataset=CIFAR10
