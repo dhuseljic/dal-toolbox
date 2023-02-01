@@ -21,8 +21,8 @@ al_strat=random
 dataset=CIFAR10
 dataset_path=/tmp/
 
-n_init=1000
-acq_size=1000
+n_init=100
+acq_size=100
 n_acq=9
 random_seed=$SLURM_ARRAY_TASK_ID
 
@@ -32,12 +32,12 @@ echo "Starting script. Writing results to ${output_dir}"
 srun python -u al.py \
 	model=$model \
 	dataset=$dataset \
-	random_seed=$random_seed \
 	al_strategy=$al_strat \
 	al_cycle.n_init=$n_init \
 	al_cycle.acq_size=$acq_size \
 	al_cycle.n_acq=$n_acq \
 	output_dir=$output_dir \
+	random_seed=$random_seed \
 	model.optimizer.lr=1e-2
 echo "Finished script."
 date
