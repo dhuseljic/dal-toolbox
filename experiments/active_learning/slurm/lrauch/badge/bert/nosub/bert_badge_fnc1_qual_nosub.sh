@@ -32,12 +32,11 @@ srun python -u al_txt.py \
     model=$MODEL \
     dataset=$DATASET \
     output_dir=$OUTPUT_DIR \
-    al_strategy=$STRATEGY \
     random_seed=$SLURM_ARRAY_TASK_ID \
     al_strategy=$STRATEGY \
     al_cycle.n_init=$N_INIT \
     al_cycle.acq_size=$ACQ_SIZE \
     al_cycle.n_acq=$N_ACQ \
-    wandb.group=$GROUP \ 
+    wandb.group=$GROUP \
     dataset.train_subset=$TRAIN_SUBSET
 

@@ -22,7 +22,6 @@ STRATEGY=badge
 N_INIT=100
 ACQ_SIZE=100
 N_ACQ=15
-
 GROUP=bert_badge_agnews_nosub
 TRAIN_SUBSET=0
 
