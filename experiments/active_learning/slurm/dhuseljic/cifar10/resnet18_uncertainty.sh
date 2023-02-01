@@ -11,14 +11,15 @@ date;hostname;pwd
 source /mnt/home/dhuseljic/.zshrc
 conda activate uncertainty_evaluation
 
-cd /mnt/home/dhuseljic/projects/uncertainty-evaluation/experiments/active_learning/
+cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/active_learning/
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
 # ARGS
 model=resnet18
-dataset=CIFAR10
 al_strat=uncertainty
+dataset=CIFAR10
+dataset_path=/tmp/
 
 n_init=1000
 acq_size=1000
