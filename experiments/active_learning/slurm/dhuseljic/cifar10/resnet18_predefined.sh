@@ -6,7 +6,7 @@
 #SBATCH --partition=main
 #SBATCH --array=1-3%10
 #SBATCH --job-name=al_predefined_resnet18_cifar10
-#SBATCH --output=/mnt/work/dhuseljic/logs/active_learning/%x_%a.log
+#SBATCH --output=/mnt/work/dhuseljic/logs/active_learning/%A_%a_%x.log
 date;hostname;pwd
 source /mnt/home/dhuseljic/.zshrc
 conda activate uncertainty_evaluation
@@ -26,7 +26,7 @@ n_acq=9
 random_seed=$SLURM_ARRAY_TASK_ID
 
 # Define the queried indices file from another experiment
-model_predefined=resnet18
+model_predefined=resnet18_mcdropout
 al_start_predefined=uncertainty
 queried_indices_json=/mnt/work/deep_al/results/active_learning/${dataset}/${model_predefined}/${al_start_predefined}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/queried_indices.json
 
@@ -35,6 +35,7 @@ output_dir=/mnt/work/deep_al/results/active_learning/${dataset}/${model}/${al_st
 echo "Starting script. Writing results to ${output_dir}"
 srun python -u al.py \
 	model=$model \
+	model.optimizer.lr=1e-2 \
 	dataset=$dataset \
 	al_strategy=$al_strat \
 	al_strategy.queried_indices_json=$queried_indices_json \
@@ -42,7 +43,6 @@ srun python -u al.py \
 	al_cycle.acq_size=$acq_size \
 	al_cycle.n_acq=$n_acq \
 	output_dir=$output_dir \
-	random_seed=$random_seed \
-	model.optimizer.lr=1e-2
+	random_seed=$random_seed
 echo "Finished script."
 date

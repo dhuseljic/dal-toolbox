@@ -6,7 +6,7 @@
 #SBATCH --partition=main
 #SBATCH --array=1-3%10
 #SBATCH --job-name=al_uncertainty_resnet18_cifar10
-#SBATCH --output=/mnt/work/dhuseljic/logs/active_learning/%x_%a.log
+#SBATCH --output=/mnt/work/dhuseljic/logs/active_learning/%A_%a_%x.log
 date;hostname;pwd
 source /mnt/home/dhuseljic/.zshrc
 conda activate uncertainty_evaluation
@@ -30,13 +30,13 @@ output_dir=/mnt/work/deep_al/results/active_learning/${dataset}/${model}/${al_st
 echo "Starting script. Writing results to ${output_dir}"
 srun python -u al.py \
 	model=$model \
+	model.optimizer.lr=1e-2 \
 	dataset=$dataset \
 	al_strategy=$al_strat \
 	al_cycle.n_init=$n_init \
 	al_cycle.acq_size=$acq_size \
 	al_cycle.n_acq=$n_acq \
 	output_dir=$output_dir \
-	random_seed=$random_seed \
-	model.optimizer.lr=1e-2
+	random_seed=$random_seed
 echo "Finished script."
 date
