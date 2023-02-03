@@ -1,6 +1,7 @@
 defaults:
   - _self_
   - model: resnet18
+  - dataset: CIFAR10
   - al_strategy: random
 
 al_cycle:
@@ -9,7 +10,6 @@ al_cycle:
   n_acq: 10
   cold_start: True
 
-dataset: CIFAR10
 dataset_path: ./data/
 device: cuda
 
