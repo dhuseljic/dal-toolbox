@@ -24,4 +24,4 @@ srun python -u experiments/pretraining/main.py \
     dataset_path=/mnt/datasets/imagenet/ILSVRC2012/ \
     model=wideresnet2810 \
     output_dir=$OUTPUT_DIR \
-    random_seed=${SLURM_ARRAY_TASK_ID}
+    random_seed=${SLURM_JOB_ID}
