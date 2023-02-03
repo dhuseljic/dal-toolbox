@@ -1,0 +1,9 @@
+name: wideresnet2810_deterministic
+width: 10
+n_epochs: 200
+batch_size: 128
+dropout_rate: 0.0
+optimizer:
+  lr: 0.1
+  weight_decay: 5e-4
+  momentum: .9
