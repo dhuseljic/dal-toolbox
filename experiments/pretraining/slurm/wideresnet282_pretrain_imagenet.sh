@@ -21,7 +21,7 @@ echo "Saving results to $OUTPUT_DIR"
 
 srun python -u experiments/pretraining/main.py \
     dataset=IMAGENET \
-    dataset_path=/mnt/datasets/imagenet/ILSVRC2012 \
-    model=wideresnet282_deterministic \
+    dataset_path=/mnt/datasets/imagenet/ILSVRC2012/ \
+    model=wideresnet282 \
     output_dir=$OUTPUT_DIR \
     random_seed=${SLURM_ARRAY_TASK_ID}
