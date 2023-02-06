@@ -1,9 +1,3 @@
-# Initialize Model
-# Initialize Dataset
-# Train Model
-# Eval Model each eval-step
-# Save Model
-
 import os
 import json
 import logging
