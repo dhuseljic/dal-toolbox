@@ -425,7 +425,7 @@ def build_wide_resnet_pimodel(n_classes, dropout_rate, lr, weight_decay, momentu
 
 def build_wide_resnet_fixmatch(n_classes, dropout_rate, lr, weight_decay, momentum, n_epochs, device, p_cutoff,
 lambda_u, T, use_hard_labels, use_cat):
-    model = wide_resnet.wide_resnet_28_10(num_classes=n_classes, dropout_rate=dropout_rate)
+    model = wide_resnet.wide_resnet_28_2(num_classes=n_classes, dropout_rate=dropout_rate)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=True)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
     criterion = nn.CrossEntropyLoss()
