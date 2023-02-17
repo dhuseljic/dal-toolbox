@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - model: wideresnet2810
+  - model: wideresnet282
 
 dataset: CIFAR10
 dataset_path: ./data/

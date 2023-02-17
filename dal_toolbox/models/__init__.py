@@ -553,7 +553,7 @@ def build_ssl_model(args, **kwargs):
             n_iter=args.ssl_algorithm.n_iter,
             unsup_warmup=args.ssl_algorithm.unsup_warmup
         )
-    elif args.model.name == 'wideresnet2810_deterministic' and args.ssl_algorithm.name == 'fixmatch':
+    elif args.model.name == 'wideresnet282_deterministic' and args.ssl_algorithm.name == 'fixmatch':
         model_dict = build_wide_resnet_fixmatch(
             n_classes=n_classes,
             dropout_rate=args.model.dropout_rate,
