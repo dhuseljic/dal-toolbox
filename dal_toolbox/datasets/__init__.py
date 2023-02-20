@@ -31,7 +31,7 @@ def build_dataset(args):
         test_ds = tiny_imagenet.build_tinyimagenet('test', args.dataset_path)
 
     elif args.dataset == 'Imagenet':
-        train_ds, ds_info = imagenet.build_imagenet('train', args.dataset_path)
+        train_ds, ds_info = imagenet.build_imagenet('train', args.dataset_path, return_info=True)
         test_ds = imagenet.build_imagenet('val', args.dataset_path)
     else:
         raise NotImplementedError
