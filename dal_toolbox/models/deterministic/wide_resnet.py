@@ -50,6 +50,11 @@ def wide_resnet_28_10(num_classes, dropout_rate=0.3):
     return model
 
 
+def wide_resnet_28_2(num_classes, dropout_rate=0.3):
+    model = WideResNet(depth=28, widen_factor=2, dropout_rate=dropout_rate, num_classes=num_classes)
+    return model
+
+
 class WideResNet(nn.Module):
     def __init__(self, depth, widen_factor, dropout_rate, num_classes):
         super(WideResNet, self).__init__()

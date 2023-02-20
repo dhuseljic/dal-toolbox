@@ -1,5 +1,6 @@
 defaults:
-  - model: wideresnet2810
+  - _self_
+  - model: wideresnet282
 
 dataset: CIFAR10
 dataset_path: ./data/
@@ -23,7 +24,7 @@ hydra:
         mode: w
 
 ssl_algorithm:
-  u_ratio: 1
+  u_ratio: 7
   name: fixmatch
   T: 0.5
   lambda_u: 1

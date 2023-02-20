@@ -224,7 +224,7 @@ def train_one_epoch_pimodel(model, dataloaders, criterion, optimizer, n_iter, la
 
 
 def train_one_epoch_fixmatch(model, dataloaders, criterion, optimizer, device, use_hard_labels,
-                    lambda_u, p_cutoff, use_cat, T, epoch=None, print_freq=200):
+                    lambda_u, p_cutoff, use_cat, T, epoch=None, print_freq=50):
     model.train()
     model.to(device)
     criterion.to(device)

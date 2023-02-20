@@ -4,16 +4,12 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --job-name=fixmatch-250
+#SBATCH --job-name=fixmatch-4000
 #SBATCH --output=/mnt/stud/work/phahn/uncertainty/logs/%x_%A_%a.log
-#SBATCH --array=1-4%4
+#SBATCH --array=1-2%2
 source /mnt/stud/home/phahn/.zshrc
 
 conda activate uncertainty_evaluation
-
-rm -f /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation/.git/index.lock
-
-git checkout feature_fixmatch
 
 cd /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation/
 
@@ -24,5 +20,4 @@ srun python -u experiments/semi_supervised_learning/fixmatch.py \
     dataset=CIFAR10 \
     output_dir=$OUTPUT_DIR \
     random_seed=${SLURM_ARRAY_TASK_ID} \
-    n_labeled_samples=250 \
-    u_ratio=7
+    n_labeled_samples=4000
