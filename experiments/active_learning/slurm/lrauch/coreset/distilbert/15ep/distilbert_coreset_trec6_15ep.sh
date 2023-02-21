@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --job-name=glae_agnews_badge_bert_15ep
+#SBATCH --job-name=glae_trec6_coreset_distilbert_15ep
 #SBATCH --output=/mnt/work/lrauch/logs/active_learning/%x_%a.log
 #SBATCH --array=1-5%5
 date;hostname;pwd
@@ -15,14 +15,14 @@ cd /mnt/home/lrauch/projects/dal-toolbox/experiments/active_learning/
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
-MODEL=bert
-DATASET=agnews
-STRATEGY=badge
+MODEL=distilbert
+DATASET=trec6
+STRATEGY=coreset
 
 N_INIT=100
 ACQ_SIZE=100
 N_ACQ=15
-GROUP=bert_badge_agnews_15ep
+GROUP=distilbert_coreset_trec6_15ep
 N_EPOCHS=15
 
 OUTPUT_DIR=/mnt/work/glae/glae-results/${DATASET}/$MODEL/${STRATEGY}/15ep/N_INIT${N_INIT}__ACQ_SIZE${ACQ_SIZE}__N_ACQ${N_ACQ}/seed${SLURM_ARRAY_TASK_ID}
