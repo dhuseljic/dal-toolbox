@@ -15,13 +15,13 @@ cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/active_learning/
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
-model=resnet18
+model=resnet18_ensemble
 al_strat=uncertainty
 dataset=CIFAR10
 dataset_path=/tmp/
 
-n_init=100
-acq_size=100
+n_init=1000
+acq_size=1000
 n_acq=9
 random_seed=$SLURM_ARRAY_TASK_ID
 
