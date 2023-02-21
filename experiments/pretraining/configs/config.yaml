@@ -1,12 +1,10 @@
 defaults:
   - _self_
-  - model: wideresnet282
+  - model: wideresnet2810
 
 dataset: CIFAR10
 dataset_path: ./data/
-n_labeled_samples: 40
-n_unlabeled_samples: 50_000
-eval_interval: 1
+eval_interval: 5
 
 device: cuda
 random_seed: 42
@@ -22,12 +20,3 @@ hydra:
     handlers:
       file:
         mode: w
-
-ssl_algorithm:
-  u_ratio: 7
-  name: fixmatch
-  T: 0.5
-  lambda_u: 1
-  use_hard_labels: True
-  use_cat: True
-  p_cutoff: 0.95
