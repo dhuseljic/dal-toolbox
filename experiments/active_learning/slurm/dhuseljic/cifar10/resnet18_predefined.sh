@@ -20,14 +20,14 @@ al_strat=predefined
 dataset=CIFAR10
 dataset_path=/tmp/
 
-n_init=100
-acq_size=100
+n_init=1000
+acq_size=1000
 n_acq=9
 random_seed=$SLURM_ARRAY_TASK_ID
 
 # Define the queried indices file from another experiment
-model_predefined=resnet18_mcdropout
-al_start_predefined=uncertainty
+model_predefined=resnet18
+al_start_predefined=random
 queried_indices_json=/mnt/work/deep_al/results/active_learning/${dataset}/${model_predefined}/${al_start_predefined}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/queried_indices.json
 
 output_dir=/mnt/work/deep_al/results/active_learning/${dataset}/${model}/${al_strat}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/${model_predefined}_${al_start_predefined}_queries/seed${random_seed}/
