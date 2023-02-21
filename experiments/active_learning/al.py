@@ -8,7 +8,7 @@ import torch
 import hydra
 
 from torch.utils.tensorboard import SummaryWriter
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, RandomSampler
 from omegaconf import OmegaConf
 
 from dal_toolbox.active_learning.data import ALDataset
@@ -92,9 +92,10 @@ def main(args):
         # Train with updated annotations
         logging.info('Training on labeled pool with %s samples', len(al_dataset.labeled_dataset))
         t1 = time.time()
+        iter_per_epoch = len(al_dataset.labeled_dataset) // args.model.batch_size + 1
+        train_sampler = RandomSampler(al_dataset.labeled_dataset, num_samples=args.model.batch_size*iter_per_epoch)
+        train_loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.model.batch_size, sampler=train_sampler)
         train_history = []
-        train_loader = DataLoader(al_dataset.labeled_dataset,
-                                  batch_size=args.model.batch_size, shuffle=True, drop_last=True)
 
         # TODO: set hyperparameters method?
         if False:
