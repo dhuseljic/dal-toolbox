@@ -17,7 +17,7 @@ echo "Saving results to $OUTPUT_DIR"
 
 srun python -u experiments/pretraining/main.py \
     dataset=Imagenet \
-    dataset_path=/mnt/datasets/imagenet/ILSVRC2012/ \
+    dataset_path=/mnt/datasets/imagenet/ILSVRC2012/downloads/ \
     model=wideresnet2810 \
     output_dir=$OUTPUT_DIR \
     random_seed=${SLURM_JOB_ID}
