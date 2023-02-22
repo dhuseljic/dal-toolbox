@@ -8,6 +8,8 @@
 #SBATCH --output=/mnt/stud/work/phahn/uncertainty/logs/%x_%j.log
 source /mnt/stud/home/phahn/.zshrc
 
+git checkout 38-pretraining-time-too-long
+
 conda activate uncertainty_evaluation
 
 cd /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation/

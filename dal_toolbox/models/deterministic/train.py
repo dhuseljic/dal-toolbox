@@ -1,6 +1,7 @@
 import torch 
 import torch.nn as nn
 import torch.nn.functional as F
+from tqdm import tqdm
 
 import numpy as np
 
@@ -9,7 +10,7 @@ from ...metrics import generalization
 from ...utils import MetricLogger, SmoothedValue
 
 
-def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
+def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200, use_tqdm=False):
     model.train()
     model.to(device)
     criterion.to(device)
@@ -17,6 +18,9 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None,
     metric_logger = MetricLogger(delimiter=" ")
     metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
     header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
+
+    if use_tqdm:
+        dataloader = tqdm(dataloader)
 
     # Train the epoch
     for inputs, targets in metric_logger.log_every(dataloader, print_freq, header):
