@@ -38,8 +38,13 @@ def main(args):
         logging.info('Using initial labeled pool from %s.', args.al_strategy.queried_indices_json)
         with open(args.al_strategy.queried_indices_json, 'r', encoding='utf-8') as f:
             queried_indices_json = json.load(f)
-        indices = queried_indices_json['cycle0']
-        al_dataset.update_annotations(indices)
+        initial_indices = queried_indices_json['cycle0']
+        al_dataset.update_annotations(initial_indices)
+    elif args.al_cycle.init_pool_file is not None:
+        logging.info('Using initial labeled pool from %s.', args.al_cycle.init_pool_file)
+        with open(args.al_cycle.init_pool_file, 'r', encoding='utf-8') as f:
+            initial_indices = json.load(f)
+        al_dataset.update_annotations(initial_indices)
     else:
         logging.info('Creating random initial labeled pool with %s samples.', args.al_cycle.n_init)
         al_dataset.random_init(n_samples=args.al_cycle.n_init)

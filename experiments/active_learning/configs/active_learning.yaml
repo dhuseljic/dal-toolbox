@@ -9,11 +9,12 @@ al_cycle:
   acq_size: 100
   n_acq: 9
   cold_start: True
+  init_pool_file: null
 
 dataset_path: ./data/
 device: cuda
 
-random_seed: 42
+random_seed: 1
 val_batch_size: 128
 print_freq_eval: 100
 print_freq_train: 100
