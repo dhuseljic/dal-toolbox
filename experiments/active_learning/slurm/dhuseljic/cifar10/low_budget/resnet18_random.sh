@@ -16,10 +16,10 @@ export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
 model=resnet18
-al_strat=random
 dataset=CIFAR10
 dataset_path=/tmp/
 
+al_strat=random
 n_init=100
 acq_size=100
 n_acq=19

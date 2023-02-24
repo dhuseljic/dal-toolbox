@@ -34,6 +34,7 @@ srun python -u al.py \
 	model.optimizer.lr=1e-2 \
 	model.optimizer.weight_decay=5e-2 \
 	dataset=$dataset \
+	dataset_path=/tmp/ \
 	al_strategy=$al_strat \
 	al_cycle.n_init=$n_init \
 	al_cycle.init_pool_file=$init_pool_file \

@@ -23,8 +23,8 @@ al_strat=coreset
 n_init=100
 acq_size=100
 n_acq=19
-
 random_seed=$SLURM_ARRAY_TASK_ID
+init_pool_file=/mnt/home/dhuseljic/projects/dal-toolbox/experiments/active_learning/initial_pools/CIFAR10/random_${n_init}_seed${random_seed}.json
 
 output_dir=/mnt/work/deep_al/results/active_learning/${dataset}/${model}/${al_strat}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/
 
@@ -34,8 +34,10 @@ srun python -u al.py \
 	model.optimizer.lr=1e-2 \
 	model.optimizer.weight_decay=5e-2 \
 	dataset=$dataset \
+	dataset_path=/tmp/ \
 	al_strategy=$al_strat \
 	al_cycle.n_init=$n_init \
+	al_cycle.init_pool_file=$init_pool_file \
 	al_cycle.acq_size=$acq_size \
 	al_cycle.n_acq=$n_acq \
 	output_dir=$output_dir \
