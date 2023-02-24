@@ -33,7 +33,7 @@ def main(args):
     logging.info('Building datasets.')
     train_ds, query_ds, val_ds, ds_info = build_al_datasets(args)
     val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)
-    al_dataset = ALDataset(train_ds, query_ds)
+    al_dataset = ALDataset(train_ds, query_ds, random_state=args.random_seed)
     if args.al_strategy.name == 'predefined':
         logging.info('Using initial labeled pool from %s.', args.al_strategy.queried_indices_json)
         with open(args.al_strategy.queried_indices_json, 'r', encoding='utf-8') as f:
