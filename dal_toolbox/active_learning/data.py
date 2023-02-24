@@ -24,7 +24,7 @@ class FullDataset(Subset):
 
 
 class ALDataset:
-    def __init__(self, train_dataset, query_dataset=None):
+    def __init__(self, train_dataset, query_dataset=None, random_state=None):
         # Differenciating between train and query, since train can contain additional transformations
         # for optimal training performance
         self.train_dataset = train_dataset
@@ -36,7 +36,7 @@ class ALDataset:
         # Set up the indices for unlabeled and labeled pool
         self.unlabeled_indices = range(len(self.train_dataset))
         self.labeled_indices = []
-        self.rng = random.Random(0)
+        self.rng = random.Random(random_state)
 
     @property
     def unlabeled_dataset(self):
