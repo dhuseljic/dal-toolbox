@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
 #SBATCH --array=1-3%10
-#SBATCH --job-name=al_random_resnet18_cifar10
+#SBATCH --job-name=al_random_resnet18_svhn
 #SBATCH --output=/mnt/work/dhuseljic/logs/active_learning/%A_%a__%x.log
 date;hostname;pwd
 source /mnt/home/dhuseljic/.zshrc
@@ -16,8 +16,8 @@ export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
 model=resnet18
-al_strat=uncertainty
-dataset=CIFAR10
+al_strat=random
+dataset=SVHN
 dataset_path=/tmp/
 
 n_init=100
@@ -30,7 +30,6 @@ output_dir=/mnt/work/deep_al/results/active_learning/${dataset}/${model}/${al_st
 echo "Starting script. Writing results to ${output_dir}"
 srun python -u al.py \
 	model=$model \
-	model.n_epochs=250 \
 	model.optimizer.lr=1e-2 \
 	model.optimizer.weight_decay=5e-2 \
 	dataset=$dataset \
