@@ -1,3 +1,4 @@
+"""This scripts creates the json files which store the initial pools use throughout the evaluation."""
 import os
 import json
 import random
