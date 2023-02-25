@@ -11,7 +11,7 @@ date;hostname;pwd
 source /mnt/home/dhuseljic/.zshrc
 conda activate uncertainty_evaluation
 
-cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/active_learning/
+cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
@@ -29,7 +29,7 @@ init_pool_file=/mnt/home/dhuseljic/projects/dal-toolbox/experiments/active_learn
 output_dir=/mnt/work/deep_al/results/active_learning/${dataset}/${model}/${al_strat}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/
 
 echo "Starting script. Writing results to ${output_dir}"
-srun python -u al.py \
+srun python -u active_learning.py \
 	model=$model \
 	model.optimizer.lr=1e-2 \
 	model.optimizer.weight_decay=5e-2 \
