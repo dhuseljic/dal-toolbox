@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --job-name=glae_wikitalk_coreset_distilbert_15ep_nosub
+#SBATCH --job-name=glae_wikitalk_entropy_distilbert_15ep_nosub
 #SBATCH --output=/mnt/work/lrauch/logs/active_learning/%x_%a.log
 #SBATCH --array=1-5%5
 date;hostname;pwd
@@ -17,12 +17,12 @@ export HYDRA_FULL_ERROR=1
 
 MODEL=distilbert
 DATASET=wikitalk
-STRATEGY=coreset
+STRATEGY=uncertainty
 
 N_INIT=100
 ACQ_SIZE=100
 N_ACQ=15
-GROUP=distilbert_coreset_wikitalk_15ep_nosub
+GROUP=distilbert_entropy_wikitalk_15ep_nosub
 TRAIN_SUBSET=0
 N_EPOCHS=15
 
@@ -40,4 +40,5 @@ srun python -u al_txt.py \
     al_cycle.acq_size=$ACQ_SIZE \
     al_cycle.n_acq=$N_ACQ \
     wandb.group=$GROUP \
-    dataset.train_subset=$TRAIN_SUBSET
+    dataset.train_subset=$TRAIN_SUBSET \
+    model.n_epochs=$N_EPOCHS

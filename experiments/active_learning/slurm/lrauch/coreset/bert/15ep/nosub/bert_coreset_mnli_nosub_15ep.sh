@@ -40,4 +40,5 @@ srun python -u al_txt.py \
     al_cycle.acq_size=$ACQ_SIZE \
     al_cycle.n_acq=$N_ACQ \
     wandb.group=$GROUP \
-    dataset.train_subset=$TRAIN_SUBSET
+    dataset.train_subset=$TRAIN_SUBSET \
+    model.n_epochs=$N_EPOCHS
