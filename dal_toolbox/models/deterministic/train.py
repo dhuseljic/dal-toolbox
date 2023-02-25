@@ -71,6 +71,7 @@ def train_one_epoch_bertmodel(model, dataloader, epoch, optimizer, scheduler, cr
         Train Accuracy: {train_stats['train_batch_acc_epoch']:.4f}")
     print("--"*40)
     return train_stats
+
 # def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
 #     model.train()
 #     model.to(device)
