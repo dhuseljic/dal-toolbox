@@ -20,10 +20,19 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None,
     metric_logger = MetricLogger(delimiter=" ")
     metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
 
+    t_dl = time.time()
+
     # Train the epoch
     for i, (inputs, targets) in enumerate(dataloader):
         if i%10 == 0:
             logging.info(f'Batch {i}')
+
+        t = time.time() - t_dl
+
+        if i%10 == 0:
+            logging.info('Getting data from dataloader took %.2f minutes and %.2f seconds', (t)/60, t%60)
+        
+        
         t1 = time.time()
         inputs, targets = inputs.to(device), targets.to(device)
         t = time.time() - t1 
@@ -66,8 +75,10 @@ def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None,
         metric_logger.update(loss=loss.item(), lr=optimizer.param_groups[0]["lr"])
         metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
         t = time.time() - t1 
-        if i%10 == 0:
+        if i%50 == 0:
             logging.info('Logging took %.2f minutes and %.2f seconds', (t)/60, t%60)
+
+        t_dl = time.time()
 
     train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
 
