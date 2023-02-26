@@ -6,7 +6,7 @@
 #SBATCH --partition=main
 #SBATCH --job-name=fixmatch-250
 #SBATCH --output=/mnt/stud/work/phahn/uncertainty/logs/%x_%A_%a.log
-#SBATCH --array=1-2%2
+#SBATCH --array=1-6%6
 source /mnt/stud/home/phahn/.zshrc
 
 conda activate uncertainty_evaluation
@@ -21,4 +21,5 @@ srun python -u experiments/semi_supervised_learning/fixmatch.py \
     dataset=CIFAR10 \
     output_dir=$OUTPUT_DIR \
     random_seed=${SLURM_ARRAY_TASK_ID} \
-    n_labeled_samples=250
+    n_labeled_samples=250 \
+    ssl_algorithm.u_ratio=6
