@@ -1,7 +1,7 @@
 defaults:
-  - model: distilbert
-  - al_strategy: uncertainty
-  - dataset: agnews
+  - model: bert
+  - al_strategy: cal
+  - dataset: trec6
   - _self_
 
 al_cycle:

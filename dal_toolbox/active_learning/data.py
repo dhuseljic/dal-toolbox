@@ -58,7 +58,7 @@ class ALDataset:
 
             Args:
                 buy_idx (list): List of indices which identify samples of the unlabeled pool that should be
-                                transfered to the labeld pool.
+                                transfered to the labeled pool.
         """
         self.labeled_indices = list_union(self.labeled_indices, buy_idx)
         self.unlabeled_indices = list_diff(self.unlabeled_indices, buy_idx)

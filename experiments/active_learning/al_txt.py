@@ -21,11 +21,11 @@ from dal_toolbox.models import build_model
 from dal_toolbox.utils import seed_everything
 from dal_toolbox.datasets import build_al_datasets
 from dal_toolbox.metrics.generalization import area_under_curve
-
+from dal_toolbox.active_learning.strategies import cal
 transformers.logging.set_verbosity_error()
 
 
-@hydra.main(version_base=None, config_path="./configs", config_name="al_nlp_slrm")
+@hydra.main(version_base=None, config_path="./configs", config_name="al_nlp")
 def main(args):
     print(OmegaConf.to_yaml(args))
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
@@ -247,6 +247,9 @@ def build_query(args, **kwargs):
     elif args.al_strategy.name == "badge":
         device = kwargs['device']
         query = badge.Badge(subset_size=args.dataset.train_subset, device=device)
+    elif args.al_strategy.name == "cal":
+        device = kwargs['device']
+        query = cal.CAL(subset_size=args.dataset.train_subset, device=device)
     else:
         raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
     return query
