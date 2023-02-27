@@ -110,7 +110,7 @@ class BertSequenceClassifier(nn.Module):
         logits = torch.cat(all_logits)
         probas = logits.softmax(-1)
         features = torch.cat(all_features)
-        return features
+        return features, probas
 
 
 
