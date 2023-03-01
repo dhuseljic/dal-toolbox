@@ -30,6 +30,7 @@ def build_model(args, **kwargs):
             lr=args.model.optimizer.lr,
             weight_decay=args.model.optimizer.weight_decay,
             momentum=args.model.optimizer.momentum,
+            nesterov=True,
         )
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
         criterion = nn.CrossEntropyLoss()
