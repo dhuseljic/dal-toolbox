@@ -60,10 +60,22 @@ def train_one_epoch_bertmodel(model, dataloader, epoch, optimizer, scheduler, cr
         optimizer.zero_grad()
 
         batch_size = targets.size(0)
+
         batch_acc, = generalization.accuracy(logits, targets, topk=(1,))
+        if model.num_classes <= 2: 
+            batch_f1_macro = generalization.f1_macro(logits, targets, 'binary', device)
+            batch_f1_micro = batch_f1_macro
+        else:
+            batch_f1_macro = generalization.f1_macro(logits, targets, 'macro', device)
+            batch_f1_micro = generalization.f1_macro(logits, targets, 'micro', device)
+
+        batch_acc_balanced = generalization.balanced_acc(logits, targets, device)
 
         metric_logger.update(loss=loss.item(), lr=optimizer.param_groups[0]["lr"])
         metric_logger.meters["batch_acc"].update(batch_acc.item(), n=batch_size)
+        metric_logger.meters['batch_f1_macro'].update(batch_f1_macro.item(), n=batch_size)
+        metric_logger.meters['batch_f1_micro'].update(batch_f1_micro.item(), n=batch_size)
+        metric_logger.meters['batch_acc_balanced'].update(batch_acc_balanced.item(), n=batch_size)
 
     # save global (epoch) stats: take average of all the saved batch
     train_stats = {f"train_{name}_epoch": meter.global_avg for name, meter, in metric_logger.meters.items()}

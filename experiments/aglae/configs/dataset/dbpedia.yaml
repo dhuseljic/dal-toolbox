@@ -1,0 +1,9 @@
+name: dbpedia
+name_hf: dbpedia_14
+n_classes: 14
+train_subset: 10000
+test_subset: 0
+
+
+#560k training
+#70k testing

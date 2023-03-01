@@ -1,0 +1,9 @@
+name: trec6
+name_hf: trec
+n_classes: 6
+train_subset: 0
+test_subset: 0
+
+# train: 5.5k
+# test: 500
+

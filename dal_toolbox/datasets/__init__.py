@@ -122,61 +122,72 @@ def build_al_datasets(args):
         complete_ds, ds_info = agnews.build_agnews(args)
         train_ds = complete_ds['train']
         query_ds = complete_ds['train']
-        test_ds_id = create_testsubset(complete_ds, args, "test")
+        test_ds_id = complete_ds['test']
+        #test_ds_id = create_testsubset(complete_ds, args, "test")
 
     elif args.dataset.name == 'banks77':
         complete_ds, ds_info = banks77.build_banks77(args)
         train_ds = complete_ds['train']
         query_ds = complete_ds['train']
-        test_ds_id = create_testsubset(complete_ds, args, "test")
+        test_ds_id = complete_ds['test']
+        #test_ds_id = create_testsubset(complete_ds, args, "test")
 
     elif args.dataset.name == 'dbpedia':
         complete_ds, ds_info = dbpedia.build_dbpedia(args)
         train_ds = complete_ds['train']
         query_ds = complete_ds['train']
-        test_ds_id = create_testsubset(complete_ds, args, "test")
+        test_ds_id = complete_ds['test']
+        #test_ds_id = create_testsubset(complete_ds, args, "test")
 
     elif args.dataset.name == 'fnc1':
         complete_ds, ds_info = fnc1.build_fnc1(args)
         train_ds = complete_ds['train']
         query_ds = complete_ds['train']
-        test_ds_id = create_testsubset(complete_ds, args, "test")
+        test_ds_id = complete_ds['test']
+        #test_ds_id = create_testsubset(complete_ds, args, "test")
 
     elif args.dataset.name == 'mnli':
         complete_ds, ds_info = mnli.build_mnli(args)
         train_ds = complete_ds['train']
         query_ds = complete_ds['train']
-        test_ds_id = create_testsubset(complete_ds, args, "validation_matched")
+        test_ds_id = complete_ds['validation_matched']
+        #test_ds_id = create_testsubset(complete_ds, args, "validation_matched")
 
     elif args.dataset.name == 'qnli':
         complete_ds, ds_info = qnli.build_qnli(args)
         train_ds = complete_ds['train']
         query_ds = complete_ds['train']
-        test_ds_id = create_testsubset(complete_ds, args, "validation")
+        test_ds_id = complete_ds['validation']
+        #test_ds_id = create_testsubset(complete_ds, args, "validation")
 
     elif args.dataset.name == 'sst2':
         complete_ds, ds_info = sst2.build_sst2(args)
         train_ds = complete_ds['train']
         query_ds = complete_ds['train']
-        test_ds_id = create_testsubset(complete_ds, args, "validation")
+        test_ds_id = complete_ds['validation']
+
+        #test_ds_id = create_testsubset(complete_ds, args, "validation")
 
     elif args.dataset.name == 'trec6':
         complete_ds, ds_info = trec6.build_trec6(args)
         train_ds = complete_ds['train']
         query_ds = complete_ds['train']
-        test_ds_id = create_testsubset(complete_ds, args, "test")
+        test_ds_id = complete_ds['test']
+        #test_ds_id = create_testsubset(complete_ds, args, "test")
 
     elif args.dataset.name == 'wikitalk':
         complete_ds, ds_info = wikitalk.build_wikitalk(args)
         train_ds = complete_ds['train']
         query_ds = complete_ds['train']
-        test_ds_id = create_testsubset(complete_ds, args, "test")
+        test_ds_id = complete_ds['test']
+        #test_ds_id = create_testsubset(complete_ds, args, "test")
 
     elif args.dataset.name == 'yelp5':
         complete_ds, ds_info = yelp5.build_yelp5(args)
         train_ds = complete_ds['train']
         query_ds = complete_ds['train']
-        test_ds_id = create_testsubset(complete_ds, args, "test")
+        test_ds_id = complete_ds['test']
+        #test_ds_id = create_testsubset(complete_ds, args, "test")
 
     else:
         raise NotImplementedError('Dataset not available')

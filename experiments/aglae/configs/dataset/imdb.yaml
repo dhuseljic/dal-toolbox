@@ -1,0 +1,8 @@
+name: imdb
+name_hf: imdb
+n_classes: 2
+train_subset: 10000
+test_subset: 0
+
+#train: 25k
+#test: 25k

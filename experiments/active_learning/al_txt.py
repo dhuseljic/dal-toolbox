@@ -34,6 +34,7 @@ def main(args):
 
     t_init = time.time()
     results = {}
+    query_indices = {}
     wandb.init(
         project=args.wandb.project,
         entity=args.wandb.entity,
@@ -46,14 +47,21 @@ def main(args):
             resolve=True, 
             throw_on_missing=True
     ))
-    # writer = SummaryWriter('runs/' + get_tensorboard_params(args))
+
     writer =  SummaryWriter(log_dir=args.output_dir)
 
     # Setup Datasets
     logging.info('Building datasets. Creating random initial labeled pool with %s samples.',
             args.al_cycle.n_init)
     train_ds, query_ds, test_ds, ds_info = build_al_datasets(args)
-    al_dataset = ALDataset(train_ds, query_ds)
+    al_dataset = ALDataset(train_ds, query_ds, random_state=args.random_seed)
+
+    if args.al_cycle.init_pool_file is not None: 
+        logging.info('Using initial labeled pool from %s.', args.al_strategy.queried_indices_json)
+        with open(args.al_cycle.init_pool_file, 'r', encoding='utf-8') as f:
+            queried_indices_json = json.load(f)
+            
+
     al_dataset.random_init(n_samples=args.al_cycle.n_init)
 
     # Setup Model
@@ -222,11 +230,20 @@ def main(args):
         'final_auc_f1': auc_f1,
         'final_auc_acc_blc': auc_acc_blc
         })
+    
+    # save all results
     savepath = os.path.join(args.output_dir, 'results.json')
     logging.info('Saving results to %s', savepath)
     print(f'Saving results to {savepath}.')
     with open(savepath, 'w', encoding='utf8') as file:
         json.dump(results, file)
+    
+    # save only indices
+    savepath = os.path.join(args.output_dir, 'queried_indices.json')
+    logging.info('Saving results to %s', savepath)
+    print(f'Saving queried indices to {savepath}.')
+    with open(savepath, 'w', encoding='utf8') as file:
+        json.dump(queried_indices, file)
 
     time_overall = time.time()- t_init
     logging.info('Experiment took %.2f minutes', time_overall/60)

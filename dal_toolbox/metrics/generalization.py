@@ -24,17 +24,18 @@ def accuracy(output, target, topk=(1,)):
     return res
 
 # !TODO: Sklearn and torchmetrics scores do not align 
-def f1_macro(output, target, num_classes, device):
+def f1_macro(output, target, mode, device):
     _, pred = output.topk(1, 1, True, True)
     pred = pred.t().squeeze(0)
     pred = pred.cpu().detach().numpy()
     target = target.cpu().detach().numpy()
 
-    if num_classes <=2:
+    if mode == 'binary':
         f1 = f1_score(target, pred, average='binary')
-    
-    else:
+    elif mode =='macro':
         f1 = f1_score(target, pred, average='macro')
+    elif mode == 'micro':
+        f1 = f1_score(target, pred, average='micro')
 
     return torch.from_numpy(np.asarray(f1)).to(device)
 
