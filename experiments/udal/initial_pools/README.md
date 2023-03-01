@@ -1,0 +1,1 @@
+This folder contains indices for the initial pool.

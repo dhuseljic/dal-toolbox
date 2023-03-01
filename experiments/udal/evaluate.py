@@ -1,3 +1,4 @@
+"""This script evaluates an active learning cycle with indices that are given as arguments."""
 import os
 import time
 import copy
@@ -18,7 +19,7 @@ from dal_toolbox.datasets import build_al_datasets
 from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, predefined
 
 
-@hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
+@hydra.main(version_base=None, config_path="./configs", config_name="evaluate")
 def main(args):
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
@@ -26,7 +27,6 @@ def main(args):
 
     # Necessary for logging
     results = {}
-    queried_indices = {}
     writer = SummaryWriter(log_dir=args.output_dir)
 
     # Setup Dataset
@@ -34,21 +34,15 @@ def main(args):
     train_ds, query_ds, val_ds, ds_info = build_al_datasets(args)
     val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)
     al_dataset = ALDataset(train_ds, query_ds, random_state=args.random_seed)
-    if args.al_strategy.name == 'predefined':
-        logging.info('Using initial labeled pool from %s.', args.al_strategy.queried_indices_json)
-        with open(args.al_strategy.queried_indices_json, 'r', encoding='utf-8') as f:
-            queried_indices_json = json.load(f)
-        initial_indices = queried_indices_json['cycle0']
-        al_dataset.update_annotations(initial_indices)
-    elif args.al_cycle.init_pool_file is not None:
-        logging.info('Using initial labeled pool from %s.', args.al_cycle.init_pool_file)
-        with open(args.al_cycle.init_pool_file, 'r', encoding='utf-8') as f:
-            initial_indices = json.load(f)
-        al_dataset.update_annotations(initial_indices)
-    else:
-        logging.info('Creating random initial labeled pool with %s samples.', args.al_cycle.n_init)
-        al_dataset.random_init(n_samples=args.al_cycle.n_init)
-    queried_indices['cycle0'] = al_dataset.labeled_indices
+
+    logging.info('Loading initial labeled pool from %s', args.queried_indices_json)
+    with open(args.queried_indices_json, 'r', encoding='utf-8') as f:
+        queried_indices = json.load(f)
+    al_dataset.update_annotations(queried_indices['cycle0'])
+    n_init = len(queried_indices['cycle0'])
+    acq_size = len(queried_indices['cycle1'])
+    n_acq = len(queried_indices) - 1
+    logging.info('Initial pool: %s  Acquisition Size: %s  Number of Acquisitions: %s', n_init, acq_size, n_acq)
 
     # Setup Model
     logging.info('Building model: %s', args.model.name)
@@ -56,42 +50,26 @@ def main(args):
     model, train_one_epoch, evaluate = model_dict['model'], model_dict['train_one_epoch'], model_dict['evaluate']
     optimizer, lr_scheduler = model_dict['optimizer'], model_dict['lr_scheduler']
 
-    # Setup Query
-    logging.info('Building query strategy: %s', args.al_strategy.name)
-    al_strategy = build_query(args, device=args.device)
-
     # Setup initial states
     initial_model_state = copy.deepcopy(model.state_dict())
     initial_optimizer_state = copy.deepcopy(optimizer.state_dict())
     initial_scheduler_state = copy.deepcopy(lr_scheduler.state_dict())
 
     # Active Learning Cycles
-    for i_acq in range(0, args.al_cycle.n_acq + 1):
-        logging.info('Starting AL iteration %s / %s', i_acq, args.al_cycle.n_acq)
+    for i_acq in range(0, n_acq+1):
+        logging.info('Starting AL iteration %s / %s', i_acq, n_acq)
         cycle_results = {}
 
-        # Analyse unlabeled set and query most promising data
         if i_acq != 0:
-            t1 = time.time()
-            logging.info('Querying %s samples with strategy `%s`', args.al_cycle.acq_size, args.al_strategy.name)
-            indices = al_strategy.query(
-                model=model,
-                dataset=al_dataset.query_dataset,
-                unlabeled_indices=al_dataset.unlabeled_indices,
-                labeled_indices=al_dataset.labeled_indices,
-                acq_size=args.al_cycle.acq_size
-            )
+            indices = queried_indices[f'cycle{i_acq}']
+            logging.info('Updating pool with %s samples', len(indices))
             al_dataset.update_annotations(indices)
-            query_time = time.time() - t1
-            logging.info('Querying took %.2f minutes', query_time/60)
-            cycle_results['query_indices'] = indices
-            cycle_results['query_time'] = query_time
-            queried_indices[f'cycle{i_acq}'] = indices
+
 
         #  If cold start is set, reset the model parameters
         optimizer.load_state_dict(initial_optimizer_state)
         lr_scheduler.load_state_dict(initial_scheduler_state)
-        if args.al_cycle.cold_start:
+        if args.cold_start:
             model.load_state_dict(initial_model_state)
 
         # Train with updated annotations
@@ -101,13 +79,6 @@ def main(args):
         train_sampler = RandomSampler(al_dataset.labeled_dataset, num_samples=args.model.batch_size*iter_per_epoch)
         train_loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.model.batch_size, sampler=train_sampler)
         train_history = []
-
-        # TODO: set hyperparameters method?
-        if False:
-            loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.model.batch_size)
-            all_targets = torch.cat([y for _, y in loader])
-            class_weights = 100 / (10 * torch.bincount(all_targets))
-            model_dict['train_kwargs']['criterion'] = torch.nn.CrossEntropyLoss(weight=class_weights)
 
         for i_epoch in range(args.model.n_epochs):
             train_stats = train_one_epoch(model, train_loader, **model_dict['train_kwargs'], epoch=i_epoch)
@@ -160,48 +131,14 @@ def main(args):
     # Saving
     # Save results
     file_name = os.path.join(args.output_dir, 'results.json')
-    logging.info("Saving queried indices to %s.", file_name)
-    with open(file_name, 'w', encoding='utf-8') as f:
-        json.dump(results, f)
-
-    # Save indices
-    file_name = os.path.join(args.output_dir, 'queried_indices.json')
     logging.info("Saving results to %s.", file_name)
     with open(file_name, 'w', encoding='utf-8') as f:
-        json.dump(queried_indices, f, sort_keys=False)
+        json.dump(results, f)
 
     # Save Model
     file_name = os.path.join(args.output_dir, "model_final.pth")
     logging.info("Saving final model to %s.", file_name)
     torch.save(checkpoint, file_name)
-
-
-def build_query(args, **kwargs):
-    if args.al_strategy.name == "random":
-        query = random.RandomSampling(random_seed=args.random_seed)
-    elif args.al_strategy.name == "uncertainty":
-        device = kwargs['device']
-        query = uncertainty.UncertaintySampling(
-            uncertainty_type=args.al_strategy.uncertainty_type,
-            subset_size=args.al_strategy.subset_size,
-            device=device,
-        )
-    elif args.al_strategy.name == "coreset":
-        device = kwargs['device']
-        query = coreset.CoreSet(subset_size=args.al_strategy.subset_size, device=device)
-    elif args.al_strategy.name == "badge":
-        device = kwargs['device']
-        query = badge.Badge(subset_size=args.al_strategy.subset_size, device=device)
-    elif args.al_strategy.name == "predefined":
-        query = predefined.PredefinedSampling(
-            queried_indices_json=args.al_strategy.queried_indices_json,
-            n_acq=args.al_cycle.n_acq,
-            n_init=args.al_cycle.n_init,
-            acq_size=args.al_cycle.acq_size,
-        )
-    else:
-        raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
-    return query
 
 
 if __name__ == "__main__":

@@ -34,16 +34,11 @@ def main(args):
     train_ds, query_ds, val_ds, ds_info = build_al_datasets(args)
     val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)
     al_dataset = ALDataset(train_ds, query_ds, random_state=args.random_seed)
-    if args.al_strategy.name == 'predefined':
-        logging.info('Using initial labeled pool from %s.', args.al_strategy.queried_indices_json)
-        with open(args.al_strategy.queried_indices_json, 'r', encoding='utf-8') as f:
-            queried_indices_json = json.load(f)
-        initial_indices = queried_indices_json['cycle0']
-        al_dataset.update_annotations(initial_indices)
-    elif args.al_cycle.init_pool_file is not None:
+    if args.al_cycle.init_pool_file is not None:
         logging.info('Using initial labeled pool from %s.', args.al_cycle.init_pool_file)
         with open(args.al_cycle.init_pool_file, 'r', encoding='utf-8') as f:
             initial_indices = json.load(f)
+        assert len(initial_indices) == args.al_cycle.n_init, 'Number of samples in initial pool file does not match.'
         al_dataset.update_annotations(initial_indices)
     else:
         logging.info('Creating random initial labeled pool with %s samples.', args.al_cycle.n_init)
@@ -102,12 +97,7 @@ def main(args):
         train_loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.model.batch_size, sampler=train_sampler)
         train_history = []
 
-        # TODO: set hyperparameters method?
-        if False:
-            loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.model.batch_size)
-            all_targets = torch.cat([y for _, y in loader])
-            class_weights = 100 / (10 * torch.bincount(all_targets))
-            model_dict['train_kwargs']['criterion'] = torch.nn.CrossEntropyLoss(weight=class_weights)
+        # TODO: hyperparameters
 
         for i_epoch in range(args.model.n_epochs):
             train_stats = train_one_epoch(model, train_loader, **model_dict['train_kwargs'], epoch=i_epoch)
@@ -160,13 +150,13 @@ def main(args):
     # Saving
     # Save results
     file_name = os.path.join(args.output_dir, 'results.json')
-    logging.info("Saving queried indices to %s.", file_name)
+    logging.info("Saving results to %s.", file_name)
     with open(file_name, 'w', encoding='utf-8') as f:
         json.dump(results, f)
 
     # Save indices
     file_name = os.path.join(args.output_dir, 'queried_indices.json')
-    logging.info("Saving results to %s.", file_name)
+    logging.info("Saving queried indices to %s.", file_name)
     with open(file_name, 'w', encoding='utf-8') as f:
         json.dump(queried_indices, f, sort_keys=False)
 

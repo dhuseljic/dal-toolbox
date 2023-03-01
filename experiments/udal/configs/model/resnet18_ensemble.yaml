@@ -1,0 +1,8 @@
+name: resnet18_ensemble
+n_epochs: 200
+batch_size: 64
+n_member: 4
+optimizer:
+  lr: 0.1
+  weight_decay: 2e-4
+  momentum: 0.9
