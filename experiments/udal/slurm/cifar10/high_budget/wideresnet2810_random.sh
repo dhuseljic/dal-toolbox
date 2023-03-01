@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
 #SBATCH --array=1-3%10
-#SBATCH --job-name=al_random_resnet18_cifar10
+#SBATCH --job-name=al_random_wideresnet_cifar10
 #SBATCH --output=/mnt/work/dhuseljic/logs/active_learning/%A_%a__%x.log
 date;hostname;pwd
 source /mnt/home/dhuseljic/.zshrc
@@ -15,7 +15,7 @@ cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
-model=resnet18
+model=wideresnet2810
 dataset=CIFAR10
 dataset_path=/tmp/
 
