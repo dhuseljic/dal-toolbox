@@ -23,9 +23,9 @@ N_INIT=100
 ACQ_SIZE=100
 N_ACQ=15
 GROUP=bert_entropy_agnews
-random_seed=$SLURM_ARRAY_TASK_ID
+SEED=$SLURM_ARRAY_TASK_ID
 
-init_pool_file=~/projects/dal-toolbox/experiments/aglae/initial_pools/agnews/random_${n_init}_seed${random_seed}.json
+init_pool_file=~/projects/dal-toolbox/experiments/aglae/initial_pools/agnews/random_${N_INIT}_seed${SEED}.json
 
 OUTPUT_DIR=/mnt/work/lrauch/glae-results/${DATASET}/$MODEL/${STRATEGY}/5ep/sub/N_INIT${N_INIT}__ACQ_SIZE${ACQ_SIZE}__N_ACQ${N_ACQ}/seed${SLURM_ARRAY_TASK_ID}
 
@@ -35,7 +35,7 @@ srun python -u al_txt.py \
     model=$MODEL \
     dataset=$DATASET \
     output_dir=$OUTPUT_DIR \
-    random_seed=$random_seed \
+    random_seed=$SEED \
     al_strategy=$STRATEGY \
     al_cycle.n_init=$N_INIT \
     al_cycle.init_pool_file=$init_pool_file \
