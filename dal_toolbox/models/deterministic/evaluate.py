@@ -93,7 +93,7 @@ def evaluate_bertmodel(model, dataloader, epoch, criterion, device):
     targets = torch.cat(targets, dim=0).cpu()
 
     if model.num_classes <= 2:
-        test_f1_macro = generalization.f1_macro(logits, targets, model.num_classes)
+        test_f1_macro = generalization.f1_macro(logits, targets, 'binary')
         test_f1_micro = test_f1_macro
 
     else:
