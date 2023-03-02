@@ -1,22 +1,22 @@
 defaults:
   - model: bert
-  - al_strategy: cal
-  - dataset: trec6
+  - al_strategy: uncertainty
+  - dataset: banks77
   - _self_
 
 al_cycle:
   n_init: 100
-  acq_size: 20
-  n_acq: 5
+  acq_size: 100
+  n_acq: 10
   cold_start: True
   init_pool_file: null
 
 wandb:
-  project: glae
-  entity: lura
+  project: active-glae
+  entity: dal-nlp
   group: default
   reinit: True
-  mode: disabled
+  mode: online
 
 dataset_path: $HOME/.cache/huggingface/datasets
 device: cuda

@@ -26,7 +26,7 @@ from utils import final_results
 transformers.logging.set_verbosity_error()
 
 
-@hydra.main(version_base=None, config_path="./configs", config_name="al_nlp")
+@hydra.main(version_base=None, config_path="./configs", config_name="al_nlp_slrm")
 def main(args):
     print(OmegaConf.to_yaml(args))
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
@@ -81,7 +81,7 @@ def main(args):
         padding = 'longest',
         return_tensors="pt",
         )
-
+    #!TODO: what happens if the batch size and evaluation size do not add up?
     test_loader = DataLoader(
         test_ds,
         batch_size=args.model.batch_size*4,
@@ -120,6 +120,7 @@ def main(args):
             queried_indices[f'cycle{i_acq}'] = indices
 
         logging.info('Training on labeled pool with %s samples', len(al_dataset.labeled_dataset))
+        logging.info('Pool Subset of %s samples', args.dataset.train_subset)
         print('> Training.')
         t_start = time.time()
         train_history = []
@@ -223,11 +224,11 @@ def main(args):
     writer.close()
 
     # final results and logging 
-    auc_results = final_results(results, i_acq)
-    results[f'cycle{i_acq}']['test_stats']['auc_acc'] = auc_results['auc_acc']
-    results[f'cycle{i_acq}']['test_stats']['auc_f1_macro'] = auc_results['auc_f1_macro']
-    results[f'cycle{i_acq}']['test_stats']['auc_f1_micro'] = auc_results['auc_f1_micro']
-    results[f'cycle{i_acq}']['test_stats']['auc_acc_blc'] = auc_results['auc_acc_blc']
+    auc_results = final_results(results)
+    results[f'cycle{i_acq}']['test_stats']['auc_acc'] = auc_results['final_auc_acc']
+    results[f'cycle{i_acq}']['test_stats']['auc_f1_macro'] = auc_results['final_auc_f1_macro']
+    results[f'cycle{i_acq}']['test_stats']['auc_f1_micro'] = auc_results['final_auc_f1_micro']
+    results[f'cycle{i_acq}']['test_stats']['auc_acc_blc'] = auc_results['final_auc_acc_blc']
     wandb.log(auc_results)
     
     # save results

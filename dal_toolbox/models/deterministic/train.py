@@ -63,13 +63,13 @@ def train_one_epoch_bertmodel(model, dataloader, epoch, optimizer, scheduler, cr
 
         batch_acc, = generalization.accuracy(logits, targets, topk=(1,))
         if model.num_classes <= 2: 
-            batch_f1_macro = generalization.f1_macro(logits, targets, 'binary', device)
+            batch_f1_macro = generalization.f1_macro(logits, targets, 'binary')
             batch_f1_micro = batch_f1_macro
         else:
-            batch_f1_macro = generalization.f1_macro(logits, targets, 'macro', device)
-            batch_f1_micro = generalization.f1_macro(logits, targets, 'micro', device)
+            batch_f1_macro = generalization.f1_macro(logits, targets, 'macro')
+            batch_f1_micro = generalization.f1_macro(logits, targets, 'micro')
 
-        batch_acc_balanced = generalization.balanced_acc(logits, targets, device)
+        batch_acc_balanced = generalization.balanced_acc(logits, targets)
 
         metric_logger.update(loss=loss.item(), lr=optimizer.param_groups[0]["lr"])
         metric_logger.meters["batch_acc"].update(batch_acc.item(), n=batch_size)

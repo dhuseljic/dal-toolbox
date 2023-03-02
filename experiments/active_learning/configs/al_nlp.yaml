@@ -12,8 +12,8 @@ al_cycle:
   init_pool_file: null
 
 wandb:
-  project: glae
-  entity: lura
+  project: active-glae
+  entity: dal-nlp
   group: default
   reinit: True
   mode: disabled

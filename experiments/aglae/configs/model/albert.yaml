@@ -4,7 +4,7 @@ n_epochs: 5
 batch_size: 32
 optimizer:
   name: AdamW
-  lr: 3e-5
+  lr: 5e-5
   lr_scheduler: linear_warmup
   warmup_steps: 200
   weight_decay: 0.01

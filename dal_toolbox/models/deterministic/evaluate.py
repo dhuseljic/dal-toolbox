@@ -1,7 +1,12 @@
 import torch
+from tqdm.auto import tqdm
+import warnings
+warnings.filterwarnings('ignore') 
+
 from ...metrics import generalization, calibration, ood
 from ...metrics import generalization
 from ...utils import MetricLogger, SmoothedValue
+
 
 @torch.no_grad()
 def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
@@ -73,35 +78,39 @@ def evaluate(model, dataloader_id, dataloaders_ood, criterion, device):
     return {f"test_{k}": v for k, v in metrics.items()}
 
 @torch.no_grad()
-def evaluate_bertmodel(model, dataloader, epoch, criterion, device, print_freq=25):
+def evaluate_bertmodel(model, dataloader, epoch, criterion, device):
     model.eval()
     model.to(device)
 
-    metric_logger = MetricLogger(delimiter=" ")
-    header = "Testing:"
-    for batch in metric_logger.log_every(dataloader, print_freq, header):
+    logits, targets = [],[]
+    for batch in tqdm(dataloader):
         batch = batch.to(device)
-        targets = batch['labels']
-       
-        logits = model(batch['input_ids'], batch['attention_mask'])
-        loss = criterion(logits, targets)
 
-        batch_size = targets.size(0)
+        targets.append(batch['labels'])
+        logits.append(model(batch['input_ids'], batch['attention_mask']))
 
-        batch_acc, = generalization.accuracy(logits, targets)
-        batch_f1_macro = generalization.f1_macro(logits, targets, model.num_classes, device)
-        batch_f1_micro = generalization.f1_micro(logits, targets, model.num_classes, device)
-        batch_acc_balanced = generalization.balanced_acc(logits, targets, device)
+    logits = torch.cat(logits, dim=0).cpu()
+    targets = torch.cat(targets, dim=0).cpu()
 
-        metric_logger.update(loss=loss.item())
-        metric_logger.meters['batch_acc'].update(batch_acc.item(), n=batch_size)
-        metric_logger.meters['batch_f1_macro'].update(batch_f1_macro.item(), n=batch_size)
-        metric_logger.meters['batch_f1_micro'].update(batch_f1_micro.item(), n=batch_size)
-        metric_logger.meters['batch_acc_balanced'].update(batch_acc_balanced.item(), n=batch_size)
+    if model.num_classes <= 2:
+        test_f1_macro = generalization.f1_macro(logits, targets, model.num_classes)
+        test_f1_micro = test_f1_macro
 
-    test_stats = {f"test_{name}_epoch": meter.global_avg for name, meter, in metric_logger.meters.items()}
-    print(f"Epoch [{epoch}]: Test Loss: {test_stats['test_loss_epoch']:.4f}, \
-        Test Accuracy: {test_stats['test_batch_acc_epoch']:.4f}")
+    else:
+        test_f1_macro = generalization.f1_macro(logits, targets, 'macro')
+        test_f1_micro = generalization.f1_macro(logits, targets, 'micro')
+
+    test_stats = {
+        'test_acc': generalization.accuracy(logits, targets)[0].item(),
+        'test_f1_macro': test_f1_macro,
+        'test_f1_micro': test_f1_micro,
+        'test_acc_blc': generalization.balanced_acc(logits, targets),
+        'test_loss':  criterion(logits, targets).item()
+    }
+
+    print(f"Epoch [{epoch}]: Test Loss: {test_stats['test_loss']:.4f}, \
+        Test Accuracy: {test_stats['test_acc']:.4f}, \
+        Test acc_blc: {test_stats['test_acc_blc']:.4f}")
     print("--"*40)
     return test_stats
 
