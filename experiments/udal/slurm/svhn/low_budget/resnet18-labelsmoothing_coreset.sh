@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
 #SBATCH --array=1-3%10
-#SBATCH --job-name=al_random_resnet18_svhn
+#SBATCH --job-name=al_coreset_resnet18-labelsmoothing_svhn
 #SBATCH --output=/mnt/work/dhuseljic/logs/active_learning/%A_%a_%x.log
 date;hostname;pwd
 source /mnt/home/dhuseljic/.zshrc
@@ -15,10 +15,10 @@ cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
-model=resnet18
+model=resnet18_labelsmoothing
 dataset=SVHN
 
-al_strat=random
+al_strat=coreset
 n_init=100
 acq_size=100
 n_acq=19
@@ -40,6 +40,6 @@ srun python -u active_learning.py \
 	al_cycle.acq_size=$acq_size \
 	al_cycle.n_acq=$n_acq \
 	output_dir=$output_dir \
-	random_seed=$random_seed 
+	random_seed=$random_seed
 echo "Finished script."
 date

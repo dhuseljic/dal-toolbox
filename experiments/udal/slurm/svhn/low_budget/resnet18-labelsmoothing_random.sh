@@ -5,8 +5,8 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
 #SBATCH --array=1-3%10
-#SBATCH --job-name=al_random_resnet18_svhn
-#SBATCH --output=/mnt/work/dhuseljic/logs/active_learning/%A_%a_%x.log
+#SBATCH --job-name=al_random_resnet18-labelsmoothing_svhn
+#SBATCH --output=/mnt/work/dhuseljic/logs/active_learning/%A_%a__%x.log
 date;hostname;pwd
 source /mnt/home/dhuseljic/.zshrc
 conda activate uncertainty_evaluation
@@ -15,7 +15,7 @@ cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
-model=resnet18
+model=resnet18_labelsmoothing
 dataset=SVHN
 
 al_strat=random
