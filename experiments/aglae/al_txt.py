@@ -67,7 +67,7 @@ def main(args):
         logging.info('Creating random initial labeled pool with %s samples.', args.al_cycle.n_init)
         al_dataset.random_init(n_samples=args.al_cycle.n_init)
 
-    queried_indices['cycle0'] = al_dataset.labeled_indices
+    queried_indices['cycle0'] = sorted(al_dataset.labeled_indices)
 
     # Setup Model
     logging.info('Building model: %s', args.model.name)
@@ -115,9 +115,9 @@ def main(args):
             al_dataset.update_annotations(indices)
             query_time = time.time() - t_start
             logging.info('Querying time was %.2f minutes', query_time/60)
-            cycle_results['query_indices'] = indices
+            cycle_results['query_indices'] = sorted(indices)
             cycle_results['query_time'] = query_time
-            queried_indices[f'cycle{i_acq}'] = indices
+            queried_indices[f'cycle{i_acq}'] = sorted(indices)
 
         logging.info('Training on labeled pool with %s samples', len(al_dataset.labeled_dataset))
         logging.info('Pool Subset of %s samples', args.dataset.train_subset)
@@ -200,9 +200,9 @@ def main(args):
                 global_step=len(al_dataset.labeled_indices))
              
         cycle_results.update({
-            "labeled_indices": al_dataset.labeled_indices,
+            "labeled_indices": sorted(al_dataset.labeled_indices),
             "n_labeled_samples": len(al_dataset.labeled_dataset),
-            "unlabeled_indices": al_dataset.unlabeled_indices,
+            "unlabeled_indices": sorted(al_dataset.unlabeled_indices),
             "n_unlabeled_samples": len(al_dataset.unlabeled_dataset),
         })
 
