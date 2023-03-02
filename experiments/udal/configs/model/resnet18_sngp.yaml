@@ -1,5 +1,5 @@
 name : resnet18_sngp
-batch_size: 64
+batch_size: 128
 n_epochs: 250
 spectral_norm:
   use_spectral_norm: True
