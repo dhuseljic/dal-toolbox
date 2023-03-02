@@ -124,7 +124,7 @@ def main(args):
         # Evaluate resulting model
         logging.info('Evaluation with %s samples', len(val_ds))
         t1 = time.time()
-        test_stats = evaluate(model, val_loader, dataloaders_ood={}, **model_dict['eval_kwargs'])
+        test_stats = evaluate(model, val_loader, criterion=criterion,  dataloaders_ood={}, **model_dict['eval_kwargs'])
         evaluation_time = time.time() - t1
         logging.info('Evaluation took %.2f minutes', evaluation_time/60)
         logging.info('Evaluation stats: %s', test_stats)
