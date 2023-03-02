@@ -43,7 +43,7 @@ def build_model(args, **kwargs):
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
         }
-    if args.model.name == 'resnet18_labelsmoothing':
+    elif args.model.name == 'resnet18_labelsmoothing':
         model = resnet.ResNet18(n_classes)
         optimizer = torch.optim.SGD(
             model.parameters(),
