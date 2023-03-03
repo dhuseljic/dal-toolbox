@@ -11,75 +11,31 @@ from ..utils import unfreeze_bn, freeze_bn
 from ...metrics import generalization
 from ...utils import MetricLogger, SmoothedValue
 
-
-def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200, use_tqdm=False):
+def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
     model.train()
     model.to(device)
     criterion.to(device)
 
     metric_logger = MetricLogger(delimiter=" ")
     metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
-
-    t_dl = time.time()
+    header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
     # Train the epoch
-    for i, (inputs, targets) in enumerate(dataloader):
-        if i%10 == 0:
-            logging.info(f'Batch {i}')
-
-        t = time.time() - t_dl
-
-        if i%10 == 0:
-            logging.info('Getting data from dataloader took %.2f minutes and %.2f seconds', (t)/60, t%60)
-        
-        
-        t1 = time.time()
+    for inputs, targets in metric_logger.log_every(dataloader, print_freq, header):
         inputs, targets = inputs.to(device), targets.to(device)
-        t = time.time() - t1 
-        if i%10 == 0:
-            logging.info('Move data to device took %.2f minutes and %.2f seconds', (t)/60, t%60)
 
-        t1 = time.time()
         outputs = model(inputs)
-        t = time.time() - t1 
-        if i%10 == 0:
-            logging.info('Calculating outputs took %.2f minutes and %.2f seconds', (t)/60, t%60)
 
-        t1 = time.time()
         loss = criterion(outputs, targets)
-        t = time.time() - t1 
-        if i%10 == 0:
-            logging.info('Calculating Loss took %.2f minutes and %.2f seconds', (t)/60, t%60)
 
-        t1 = time.time()
         optimizer.zero_grad()
-        t = time.time() - t1 
-        if i%10 == 0:
-            logging.info('Resetting Grad took %.2f minutes and %.2f seconds', (t)/60, t%60)
-
-        t1 = time.time()
         loss.backward()
-        t = time.time() - t1 
-        if i%10 == 0:
-            logging.info('Backwardpropagation took %.2f minutes and %.2f seconds', (t)/60, t%60)
-
-        t1 = time.time()
         optimizer.step()
-        t = time.time() - t1 
-        if i%10 == 0:
-            logging.info('Optimizer-Step took %.2f minutes and %.2f seconds', (t)/60, t%60)
 
-        t1 = time.time()
         batch_size = inputs.shape[0]
         acc1, = generalization.accuracy(outputs, targets, topk=(1,))
         metric_logger.update(loss=loss.item(), lr=optimizer.param_groups[0]["lr"])
         metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
-        t = time.time() - t1 
-        if i%50 == 0:
-            logging.info('Logging took %.2f minutes and %.2f seconds', (t)/60, t%60)
-
-        t_dl = time.time()
-
     train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
 
     return train_stats
