@@ -223,8 +223,8 @@ def train_one_epoch_pimodel(model, dataloaders, criterion, optimizer, n_iter, la
     return train_stats
 
 
-def train_one_epoch_fixmatch(model, dataloaders, criterion, optimizer, device, use_hard_labels,
-                    lambda_u, p_cutoff, use_cat, T, epoch=None, print_freq=50):
+def train_one_epoch_fixmatch(model, dataloaders, criterion, optimizer, device,
+                    lambda_u, p_cutoff, T, epoch=None, print_freq=50):
     model.train()
     model.to(device)
     criterion.to(device)
@@ -245,15 +245,16 @@ def train_one_epoch_fixmatch(model, dataloaders, criterion, optimizer, device, u
         x_ulb_strong = x_ulb_strong.to(device)
 
         # Forward Propagation of all samples
-        logits_lb = model(x_lb) 
-        logits_ulb_strong = model(x_ulb_strong)
-        with torch.no_grad():
-            logits_ulb_weak = model(x_ulb_weak)
+        num_lb = x_lb.shape[0]
+        outputs = model(torch.cat((x_lb, x_ulb_weak, x_ulb_strong)))
+        logits_lb = outputs[:num_lb]
+        logits_ulb_weak, logits_ulb_strong = outputs[num_lb:].chunk(2)
+        logits_ulb_weak = logits_ulb_weak.detach()
 
         # Generate pseudo labels and mask
-        probas_ulb_weak = torch.softmax(logits_ulb_weak.detach()/T, dim=-1)
-        max_probas_weak, pseudo_labels = torch.max(probas_ulb_weak, dim=-1)
-        mask = max_probas_weak.ge(p_cutoff)
+        probas_ulb_weak = torch.softmax(logits_ulb_weak/T, dim=-1)
+        max_probas_ulb_weak, pseudo_labels = torch.max(probas_ulb_weak, dim=-1)
+        mask = max_probas_ulb_weak.ge(p_cutoff)
 
         # Loss
         sup_loss = criterion(logits_lb, y_lb)
