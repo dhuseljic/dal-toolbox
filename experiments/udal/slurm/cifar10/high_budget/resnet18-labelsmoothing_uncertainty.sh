@@ -5,8 +5,8 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
 #SBATCH --array=1-3%10
-#SBATCH --job-name=al_uncertainty_resnet18_cifar10
-#SBATCH --output=/mnt/work/dhuseljic/logs/active_learning/%A_%a__%x.log
+#SBATCH --job-name=al_uncertainty_resnet18-labelsmoothing_cifar10
+#SBATCH --output=/mnt/work/dhuseljic/logs/active_learning/%A_%a_%x.log
 date;hostname;pwd
 source /mnt/home/dhuseljic/.zshrc
 conda activate uncertainty_evaluation
@@ -15,7 +15,7 @@ cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
-model=resnet18
+model=resnet18_labelsmoothing
 dataset=CIFAR10
 dataset_path=/tmp/
 
@@ -34,7 +34,7 @@ srun python -u active_learning.py \
 	model.optimizer.lr=1e-2 \
 	model.optimizer.weight_decay=5e-3 \
 	dataset=$dataset \
-	dataset_path=/tmp/ \
+	dataset_path=/mnt/work/dhuseljic/datasets \
 	al_strategy=$al_strat \
 	al_cycle.n_init=$n_init \
 	al_cycle.init_pool_file=$init_pool_file \
