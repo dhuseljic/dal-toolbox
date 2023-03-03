@@ -34,7 +34,7 @@ srun python -u active_learning.py \
 	model.optimizer.lr=1e-2 \
 	model.optimizer.weight_decay=5e-3 \
 	dataset=$dataset \
-	dataset_path=/tmp/ \
+	dataset_path=/mnt/work/dhuseljic/datasets \
 	al_strategy=$al_strat \
 	al_cycle.n_init=$n_init \
 	al_cycle.init_pool_file=$init_pool_file \
