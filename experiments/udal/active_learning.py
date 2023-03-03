@@ -15,7 +15,7 @@ from omegaconf import OmegaConf
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp
 from dal_toolbox.active_learning.data import ALDataset
 from dal_toolbox.utils import seed_everything
-from dal_toolbox.datasets import build_al_datasets
+from dal_toolbox import datasets
 from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, predefined
 
 
@@ -32,7 +32,7 @@ def main(args):
 
     # Setup Dataset
     logging.info('Building datasets.')
-    train_ds, query_ds, val_ds, ds_info = build_al_datasets(args)
+    train_ds, query_ds, val_ds, ds_info = build_datasets(args)
     val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)
     al_dataset = ALDataset(train_ds, query_ds, random_state=args.random_seed)
     if args.al_cycle.init_pool_file is not None:
@@ -344,6 +344,29 @@ def build_model(args, **kwargs):
         NotImplementedError()
 
     return model_dict
+
+
+def build_datasets(args):
+
+    if args.dataset.name == 'CIFAR10':
+        train_ds, ds_info = datasets.cifar.build_cifar10('train', args.dataset_path, return_info=True)
+        query_ds = datasets.cifar.build_cifar10('query', args.dataset_path)
+        test_ds_id = datasets.cifar.build_cifar10('test', args.dataset_path)
+
+    elif args.dataset.name == 'CIFAR100':
+        train_ds, ds_info = datasets.cifar.build_cifar100('train', args.dataset_path, return_info=True)
+        query_ds = datasets.cifar.build_cifar100('query', args.dataset_path)
+        test_ds_id = datasets.cifar.build_cifar100('test', args.dataset_path)
+
+    elif args.dataset.name == 'SVHN':
+        train_ds, ds_info = datasets.svhn.build_svhn('train', args.dataset_path, return_info=True)
+        query_ds = datasets.svhn.build_svhn('query', args.dataset_path)
+        test_ds_id = datasets.svhn.build_svhn('test', args.dataset_path)
+
+    else:
+        raise NotImplementedError('Dataset not available')
+
+    return train_ds, query_ds, test_ds_id, ds_info
 
 
 if __name__ == "__main__":
