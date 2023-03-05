@@ -41,7 +41,7 @@ srun python -u al_txt.py \
     al_cycle.init_pool_file=$init_pool_file \
     al_cycle.acq_size=$ACQ_SIZE \
     al_cycle.n_acq=$N_ACQ \
-    wandb.group=$GROUP
+    wandb.group=$GROUP \
 
 echo "Finished script."
 date
