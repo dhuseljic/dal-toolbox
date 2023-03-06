@@ -11,7 +11,7 @@ date;hostname;pwd
 source /mnt/home/lrauch/.zshrc
 conda activate uncertainty-evaluation
 
-cd /mnt/home/lrauch/projects/dal-toolbox/experiments/active_learning/
+cd /mnt/home/lrauch/projects/dal-toolbox/experiments/aglae/
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
