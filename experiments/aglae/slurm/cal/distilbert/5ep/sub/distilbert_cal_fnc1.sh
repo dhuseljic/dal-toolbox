@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --job-name=glae_trec6_coreset_distilbert
+#SBATCH --job-name=glae_fnc1_cal_distilbert
 #SBATCH --output=/mnt/work/lrauch/logs/aglae/%x_%a.log
 #SBATCH --array=1-5%5
 date;hostname;pwd
@@ -16,16 +16,16 @@ export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
 MODEL=distilbert
-DATASET=trec6
-STRATEGY=coreset
+DATASET=fnc1
+STRATEGY=cal
 
 N_INIT=100
 ACQ_SIZE=100
 N_ACQ=15
-GROUP=distilbert_coreset_trec6
+GROUP=distilbert_cal_fnc1
 SEED=$SLURM_ARRAY_TASK_ID
 
-init_pool_file=~/projects/dal-toolbox/experiments/aglae/initial_pools/trec6/random_${N_INIT}_seed${SEED}.json
+init_pool_file=~/projects/dal-toolbox/experiments/aglae/initial_pools/fnc1/random_${N_INIT}_seed${SEED}.json
 
 OUTPUT_DIR=/mnt/work/glae/glae-results/${DATASET}/$MODEL/${STRATEGY}/5ep/sub/N_INIT${N_INIT}__ACQ_SIZE${ACQ_SIZE}__N_ACQ${N_ACQ}/seed${SLURM_ARRAY_TASK_ID}
 

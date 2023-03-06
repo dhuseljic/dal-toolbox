@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --job-name=glae_trec6_coreset_distilbert
+#SBATCH --job-name=glae_trec6_cal_roberta
 #SBATCH --output=/mnt/work/lrauch/logs/aglae/%x_%a.log
 #SBATCH --array=1-5%5
 date;hostname;pwd
@@ -15,14 +15,14 @@ cd /mnt/home/lrauch/projects/dal-toolbox/experiments/aglae/
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
-MODEL=distilbert
+MODEL=roberta
 DATASET=trec6
-STRATEGY=coreset
+STRATEGY=cal
 
 N_INIT=100
 ACQ_SIZE=100
 N_ACQ=15
-GROUP=distilbert_coreset_trec6
+GROUP=roberta_cal_trec6
 SEED=$SLURM_ARRAY_TASK_ID
 
 init_pool_file=~/projects/dal-toolbox/experiments/aglae/initial_pools/trec6/random_${N_INIT}_seed${SEED}.json
@@ -42,6 +42,6 @@ srun python -u al_txt.py \
     al_cycle.acq_size=$ACQ_SIZE \
     al_cycle.n_acq=$N_ACQ \
     wandb.group=$GROUP
-
+    
 echo "Finished script."
 date

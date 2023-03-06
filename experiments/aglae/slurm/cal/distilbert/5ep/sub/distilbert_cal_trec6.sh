@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --job-name=glae_trec6_coreset_distilbert
+#SBATCH --job-name=glae_trec6_cal_distilbert
 #SBATCH --output=/mnt/work/lrauch/logs/aglae/%x_%a.log
 #SBATCH --array=1-5%5
 date;hostname;pwd
@@ -17,12 +17,12 @@ export HYDRA_FULL_ERROR=1
 
 MODEL=distilbert
 DATASET=trec6
-STRATEGY=coreset
+STRATEGY=cal
 
 N_INIT=100
 ACQ_SIZE=100
 N_ACQ=15
-GROUP=distilbert_coreset_trec6
+GROUP=distilbert_cal_trec6
 SEED=$SLURM_ARRAY_TASK_ID
 
 init_pool_file=~/projects/dal-toolbox/experiments/aglae/initial_pools/trec6/random_${N_INIT}_seed${SEED}.json

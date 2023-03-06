@@ -4,8 +4,8 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --job-name=glae_trec6_coreset_distilbert
-#SBATCH --output=/mnt/work/lrauch/logs/aglae/%x_%a.log
+#SBATCH --job-name=glae_sst2_cal_bert_nosub
+#SBATCH --output=/mnt/work/lrauch/logs/active_learning/%x_%a.log
 #SBATCH --array=1-5%5
 date;hostname;pwd
 source /mnt/home/lrauch/.zshrc
@@ -15,19 +15,21 @@ cd /mnt/home/lrauch/projects/dal-toolbox/experiments/aglae/
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
-MODEL=distilbert
-DATASET=trec6
-STRATEGY=coreset
+MODEL=bert
+DATASET=sst2
+STRATEGY=cal
 
 N_INIT=100
 ACQ_SIZE=100
 N_ACQ=15
-GROUP=distilbert_coreset_trec6
+GROUP=bert_cal_sst2_nosub
+TRAIN_SUBSET=0
 SEED=$SLURM_ARRAY_TASK_ID
 
-init_pool_file=~/projects/dal-toolbox/experiments/aglae/initial_pools/trec6/random_${N_INIT}_seed${SEED}.json
 
-OUTPUT_DIR=/mnt/work/glae/glae-results/${DATASET}/$MODEL/${STRATEGY}/5ep/sub/N_INIT${N_INIT}__ACQ_SIZE${ACQ_SIZE}__N_ACQ${N_ACQ}/seed${SLURM_ARRAY_TASK_ID}
+init_pool_file=~/projects/dal-toolbox/experiments/aglae/initial_pools/sst2/random_${N_INIT}_seed${SEED}.json
+
+OUTPUT_DIR=/mnt/work/glae/glae-results/${DATASET}/$MODEL/${STRATEGY}/5ep/nosub/N_INIT${N_INIT}__ACQ_SIZE${ACQ_SIZE}__N_ACQ${N_ACQ}/seed${SLURM_ARRAY_TASK_ID}
 
 echo "Writing results to ${OUTPUT_DIR}"
 
@@ -41,7 +43,8 @@ srun python -u al_txt.py \
     al_cycle.init_pool_file=$init_pool_file \
     al_cycle.acq_size=$ACQ_SIZE \
     al_cycle.n_acq=$N_ACQ \
-    wandb.group=$GROUP
+    wandb.group=$GROUP \
+    dataset.train_subset=$TRAIN_SUBSET
 
 echo "Finished script."
 date

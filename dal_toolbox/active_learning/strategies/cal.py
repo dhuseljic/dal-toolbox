@@ -43,124 +43,78 @@ class CAL(Query):
 
         del kwargs
 
-        embeddings_unlabeled, probas_unlabeled = model.get_representations_and_probas(
+        # get embeddings and probas for pool and labeled data
+        embs_pool, probas_pool = model.get_representations_and_probas(
             unlabeled_dataloader, 
             device=self.device)
-        embeddings_labeled, probas_labeled = model.get_representations_and_probas(
+        embs_labeled, probas_labeled = model.get_representations_and_probas(
             labeled_dataloader, 
             device=self.device)
-        
+        # get true targets for labeled set 
         y_labeled = torch.cat([i['labels'] for i in labeled_dataloader])
-        # score for every instance in unlabeled pool 
+
+        # mean kl divergence score to 10 nearest neighbors and difference to labeled for every instance in unlabeled 
         kl_scores = self.cal(
-            embeddings_unlabeled.numpy(), 
-            probas_unlabeled.numpy(),
-            embeddings_labeled.numpy(), 
+            embs_pool.numpy(), 
+            probas_pool.numpy(),
+            embs_labeled.numpy(), 
             probas_labeled.numpy(),
             y_labeled.numpy(),
             n_neighbors=10,
-            acq_size=acq_size
-
         )
-        # score for every instance in unlabeled pool 
-        #selected_inds = np.argpartition(kl_scores, -acq_size)[-acq_size:]
+
+        # high score: high divergence in model predicted probas for candidate compared to neighbors in labeled set
         _, indices = torch.tensor(kl_scores).topk(acq_size)
+
+        # reverse indices back to the true unlabeled indices 
         actual_indices = [unlabeled_indices[i] for i in indices]
 
         return actual_indices
 
-    def cal(self, embeddings_unlabeled, probas_unlabeled, embeddings_labeled, probas_labeled, y_labeled, n_neighbors, acq_size):
-        # centroids: unlabeled datapoints?
-        embeddings_unlabeled = normalize(embeddings_unlabeled, axis=1)
-        embeddings_labeled = normalize(embeddings_labeled, axis=1)
+    def cal(self, embs_pool, probas_pool, embs_labeled, probas_labeled, y_labeled, n_neighbors):
+    # contrastive instances:
+    # find data points that are similiar in the model feature space but the model outputs maximally different probas
 
-        # knn classifier fitted on labeled data
+        # 1) find embeddings that are similir in the model feature space:
+            
+        # get emb_labeled and emb_pool from [cls] (normalize them)
+        embs_pool = normalize(embs_pool, axis=1)
+        embs_labeled = normalize(embs_labeled, axis=1)
+
+        # knn classifier fitted on embs_labeled data
         neigh = KNeighborsClassifier(n_neighbors=n_neighbors)
-        neigh.fit(X=embeddings_labeled, y=y_labeled)        
-        dist = DistanceMetric.get_metric('euclidean')
+        neigh.fit(X=embs_labeled, y=y_labeled)        
+        #dist = DistanceMetric.get_metric('euclidean')
         criterion = nn.KLDivLoss(reduction='none')
 
+        # we want to query similar instances from the labeled neigborhood to each instance from the pool
         kl_scores = []
-        num_adv = 0
-        distances = []
-        pairs = []
-        # go throiugh every unlabeled sample in pool 
-        for _, candidate in enumerate(
-                tqdm(zip(embeddings_unlabeled, probas_unlabeled), desc="Finding neighbours for every unlabeled data point")):
-            # find indices of closesest "neighbours" in train set
-            #unlab_representation, unlab_logit = candidate
-            # distances = distances from candidate to each center (10?)
-            # neighors_idx = indices of the nearest points in the popluation matrix (labeled data!)
-            distances_, neighbors_idx = neigh.kneighbors(X=[candidate[0]], return_distance=True)
-            distances.append(distances_[0])
+        #distances = []
 
-            # labeled_neighbours_inds = np.array(labeled_inds)[neighbors_idx[0]]  # orig inds
-            # labeled_neighbours_labels = train_dataset.tensors[3][neighbors_idx[0]]
-            # calculate score
+        # go through every unlabeled sample in pool 
+        for embs_candidate, probas_candidate in tqdm(zip(embs_pool, probas_pool)):
+            # 2) find the 10 nearest neighbors of a candidate from pool
+            # distances = distances from candidate embedding from pool to the k=10 nearest labeled neighbors (from KNN)
+            # neigbhors_idx = indices of the nearest points in the embs_labeled to the embs_candidate
+            _, neighbors_idx = neigh.kneighbors(X=[embs_candidate], return_distance=True)
+            #distances.append(distances_[-1])
 
-            # probas_neigh = probabilities of the nearest points in the population (labeled data) --> n_neighbors x classes
-            probas_neigh = [probas_labeled[n] for n in neighbors_idx][-1]
-            probas_candidate = candidate[1] # probas for prediction of current candidate (from unlabeled pool!)
-
-            # logits_neigh = [train_logits[n] for n in neighbors_idx]
-            # logits_candidate = candidate[1]
-            #neigh_prob = F.softmax(train_logits[neighbors_idx], dim=-1)
-
-            # predictions of labeled 
-            preds_neigh = [np.argmax(probas_labeled[n], axis=1) for n in neighbors_idx]
-            # predictions of candidate
-            pred_candidate = [np.argmax(probas_candidate)]
-            # number of predictions that exist in preds_neigh and pred_candidate
-            num_diff_pred = len(list(set(preds_neigh[-1]).intersection(pred_candidate)))
-
-            if num_diff_pred > 0: num_adv += 1
+            # get the respective probas and preds from the nearest labeled instances --> n_neighbors x classes
+            probas_labeled_neigh = [probas_labeled[n] for n in neighbors_idx][-1]
+            #preds_labeled_neigh = [np.argmax(probas_labeled_neigh, axis=1)]
+            # get the predictions of pool_candidate 
+            #pred_candidate = [np.argmax(probas_candidate)]
+            
+            # input of kl divergence should be a distribution in the log space
             uda_softmax_temp = 1
-            candidate_log_prob = torch.from_numpy(np.log(candidate[1] / uda_softmax_temp))
-            kl = np.array([torch.sum(criterion(candidate_log_prob, n), dim=-1).numpy() for n in torch.from_numpy(probas_neigh)])
-            kl_scores.append(kl.mean())
-        distances = np.array([np.array(xi) for xi in distances])
+            log_probas_candidate = torch.from_numpy(np.log(probas_candidate / uda_softmax_temp))
 
-        #logger.info('Total Different predictions for similar inputs: {}'.format(num_adv))
+            # calculcate the KL Divergence between the candidate and the 10 nearest neighbor probas --> k=10 values
+            kl = np.array([torch.sum(criterion(log_probas_candidate, n), dim=-1).numpy() for n in torch.from_numpy(probas_labeled_neigh)])
+            # calculate a score for a candidate
+            kl_candidate_score = kl.mean()
+            # calculate a score for a
+            kl_scores.append(kl_candidate_score)
 
-        #selected_inds = np.argpartition(kl_scores, -acq_size)[-acq_size:]
+        #distances = np.array([np.array(xi) for xi in distances])
         return kl_scores
-
-    #neigh.fit(X=embeddings_labeled, y=y_labeled)
-    
-
-    # embeddings = normalize(embeddings, axis=1)
-    # nn = NearestNeighbors(n_neighbors=n_neighbors)
-    # nn.fit(embeddings)
-
-    # num_batches = int(np.ceil(len_dataset / self.batch_size))
-    # offset = 0
-
-    
-    # for batch_idx in np.array_split(np.arange(embeddings.shape[0]), num_batches,
-    #                                 axis=0):
-
-    #     nn_indices = nn.kneighbors(embeddings[batch_idx],
-    #                                n_neighbors=self.k,
-    #                                return_distance=False)
-
-    #     kl_divs = np.apply_along_axis(lambda v: np.mean([
-    #         rel_entr(embeddings_proba[i], embeddings_unlabelled_proba[v])
-    #         for i in nn_indices[v - offset]]),
-    #         0,
-    #         batch_idx[None, :])
-
-    #     scores.extend(kl_divs.tolist())
-    #     offset += batch_idx.shape[0]
-
-    # scores = np.array(scores)
-    # indices = np.argpartition(-scores, n)[:n]
-
-    # return indices
-
-    
-
-
-    #chosen = kmeans_plusplus(grad_embedding.numpy(), acq_size, np_rng=self.np_rng)
-    #return [unlabeled_indices[idx] for idx in chosen]
-    
-
