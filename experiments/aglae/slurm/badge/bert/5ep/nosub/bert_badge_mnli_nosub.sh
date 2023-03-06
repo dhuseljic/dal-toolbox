@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --job-name=glae_mnli_coreset_bert_nosub
+#SBATCH --job-name=glae_mnli_badge_bert_nosub
 #SBATCH --output=/mnt/work/lrauch/logs/active_learning/%x_%a.log
 #SBATCH --array=1-5%5
 date;hostname;pwd
@@ -17,12 +17,12 @@ export HYDRA_FULL_ERROR=1
 
 MODEL=bert
 DATASET=mnli
-STRATEGY=coreset
+STRATEGY=badge
 
 N_INIT=100
 ACQ_SIZE=100
 N_ACQ=15
-GROUP=bert_coreset_mnli_nosub
+GROUP=bert_badge_mnli_nosub
 TRAIN_SUBSET=0
 SEED=$SLURM_ARRAY_TASK_ID
 
