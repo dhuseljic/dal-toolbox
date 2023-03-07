@@ -92,4 +92,20 @@ class DistilbertSequenceClassifier(nn.Module):
         embedding = torch.cat(embedding)
         return embedding
 
-
+    @torch.inference_mode()
+    def get_representations_and_probas(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_features = []
+        all_logits = []
+        for batch in tqdm(dataloader):
+            input_ids = batch["input_ids"].to(device)
+            attention_mask = batch["attention_mask"].to(device)
+            logits, cls_state = self(input_ids, attention_mask, return_cls=True)
+            all_features.append(cls_state.to("cpu"))
+            all_logits.append(logits.to('cpu'))
+            
+        logits = torch.cat(all_logits)
+        probas = logits.softmax(-1)
+        features = torch.cat(all_features)
+        return features, probas
