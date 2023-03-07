@@ -46,7 +46,7 @@ def main(args):
     history_train, history_test = [], []
     for i_epoch in range(args.model.n_epochs):
         logging.info("Epoch [%s] - Start of Training.", i_epoch)
-        train_stats = train_one_epoch(model, train_loader, criterion, optimizer, device, epoch=i_epoch, use_tqdm=True)
+        train_stats = train_one_epoch(model, train_loader, criterion, optimizer, device, epoch=i_epoch)
         logging.info("Epoch [%s] - End of Training. Results: %s", i_epoch, train_stats)
         if lr_scheduler:
             lr_scheduler.step()
