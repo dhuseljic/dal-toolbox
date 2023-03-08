@@ -7,3 +7,7 @@ output/
 results/
 outputs/
 wandb/
+
+*.pdf
+*.png
+*.jpg
