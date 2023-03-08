@@ -11,3 +11,4 @@ wandb/
 *.pdf
 *.png
 *.jpg
+*.pth
