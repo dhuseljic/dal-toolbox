@@ -24,23 +24,28 @@ ACQ_SIZE=100
 N_ACQ=15
 GROUP=bert_cal_fnc1_15ep_nosub
 TRAIN_SUBSET=0
+SEED=$SLURM_ARRAY_TASK_ID
 N_EPOCHS=15
 
+init_pool_file=~/projects/dal-toolbox/experiments/aglae/initial_pools/fnc1/random_${N_INIT}_seed${SEED}.json
 
 OUTPUT_DIR=/mnt/work/glae/glae-results/${DATASET}/$MODEL/${STRATEGY}/15ep/nosub/N_INIT${N_INIT}__ACQ_SIZE${ACQ_SIZE}__N_ACQ${N_ACQ}/seed${SLURM_ARRAY_TASK_ID}
+
 echo "Writing results to ${OUTPUT_DIR}"
 
 srun python -u al_txt.py \
     model=$MODEL \
     dataset=$DATASET \
     output_dir=$OUTPUT_DIR \
-    random_seed=$SLURM_ARRAY_TASK_ID \
+    random_seed=$SEED \
     al_strategy=$STRATEGY \
     al_cycle.n_init=$N_INIT \
+    al_cycle.init_pool_file=$init_pool_file \
     al_cycle.acq_size=$ACQ_SIZE \
     al_cycle.n_acq=$N_ACQ \
     wandb.group=$GROUP \
     dataset.train_subset=$TRAIN_SUBSET \
     model.n_epochs=$N_EPOCHS
 
-
+echo "Finished script."
+date
