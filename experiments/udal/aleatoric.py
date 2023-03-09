@@ -4,6 +4,7 @@ import copy
 import json
 import logging
 
+import numpy as np
 import torch
 import torch.nn as nn
 import hydra
@@ -93,6 +94,7 @@ def main(args):
 
         # Train with updated annotations
         logging.info('Training on labeled pool with %s samples', len(al_dataset.labeled_dataset))
+        logging.info('Distribution of labels: %s ', np.unique([y for _, y in al_dataset.labeled_dataset], return_counts=True))
         t1 = time.time()
         iter_per_epoch = len(al_dataset.labeled_dataset) // args.model.batch_size + 1
         train_sampler = RandomSampler(al_dataset.labeled_dataset, num_samples=args.model.batch_size*iter_per_epoch)
