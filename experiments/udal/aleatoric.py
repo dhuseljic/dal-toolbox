@@ -15,7 +15,8 @@ from omegaconf import OmegaConf
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp
 from dal_toolbox.active_learning.data import ALDataset
 from dal_toolbox.utils import seed_everything
-from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, predefined
+from dal_toolbox.active_learning.strategies import random, uncertainty, query
+from dal_toolbox.metrics.ood import entropy_fn
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="aleatoric")
@@ -68,6 +69,7 @@ def main(args):
         if i_acq != 0:
             t1 = time.time()
             logging.info('Querying %s samples with strategy `%s`', args.al_cycle.acq_size, args.al_strategy.name)
+
             indices = al_strategy.query(
                 model=model,
                 dataset=al_dataset.query_dataset,
@@ -76,6 +78,7 @@ def main(args):
                 acq_size=args.al_cycle.acq_size
             )
             al_dataset.update_annotations(indices)
+
             query_time = time.time() - t1
             logging.info('Querying took %.2f minutes', query_time/60)
             cycle_results['query_indices'] = indices
@@ -182,22 +185,31 @@ def build_query(args, **kwargs):
             subset_size=args.al_strategy.subset_size,
             device=device,
         )
-    elif args.al_strategy.name == "coreset":
-        device = kwargs['device']
-        query = coreset.CoreSet(subset_size=args.al_strategy.subset_size, device=device)
-    elif args.al_strategy.name == "badge":
-        device = kwargs['device']
-        query = badge.Badge(subset_size=args.al_strategy.subset_size, device=device)
-    elif args.al_strategy.name == "predefined":
-        query = predefined.PredefinedSampling(
-            queried_indices_json=args.al_strategy.queried_indices_json,
-            n_acq=args.al_cycle.n_acq,
-            n_init=args.al_cycle.n_init,
-            acq_size=args.al_cycle.acq_size,
-        )
+    elif args.al_strategy.name == "aleatoric":
+        query = Aleatoric()
     else:
         raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
     return query
+
+
+# Defines aleatoric sampling
+class Aleatoric(query.Query):
+
+    @torch.no_grad()
+    def query(self, dataset, unlabeled_indices, acq_size, **kwargs):
+        del kwargs
+
+        gt_probas_pos = []
+        for idx in unlabeled_indices:
+            img, _ = dataset[idx]
+            gt_probas_pos.append(img.mean())
+        gt_probas_pos = torch.stack(gt_probas_pos)
+        gt_probas = torch.stack((1-gt_probas_pos, gt_probas_pos), dim=1)
+        scores = entropy_fn(gt_probas)
+        _, indices = scores.topk(acq_size)
+
+        actual_indices = [unlabeled_indices[i] for i in indices]
+        return actual_indices
 
 
 def build_model(args, **kwargs):
