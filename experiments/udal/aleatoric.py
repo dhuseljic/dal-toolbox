@@ -99,8 +99,6 @@ def main(args):
         train_loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.model.batch_size, sampler=train_sampler)
         train_history = []
 
-        # TODO: hyperparameters
-
         for i_epoch in range(args.model.n_epochs):
             train_stats = train_one_epoch(
                 model,
@@ -180,11 +178,7 @@ def build_query(args, **kwargs):
         query = random.RandomSampling(random_seed=args.random_seed)
     elif args.al_strategy.name == "uncertainty":
         device = kwargs['device']
-        query = uncertainty.UncertaintySampling(
-            uncertainty_type=args.al_strategy.uncertainty_type,
-            subset_size=args.al_strategy.subset_size,
-            device=device,
-        )
+        query = uncertainty.UncertaintySampling(uncertainty_type=args.al_strategy.uncertainty_type, device=device,)
     elif args.al_strategy.name == "aleatoric":
         query = Aleatoric()
     else:

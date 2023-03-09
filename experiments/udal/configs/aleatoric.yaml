@@ -4,9 +4,9 @@ defaults:
   - al_strategy: random
 
 al_cycle:
-  n_init: 10
-  acq_size: 10
-  n_acq: 49
+  n_init: 2
+  acq_size: 2
+  n_acq: 19
   cold_start: True
 
 dataset_path: ./experiments/udal/notebooks/synthetic_images/pixel_sum_dataset.pth
