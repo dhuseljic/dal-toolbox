@@ -245,14 +245,13 @@ def train_one_epoch_fixmatch(model, dataloaders, criterion, optimizer, device,
         x_ulb_strong = x_ulb_strong.to(device)
 
         # Forward Propagation of all samples
-        num_lb = x_lb.shape[0]
-        outputs = model(torch.cat((x_lb, x_ulb_weak, x_ulb_strong)))
-        logits_lb = outputs[:num_lb]
-        logits_ulb_weak, logits_ulb_strong = outputs[num_lb:].chunk(2)
-        logits_ulb_weak = logits_ulb_weak.detach()
+        logits_lb = model(x_lb)
+        with torch.no_grad():
+            logits_ulb_weak = model(x_ulb_weak)
+        logits_ulb_strong = model(x_ulb_strong)
 
         # Generate pseudo labels and mask
-        probas_ulb_weak = torch.softmax(logits_ulb_weak/T, dim=-1)
+        probas_ulb_weak = torch.softmax(logits_ulb_weak, dim=-1)
         max_probas_ulb_weak, pseudo_labels = torch.max(probas_ulb_weak, dim=-1)
         mask = max_probas_ulb_weak.ge(p_cutoff)
 
