@@ -85,15 +85,30 @@ class ALDataset:
             setattr(self, key, state_dict[key])
         print('<All keys matched successfully>')
 
-    def random_init(self, n_samples: int):
+    def random_init(self, n_samples: int, class_balanced: bool = False):
         """Randomly buys samples from the unlabeled pool and adds them to the labeled one.
 
             Args:
                 n_samples (int): Size of the initial labeld pool.    
+                class_balanced (bool): Whether to use an class balanced initialization.
         """
         if len(self.labeled_indices) != 0:
             raise ValueError('Pools already initialized.')
-        indices = self.rng.sample(self.unlabeled_indices, k=n_samples)
+
+        if class_balanced:
+            classes = torch.Tensor([self.query_dataset[idx][-1] for idx in self.unlabeled_indices]).long()
+            classes_unique = classes.unique()
+            n_classes = len(classes_unique)
+            n_samples_per_class = n_samples // n_classes
+            
+            indices = []
+            for label in classes_unique:
+                unlabeled_indices_lbl = (classes == label).nonzero().squeeze()
+                indices_lbl = self.rng.sample(unlabeled_indices_lbl.tolist(), k=n_samples_per_class)
+                indices.extend(indices_lbl)
+        else:
+            indices = self.rng.sample(self.unlabeled_indices, k=n_samples)
+
         self.update_annotations(indices)
 
 

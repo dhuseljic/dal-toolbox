@@ -43,7 +43,7 @@ def main(args):
     val_ds = Subset(dataset, indices=val_indices)
     val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)
     al_dataset = ALDataset(train_ds, random_state=args.random_seed)
-    al_dataset.random_init(n_samples=args.al_cycle.n_init)
+    al_dataset.random_init(n_samples=args.al_cycle.n_init, class_balanced=True)
     queried_indices['cycle0'] = al_dataset.labeled_indices
 
     # Setup Model
