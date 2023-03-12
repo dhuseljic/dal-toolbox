@@ -9,11 +9,13 @@
 #SBATCH --array=1-3%3
 source /mnt/stud/home/phahn/.zshrc
 
+rm /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation/.git/index.lock
+
 git checkout 40-implement-mixup-for-uncertainty-calibration
 
 conda activate uncertainty_evaluation
 
-cd /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation
+cd /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation/experiments/uncertainty
 
 OUTPUT_DIR=/mnt/stud/work/phahn/uncertainty/output/${SLURM_JOB_NAME}_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}/
 echo "Saving results to $OUTPUT_DIR"
