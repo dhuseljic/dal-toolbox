@@ -305,7 +305,7 @@ def train_one_epoch_mixup(model, dataloader, criterion, optimizer, device, alpha
 
         # Creating Mixup Data
         lam = 1 if alpha <= 0 else np.random.beta(alpha, alpha)
-        idx_shuffled = torch.randperm(batch_size).device()
+        idx_shuffled = torch.randperm(batch_size).to(device)
         mixed_inputs = lam * inputs + (1 - lam) * inputs[idx_shuffled, :]
         targets_a, targets_b = targets, targets[idx_shuffled]
         mixed_inputs, targets_a, targets_b = map(Variable, (mixed_inputs, targets_a, targets_b))
