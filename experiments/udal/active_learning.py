@@ -250,7 +250,26 @@ def build_model(args, **kwargs):
         }
 
     elif args.model.name == 'resnet18_mixup':
-        NotImplementedError()
+        model = deterministic.resnet.ResNet18(n_classes)
+        criterion = nn.CrossEntropyLoss()
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+            nesterov=True,
+        )
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        model_dict = {
+            'model': model,
+            'criterion': criterion,
+            'optimizer': optimizer,
+            'train_one_epoch': deterministic.train.train_one_epoch_mixup,
+            'evaluate': deterministic.evaluate.evaluate,
+            'lr_scheduler': lr_scheduler,
+            'train_kwargs': dict(device=args.device, alpha=args.model.alpha),
+            'eval_kwargs': dict(device=args.device),
+        }
 
     elif args.model.name == 'resnet18_mcdropout':
         model = mc_dropout.resnet.DropoutResNet18(n_classes, args.model.n_passes, args.model.dropout_rate)
