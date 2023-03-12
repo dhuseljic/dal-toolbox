@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --job-name=fixmatch-250
+#SBATCH --job-name=fixmatch-warmup-250
 #SBATCH --output=/mnt/stud/work/phahn/uncertainty/logs/%x_%A_%a.log
 #SBATCH --array=1-3%3
 source /mnt/stud/home/phahn/.zshrc

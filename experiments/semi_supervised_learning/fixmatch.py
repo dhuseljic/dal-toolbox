@@ -59,7 +59,7 @@ def main(args):
         # Train model for one epoch
         logging.info('Training epoch %s', i_epoch)
         train_stats = train_one_epoch(
-            model, dataloaders, **model_dict['train_kwargs']
+            model, dataloaders, n_iter=args.model.n_iter, epoch=i_epoch, **model_dict['train_kwargs']
         )
         if lr_scheduler:
             lr_scheduler.step()
