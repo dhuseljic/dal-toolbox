@@ -273,7 +273,7 @@ def train_one_epoch_fixmatch(model, dataloaders, criterion, optimizer, n_iter, d
         batch_size = x_lb.shape[0]
         acc1, = generalization.accuracy(logits_lb, y_lb, topk=(1,))
         metric_logger.update(
-            sup_loss=sup_loss.item(), unsup_loss=unsup_loss.item(), 
+            sup_loss=sup_loss.item(), unsup_loss=unsup_loss.item(), mask_ratio=mask.float().mean().item(), 
             total_loss=total_loss.item(), lr=optimizer.param_groups[0]["lr"]
             )
         metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
