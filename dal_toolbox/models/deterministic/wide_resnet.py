@@ -104,3 +104,15 @@ class WideResNet(nn.Module):
             logits = self(samples.to(device))
             all_logits.append(logits)
         return torch.cat(all_logits)
+
+    @torch.inference_mode()
+    def get_probas(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_logits = []
+        for samples, _ in dataloader:
+            logits = self(samples.to(device))
+            all_logits.append(logits)
+        logits = torch.cat(all_logits)
+        probas = logits.softmax(-1)
+        return probas
