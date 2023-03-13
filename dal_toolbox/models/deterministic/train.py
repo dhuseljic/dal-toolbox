@@ -223,8 +223,8 @@ def train_one_epoch_pimodel(model, dataloaders, criterion, optimizer, n_iter, la
     return train_stats
 
 
-def train_one_epoch_fixmatch(model, dataloaders, criterion, optimizer, n_iter, device,
-                    lambda_u, p_cutoff, T, unsup_warmup=.4, epoch=None, print_freq=100):
+def train_one_epoch_fixmatch(model, dataloaders, criterion, optimizer, device,
+                    lambda_u, p_cutoff, epoch=None, print_freq=100):
     model.train()
     model.to(device)
     criterion.to(device)
@@ -237,7 +237,6 @@ def train_one_epoch_fixmatch(model, dataloaders, criterion, optimizer, n_iter, d
     unlabeled_iter1 = iter(dataloaders['train_unsup_weak'])
     unlabeled_iter2 = iter(dataloaders['train_unsup_strong'])
 
-    i_iter = epoch*len(labeled_loader)
     for x_lb, y_lb in metric_logger.log_every(labeled_loader, print_freq=print_freq, header=header):
         x_lb, y_lb = x_lb.to(device), y_lb.to(device)
         x_ulb_weak, _ = next(unlabeled_iter1)
@@ -252,17 +251,14 @@ def train_one_epoch_fixmatch(model, dataloaders, criterion, optimizer, n_iter, d
         logits_ulb_strong = model(x_ulb_strong)
 
         # Generate pseudo labels and mask
-        probas_ulb_weak = torch.softmax(logits_ulb_weak, dim=-1)
+        probas_ulb_weak = logits_ulb_weak.detach().softmax(dim=-1)
         max_probas_ulb_weak, pseudo_labels = torch.max(probas_ulb_weak, dim=-1)
-        mask = max_probas_ulb_weak.ge(p_cutoff)
+        mask = max_probas_ulb_weak.ge(p_cutoff).to(max_probas_ulb_weak.dtype)
 
         # Loss
         sup_loss = criterion(logits_lb, y_lb)
         unsup_loss = (F.cross_entropy(logits_ulb_strong, pseudo_labels, reduction='none') * mask).mean()
-
-        unsup_warmup_factor = np.clip(i_iter / (unsup_warmup*n_iter), a_min=0, a_max=1)
-        i_iter += 1
-        total_loss = sup_loss + unsup_warmup_factor * lambda_u * unsup_loss
+        total_loss = sup_loss + lambda_u * unsup_loss
 
         # Update Model Weights
         optimizer.zero_grad()
