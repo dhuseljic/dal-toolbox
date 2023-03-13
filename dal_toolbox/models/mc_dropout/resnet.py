@@ -48,16 +48,17 @@ class DropoutResNet18(BayesianModule):
     def mc_forward_impl(self, mc_input_BK: torch.Tensor):
         return self.forward(mc_input_BK)
 
-    @torch.no_grad()
-    def forward_logits(self, dataloader, device):
-        # TODO: Should logits for querying be the mean of mc forward logits?
+    @torch.inference_mode()
+    def get_probas(self, dataloader, device):
         self.to(device)
         self.eval()
-        all_logits = []
+        mc_logits_list = []
         for samples, _ in dataloader:
-            logits = torch.mean(self.mc_forward(samples.to(device), k=self.k), dim=1)
-            all_logits.append(logits)
-        return torch.cat(all_logits)
+            mc_logits = self.mc_forward(samples.to(device), k=self.k)
+            mc_logits_list.append(mc_logits.cpu())
+        mc_logits = torch.cat(mc_logits_list)
+        probas = mc_logits.softmax(-1).mean(1)
+        return probas
 
 
 class DropoutBasicBlock(nn.Module):
@@ -71,7 +72,7 @@ class DropoutBasicBlock(nn.Module):
         self.bn1 = nn.BatchNorm2d(planes)
 
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
-        self.conv2_dropout = ConsistentMCDropout2d(dropout_rate)
+        # self.conv2_dropout = ConsistentMCDropout2d(dropout_rate)
         self.bn2 = nn.BatchNorm2d(planes)
 
         self.shortcut = nn.Sequential()
@@ -89,5 +90,5 @@ class DropoutBasicBlock(nn.Module):
         out = self.bn2(self.conv2(out))
         out += self.shortcut(x)
         out = F.relu(out)
-        out = self.conv2_dropout(out)
+        # out = self.conv2_dropout(out)
         return out

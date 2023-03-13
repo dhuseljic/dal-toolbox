@@ -8,7 +8,7 @@ import torch
 import hydra
 
 from torch.utils.tensorboard import SummaryWriter
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, RandomSampler
 from omegaconf import OmegaConf
 
 from dal_toolbox.active_learning.data import ALDataset
@@ -33,13 +33,18 @@ def main(args):
     logging.info('Building datasets.')
     train_ds, query_ds, val_ds, ds_info = build_al_datasets(args)
     val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)
-    al_dataset = ALDataset(train_ds, query_ds)
+    al_dataset = ALDataset(train_ds, query_ds, random_state=args.random_seed)
     if args.al_strategy.name == 'predefined':
         logging.info('Using initial labeled pool from %s.', args.al_strategy.queried_indices_json)
         with open(args.al_strategy.queried_indices_json, 'r', encoding='utf-8') as f:
             queried_indices_json = json.load(f)
-        indices = queried_indices_json['cycle0']
-        al_dataset.update_annotations(indices)
+        initial_indices = queried_indices_json['cycle0']
+        al_dataset.update_annotations(initial_indices)
+    elif args.al_cycle.init_pool_file is not None:
+        logging.info('Using initial labeled pool from %s.', args.al_cycle.init_pool_file)
+        with open(args.al_cycle.init_pool_file, 'r', encoding='utf-8') as f:
+            initial_indices = json.load(f)
+        al_dataset.update_annotations(initial_indices)
     else:
         logging.info('Creating random initial labeled pool with %s samples.', args.al_cycle.n_init)
         al_dataset.random_init(n_samples=args.al_cycle.n_init)
@@ -92,9 +97,10 @@ def main(args):
         # Train with updated annotations
         logging.info('Training on labeled pool with %s samples', len(al_dataset.labeled_dataset))
         t1 = time.time()
+        iter_per_epoch = len(al_dataset.labeled_dataset) // args.model.batch_size + 1
+        train_sampler = RandomSampler(al_dataset.labeled_dataset, num_samples=args.model.batch_size*iter_per_epoch)
+        train_loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.model.batch_size, sampler=train_sampler)
         train_history = []
-        train_loader = DataLoader(al_dataset.labeled_dataset,
-                                  batch_size=args.model.batch_size, shuffle=True, drop_last=True)
 
         # TODO: set hyperparameters method?
         if False:

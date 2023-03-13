@@ -5,7 +5,7 @@ from ...utils import MetricLogger, SmoothedValue
 def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
     metric_logger = MetricLogger(delimiter="  ")
     metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
-    header = f"Training: Epoch {epoch}"
+    header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
     model.to(device)
     model.train()
 
