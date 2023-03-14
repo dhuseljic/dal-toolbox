@@ -1,13 +1,15 @@
-import torch 
+import torch
+import time
+import logging
 import torch.nn as nn
 import torch.nn.functional as F
+from tqdm import tqdm
 
 import numpy as np
 
 from ..utils import unfreeze_bn, freeze_bn
 from ...metrics import generalization
 from ...utils import MetricLogger, SmoothedValue
-
 
 def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
     model.train()
