@@ -26,7 +26,6 @@ def main(args):
     # Setup Dataset
     logging.info('Building datasets.')
     train_ds, test_ds, ds_info = build_dataset(args)
-
     train_loader = DataLoader(train_ds, batch_size=args.model.batch_size, shuffle=True)
     test_loader = DataLoader(test_ds, batch_size=args.val_batch_size, shuffle=False)
 
@@ -46,16 +45,19 @@ def main(args):
 
     history_train, history_test = [], []
     for i_epoch in range(args.model.n_epochs):
+        logging.info("Epoch [%s] - Start of Training.", i_epoch)
         train_stats = train_one_epoch(model, train_loader, criterion, optimizer, device, epoch=i_epoch)
+        logging.info("Epoch [%s] - End of Training. Results: %s", i_epoch, train_stats)
         if lr_scheduler:
             lr_scheduler.step()
         history_train.append(train_stats)
 
         # Eval
         if (i_epoch+1) % args.eval_interval == 0 or (i_epoch+1) == args.model.n_epochs:
+            logging.info("Epoch [%s]  - Start of Evaluation.", i_epoch)
             test_stats = evaluate(model, test_loader, {}, criterion, device)
             history_test.append(test_stats)
-            logging.info("Epoch [%s] %s %s", i_epoch, train_stats, test_stats)
+            logging.info("Epoch [%s] - End of Evaluation. Results: %s", i_epoch, test_stats)
 
             # Saving checkpoint
             t1 = time.time()
