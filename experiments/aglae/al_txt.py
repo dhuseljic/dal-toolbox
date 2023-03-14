@@ -219,7 +219,7 @@ def main(args):
                 "lr_scheduler": lr_scheduler.state_dict() if lr_scheduler else None,
                 "cycle_results": cycle_results,
             }
-            torch.save(checkpoint, os.path.join(os.getcwd(), f"check{i_acq}.pth"))   
+            #torch.save(checkpoint, os.path.join(os.getcwd(), f"check{i_acq}.pth"))   
         
     writer.close()
 
