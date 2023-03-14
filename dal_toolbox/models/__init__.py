@@ -464,8 +464,7 @@ def build_wide_resnet_pimodel(n_classes, dropout_rate, lr, weight_decay, momentu
     return model_dict
 
 
-def build_wide_resnet_fixmatch(n_classes, dropout_rate, lr, weight_decay, momentum, n_epochs, device, p_cutoff,
-lambda_u, T, use_hard_labels, use_cat):
+def build_wide_resnet_fixmatch(n_classes, dropout_rate, lr, weight_decay, momentum, n_epochs, device, p_cutoff, lambda_u):
     model = wide_resnet.wide_resnet_28_2(num_classes=n_classes, dropout_rate=dropout_rate)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=True)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_epochs)
@@ -477,7 +476,7 @@ lambda_u, T, use_hard_labels, use_cat):
         'evaluate': eval_deterministic.evaluate,
         'lr_scheduler': lr_scheduler,
         'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=device, 
-                lambda_u=lambda_u, T=T, p_cutoff=p_cutoff, use_hard_labels=use_hard_labels, use_cat=use_cat),
+                lambda_u=lambda_u, p_cutoff=p_cutoff),
         'eval_kwargs': dict(criterion=criterion, device=device),
     }
     return model_dict
@@ -605,11 +604,8 @@ def build_ssl_model(args, **kwargs):
             device=args.device,
             # SSL Parameters
             lambda_u=args.ssl_algorithm.lambda_u,
-            p_cutoff=args.ssl_algorithm.p_cutoff,
-            T=args.ssl_algorithm.T,
-            use_hard_labels=args.ssl_algorithm.use_hard_labels,
-            use_cat=args.ssl_algorithm.use_cat
-        )
+            p_cutoff=args.ssl_algorithm.p_cutoff
+            )
     else:
         raise NotImplementedError()
     return model_dict
