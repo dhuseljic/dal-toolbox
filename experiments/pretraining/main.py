@@ -26,9 +26,6 @@ def main(args):
     rank = int(os.environ["LOCAL_RANK"])
     device = f'cuda:{rank}'
 
-    # with hydra.initialize(version_base=None, config_path="./configs", job_name="pretraining"):
-    #     args = hydra.compose(config_name="config")
-
     # Initial Setup (Seed, create output folder, SummaryWriter and results-container init)
     os.makedirs(args.output_dir, exist_ok=True)
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
