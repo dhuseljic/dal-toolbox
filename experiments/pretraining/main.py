@@ -20,18 +20,19 @@ from torch.nn.parallel import DistributedDataParallel
 from torch.distributed import init_process_group, destroy_process_group
 
 
-def main():
+@hydra.main(version_base=None, config_path="./configs", config_name="config")
+def main(args):
     init_process_group(backend="nccl")
     rank = int(os.environ["LOCAL_RANK"])
     device = f'cuda:{rank}'
 
-    with hydra.initialize(version_base=None, config_path="./configs", job_name="pretraining"):
-        args = hydra.compose(config_name="config")
+    # with hydra.initialize(version_base=None, config_path="./configs", job_name="pretraining"):
+    #     args = hydra.compose(config_name="config")
 
     # Initial Setup (Seed, create output folder, SummaryWriter and results-container init)
+    os.makedirs(args.output_dir, exist_ok=True)
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
-    os.makedirs(args.output_dir, exist_ok=True)
 
     # Setup Dataset
     logging.info('Building datasets.')
