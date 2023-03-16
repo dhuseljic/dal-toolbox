@@ -23,12 +23,13 @@ from torch.distributed import init_process_group, destroy_process_group
 def main():
     init_process_group(backend="nccl")
     rank = int(os.environ["LOCAL_RANK"])
+    device = f'cuda:{rank}'
 
     with hydra.initialize(version_base=None, config_path="./configs", job_name="pretraining"):
         args = hydra.compose(config_name="config")
+
     # Initial Setup (Seed, create output folder, SummaryWriter and results-container init)
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
-    device = f'cuda:{rank}'
     seed_everything(args.random_seed)
     os.makedirs(args.output_dir, exist_ok=True)
 
@@ -64,27 +65,26 @@ def main():
         history_train.append(train_stats)
 
         # Eval
-        if rank == 0:
-            if (i_epoch+1) % args.eval_interval == 0 or (i_epoch+1) == args.model.n_epochs:
-                logging.info("Epoch [%s]  - Start of Evaluation.", i_epoch)
-                test_stats = evaluate(model, test_loader, {}, criterion, device)
-                history_test.append(test_stats)
-                logging.info("Epoch [%s] - End of Evaluation. Results: %s", i_epoch, test_stats)
+        if rank == 0 and ((i_epoch+1) % args.eval_interval == 0 or (i_epoch+1) == args.model.n_epochs):
+            logging.info("Epoch [%s]  - Start of Evaluation.", i_epoch)
+            test_stats = evaluate(model.module, test_loader, {}, criterion, device)
+            history_test.append(test_stats)
+            logging.info("Epoch [%s] - End of Evaluation. Results: %s", i_epoch, test_stats)
 
-                # Saving checkpoint
-                t1 = time.time()
-                logging.info('Saving checkpoint')
-                checkpoint = {
-                    "args": args,
-                    "model": model.state_dict(),
-                    "optimizer": optimizer.state_dict(),
-                    "epoch": i_epoch,
-                    "train_history": history_train,
-                    "test_history": history_test,
-                    "lr_scheduler": lr_scheduler.state_dict() if lr_scheduler else None,
-                }
-                torch.save(checkpoint, os.path.join(args.output_dir, "checkpoint.pth"))
-                logging.info('Saving took %.2f minutes', (time.time() - t1)/60)
+            # Saving checkpoint
+            t1 = time.time()
+            logging.info('Saving checkpoint')
+            checkpoint = {
+                "args": args,
+                "model": model.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "epoch": i_epoch,
+                "train_history": history_train,
+                "test_history": history_test,
+                "lr_scheduler": lr_scheduler.state_dict() if lr_scheduler else None,
+            }
+            torch.save(checkpoint, os.path.join(args.output_dir, "checkpoint.pth"))
+            logging.info('Saving took %.2f minutes', (time.time() - t1)/60)
 
     if rank == 0:
         # Saving results
@@ -98,6 +98,7 @@ def main():
         with open(fname, 'w') as f:
             json.dump(results, f)
     destroy_process_group()
+
 
 if __name__ == "__main__":
     main()
