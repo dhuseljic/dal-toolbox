@@ -15,19 +15,20 @@ from dal_toolbox.models.deterministic.train import train_one_epoch
 from dal_toolbox.models.deterministic.evaluate import evaluate
 from dal_toolbox.utils import seed_everything
 
-import torch.multiprocessing as mp
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel
 from torch.distributed import init_process_group, destroy_process_group
 
 
-def main(rank, world_size):
-    ddp_setup(rank, world_size)
+def main():
+    init_process_group(backend="nccl")
+    rank = int(os.environ["LOCAL_RANK"])
+
     with hydra.initialize(version_base=None, config_path="./configs", job_name="pretraining"):
         args = hydra.compose(config_name="config")
-
     # Initial Setup (Seed, create output folder, SummaryWriter and results-container init)
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
+    device = f'cuda:{rank}'
     seed_everything(args.random_seed)
     os.makedirs(args.output_dir, exist_ok=True)
 
@@ -41,7 +42,7 @@ def main(rank, world_size):
     # Setup Model
     logging.info('Building model: %s', args.model.name)
     model = wide_resnet.WideResNet(28, args.model.width, dropout_rate=0, num_classes=ds_info['n_classes'])
-    model = DistributedDataParallel(model.cuda())
+    model.to(device)
     optimizer = torch.optim.SGD(
         model.parameters(),
         lr=args.model.optimizer.lr,
@@ -51,12 +52,11 @@ def main(rank, world_size):
     )
     criterion = nn.CrossEntropyLoss()
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
-    device = 'cuda'
 
+    model = DistributedDataParallel(model, device_ids=[rank])
     history_train, history_test = [], []
     for i_epoch in range(args.model.n_epochs):
         train_sampler.set_epoch(i_epoch)
-        logging.info("Epoch [%s] - Start of Training.", i_epoch)
         train_stats = train_one_epoch(model, train_loader, criterion, optimizer, device, epoch=i_epoch)
         logging.info("Epoch [%s] - End of Training. Results: %s", i_epoch, train_stats)
         if lr_scheduler:
@@ -99,18 +99,5 @@ def main(rank, world_size):
             json.dump(results, f)
     destroy_process_group()
 
-
-def ddp_setup(rank: int, world_size: int):
-    """
-    Args:
-        rank: Unique identifier of each process
-       world_size: Total number of processes
-    """
-    os.environ["MASTER_ADDR"] = "localhost"
-    os.environ["MASTER_PORT"] = "12355"
-    init_process_group(backend="nccl", rank=rank, world_size=world_size)
-
-
 if __name__ == "__main__":
-    world_size = torch.cuda.device_count()
-    mp.spawn(main, args=(world_size,), nprocs=world_size)
+    main()
