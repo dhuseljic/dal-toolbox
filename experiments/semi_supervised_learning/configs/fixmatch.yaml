@@ -28,6 +28,4 @@ ssl_algorithm:
   name: fixmatch
   T: 0.5
   lambda_u: 1
-  use_hard_labels: True
-  use_cat: True
   p_cutoff: 0.95
