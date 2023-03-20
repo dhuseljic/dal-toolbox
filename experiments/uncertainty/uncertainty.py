@@ -4,19 +4,28 @@ import logging
 
 import hydra
 import torch
+import torch.nn as nn
 
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader, Subset
 from torch.utils.tensorboard import SummaryWriter
 from dal_toolbox.datasets import build_dataset, build_ood_datasets
-from dal_toolbox.models import build_model
-from dal_toolbox.utils import write_scalar_dict, seed_everything
-
 from dal_toolbox.models.deterministic.trainer import BasicTrainer
+from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp
+from dal_toolbox.utils import seed_everything, init_distributed_mode
+
+from torch.utils.data import DistributedSampler, RandomSampler
+from torch.distributed import destroy_process_group
+
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="uncertainty")
 def main(args):
+    use_distributed = init_distributed_mode(args)
+    if use_distributed:
+        rank = int(os.environ["LOCAL_RANK"])
+        args.device = f'cuda:{rank}'
+
     logger = logging.getLogger(__name__)
     logger.info('Using config: \n%s', OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
@@ -37,7 +46,12 @@ def main(args):
     for name, test_ds_ood in ood_datasets.items():
         logger.info('Test out-of-distribution dataset %s has %s samples.', name, len(test_ds_ood))
 
-    train_loader = DataLoader(train_ds, batch_size=args.model.batch_size, shuffle=True, drop_last=True)
+    if use_distributed:
+        train_sampler = DistributedSampler(train_ds)
+    else:
+        train_sampler = RandomSampler(train_ds)
+
+    train_loader = DataLoader(train_ds, batch_size=args.model.batch_size, sampler=train_sampler, drop_last=True)
     test_loader_id = DataLoader(test_ds_id, batch_size=args.test_batch_size)
     test_loaders_ood = {name: DataLoader(test_ds_ood, batch_size=args.test_batch_size)
                         for name, test_ds_ood in ood_datasets.items()}
@@ -60,20 +74,23 @@ def main(args):
         lr_scheduler=lr_scheduler,
         output_dir=args.output_dir,
         summary_writer=writer,
-        device=args.device
+        device=args.device,
+        use_distributed=use_distributed,
     )
     trainer.train(
         n_epochs=args.model.n_epochs,
         train_loader=train_loader,
         test_loaders={'test_loader_id': test_loader_id},
-        eval_every=50,
-        save_every=50
+        eval_every=args.eval_interval,
+        save_every=args.eval_interval,
     )
+
+    test_stats = trainer.evaluate(test_loader_id=test_loader_id, test_loader_ood=test_loaders_ood)
+    logger.info("Final test results: %s", test_stats)
 
     # Saving results
     fname = os.path.join(args.output_dir, 'results_final.json')
     logger.info("Saving results to %s", fname)
-    test_stats = trainer.evaluate(test_loader_id=test_loader_id, test_loader_ood=test_loaders_ood)
     results = {
         'test_stats': test_stats,
         'train_history': trainer.train_history,
@@ -82,6 +99,123 @@ def main(args):
     }
     with open(fname, 'w') as f:
         json.dump(results, f)
+
+    destroy_process_group()
+
+
+def build_model(args, **kwargs):
+    n_classes = kwargs['n_classes']
+
+    if args.model.name == 'resnet18_deterministic':
+        model = deterministic.resnet.ResNet18(n_classes)
+        criterion = nn.CrossEntropyLoss()
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+        )
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        model_dict = {
+            'model': model,
+            'optimizer': optimizer,
+            'criterion': criterion,
+            'lr_scheduler': lr_scheduler,
+            'train_one_epoch': deterministic.train.train_one_epoch,
+            'evaluate': deterministic.evaluate.evaluate,
+            'train_kwargs': dict(device=args.device),
+            'eval_kwargs': dict(device=args.device),
+        }
+
+    elif args.model.name == 'resnet18_mcdropout':
+        model = mc_dropout.resnet.DropoutResNet18(n_classes, args.model.n_passes, args.model.dropout_rate)
+        criterion = nn.CrossEntropyLoss()
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+        )
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        model_dict = {
+            'model': model,
+            'optimizer': optimizer,
+            'criterion': criterion,
+            'train_one_epoch': mc_dropout.train.train_one_epoch,
+            'evaluate': mc_dropout.evaluate.evaluate,
+            'lr_scheduler': lr_scheduler,
+            'train_kwargs': dict(device=args.device),
+            'eval_kwargs': dict(device=args.device),
+        }
+
+    elif args.model.name == 'resnet18_ensemble':
+        members, lr_schedulers, optimizers = [], [], []
+        for _ in range(args.model.n_member):
+            mem = deterministic.resnet.ResNet18(n_classes)
+            opt = torch.optim.SGD(
+                mem.parameters(),
+                lr=args.model.optimizer.lr,
+                weight_decay=args.model.optimizer.weight_decay,
+                momentum=args.model.optimizer.momentum,
+            )
+            lrs = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.model.n_epochs)
+            members.append(mem)
+            optimizers.append(opt)
+            lr_schedulers.append(lrs)
+        model = ensemble.voting_ensemble.Ensemble(members)
+        criterion = nn.CrossEntropyLoss()
+        optimizer = ensemble.voting_ensemble.EnsembleOptimizer(optimizers)
+        lr_scheduler = ensemble.voting_ensemble.EnsembleLRScheduler(lr_schedulers)
+        model_dict = {
+            'model': model,
+            'criterion': criterion,
+            'optimizer': optimizer,
+            'train_one_epoch': ensemble.train.train_one_epoch,
+            'evaluate': ensemble.evaluate.evaluate,
+            'lr_scheduler': lr_scheduler,
+            'train_kwargs': dict(device=args.device),
+            'eval_kwargs': dict(device=args.device),
+        }
+
+    elif args.model.name == 'resnet18_sngp':
+        model = sngp.resnet.resnet18_sngp(
+            num_classes=10,
+            input_shape=(3, 32, 32),
+            spectral_norm=args.model.spectral_norm.use_spectral_norm,
+            norm_bound=args.model.spectral_norm.norm_bound,
+            n_power_iterations=args.model.spectral_norm.n_power_iterations,
+            num_inducing=args.model.gp.num_inducing,
+            kernel_scale=args.model.gp.kernel_scale,
+            normalize_input=False,
+            random_feature_type=args.model.gp.random_feature_type,
+            scale_random_features=args.model.gp.scale_random_features,
+            mean_field_factor=args.model.gp.mean_field_factor,
+            cov_momentum=args.model.gp.cov_momentum,
+            ridge_penalty=args.model.gp.ridge_penalty,
+        )
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+        )
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        criterion = nn.CrossEntropyLoss()
+        model_dict = {
+            'model': model,
+            'criterion': criterion,
+            'optimizer': optimizer,
+            'train_one_epoch': sngp.train.train_one_epoch,
+            'evaluate': sngp.evaluate.evaluate,
+            'lr_scheduler': lr_scheduler,
+            'train_kwargs': dict(device=args.device),
+            'eval_kwargs': dict(device=args.device),
+        }
+
+    else:
+        raise NotImplementedError(f'{args.model.name} not implemented')
+
+    return model_dict
 
 
 if __name__ == '__main__':
