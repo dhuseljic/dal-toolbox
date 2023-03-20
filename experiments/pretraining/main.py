@@ -68,14 +68,15 @@ def main(args):
         use_distributed=use_distributed,
     )
     trainer.train(args.model.n_epochs, train_loader=train_loader)
-    trainer.evaluate(test_loader_id=test_loader)
+    test_stats = trainer.evaluate(test_loader_id=test_loader)
 
     # Saving results
     fname = os.path.join(args.output_dir, 'results_final.json')
     logging.info("Saving results to %s.", fname)
     results = {
         'train_history': trainer.train_history,
-        'test_history': trainer.test_history 
+        'test_history': trainer.test_history,
+        'test_stats': test_stats
     }
     with open(fname, 'w') as f:
         json.dump(results, f)
