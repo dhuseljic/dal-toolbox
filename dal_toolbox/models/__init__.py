@@ -20,6 +20,7 @@ from .sngp import wide_resnet as wide_resnet_sngp
 from .sngp import train as train_sngp
 from .sngp import evaluate as eval_sngp
 
+
 def build_model(args, **kwargs):
     n_classes = kwargs['n_classes']
 
@@ -37,11 +38,12 @@ def build_model(args, **kwargs):
         model_dict = {
             'model': model,
             'optimizer': optimizer,
+            'criterion': criterion,
+            'lr_scheduler': lr_scheduler,
             'train_one_epoch': train_deterministic.train_one_epoch,
             'evaluate': eval_deterministic.evaluate,
-            'lr_scheduler': lr_scheduler,
-            'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
-            'eval_kwargs': dict(criterion=criterion, device=args.device),
+            'train_kwargs': dict(device=args.device),
+            'eval_kwargs': dict(device=args.device),
         }
     elif args.model.name == 'resnet18_labelsmoothing':
         model = resnet.ResNet18(n_classes)
@@ -84,7 +86,7 @@ def build_model(args, **kwargs):
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
         }
-    
+
     elif args.model.name == 'resnet18_mcdropout':
         model = resnet_mcdropout.DropoutResNet18(n_classes, args.model.n_passes, args.model.dropout_rate)
         optimizer = torch.optim.SGD(
@@ -180,7 +182,6 @@ def build_model(args, **kwargs):
             n_epochs=args.model.n_epochs,
             device=args.device,
         )
-
 
     elif args.model.name == 'wideresnet2810_mcdropout':
         model_dict = build_wide_resnet_mcdropout(
@@ -475,8 +476,8 @@ def build_wide_resnet_fixmatch(n_classes, dropout_rate, lr, weight_decay, moment
         'train_one_epoch': train_deterministic.train_one_epoch_fixmatch,
         'evaluate': eval_deterministic.evaluate,
         'lr_scheduler': lr_scheduler,
-        'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=device, 
-                lambda_u=lambda_u, p_cutoff=p_cutoff),
+        'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=device,
+                             lambda_u=lambda_u, p_cutoff=p_cutoff),
         'eval_kwargs': dict(criterion=criterion, device=device),
     }
     return model_dict
@@ -605,7 +606,7 @@ def build_ssl_model(args, **kwargs):
             # SSL Parameters
             lambda_u=args.ssl_algorithm.lambda_u,
             p_cutoff=args.ssl_algorithm.p_cutoff
-            )
+        )
     else:
         raise NotImplementedError()
     return model_dict
