@@ -12,15 +12,18 @@ logger = logging.getLogger(__name__)
 class BasicTrainer:
     def __init__(self, model, optimizer, criterion, train_one_epoch, evaluate, lr_scheduler=None, device=None, output_dir=None, summary_writer=None, use_distributed=False):
         self.model = model
-        self.train_one_epoch = train_one_epoch
-        self.evaluate_fn = evaluate
         self.optimizer = optimizer
         self.criterion = criterion
         self.lr_scheduler = lr_scheduler
-        self.summary_writer = summary_writer
-        self.output_dir = output_dir
+
+        self.train_one_epoch = train_one_epoch
+        self.evaluate_fn = evaluate
+
         self.device = device
         self.use_distributed = use_distributed
+
+        self.summary_writer = summary_writer
+        self.output_dir = output_dir
 
         # TODO: copy init states
         # TODO: write reset to reset these states
