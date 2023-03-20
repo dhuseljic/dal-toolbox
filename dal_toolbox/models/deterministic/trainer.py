@@ -1,7 +1,9 @@
 import os
+import copy
 import time
-import torch
 import logging
+
+import torch
 
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DistributedSampler
@@ -10,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class BasicTrainer:
+
     def __init__(self, model, optimizer, criterion, train_one_epoch, evaluate, lr_scheduler=None, device=None, output_dir=None, summary_writer=None, use_distributed=False):
         self.model = model
         self.optimizer = optimizer
@@ -25,23 +28,28 @@ class BasicTrainer:
         self.summary_writer = summary_writer
         self.output_dir = output_dir
 
-        # TODO: copy init states
-        # TODO: write reset to reset these states
-
         if self.use_distributed:
             self.model.to(device)
             rank = int(os.environ["LOCAL_RANK"])
             self.model = DistributedDataParallel(model, device_ids=[rank])
 
+        self.init_model_state = copy.deepcopy(self.model.state_dict())
+        self.init_optimizer_state = copy.deepcopy(self.optimizer.state_dict())
+        self.init_criterion_state = copy.deepcopy(self.criterion.state_dict())
+        self.init_scheduler_state = copy.deepcopy(self.lr_scheduler.state_dict())
+        # TODO: write reset to reset these states
+
         self.train_history: list = []
         self.test_history: list = []
         self.test_stats: dict = {}
 
-    def train(self, n_epochs, train_loader, test_loaders=None, eval_every=1, save_every=1):
+    def train(self, n_epochs, train_loader, test_loaders=None, eval_every=None, save_every=None):
         if self.use_distributed:
             if not isinstance(train_loader.sampler, DistributedSampler):
                 raise ValueError('Configure a distributed sampler to use distributed training.')
         self.model.to(self.device)
+
+        t1 = time.time()
 
         self.train_history = []
         self.test_history = []
@@ -66,16 +74,17 @@ class BasicTrainer:
 
             # Eval in intervals if test loader exists
             if test_loaders and i_epoch % eval_every == 0:
+                logger.info('Evaluation ...')
                 test_loader_id = test_loaders.get('test_loader_id')
                 test_loader_ood = test_loaders.get('test_loader_ood', {})
-                logger.info('Evaluation')
                 t1 = time.time()
                 test_stats = self.evaluate(test_loader_id=test_loader_id, test_loader_ood=test_loader_ood)
                 logger.info(test_stats)
                 self.test_history.append(test_stats)
                 logger.info('Evaluation took %.2f minutes', (time.time() - t1)/60)
 
-            if self.output_dir and i_epoch % save_every == 0:
+            # Save checkpoint in intervals if output directory is defined
+            if self.output_dir and save_every and i_epoch % save_every == 0:
                 t1 = time.time()
                 logger.info('Saving checkpoint')
                 checkpoint = {
@@ -89,7 +98,11 @@ class BasicTrainer:
                 torch.save(checkpoint, os.path.join(self.output_dir, "checkpoint.pth"))
                 logger.info('Saving took %.2f minutes', (time.time() - t1)/60)
 
-        # TODO save final model after training
+        training_time = (time.time() - t1)
+        logger.info('Training took %.2f minutes', training_time/60)
+        logger.info('Training stats: %s', train_stats)
+
+        # Save final model if output directory is defined
         if self.output_dir is not None:
             t1 = time.time()
             fname = os.path.join(self.output_dir, "model_final.pth")

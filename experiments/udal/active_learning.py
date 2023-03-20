@@ -13,6 +13,7 @@ from torch.utils.data import DataLoader, RandomSampler
 from omegaconf import OmegaConf
 
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp
+from dal_toolbox.models.deterministic.trainer import BasicTrainer
 from dal_toolbox.active_learning.data import ALDataset
 from dal_toolbox.utils import seed_everything
 from dal_toolbox import datasets
@@ -92,43 +93,30 @@ def main(args):
 
         # Train with updated annotations
         logging.info('Training on labeled pool with %s samples', len(al_dataset.labeled_dataset))
-        t1 = time.time()
         iter_per_epoch = len(al_dataset.labeled_dataset) // args.model.batch_size + 1
         train_sampler = RandomSampler(al_dataset.labeled_dataset, num_samples=args.model.batch_size*iter_per_epoch)
         train_loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.model.batch_size, sampler=train_sampler)
-        train_history = []
 
+        trainer = BasicTrainer(
+            model=model,
+            optimizer=optimizer,
+            criterion=criterion,
+            lr_scheduler=lr_scheduler,
+            train_one_epoch=train_one_epoch,
+            evaluate=evaluate,
+            device=args.device,
+            output_dir=args.output_dir,
+            summary_writer=writer,
+        )
         # TODO: hyperparameters
-
-        for i_epoch in range(args.model.n_epochs):
-            train_stats = train_one_epoch(
-                model,
-                train_loader,
-                criterion=criterion,
-                optimizer=optimizer,
-                epoch=i_epoch,
-                **model_dict['train_kwargs'],
-            )
-            if lr_scheduler:
-                lr_scheduler.step()
-
-            for key, value in train_stats.items():
-                writer.add_scalar(tag=f"cycle_{i_acq}_train/{key}", scalar_value=value, global_step=i_epoch)
-            train_history.append(train_stats)
-        training_time = (time.time() - t1)
-        logging.info('Training took %.2f minutes', training_time/60)
-        logging.info('Training stats: %s', train_stats)
-        cycle_results['train_history'] = train_history
-        cycle_results['training_time'] = training_time
+        history = trainer.train(args.model.n_epochs, train_loader=train_loader)
+        cycle_results['train_history'] = history['train_history']
+        # cycle_results['training_time'] =
 
         # Evaluate resulting model
         logging.info('Evaluation with %s samples', len(val_ds))
-        t1 = time.time()
-        test_stats = evaluate(model, val_loader, criterion=criterion,  dataloaders_ood={}, **model_dict['eval_kwargs'])
-        evaluation_time = time.time() - t1
-        logging.info('Evaluation took %.2f minutes', evaluation_time/60)
-        logging.info('Evaluation stats: %s', test_stats)
-        cycle_results['evaluation_time'] = evaluation_time
+        test_stats = trainer.evaluate(val_loader)
+        # cycle_results['evaluation_time'] = evaluation_time
         cycle_results['test_stats'] = test_stats
 
         # Log
@@ -143,18 +131,6 @@ def main(args):
         })
         results[f'cycle{i_acq}'] = cycle_results
 
-        # Save checkpoint
-        logging.info('Saving checkpoint for cycle %s', i_acq)
-        checkpoint = {
-            "args": args,
-            "model": model.state_dict(),
-            "al_dataset": al_dataset.state_dict(),
-            "optimizer": optimizer.state_dict(),
-            "lr_scheduler": lr_scheduler.state_dict() if lr_scheduler else None,
-            "cycle_results": cycle_results,
-        }
-        torch.save(checkpoint, os.path.join(args.output_dir, 'checkpoint.pth'))
-
     # Saving
     # Save results
     file_name = os.path.join(args.output_dir, 'results.json')
@@ -167,11 +143,6 @@ def main(args):
     logging.info("Saving queried indices to %s.", file_name)
     with open(file_name, 'w', encoding='utf-8') as f:
         json.dump(queried_indices, f, sort_keys=False)
-
-    # Save Model
-    file_name = os.path.join(args.output_dir, "model_final.pth")
-    logging.info("Saving final model to %s.", file_name)
-    torch.save(checkpoint, file_name)
 
 
 def build_query(args, **kwargs):
