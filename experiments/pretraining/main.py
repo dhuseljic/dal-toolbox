@@ -20,8 +20,6 @@ from dal_toolbox.models.deterministic.evaluate import evaluate
 from dal_toolbox.utils import seed_everything, init_distributed_mode
 
 
-from logging import info
-
 @hydra.main(version_base=None, config_path="./configs", config_name="config")
 def main(args):
     use_distributed = init_distributed_mode(args)
@@ -85,7 +83,7 @@ def main(args):
             logging.info('Saving checkpoint')
             checkpoint = {
                 "args": args,
-                "model": model.state_dict(),
+                "model": model.module.state_dict(),
                 "optimizer": optimizer.state_dict(),
                 "epoch": i_epoch,
                 "train_history": history_train,
