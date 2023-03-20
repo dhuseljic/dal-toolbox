@@ -30,11 +30,11 @@ class UncertaintySampling(Query):
 
         if self.subset_size:
             unlabeled_indices = self.rng.sample(unlabeled_indices, k=self.subset_size)
-            
+
         if "collator" in list(kwargs.keys()):
             dataloader = DataLoader(
-                dataset, 
-                batch_size=self.batch_size*2, 
+                dataset,
+                batch_size=self.batch_size*2,
                 collate_fn=kwargs['collator'],
                 sampler=unlabeled_indices)
         else:
@@ -43,11 +43,7 @@ class UncertaintySampling(Query):
         del kwargs
         probas = model.get_probas(dataloader, device=self.device)
         scores = self.get_scores(probas)
-
         _, indices = scores.topk(acq_size)
+
         actual_indices = [unlabeled_indices[i] for i in indices]
         return actual_indices
-
-class CertaintySampling(UncertaintySampling):
-    def get_scores(self, probas):
-        return -super().get_scores(probas)

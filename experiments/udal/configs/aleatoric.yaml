@@ -1,0 +1,27 @@
+defaults:
+  - _self_
+  - model: resnet18
+  - al_strategy: random
+
+al_cycle:
+  n_init: 2
+  acq_size: 2
+  n_acq: 19
+  cold_start: True
+
+dataset_path: ./experiments/udal/notebooks/synthetic_images/pixel_sum_dataset.pth
+device: cuda
+
+random_seed: 1
+val_batch_size: 128
+print_freq_eval: 100
+print_freq_train: 100
+
+output_dir: ./output/
+hydra:
+  run:
+    dir: ${output_dir}
+  job_logging:
+    handlers:
+      file:
+        mode: w
