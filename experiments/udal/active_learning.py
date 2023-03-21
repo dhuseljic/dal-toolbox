@@ -50,8 +50,12 @@ def main(args):
     # Setup Model
     logging.info('Building model: %s', args.model.name)
     model_dict = build_model(args, n_classes=ds_info['n_classes'])
-    model, train_one_epoch, evaluate = model_dict['model'], model_dict['train_one_epoch'], model_dict['evaluate']
-    criterion, optimizer, lr_scheduler = model_dict['criterion'], model_dict['optimizer'], model_dict['lr_scheduler']
+    model = model_dict['model']
+    criterion = model_dict['criterion']
+    optimizer = model_dict['optimizer']
+    lr_scheduler = model_dict['lr_scheduler']
+    train_one_epoch = model_dict['train_one_epoch']
+    evaluate = model_dict['evaluate']
 
     # Setup Query
     logging.info('Building query strategy: %s', args.al_strategy.name)
@@ -108,15 +112,12 @@ def main(args):
             output_dir=args.output_dir,
             summary_writer=writer,
         )
-        # TODO: hyperparameters
         history = trainer.train(args.model.n_epochs, train_loader=train_loader)
         cycle_results['train_history'] = history['train_history']
-        # cycle_results['training_time'] =
 
         # Evaluate resulting model
         logging.info('Evaluation with %s samples', len(val_ds))
         test_stats = trainer.evaluate(val_loader)
-        # cycle_results['evaluation_time'] = evaluation_time
         cycle_results['test_stats'] = test_stats
 
         # Log
@@ -129,9 +130,9 @@ def main(args):
             "unlabeled_indices": al_dataset.unlabeled_indices,
             "n_unlabeled_samples": len(al_dataset.unlabeled_dataset),
         })
+        cycle_results.keys()
         results[f'cycle{i_acq}'] = cycle_results
 
-    # Saving
     # Save results
     file_name = os.path.join(args.output_dir, 'results.json')
     logging.info("Saving results to %s.", file_name)
