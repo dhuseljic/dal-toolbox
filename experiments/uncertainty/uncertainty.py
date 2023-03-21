@@ -7,15 +7,12 @@ import torch
 import torch.nn as nn
 
 from omegaconf import OmegaConf
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader, Subset, RandomSampler, DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
 from dal_toolbox.datasets import build_dataset, build_ood_datasets
 from dal_toolbox.models.deterministic.trainer import BasicTrainer
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp
 from dal_toolbox.utils import seed_everything, init_distributed_mode
-
-from torch.utils.data import DistributedSampler, RandomSampler
-from torch.distributed import destroy_process_group
 
 
 
@@ -49,9 +46,10 @@ def main(args):
     if use_distributed:
         train_sampler = DistributedSampler(train_ds)
     else:
-        train_sampler = RandomSampler(train_ds)
+        iter_per_epoch = len(train_ds) // args.model.batch_size + 1
+        train_sampler = RandomSampler(train_ds, num_samples=(iter_per_epoch * args.model.batch_size))
 
-    train_loader = DataLoader(train_ds, batch_size=args.model.batch_size, sampler=train_sampler, drop_last=True)
+    train_loader = DataLoader(train_ds, batch_size=args.model.batch_size, sampler=train_sampler)
     test_loader_id = DataLoader(test_ds_id, batch_size=args.test_batch_size)
     test_loaders_ood = {name: DataLoader(test_ds_ood, batch_size=args.test_batch_size)
                         for name, test_ds_ood in ood_datasets.items()}
@@ -84,7 +82,6 @@ def main(args):
         eval_every=args.eval_interval,
         save_every=args.eval_interval,
     )
-
     test_stats = trainer.evaluate(test_loader_id=test_loader_id, test_loader_ood=test_loaders_ood)
     logger.info("Final test results: %s", test_stats)
 
@@ -100,8 +97,6 @@ def main(args):
     with open(fname, 'w') as f:
         json.dump(results, f)
 
-    destroy_process_group()
-
 
 def build_model(args, **kwargs):
     n_classes = kwargs['n_classes']
@@ -109,6 +104,27 @@ def build_model(args, **kwargs):
     if args.model.name == 'resnet18_deterministic':
         model = deterministic.resnet.ResNet18(n_classes)
         criterion = nn.CrossEntropyLoss()
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+        )
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        model_dict = {
+            'model': model,
+            'optimizer': optimizer,
+            'criterion': criterion,
+            'lr_scheduler': lr_scheduler,
+            'train_one_epoch': deterministic.train.train_one_epoch,
+            'evaluate': deterministic.evaluate.evaluate,
+            'train_kwargs': dict(device=args.device),
+            'eval_kwargs': dict(device=args.device),
+        }
+
+    elif args.model.name == 'resnet18_labelsmoothing':
+        model = deterministic.resnet.ResNet18(n_classes)
+        criterion = nn.CrossEntropyLoss(label_smoothing=args.model.label_smoothing)
         optimizer = torch.optim.SGD(
             model.parameters(),
             lr=args.model.optimizer.lr,
