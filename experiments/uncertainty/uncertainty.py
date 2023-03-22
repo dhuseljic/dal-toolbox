@@ -10,10 +10,8 @@ from omegaconf import OmegaConf
 from torch.utils.data import DataLoader, Subset, RandomSampler, DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
 from dal_toolbox.datasets import build_dataset, build_ood_datasets
-from dal_toolbox.models.deterministic.trainer import BasicTrainer
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp
 from dal_toolbox.utils import seed_everything, init_distributed_mode
-
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="uncertainty")
@@ -59,16 +57,13 @@ def main(args):
     model = model_dict['model']
     optimizer = model_dict['optimizer']
     criterion = model_dict['criterion']
-    train_one_epoch = model_dict['train_one_epoch']
-    evaluate = model_dict['evaluate']
     lr_scheduler = model_dict['lr_scheduler']
+    Trainer = model_dict['trainer']
 
-    trainer = BasicTrainer(
+    trainer = Trainer(
         model=model,
         optimizer=optimizer,
         criterion=criterion,
-        train_one_epoch=train_one_epoch,
-        evaluate=evaluate,
         lr_scheduler=lr_scheduler,
         output_dir=args.output_dir,
         summary_writer=writer,
@@ -116,10 +111,7 @@ def build_model(args, **kwargs):
             'optimizer': optimizer,
             'criterion': criterion,
             'lr_scheduler': lr_scheduler,
-            'train_one_epoch': deterministic.train.train_one_epoch,
-            'evaluate': deterministic.evaluate.evaluate,
-            'train_kwargs': dict(device=args.device),
-            'eval_kwargs': dict(device=args.device),
+            'trainer': deterministic.trainer.DeterministicTrainer,
         }
 
     elif args.model.name == 'resnet18_labelsmoothing':
@@ -139,8 +131,6 @@ def build_model(args, **kwargs):
             'lr_scheduler': lr_scheduler,
             'train_one_epoch': deterministic.train.train_one_epoch,
             'evaluate': deterministic.evaluate.evaluate,
-            'train_kwargs': dict(device=args.device),
-            'eval_kwargs': dict(device=args.device),
         }
 
     elif args.model.name == 'resnet18_mcdropout':
@@ -160,8 +150,6 @@ def build_model(args, **kwargs):
             'train_one_epoch': mc_dropout.train.train_one_epoch,
             'evaluate': mc_dropout.evaluate.evaluate,
             'lr_scheduler': lr_scheduler,
-            'train_kwargs': dict(device=args.device),
-            'eval_kwargs': dict(device=args.device),
         }
 
     elif args.model.name == 'resnet18_ensemble':
@@ -189,8 +177,6 @@ def build_model(args, **kwargs):
             'train_one_epoch': ensemble.train.train_one_epoch,
             'evaluate': ensemble.evaluate.evaluate,
             'lr_scheduler': lr_scheduler,
-            'train_kwargs': dict(device=args.device),
-            'eval_kwargs': dict(device=args.device),
         }
 
     elif args.model.name == 'resnet18_sngp':
@@ -224,8 +210,6 @@ def build_model(args, **kwargs):
             'train_one_epoch': sngp.train.train_one_epoch,
             'evaluate': sngp.evaluate.evaluate,
             'lr_scheduler': lr_scheduler,
-            'train_kwargs': dict(device=args.device),
-            'eval_kwargs': dict(device=args.device),
         }
 
     else:
