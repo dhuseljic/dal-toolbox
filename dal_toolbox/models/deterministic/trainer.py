@@ -87,8 +87,7 @@ class DeterministicTrainer:
                 test_loader_id = test_loaders.get('test_loader_id')
                 test_loader_ood = test_loaders.get('test_loader_ood', {})
                 t1 = time.time()
-                test_stats = self.evaluate(model=self.model, dataloader_id=test_loader_id,
-                                           dataloaders_ood=test_loader_ood)
+                test_stats = self.evaluate(dataloader_id=test_loader_id, dataloaders_ood=test_loader_ood)
                 logger.info(test_stats)
                 self.test_history.append(test_stats)
                 logger.info('Evaluation took %.2f minutes', (time.time() - t1)/60)
@@ -162,15 +161,15 @@ class DeterministicTrainer:
         return train_stats
 
     @torch.no_grad()
-    def evaluate(self, model, dataloader_id, dataloaders_ood):
-        model.eval()
-        model.to(self.device)
+    def evaluate(self, dataloader_id, dataloaders_ood):
+        self.model.eval()
+        self.model.to(self.device)
 
         # Forward prop in distribution
         logits_id, targets_id, = [], []
         for inputs, targets in dataloader_id:
             inputs, targets = inputs.to(self.device), targets.to(self.device)
-            logits_id.append(model(inputs))
+            logits_id.append(self.model(inputs))
             targets_id.append(targets)
         logits_id = torch.cat(logits_id, dim=0).cpu()
         targets_id = torch.cat(targets_id, dim=0).cpu()
@@ -206,7 +205,7 @@ class DeterministicTrainer:
             logits_ood = []
             for inputs, targets in dataloader_ood:
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
-                logits_ood.append(model(inputs))
+                logits_ood.append(self.model(inputs))
             logits_ood = torch.cat(logits_ood, dim=0).cpu()
 
             # Confidence- and entropy-Scores of out of domain logits

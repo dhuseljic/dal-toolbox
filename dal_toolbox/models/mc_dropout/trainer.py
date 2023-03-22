@@ -31,15 +31,15 @@ class MCDropoutTrainer(DeterministicTrainer):
         return train_stats
 
     @torch.no_grad()
-    def evaluate(self, model, dataloader_id, dataloaders_ood):
-        model.eval()
-        model.to(self.device)
+    def evaluate(self, dataloader_id, dataloaders_ood):
+        self.model.eval()
+        self.model.to(self.device)
 
         # Get logits and targets for in-domain-test-set (Number of Samples x Number of Passes x Number of Classes)
         dropout_logits_id, targets_id, = [], []
         for inputs, targets in dataloader_id:
             inputs, targets = inputs.to(self.device), targets.to(self.device)
-            dropout_logits_id.append(model.mc_forward(inputs, model.k))
+            dropout_logits_id.append(self.model.mc_forward(inputs, self.model.k))
             targets_id.append(targets)
 
         # Transform to tensor
@@ -83,7 +83,7 @@ class MCDropoutTrainer(DeterministicTrainer):
             dropout_logits_ood = []
             for inputs, targets in dataloader_ood:
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
-                dropout_logits_ood.append(model.mc_forward(inputs, model.k))
+                dropout_logits_ood.append(self.model.mc_forward(inputs, self.model.k))
             dropout_logits_ood = torch.cat(dropout_logits_ood, dim=0).cpu()
             dropout_probas_ood = dropout_logits_ood.softmax(dim=-1)
             mean_probas_ood = torch.mean(dropout_probas_ood, dim=1)

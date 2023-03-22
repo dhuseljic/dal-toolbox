@@ -37,15 +37,15 @@ class EnsembleTrainer(DeterministicTrainer):
         return train_stats
 
     @torch.no_grad()
-    def evaluate(self, model, dataloader_id, dataloaders_ood):
-        model.eval()
-        model.to(self.device)
+    def evaluate(self, dataloader_id, dataloaders_ood):
+        self.model.eval()
+        self.model.to(self.device)
 
         # Get logits and targets for in-domain-test-set (Number of Members x Number of Samples x Number of Classes)
         ensemble_logits_id, targets_id, = [], []
         for inputs, targets in dataloader_id:
             inputs, targets = inputs.to(self.device), targets.to(self.device)
-            ensemble_logits_id.append(model.forward_sample(inputs))
+            ensemble_logits_id.append(self.model.forward_sample(inputs))
             targets_id.append(targets)
 
         # Transform to tensor
@@ -90,7 +90,7 @@ class EnsembleTrainer(DeterministicTrainer):
             ensemble_logits_ood = []
             for inputs, targets in dataloader_ood:
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
-                ensemble_logits_ood.append(model.forward_sample(inputs))
+                ensemble_logits_ood.append(self.model.forward_sample(inputs))
             ensemble_logits_ood = torch.cat(ensemble_logits_ood, dim=1).cpu()
             ensemble_probas_ood = ensemble_logits_ood.softmax(dim=-1)
             mean_probas_ood = torch.mean(ensemble_probas_ood, dim=0)

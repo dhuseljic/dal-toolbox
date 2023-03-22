@@ -35,15 +35,15 @@ class SNGPTrainer(DeterministicTrainer):
         return train_stats
 
     @torch.no_grad()
-    def evaluate(self, model, dataloader_id, dataloaders_ood):
-        model.eval()
-        model.to(self.device)
+    def evaluate(self, dataloader_id, dataloaders_ood):
+        self.model.eval()
+        self.model.to(self.device)
 
         # Forward prop in distribution
         logits_id, targets_id = [], []
         for inputs, targets in dataloader_id:
             inputs, targets = inputs.to(self.device), targets.to(self.device)
-            logits_scaled = model(inputs, mean_field=True)
+            logits_scaled = self.model(inputs, mean_field=True)
             logits_id.append(logits_scaled)
             targets_id.append(targets)
         logits_id = torch.cat(logits_id, dim=0).cpu()
@@ -81,7 +81,7 @@ class SNGPTrainer(DeterministicTrainer):
             logits_ood = []
             for inputs, targets in dataloader_ood:
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
-                logits_scaled = model(inputs, mean_field=True)
+                logits_scaled = self.model(inputs, mean_field=True)
                 logits_ood.append(logits_scaled)
             logits_ood = torch.cat(logits_ood, dim=0).cpu()
 
