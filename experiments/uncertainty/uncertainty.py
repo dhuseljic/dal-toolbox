@@ -147,7 +147,7 @@ def build_model(args, **kwargs):
             'optimizer': optimizer,
             'criterion': criterion,
             'lr_scheduler': lr_scheduler,
-            'trainer': deterministic.trainer.DeterministicTrainer,
+            'trainer': mc_dropout.trainer.MCDropoutTrainer,
         }
 
     elif args.model.name == 'resnet18_ensemble':
@@ -173,7 +173,7 @@ def build_model(args, **kwargs):
             'criterion': criterion,
             'optimizer': optimizer,
             'lr_scheduler': lr_scheduler,
-            'trainer': deterministic.trainer.DeterministicTrainer,
+            'trainer': ensemble.trainer.EnsembleTrainer,
         }
 
     elif args.model.name == 'resnet18_sngp':
