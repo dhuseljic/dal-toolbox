@@ -129,8 +129,7 @@ def build_model(args, **kwargs):
             'optimizer': optimizer,
             'criterion': criterion,
             'lr_scheduler': lr_scheduler,
-            'train_one_epoch': deterministic.train.train_one_epoch,
-            'evaluate': deterministic.evaluate.evaluate,
+            'trainer': deterministic.trainer.DeterministicTrainer,
         }
 
     elif args.model.name == 'resnet18_mcdropout':
@@ -147,9 +146,8 @@ def build_model(args, **kwargs):
             'model': model,
             'optimizer': optimizer,
             'criterion': criterion,
-            'train_one_epoch': mc_dropout.train.train_one_epoch,
-            'evaluate': mc_dropout.evaluate.evaluate,
             'lr_scheduler': lr_scheduler,
+            'trainer': deterministic.trainer.DeterministicTrainer,
         }
 
     elif args.model.name == 'resnet18_ensemble':
@@ -174,9 +172,8 @@ def build_model(args, **kwargs):
             'model': model,
             'criterion': criterion,
             'optimizer': optimizer,
-            'train_one_epoch': ensemble.train.train_one_epoch,
-            'evaluate': ensemble.evaluate.evaluate,
             'lr_scheduler': lr_scheduler,
+            'trainer': deterministic.trainer.DeterministicTrainer,
         }
 
     elif args.model.name == 'resnet18_sngp':
@@ -207,9 +204,8 @@ def build_model(args, **kwargs):
             'model': model,
             'criterion': criterion,
             'optimizer': optimizer,
-            'train_one_epoch': sngp.train.train_one_epoch,
-            'evaluate': sngp.evaluate.evaluate,
             'lr_scheduler': lr_scheduler,
+            'trainer': deterministic.trainer.DeterministicTrainer,
         }
 
     else:

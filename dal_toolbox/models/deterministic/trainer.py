@@ -14,6 +14,7 @@ from ...utils import MetricLogger, SmoothedValue
 
 logger = logging.getLogger(__name__)
 
+
 class DeterministicTrainer:
 
     def __init__(self,
