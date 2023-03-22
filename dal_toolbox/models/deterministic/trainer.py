@@ -161,7 +161,7 @@ class DeterministicTrainer:
         return train_stats
 
     @torch.no_grad()
-    def evaluate(self, dataloader_id, dataloaders_ood):
+    def evaluate(self, dataloader_id, dataloaders_ood={}):
         self.model.eval()
         self.model.to(self.device)
 

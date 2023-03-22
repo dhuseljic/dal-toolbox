@@ -13,7 +13,6 @@ from torch.utils.data import DataLoader, RandomSampler
 from omegaconf import OmegaConf
 
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp
-from dal_toolbox.models.deterministic.trainer import BasicTrainer
 from dal_toolbox.active_learning.data import ALDataset
 from dal_toolbox.utils import seed_everything
 from dal_toolbox import datasets
@@ -54,8 +53,7 @@ def main(args):
     criterion = model_dict['criterion']
     optimizer = model_dict['optimizer']
     lr_scheduler = model_dict['lr_scheduler']
-    train_one_epoch = model_dict['train_one_epoch']
-    evaluate = model_dict['evaluate']
+    Trainer = model_dict['trainer']
 
     # Setup Query
     logging.info('Building query strategy: %s', args.al_strategy.name)
@@ -101,13 +99,11 @@ def main(args):
         train_sampler = RandomSampler(al_dataset.labeled_dataset, num_samples=args.model.batch_size*iter_per_epoch)
         train_loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.model.batch_size, sampler=train_sampler)
 
-        trainer = BasicTrainer(
+        trainer = Trainer(
             model=model,
             optimizer=optimizer,
             criterion=criterion,
             lr_scheduler=lr_scheduler,
-            train_one_epoch=train_one_epoch,
-            evaluate=evaluate,
             device=args.device,
             output_dir=args.output_dir,
             summary_writer=writer,
@@ -119,6 +115,7 @@ def main(args):
         logging.info('Evaluation with %s samples', len(val_ds))
         test_stats = trainer.evaluate(val_loader)
         cycle_results['test_stats'] = test_stats
+        logging.info('Evaluation stats: %s', test_stats)
 
         # Log
         for key, value in test_stats.items():
@@ -192,11 +189,8 @@ def build_model(args, **kwargs):
             'model': model,
             'criterion': criterion,
             'optimizer': optimizer,
-            'train_one_epoch': deterministic.train.train_one_epoch,
-            'evaluate': deterministic.evaluate.evaluate,
             'lr_scheduler': lr_scheduler,
-            'train_kwargs': dict(device=args.device),
-            'eval_kwargs': dict(device=args.device),
+            'trainer': deterministic.trainer.DeterministicTrainer,
         }
 
     elif args.model.name == 'resnet18_labelsmoothing':
@@ -214,11 +208,8 @@ def build_model(args, **kwargs):
             'model': model,
             'criterion': criterion,
             'optimizer': optimizer,
-            'train_one_epoch': deterministic.train.train_one_epoch,
-            'evaluate': deterministic.evaluate.evaluate,
             'lr_scheduler': lr_scheduler,
-            'train_kwargs': dict(device=args.device),
-            'eval_kwargs': dict(device=args.device),
+            'trainer': deterministic.trainer.DeterministicTrainer,
         }
 
     elif args.model.name == 'resnet18_mixup':
@@ -239,11 +230,8 @@ def build_model(args, **kwargs):
             'model': model,
             'criterion': criterion,
             'optimizer': optimizer,
-            'train_one_epoch': mc_dropout.train.train_one_epoch,
-            'evaluate': mc_dropout.evaluate.evaluate,
             'lr_scheduler': lr_scheduler,
-            'train_kwargs': dict(device=args.device),
-            'eval_kwargs': dict(device=args.device),
+            'trainer': mc_dropout.trainer.MCDropoutTrainer,
         }
 
     elif args.model.name == 'resnet18_ensemble':
@@ -269,11 +257,8 @@ def build_model(args, **kwargs):
             'model': model,
             'criterion': criterion,
             'optimizer': optimizer,
-            'train_one_epoch': ensemble.train.train_one_epoch,
-            'evaluate': ensemble.evaluate.evaluate,
             'lr_scheduler': lr_scheduler,
-            'train_kwargs': dict(device=args.device),
-            'eval_kwargs': dict(device=args.device),
+            'trainer': ensemble.trainer.EnsembleTrainer,
         }
 
     elif args.model.name == 'resnet18_sngp':
@@ -305,11 +290,8 @@ def build_model(args, **kwargs):
             'model': model,
             'criterion': criterion,
             'optimizer': optimizer,
-            'train_one_epoch': sngp.train.train_one_epoch,
-            'evaluate': sngp.evaluate.evaluate,
             'lr_scheduler': lr_scheduler,
-            'train_kwargs': dict(device=args.device),
-            'eval_kwargs': dict(device=args.device),
+            'trainer': sngp.trainer.SNGPTrainer,
         }
 
     else:
