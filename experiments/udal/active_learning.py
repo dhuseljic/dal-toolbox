@@ -48,21 +48,11 @@ def main(args):
 
     # Setup Model
     logging.info('Building model: %s', args.model.name)
-    model_dict = build_model(args, n_classes=ds_info['n_classes'])
-    model = model_dict['model']
-    criterion = model_dict['criterion']
-    optimizer = model_dict['optimizer']
-    lr_scheduler = model_dict['lr_scheduler']
-    Trainer = model_dict['trainer']
+    trainer = build_model(args, n_classes=ds_info['n_classes'])
 
     # Setup Query
     logging.info('Building query strategy: %s', args.al_strategy.name)
     al_strategy = build_query(args, device=args.device)
-
-    # Setup initial states
-    initial_model_state = copy.deepcopy(model.state_dict())
-    initial_optimizer_state = copy.deepcopy(optimizer.state_dict())
-    initial_scheduler_state = copy.deepcopy(lr_scheduler.state_dict())
 
     # Active Learning Cycles
     for i_acq in range(0, args.al_cycle.n_acq + 1):
@@ -74,7 +64,7 @@ def main(args):
             t1 = time.time()
             logging.info('Querying %s samples with strategy `%s`', args.al_cycle.acq_size, args.al_strategy.name)
             indices = al_strategy.query(
-                model=model,
+                model=trainer.model,
                 dataset=al_dataset.query_dataset,
                 unlabeled_indices=al_dataset.unlabeled_indices,
                 labeled_indices=al_dataset.labeled_indices,
@@ -87,27 +77,13 @@ def main(args):
             cycle_results['query_time'] = query_time
             queried_indices[f'cycle{i_acq}'] = indices
 
-        #  If cold start is set, reset the model parameters
-        optimizer.load_state_dict(initial_optimizer_state)
-        lr_scheduler.load_state_dict(initial_scheduler_state)
-        if args.al_cycle.cold_start:
-            model.load_state_dict(initial_model_state)
-
         # Train with updated annotations
         logging.info('Training on labeled pool with %s samples', len(al_dataset.labeled_dataset))
         iter_per_epoch = len(al_dataset.labeled_dataset) // args.model.batch_size + 1
         train_sampler = RandomSampler(al_dataset.labeled_dataset, num_samples=args.model.batch_size*iter_per_epoch)
         train_loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.model.batch_size, sampler=train_sampler)
 
-        trainer = Trainer(
-            model=model,
-            optimizer=optimizer,
-            criterion=criterion,
-            lr_scheduler=lr_scheduler,
-            device=args.device,
-            output_dir=args.output_dir,
-            summary_writer=writer,
-        )
+        trainer.reset_states(reset_parameters=args.al_cycle.cold_start)
         history = trainer.train(args.model.n_epochs, train_loader=train_loader)
         cycle_results['train_history'] = history['train_history']
 
@@ -183,13 +159,15 @@ def build_model(args, **kwargs):
             nesterov=True,
         )
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
-        model_dict = {
-            'model': model,
-            'criterion': criterion,
-            'optimizer': optimizer,
-            'lr_scheduler': lr_scheduler,
-            'trainer': deterministic.trainer.DeterministicTrainer,
-        }
+        trainer = deterministic.trainer.DeterministicTrainer(
+            model,
+            optimizer,
+            criterion,
+            lr_scheduler,
+            device=args.device,
+            output_dir=args.output_dir
+        )
+        return trainer
 
     elif args.model.name == 'resnet18_labelsmoothing':
         model = deterministic.resnet.ResNet18(n_classes)

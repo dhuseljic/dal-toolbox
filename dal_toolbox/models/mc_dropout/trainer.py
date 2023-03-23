@@ -31,7 +31,7 @@ class MCDropoutTrainer(BasicTrainer):
         return train_stats
 
     @torch.no_grad()
-    def _evaluate(self, dataloader, dataloaders_ood=None):
+    def evaluate_model(self, dataloader, dataloaders_ood=None):
         self.model.eval()
         self.model.to(self.device)
 

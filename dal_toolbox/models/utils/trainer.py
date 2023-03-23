@@ -43,11 +43,17 @@ class BasicTrainer(abc.ABC):
         self.init_optimizer_state = copy.deepcopy(self.optimizer.state_dict())
         self.init_criterion_state = copy.deepcopy(self.criterion.state_dict())
         self.init_scheduler_state = copy.deepcopy(self.lr_scheduler.state_dict())
-        # TODO: write reset to reset these states
 
         self.train_history: list = []
         self.test_history: list = []
         self.test_stats: dict = {}
+
+    def reset_states(self, reset_parameters=False):
+        self.optimizer.load_state_dict(self.init_model_state)
+        self.lr_scheduler.load_state_dict(self.init_scheduler_state)
+        self.criterion.load_state_dict(self.init_criterion_state)
+        if reset_parameters:
+            self.model.load_state_dict(self.init_model_state)
 
     def train(self, n_epochs, train_loader, test_loaders=None, eval_every=None, save_every=None):
         if self.use_distributed:
@@ -96,7 +102,7 @@ class BasicTrainer(abc.ABC):
     def evaluate(self, dataloader, dataloaders_ood=None):
         self.logger.info('Evaluation with %s instances..', len(dataloader.dataset))
         t1 = time.time()
-        test_stats = self._evaluate(dataloader, dataloaders_ood)
+        test_stats = self.evaluate_model(dataloader, dataloaders_ood)
         self.logger.info(test_stats)
         self.logger.info('Evaluation took %.2f minutes', (time.time() - t1)/60)
         return test_stats
@@ -126,5 +132,5 @@ class BasicTrainer(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def _evaluate(self, dataloader, dataloaders_ood):
+    def evaluate_model(self, dataloader, dataloaders_ood):
         pass
