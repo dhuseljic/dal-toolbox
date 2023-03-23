@@ -83,7 +83,7 @@ def main(args):
         train_sampler = RandomSampler(al_dataset.labeled_dataset, num_samples=args.model.batch_size*iter_per_epoch)
         train_loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.model.batch_size, sampler=train_sampler)
 
-        trainer.reset_states(reset_parameters=args.al_cycle.cold_start)
+        trainer.reset_states(reset_model=args.al_cycle.cold_start)
         history = trainer.train(args.model.n_epochs, train_loader=train_loader)
         cycle_results['train_history'] = history['train_history']
 
@@ -160,14 +160,13 @@ def build_model(args, **kwargs):
         )
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
         trainer = deterministic.trainer.DeterministicTrainer(
-            model,
-            optimizer,
-            criterion,
-            lr_scheduler,
+            model=model,
+            criterion=criterion,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
             device=args.device,
             output_dir=args.output_dir
         )
-        return trainer
 
     elif args.model.name == 'resnet18_labelsmoothing':
         model = deterministic.resnet.ResNet18(n_classes)
@@ -180,16 +179,35 @@ def build_model(args, **kwargs):
             nesterov=True,
         )
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
-        model_dict = {
-            'model': model,
-            'criterion': criterion,
-            'optimizer': optimizer,
-            'lr_scheduler': lr_scheduler,
-            'trainer': deterministic.trainer.DeterministicTrainer,
-        }
+        trainer = deterministic.trainer.DeterministicTrainer(
+            model=model,
+            criterion=criterion,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            device=args.device,
+            output_dir=args.output_dir
+        )
 
     elif args.model.name == 'resnet18_mixup':
-        NotImplementedError()
+        model = deterministic.resnet.ResNet18(n_classes)
+        criterion = nn.CrossEntropyLoss()
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+            nesterov=True,
+        )
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        trainer = deterministic.trainer.DeterministicMixupTrainer(
+            model=model,
+            criterion=criterion,
+            mixup_alpha=args.model.mixup_alpha,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            device=args.device,
+            output_dir=args.output_dir
+        )
 
     elif args.model.name == 'resnet18_mcdropout':
         model = mc_dropout.resnet.DropoutResNet18(n_classes, args.model.n_passes, args.model.dropout_rate)
@@ -202,13 +220,14 @@ def build_model(args, **kwargs):
             nesterov=True
         )
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
-        model_dict = {
-            'model': model,
-            'criterion': criterion,
-            'optimizer': optimizer,
-            'lr_scheduler': lr_scheduler,
-            'trainer': mc_dropout.trainer.MCDropoutTrainer,
-        }
+        trainer = mc_dropout.trainer.MCDropoutTrainer(
+            model=model,
+            optimizer=optimizer,
+            criterion=criterion,
+            lr_scheduler=lr_scheduler,
+            device=args.device,
+            output_dir=args.output_dir,
+        )
 
     elif args.model.name == 'resnet18_ensemble':
         members, lr_schedulers, optimizers = [], [], []
@@ -229,13 +248,14 @@ def build_model(args, **kwargs):
         criterion = nn.CrossEntropyLoss()
         optimizer = ensemble.voting_ensemble.EnsembleOptimizer(optimizers)
         lr_scheduler = ensemble.voting_ensemble.EnsembleLRScheduler(lr_schedulers)
-        model_dict = {
-            'model': model,
-            'criterion': criterion,
-            'optimizer': optimizer,
-            'lr_scheduler': lr_scheduler,
-            'trainer': ensemble.trainer.EnsembleTrainer,
-        }
+        trainer = ensemble.trainer.EnsembleTrainer(
+            model=model,
+            criterion=criterion,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            device=args.device,
+            output_dir=args.output_dir,
+        )
 
     elif args.model.name == 'resnet18_sngp':
         model = sngp.resnet.resnet18_sngp(
@@ -262,18 +282,19 @@ def build_model(args, **kwargs):
             nesterov=True
         )
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
-        model_dict = {
-            'model': model,
-            'criterion': criterion,
-            'optimizer': optimizer,
-            'lr_scheduler': lr_scheduler,
-            'trainer': sngp.trainer.SNGPTrainer,
-        }
+        trainer = sngp.trainer.SNGPTrainer(
+            model=model,
+            criterion=criterion,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            device=args.device,
+            output_dir=args.output_dir,
+        )
 
     else:
         NotImplementedError()
 
-    return model_dict
+    return trainer
 
 
 def build_datasets(args):

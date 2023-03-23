@@ -1,5 +1,5 @@
-import time
 import torch
+import torch.nn.functional as F
 
 from ..utils.trainer import BasicTrainer
 from ...metrics import generalization, calibration, ood
@@ -111,3 +111,48 @@ class DeterministicTrainer(BasicTrainer):
 
         test_stats = {f"test_{k}": v for k, v in metrics.items()}
         return test_stats
+
+
+class DeterministicMixupTrainer(DeterministicTrainer):
+    def __init__(self, model, optimizer, mixup_alpha, criterion, lr_scheduler=None, device=None, output_dir=None, summary_writer=None, use_distributed=False):
+        super().__init__(model, optimizer, criterion, lr_scheduler, device, output_dir, summary_writer, use_distributed)
+        self.mixup_alpha = mixup_alpha
+
+    def train_one_epoch(self, dataloader, epoch=None, print_freq=200):
+        self.model.train()
+        self.model.to(self.device)
+        self.criterion.to(self.device)
+
+        metric_logger = MetricLogger(delimiter=" ")
+        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
+        header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
+
+        # Train the epoch
+        for inputs, targets in metric_logger.log_every(dataloader, print_freq, header):
+            inputs, targets = inputs.to(self.device), targets.to(self.device)
+
+            inputs, targets = self.mixup(inputs, F.one_hot(targets), self.mixup_alpha)
+
+            outputs = self.model(inputs)
+            loss = self.criterion(outputs, targets)
+
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+            batch_size = inputs.shape[0]
+            acc1, = generalization.accuracy(outputs, targets, topk=(1,))
+            metric_logger.update(loss=loss.item(), lr=self.optimizer.param_groups[0]["lr"])
+            metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
+
+        metric_logger.synchronize_between_processes()
+        train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
+
+        return train_stats
+
+    def mixup(self, inputs: torch.Tensor, targets: torch.Tensor, alpha: float):
+        # TODO: as own function in utils
+        indices = torch.randperm(len(inputs), device=inputs.device, dtype=torch.long)
+        inputs_mixed = alpha * inputs + (1 - alpha) * inputs[indices]
+        targets_mixed = alpha * targets + (1 - alpha) * targets[indices]
+        return inputs_mixed, targets_mixed

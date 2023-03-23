@@ -8,6 +8,7 @@ import torch
 
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DistributedSampler
+from ...utils import write_scalar_dict
 
 
 class BasicTrainer(abc.ABC):
@@ -48,19 +49,20 @@ class BasicTrainer(abc.ABC):
         self.test_history: list = []
         self.test_stats: dict = {}
 
-    def reset_states(self, reset_parameters=False):
+    def reset_states(self, reset_model=False):
         self.optimizer.load_state_dict(self.init_optimizer_state)
         self.lr_scheduler.load_state_dict(self.init_scheduler_state)
         self.criterion.load_state_dict(self.init_criterion_state)
-        if reset_parameters:
+        if reset_model:
             self.model.load_state_dict(self.init_model_state)
 
     def train(self, n_epochs, train_loader, test_loaders=None, eval_every=None, save_every=None):
+        self.logger.info('Training with %s instances..', len(train_loader.dataset))
+        start_time = time.time()
+
         if self.use_distributed:
             if not isinstance(train_loader.sampler, DistributedSampler):
                 raise ValueError('Configure a distributed sampler to use distributed training.')
-        self.logger.info('Training with %s instances..', len(train_loader.dataset))
-        t1 = time.time()
 
         self.train_history = []
         self.test_history = []
@@ -76,7 +78,7 @@ class BasicTrainer(abc.ABC):
 
             # Logging
             if self.summary_writer is not None:
-                self.write_scalar_dict(train_stats, prefix='train', global_step=i_epoch)
+                write_scalar_dict(train_stats, prefix='train', global_step=i_epoch)
 
             # Eval in intervals if test loader exists
             if test_loaders and i_epoch % eval_every == 0:
@@ -89,7 +91,7 @@ class BasicTrainer(abc.ABC):
             if self.output_dir and save_every and i_epoch % save_every == 0:
                 self.save_checkpoint(i_epoch)
 
-        training_time = (time.time() - t1)
+        training_time = (time.time() - start_time)
         self.logger.info('Training took %.2f minutes', training_time/60)
         self.logger.info('Training stats: %s', train_stats)
 
@@ -101,15 +103,18 @@ class BasicTrainer(abc.ABC):
 
     def evaluate(self, dataloader, dataloaders_ood=None):
         self.logger.info('Evaluation with %s instances..', len(dataloader.dataset))
-        t1 = time.time()
+        if dataloaders_ood:
+            for name, dl in dataloaders_ood:
+                self.logger.info('> OOD dataset %s with %s instances..', name, len(dl.dataset))
+        start_time = time.time()
         test_stats = self.evaluate_model(dataloader, dataloaders_ood)
         self.logger.info(test_stats)
-        self.logger.info('Evaluation took %.2f minutes', (time.time() - t1)/60)
+        self.logger.info('Evaluation took %.2f minutes', (time.time() - start_time)/60)
         return test_stats
 
     def save_checkpoint(self, i_epoch=None):
         self.logger.info('Saving checkpoint..')
-        t1 = time.time()
+        start_time = time.time()
         checkpoint_path = os.path.join(self.output_dir, "checkpoint.pth")
         checkpoint = {
             "model": self.model.state_dict(),
@@ -120,12 +125,7 @@ class BasicTrainer(abc.ABC):
             # "test_history": self.test_history,
         }
         torch.save(checkpoint, checkpoint_path)
-        self.logger.info('Saving took %.2f minutes', (time.time() - t1)/60)
-
-    def write_scalar_dict(self, scalar_dict, prefix, global_step):
-        if self.summary_writer is not None:
-            for key, val in scalar_dict.items():
-                self.summary_writer.add_scalar(f'{prefix}/{key}', val, global_step=global_step)
+        self.logger.info('Saving took %.2f minutes', (time.time() - start_time)/60)
 
     @abc.abstractmethod
     def train_one_epoch(self, dataloader, epoch):
