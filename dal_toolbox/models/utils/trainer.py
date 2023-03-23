@@ -49,7 +49,7 @@ class BasicTrainer(abc.ABC):
         self.test_stats: dict = {}
 
     def reset_states(self, reset_parameters=False):
-        self.optimizer.load_state_dict(self.init_model_state)
+        self.optimizer.load_state_dict(self.init_optimizer_state)
         self.lr_scheduler.load_state_dict(self.init_scheduler_state)
         self.criterion.load_state_dict(self.init_criterion_state)
         if reset_parameters:
