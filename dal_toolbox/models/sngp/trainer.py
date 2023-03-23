@@ -6,42 +6,42 @@ from ...metrics import generalization, calibration, ood
 
 
 class SNGPTrainer(DeterministicTrainer):
-    def train_one_epoch(self, model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
-        model.train()
-        model.reset_precision_matrix()
-        model.to(device)
-        criterion.to(device)
+    def train_one_epoch(self, dataloader, epoch=None, print_freq=200):
+        self.model.train()
+        self.model.reset_precision_matrix()
+        self.model.to(self.device)
+        self.criterion.to(self.device)
 
         metric_logger = MetricLogger(delimiter=" ")
         metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
         header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
         for inputs, targets in metric_logger.log_every(dataloader, print_freq, header):
-            inputs, targets = inputs.to(device), targets.to(device)
+            inputs, targets = inputs.to(self.device), targets.to(self.device)
 
-            outputs = model(inputs)
-            loss = criterion(outputs, targets)
+            outputs = self.model(inputs)
+            loss = self.criterion(outputs, targets)
 
-            optimizer.zero_grad()
+            self.optimizer.zero_grad()
             loss.backward()
-            optimizer.step()
+            self.optimizer.step()
 
             batch_size = inputs.shape[0]
             acc1, = generalization.accuracy(outputs, targets, topk=(1,))
-            metric_logger.update(loss=loss.item(), lr=optimizer.param_groups[0]["lr"])
+            metric_logger.update(loss=loss.item(), lr=self.optimizer.param_groups[0]["lr"])
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
 
         train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
         return train_stats
 
     @torch.no_grad()
-    def evaluate(self, dataloader_id, dataloaders_ood={}):
+    def evaluate(self, dataloader, dataloaders_ood=None):
         self.model.eval()
         self.model.to(self.device)
 
         # Forward prop in distribution
         logits_id, targets_id = [], []
-        for inputs, targets in dataloader_id:
+        for inputs, targets in dataloader:
             inputs, targets = inputs.to(self.device), targets.to(self.device)
             logits_scaled = self.model(inputs, mean_field=True)
             logits_id.append(logits_scaled)
@@ -75,6 +75,9 @@ class SNGPTrainer(DeterministicTrainer):
             "tce": tce,
             "mce": mce
         }
+
+        if dataloaders_ood is None:
+            dataloaders_ood = {}
 
         for name, dataloader_ood in dataloaders_ood.items():
             # Forward prop out of distribution

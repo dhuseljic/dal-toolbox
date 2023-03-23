@@ -77,7 +77,7 @@ def main(args):
         eval_every=args.eval_interval,
         save_every=args.eval_interval,
     )
-    test_stats = trainer.evaluate(dataloader_id=test_loader_id, dataloaders_ood=test_loaders_ood)
+    test_stats = trainer.evaluate(dataloader=test_loader_id, dataloaders_ood=test_loaders_ood)
     logger.info("Final test results: %s", test_stats)
 
     # Saving results

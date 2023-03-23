@@ -112,10 +112,8 @@ def main(args):
         cycle_results['train_history'] = history['train_history']
 
         # Evaluate resulting model
-        logging.info('Evaluation with %s samples', len(val_ds))
         test_stats = trainer.evaluate(val_loader)
         cycle_results['test_stats'] = test_stats
-        logging.info('Evaluation stats: %s', test_stats)
 
         # Log
         for key, value in test_stats.items():

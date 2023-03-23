@@ -1,28 +1,28 @@
 import torch
 
-from ..deterministic.trainer import DeterministicTrainer
+from ..utils.trainer import BasicTrainer
 from ...utils import MetricLogger
 from ...metrics import generalization, calibration, ood
 
 
-class EnsembleTrainer(DeterministicTrainer):
+class EnsembleTrainer(BasicTrainer):
 
-    def train_one_epoch(self, model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
+    def train_one_epoch(self, dataloader, epoch=None, print_freq=200):
         train_stats = {}
-        model.train()
-        model.to(device)
+        self.model.train()
+        self.model.to(self.device)
 
-        for i_member, (member, optim) in enumerate(zip(model, optimizer)):
+        for i_member, (member, optim) in enumerate(zip(self.model, self.optimizer)):
             metric_logger = MetricLogger(delimiter=" ")
             header = f"Epoch [{epoch}] Model [{i_member}] " if epoch is not None else f"Model [{i_member}] "
 
             # Train the epoch
             for inputs, targets in metric_logger.log_every(dataloader, print_freq, header):
-                inputs, targets = inputs.to(device), targets.to(device)
+                inputs, targets = inputs.to(self.device), targets.to(self.device)
 
                 outputs = member(inputs)
 
-                loss = criterion(outputs, targets)
+                loss = self.criterion(outputs, targets)
 
                 optim.zero_grad()
                 loss.backward()
@@ -32,18 +32,18 @@ class EnsembleTrainer(DeterministicTrainer):
                 acc1, = generalization.accuracy(outputs, targets, topk=(1,))
                 metric_logger.update(loss=loss.item())
                 metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
-            train_stats.update({f"train_{k}_model{i_member}": meter.global_avg for k,
+            train_stats.update({f"train_member{i_member}_{k}": meter.global_avg for k,
                                 meter, in metric_logger.meters.items()})
         return train_stats
 
     @torch.no_grad()
-    def evaluate(self, dataloader_id, dataloaders_ood={}):
+    def evaluate(self, dataloader, dataloaders_ood=None):
         self.model.eval()
         self.model.to(self.device)
 
         # Get logits and targets for in-domain-test-set (Number of Members x Number of Samples x Number of Classes)
         ensemble_logits_id, targets_id, = [], []
-        for inputs, targets in dataloader_id:
+        for inputs, targets in dataloader:
             inputs, targets = inputs.to(self.device), targets.to(self.device)
             ensemble_logits_id.append(self.model.forward_sample(inputs))
             targets_id.append(targets)
@@ -84,6 +84,9 @@ class EnsembleTrainer(DeterministicTrainer):
             "tce": tce,
             "mce": mce
         }
+
+        if dataloaders_ood is None:
+            dataloaders_ood = {}
 
         for name, dataloader_ood in dataloaders_ood.items():
             # Repeat for out-of-domain-test-set
