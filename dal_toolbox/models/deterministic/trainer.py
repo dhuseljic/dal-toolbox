@@ -114,9 +114,10 @@ class DeterministicTrainer(BasicTrainer):
 
 
 class DeterministicMixupTrainer(DeterministicTrainer):
-    def __init__(self, model, optimizer, mixup_alpha, criterion, lr_scheduler=None, device=None, output_dir=None, summary_writer=None, use_distributed=False):
+    def __init__(self, model, criterion, mixup_alpha, n_classes, optimizer, lr_scheduler=None, device=None, output_dir=None, summary_writer=None, use_distributed=False):
         super().__init__(model, optimizer, criterion, lr_scheduler, device, output_dir, summary_writer, use_distributed)
         self.mixup_alpha = mixup_alpha
+        self.n_classes = n_classes
 
     def train_one_epoch(self, dataloader, epoch=None, print_freq=200):
         self.model.train()
@@ -131,7 +132,7 @@ class DeterministicMixupTrainer(DeterministicTrainer):
         for inputs, targets in metric_logger.log_every(dataloader, print_freq, header):
             inputs, targets = inputs.to(self.device), targets.to(self.device)
 
-            inputs, targets = self.mixup(inputs, F.one_hot(targets), self.mixup_alpha)
+            inputs, targets = self.mixup(inputs, F.one_hot(targets, num_classes=self.n_classes), self.mixup_alpha)
 
             outputs = self.model(inputs)
             loss = self.criterion(outputs, targets)
@@ -150,9 +151,9 @@ class DeterministicMixupTrainer(DeterministicTrainer):
 
         return train_stats
 
-    def mixup(self, inputs: torch.Tensor, targets: torch.Tensor, alpha: float):
-        # TODO: as own function in utils
+    def mixup(self, inputs: torch.Tensor, targets_one_hot: torch.Tensor, alpha: float):
+        # TODO: move to utils
         indices = torch.randperm(len(inputs), device=inputs.device, dtype=torch.long)
         inputs_mixed = alpha * inputs + (1 - alpha) * inputs[indices]
-        targets_mixed = alpha * targets + (1 - alpha) * targets[indices]
+        targets_mixed = alpha * targets_one_hot + (1 - alpha) * targets_one_hot[indices]
         return inputs_mixed, targets_mixed

@@ -203,6 +203,7 @@ def build_model(args, **kwargs):
             model=model,
             criterion=criterion,
             mixup_alpha=args.model.mixup_alpha,
+            n_classes=n_classes,
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
             device=args.device,
