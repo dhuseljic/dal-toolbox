@@ -13,7 +13,6 @@ from torch.utils.data import DataLoader, RandomSampler
 from omegaconf import OmegaConf
 
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp
-from dal_toolbox.models.deterministic.trainer import BasicTrainer
 from dal_toolbox.active_learning.data import ALDataset
 from dal_toolbox.utils import seed_everything
 from dal_toolbox import datasets
@@ -49,18 +48,11 @@ def main(args):
 
     # Setup Model
     logging.info('Building model: %s', args.model.name)
-    model_dict = build_model(args, n_classes=ds_info['n_classes'])
-    model, train_one_epoch, evaluate = model_dict['model'], model_dict['train_one_epoch'], model_dict['evaluate']
-    criterion, optimizer, lr_scheduler = model_dict['criterion'], model_dict['optimizer'], model_dict['lr_scheduler']
+    trainer = build_model(args, n_classes=ds_info['n_classes'])
 
     # Setup Query
     logging.info('Building query strategy: %s', args.al_strategy.name)
     al_strategy = build_query(args, device=args.device)
-
-    # Setup initial states
-    initial_model_state = copy.deepcopy(model.state_dict())
-    initial_optimizer_state = copy.deepcopy(optimizer.state_dict())
-    initial_scheduler_state = copy.deepcopy(lr_scheduler.state_dict())
 
     # Active Learning Cycles
     for i_acq in range(0, args.al_cycle.n_acq + 1):
@@ -72,7 +64,7 @@ def main(args):
             t1 = time.time()
             logging.info('Querying %s samples with strategy `%s`', args.al_cycle.acq_size, args.al_strategy.name)
             indices = al_strategy.query(
-                model=model,
+                model=trainer.model,
                 dataset=al_dataset.query_dataset,
                 unlabeled_indices=al_dataset.unlabeled_indices,
                 labeled_indices=al_dataset.labeled_indices,
@@ -85,38 +77,18 @@ def main(args):
             cycle_results['query_time'] = query_time
             queried_indices[f'cycle{i_acq}'] = indices
 
-        #  If cold start is set, reset the model parameters
-        optimizer.load_state_dict(initial_optimizer_state)
-        lr_scheduler.load_state_dict(initial_scheduler_state)
-        if args.al_cycle.cold_start:
-            model.load_state_dict(initial_model_state)
-
         # Train with updated annotations
         logging.info('Training on labeled pool with %s samples', len(al_dataset.labeled_dataset))
         iter_per_epoch = len(al_dataset.labeled_dataset) // args.model.batch_size + 1
         train_sampler = RandomSampler(al_dataset.labeled_dataset, num_samples=args.model.batch_size*iter_per_epoch)
         train_loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.model.batch_size, sampler=train_sampler)
 
-        trainer = BasicTrainer(
-            model=model,
-            optimizer=optimizer,
-            criterion=criterion,
-            lr_scheduler=lr_scheduler,
-            train_one_epoch=train_one_epoch,
-            evaluate=evaluate,
-            device=args.device,
-            output_dir=args.output_dir,
-            summary_writer=writer,
-        )
-        # TODO: hyperparameters
+        trainer.reset_states(reset_model=args.al_cycle.cold_start)
         history = trainer.train(args.model.n_epochs, train_loader=train_loader)
         cycle_results['train_history'] = history['train_history']
-        # cycle_results['training_time'] =
 
         # Evaluate resulting model
-        logging.info('Evaluation with %s samples', len(val_ds))
         test_stats = trainer.evaluate(val_loader)
-        # cycle_results['evaluation_time'] = evaluation_time
         cycle_results['test_stats'] = test_stats
 
         # Log
@@ -129,9 +101,9 @@ def main(args):
             "unlabeled_indices": al_dataset.unlabeled_indices,
             "n_unlabeled_samples": len(al_dataset.unlabeled_dataset),
         })
+        cycle_results.keys()
         results[f'cycle{i_acq}'] = cycle_results
 
-    # Saving
     # Save results
     file_name = os.path.join(args.output_dir, 'results.json')
     logging.info("Saving results to %s.", file_name)
@@ -187,16 +159,14 @@ def build_model(args, **kwargs):
             nesterov=True,
         )
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
-        model_dict = {
-            'model': model,
-            'criterion': criterion,
-            'optimizer': optimizer,
-            'train_one_epoch': deterministic.train.train_one_epoch,
-            'evaluate': deterministic.evaluate.evaluate,
-            'lr_scheduler': lr_scheduler,
-            'train_kwargs': dict(device=args.device),
-            'eval_kwargs': dict(device=args.device),
-        }
+        trainer = deterministic.trainer.DeterministicTrainer(
+            model=model,
+            criterion=criterion,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            device=args.device,
+            output_dir=args.output_dir
+        )
 
     elif args.model.name == 'resnet18_labelsmoothing':
         model = deterministic.resnet.ResNet18(n_classes)
@@ -209,19 +179,36 @@ def build_model(args, **kwargs):
             nesterov=True,
         )
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
-        model_dict = {
-            'model': model,
-            'criterion': criterion,
-            'optimizer': optimizer,
-            'train_one_epoch': deterministic.train.train_one_epoch,
-            'evaluate': deterministic.evaluate.evaluate,
-            'lr_scheduler': lr_scheduler,
-            'train_kwargs': dict(device=args.device),
-            'eval_kwargs': dict(device=args.device),
-        }
+        trainer = deterministic.trainer.DeterministicTrainer(
+            model=model,
+            criterion=criterion,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            device=args.device,
+            output_dir=args.output_dir
+        )
 
     elif args.model.name == 'resnet18_mixup':
-        NotImplementedError()
+        model = deterministic.resnet.ResNet18(n_classes)
+        criterion = nn.CrossEntropyLoss()
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+            nesterov=True,
+        )
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        trainer = deterministic.trainer.DeterministicMixupTrainer(
+            model=model,
+            criterion=criterion,
+            mixup_alpha=args.model.mixup_alpha,
+            n_classes=n_classes,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            device=args.device,
+            output_dir=args.output_dir
+        )
 
     elif args.model.name == 'resnet18_mcdropout':
         model = mc_dropout.resnet.DropoutResNet18(n_classes, args.model.n_passes, args.model.dropout_rate)
@@ -234,16 +221,14 @@ def build_model(args, **kwargs):
             nesterov=True
         )
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
-        model_dict = {
-            'model': model,
-            'criterion': criterion,
-            'optimizer': optimizer,
-            'train_one_epoch': mc_dropout.train.train_one_epoch,
-            'evaluate': mc_dropout.evaluate.evaluate,
-            'lr_scheduler': lr_scheduler,
-            'train_kwargs': dict(device=args.device),
-            'eval_kwargs': dict(device=args.device),
-        }
+        trainer = mc_dropout.trainer.MCDropoutTrainer(
+            model=model,
+            optimizer=optimizer,
+            criterion=criterion,
+            lr_scheduler=lr_scheduler,
+            device=args.device,
+            output_dir=args.output_dir,
+        )
 
     elif args.model.name == 'resnet18_ensemble':
         members, lr_schedulers, optimizers = [], [], []
@@ -264,16 +249,14 @@ def build_model(args, **kwargs):
         criterion = nn.CrossEntropyLoss()
         optimizer = ensemble.voting_ensemble.EnsembleOptimizer(optimizers)
         lr_scheduler = ensemble.voting_ensemble.EnsembleLRScheduler(lr_schedulers)
-        model_dict = {
-            'model': model,
-            'criterion': criterion,
-            'optimizer': optimizer,
-            'train_one_epoch': ensemble.train.train_one_epoch,
-            'evaluate': ensemble.evaluate.evaluate,
-            'lr_scheduler': lr_scheduler,
-            'train_kwargs': dict(device=args.device),
-            'eval_kwargs': dict(device=args.device),
-        }
+        trainer = ensemble.trainer.EnsembleTrainer(
+            model=model,
+            criterion=criterion,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            device=args.device,
+            output_dir=args.output_dir,
+        )
 
     elif args.model.name == 'resnet18_sngp':
         model = sngp.resnet.resnet18_sngp(
@@ -300,21 +283,19 @@ def build_model(args, **kwargs):
             nesterov=True
         )
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
-        model_dict = {
-            'model': model,
-            'criterion': criterion,
-            'optimizer': optimizer,
-            'train_one_epoch': sngp.train.train_one_epoch,
-            'evaluate': sngp.evaluate.evaluate,
-            'lr_scheduler': lr_scheduler,
-            'train_kwargs': dict(device=args.device),
-            'eval_kwargs': dict(device=args.device),
-        }
+        trainer = sngp.trainer.SNGPTrainer(
+            model=model,
+            criterion=criterion,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            device=args.device,
+            output_dir=args.output_dir,
+        )
 
     else:
         NotImplementedError()
 
-    return model_dict
+    return trainer
 
 
 def build_datasets(args):
