@@ -40,10 +40,7 @@ class DeterministicTrainer(BasicTrainer):
         return train_stats
 
     @torch.no_grad()
-    def evaluate(self, dataloader, dataloaders_ood=None):
-        self.logger.info('Evaluation with %s instances..', len(dataloader.dataset))
-        t1 = time.time()
-
+    def _evaluate(self, dataloader, dataloaders_ood=None):
         self.model.eval()
         self.model.to(self.device)
 
@@ -82,35 +79,35 @@ class DeterministicTrainer(BasicTrainer):
             "mce": mce
         }
 
-        if dataloaders_ood:
-            for name, dataloader_ood in dataloaders_ood.items():
-                # Forward prop out of distribution
-                logits_ood = []
-                for inputs, targets in dataloader_ood:
-                    inputs, targets = inputs.to(self.device), targets.to(self.device)
-                    logits_ood.append(self.model(inputs))
-                logits_ood = torch.cat(logits_ood, dim=0).cpu()
+        if dataloaders_ood is None:
+            dataloaders_ood = {}
 
-                # Confidence- and entropy-Scores of out of domain logits
-                probas_ood = logits_ood.softmax(-1)
-                conf_ood, _ = probas_ood.max(-1)
-                entropy_ood = ood.entropy_fn(probas_ood)
+        for name, dataloader_ood in dataloaders_ood.items():
+            # Forward prop out of distribution
+            logits_ood = []
+            for inputs, targets in dataloader_ood:
+                inputs, targets = inputs.to(self.device), targets.to(self.device)
+                logits_ood.append(self.model(inputs))
+            logits_ood = torch.cat(logits_ood, dim=0).cpu()
 
-                # Area under the Precision-Recall-Curve
-                entropy_aupr = ood.ood_aupr(entropy_id, entropy_ood)
-                conf_aupr = ood.ood_aupr(1-conf_id, 1-conf_ood)
+            # Confidence- and entropy-Scores of out of domain logits
+            probas_ood = logits_ood.softmax(-1)
+            conf_ood, _ = probas_ood.max(-1)
+            entropy_ood = ood.entropy_fn(probas_ood)
 
-                # Area under the Receiver-Operator-Characteristic-Curve
-                entropy_auroc = ood.ood_auroc(entropy_id, entropy_ood)
-                conf_auroc = ood.ood_auroc(1-conf_id, 1-conf_ood)
+            # Area under the Precision-Recall-Curve
+            entropy_aupr = ood.ood_aupr(entropy_id, entropy_ood)
+            conf_aupr = ood.ood_aupr(1-conf_id, 1-conf_ood)
 
-                # Add to metrics
-                metrics[name+"_entropy_auroc"] = entropy_auroc
-                metrics[name+"_conf_auroc"] = conf_auroc
-                metrics[name+"_entropy_aupr"] = entropy_aupr
-                metrics[name+"_conf_aupr"] = conf_aupr
+            # Area under the Receiver-Operator-Characteristic-Curve
+            entropy_auroc = ood.ood_auroc(entropy_id, entropy_ood)
+            conf_auroc = ood.ood_auroc(1-conf_id, 1-conf_ood)
+
+            # Add to metrics
+            metrics[name+"_entropy_auroc"] = entropy_auroc
+            metrics[name+"_conf_auroc"] = conf_auroc
+            metrics[name+"_entropy_aupr"] = entropy_aupr
+            metrics[name+"_conf_aupr"] = conf_aupr
 
         test_stats = {f"test_{k}": v for k, v in metrics.items()}
-        self.logger.info(test_stats)
-        self.logger.info('Evaluation took %.2f minutes', (time.time() - t1)/60)
         return test_stats

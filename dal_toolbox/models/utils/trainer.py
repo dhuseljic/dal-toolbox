@@ -93,6 +93,14 @@ class BasicTrainer(abc.ABC):
 
         return {'train_history': self.train_history, 'test_history': self.test_history}
 
+    def evaluate(self, dataloader, dataloaders_ood=None):
+        self.logger.info('Evaluation with %s instances..', len(dataloader.dataset))
+        t1 = time.time()
+        test_stats = self._evaluate(dataloader, dataloaders_ood)
+        self.logger.info(test_stats)
+        self.logger.info('Evaluation took %.2f minutes', (time.time() - t1)/60)
+        return test_stats
+
     def save_checkpoint(self, i_epoch=None):
         self.logger.info('Saving checkpoint..')
         t1 = time.time()
@@ -118,5 +126,5 @@ class BasicTrainer(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def evaluate(self, dataloader, dataloaders_ood):
+    def _evaluate(self, dataloader, dataloaders_ood):
         pass

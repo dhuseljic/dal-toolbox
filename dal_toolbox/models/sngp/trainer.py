@@ -35,7 +35,7 @@ class SNGPTrainer(DeterministicTrainer):
         return train_stats
 
     @torch.no_grad()
-    def evaluate(self, dataloader, dataloaders_ood=None):
+    def _evaluate(self, dataloader, dataloaders_ood=None):
         self.model.eval()
         self.model.to(self.device)
 
