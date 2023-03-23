@@ -104,7 +104,7 @@ class BasicTrainer(abc.ABC):
     def evaluate(self, dataloader, dataloaders_ood=None):
         self.logger.info('Evaluation with %s instances..', len(dataloader.dataset))
         if dataloaders_ood:
-            for name, dl in dataloaders_ood:
+            for name, dl in dataloaders_ood.items():
                 self.logger.info('> OOD dataset %s with %s instances..', name, len(dl.dataset))
         start_time = time.time()
         test_stats = self.evaluate_model(dataloader, dataloaders_ood)
