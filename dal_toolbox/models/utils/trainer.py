@@ -32,8 +32,8 @@ class BasicTrainer(abc.ABC):
         self.logger = logging.getLogger(__name__)
         self.summary_writer = summary_writer
         self.output_dir = output_dir
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+        if output_dir is not None:
+            os.makedirs(output_dir, exist_ok=True)
 
         if self.use_distributed:
             self.model.to(device)
