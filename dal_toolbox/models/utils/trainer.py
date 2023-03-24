@@ -108,7 +108,7 @@ class BasicTrainer(abc.ABC):
 
         training_time = (time.time() - start_time)
         self.logger.info('Training took %.2f minutes', training_time/60)
-        self.logger.info('Training stats: %s', train_stats)
+        self.logger.info('Training stats of final epoch: %s', train_stats)
 
         # Save final model if output directory is defined
         if self.output_dir is not None:
@@ -124,7 +124,7 @@ class BasicTrainer(abc.ABC):
                 self.logger.info('> OOD dataset %s with %s instances..', name, len(dl.dataset))
         start_time = time.time()
         test_stats = self.evaluate_model(dataloader, dataloaders_ood)
-        self.logger.info(test_stats)
+        self.logger.info('Evaluation stats: %s', test_stats)
         self.logger.info('Evaluation took %.2f minutes', (time.time() - start_time)/60)
         return test_stats
 

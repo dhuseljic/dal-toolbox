@@ -34,35 +34,19 @@ def main(args):
 
     # Setup Model
     logging.info('Building model: %s', args.model.name)
-    model_dict = build_model(args, n_classes=ds_info['n_classes'])
-    model, train_one_epoch, evaluate = model_dict['model'], model_dict['train_one_epoch'], model_dict['evaluate']
-    criterion, optimizer, lr_scheduler = model_dict['criterion'], model_dict['optimizer'], model_dict['lr_scheduler']
+    trainer = build_model(args, n_classes=ds_info['n_classes'])
 
     # Train
     logging.info('Training on dataset with %s samples.', len(train_indices))
     iter_per_epoch = len(train_ds) // args.model.batch_size + 1
     train_sampler = RandomSampler(train_ds, num_samples=args.model.batch_size*iter_per_epoch)
     train_loader = DataLoader(train_ds, sampler=train_sampler, batch_size=args.model.batch_size)
-    train_history = []
-    for i_epoch in range(args.model.n_epochs):
-        train_stats = train_one_epoch(
-            model,
-            train_loader,
-            criterion=criterion,
-            optimizer=optimizer,
-            epoch=i_epoch,
-            **model_dict['train_kwargs'],
-        )
-        lr_scheduler.step()
-        for key, value in train_stats.items():
-            writer.add_scalar(tag=f"train/{key}", scalar_value=value, global_step=i_epoch)
-        train_history.append(train_stats)
-    logging.info('Training stats: %s', train_stats)
-    results['train_history'] = train_history
+    history = trainer.train(args.model.n_epochs, train_loader)
+    results['train_history'] = history['train_history'] 
 
     logging.info('Validation on dataset with %s samples.', len(val_indices))
     val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)
-    val_stats = evaluate(model, val_loader, {}, criterion, **model_dict['eval_kwargs'])
+    val_stats = trainer.evaluate(val_loader)
     logging.info('Validation stats: %s', val_stats)
     results['val_stats'] = val_stats
 
