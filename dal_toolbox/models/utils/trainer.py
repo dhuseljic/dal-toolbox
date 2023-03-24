@@ -56,6 +56,21 @@ class BasicTrainer(abc.ABC):
         if reset_model:
             self.model.load_state_dict(self.init_model_state)
 
+    def save_checkpoint(self, i_epoch=None):
+        self.logger.info('Saving checkpoint..')
+        start_time = time.time()
+        checkpoint_path = os.path.join(self.output_dir, "checkpoint.pth")
+        checkpoint = {
+            "model": self.model.state_dict(),
+            "optimizer": self.optimizer.state_dict(),
+            "epoch": i_epoch,
+            "lr_scheduler": self.lr_scheduler.state_dict() if self.lr_scheduler else None,
+            # "train_history": self.train_history,
+            # "test_history": self.test_history,
+        }
+        torch.save(checkpoint, checkpoint_path)
+        self.logger.info('Saving took %.2f minutes', (time.time() - start_time)/60)
+
     def train(self, n_epochs, train_loader, test_loaders=None, eval_every=None, save_every=None):
         self.logger.info('Training with %s instances..', len(train_loader.dataset))
         start_time = time.time()
@@ -101,6 +116,7 @@ class BasicTrainer(abc.ABC):
 
         return {'train_history': self.train_history, 'test_history': self.test_history}
 
+    @torch.no_grad()
     def evaluate(self, dataloader, dataloaders_ood=None):
         self.logger.info('Evaluation with %s instances..', len(dataloader.dataset))
         if dataloaders_ood:
@@ -112,20 +128,17 @@ class BasicTrainer(abc.ABC):
         self.logger.info('Evaluation took %.2f minutes', (time.time() - start_time)/60)
         return test_stats
 
-    def save_checkpoint(self, i_epoch=None):
-        self.logger.info('Saving checkpoint..')
-        start_time = time.time()
-        checkpoint_path = os.path.join(self.output_dir, "checkpoint.pth")
-        checkpoint = {
-            "model": self.model.state_dict(),
-            "optimizer": self.optimizer.state_dict(),
-            "epoch": i_epoch,
-            "lr_scheduler": self.lr_scheduler.state_dict() if self.lr_scheduler else None,
-            # "train_history": self.train_history,
-            # "test_history": self.test_history,
-        }
-        torch.save(checkpoint, checkpoint_path)
-        self.logger.info('Saving took %.2f minutes', (time.time() - start_time)/60)
+    @torch.no_grad()
+    def collect_predictions(self, dataloader):
+        all_logits = []
+        all_targets = []
+        for inputs, targets in dataloader:
+            inputs = inputs.to(self.device)
+            all_logits.append(self.model(inputs).cpu())
+            all_targets.append(targets)
+        logits = torch.cat(all_logits, dim=0)
+        targets = torch.cat(all_targets, dim=0)
+        return logits, targets
 
     @abc.abstractmethod
     def train_one_epoch(self, dataloader, epoch):

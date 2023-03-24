@@ -45,36 +45,22 @@ class DeterministicTrainer(BasicTrainer):
         self.model.to(self.device)
 
         # Forward prop in distribution
-        logits_id, targets_id, = [], []
-        for inputs, targets in dataloader:
-            inputs, targets = inputs.to(self.device), targets.to(self.device)
-            logits_id.append(self.model(inputs))
-            targets_id.append(targets)
-        logits_id = torch.cat(logits_id, dim=0).cpu()
-        targets_id = torch.cat(targets_id, dim=0).cpu()
-
-        # Confidence- and entropy-Scores of in domain set logits
+        logits_id, targets_id = self.collect_predictions(dataloader)
         probas_id = logits_id.softmax(-1)
-        conf_id, _ = probas_id.max(-1)
-        entropy_id = ood.entropy_fn(probas_id)
 
         # Model specific test loss and accuracy for in domain testset
-        acc1 = generalization.accuracy(logits_id, targets_id, (1,))[0].item()
-        prec = generalization.avg_precision(probas_id, targets_id)
         loss = self.criterion(logits_id, targets_id).item()
-
-        # Negative Log Likelihood
+        acc1 = generalization.accuracy(logits_id, targets_id, (1,))[0].item()
         nll = torch.nn.CrossEntropyLoss(reduction='mean')(logits_id, targets_id).item()
-
-        # Top- and Marginal Calibration Error
+        bs = calibration.BrierScore()(probas_id, targets_id).item()
         tce = calibration.TopLabelCalibrationError()(probas_id, targets_id).item()
         mce = calibration.MarginalCalibrationError()(probas_id, targets_id).item()
 
         metrics = {
-            "acc1": acc1,
-            "prec": prec,
             "loss": loss,
+            "acc1": acc1,
             "nll": nll,
+            "bs": bs,
             "tce": tce,
             "mce": mce
         }
@@ -84,30 +70,22 @@ class DeterministicTrainer(BasicTrainer):
 
         for name, dataloader_ood in dataloaders_ood.items():
             # Forward prop out of distribution
-            logits_ood = []
-            for inputs, targets in dataloader_ood:
-                inputs, targets = inputs.to(self.device), targets.to(self.device)
-                logits_ood.append(self.model(inputs))
-            logits_ood = torch.cat(logits_ood, dim=0).cpu()
+            logits_ood, _ = self.collect_predictions(dataloader_ood)
+            probas_ood = logits_ood.softmax(-1)
 
             # Confidence- and entropy-Scores of out of domain logits
-            probas_ood = logits_ood.softmax(-1)
-            conf_ood, _ = probas_ood.max(-1)
+            entropy_id = ood.entropy_fn(probas_id)
             entropy_ood = ood.entropy_fn(probas_ood)
 
             # Area under the Precision-Recall-Curve
-            entropy_aupr = ood.ood_aupr(entropy_id, entropy_ood)
-            conf_aupr = ood.ood_aupr(1-conf_id, 1-conf_ood)
+            ood_aupr = ood.ood_aupr(entropy_id, entropy_ood)
 
             # Area under the Receiver-Operator-Characteristic-Curve
-            entropy_auroc = ood.ood_auroc(entropy_id, entropy_ood)
-            conf_auroc = ood.ood_auroc(1-conf_id, 1-conf_ood)
+            ood_auroc = ood.ood_auroc(entropy_id, entropy_ood)
 
             # Add to metrics
-            metrics[name+"_entropy_auroc"] = entropy_auroc
-            metrics[name+"_conf_auroc"] = conf_auroc
-            metrics[name+"_entropy_aupr"] = entropy_aupr
-            metrics[name+"_conf_aupr"] = conf_aupr
+            metrics[name+"_auroc"] = ood_auroc
+            metrics[name+"_aupr"] = ood_aupr
 
         test_stats = {f"test_{k}": v for k, v in metrics.items()}
         return test_stats
@@ -132,7 +110,8 @@ class DeterministicMixupTrainer(DeterministicTrainer):
         for inputs, targets in metric_logger.log_every(dataloader, print_freq, header):
             inputs, targets = inputs.to(self.device), targets.to(self.device)
 
-            inputs, targets = self.mixup(inputs, F.one_hot(targets, num_classes=self.n_classes), self.mixup_alpha)
+            targets_one_hot = F.one_hot(targets, num_classes=self.n_classes)
+            inputs, targets = self.mixup(inputs, targets_one_hot, self.mixup_alpha)
 
             outputs = self.model(inputs)
             loss = self.criterion(outputs, targets)
