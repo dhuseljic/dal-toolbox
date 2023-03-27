@@ -47,11 +47,10 @@ def main():
     n_reps = 3
     n_samples = 10
 
-    # Parallelism is automatic, split accross devices. Assume I have 16 cpus, specifying 4 cpu in resources will allow 4 parallel tunings
     objective_with_resources = tune.with_resources(objective, resources={'cpu': 8, 'gpu': 1})
     if distributed:
         ray.init(address='auto')
-    search_alg = BayesOptSearch()  # OptunaSearch()
+    search_alg = BayesOptSearch()
     search_alg = Repeater(search_alg, repeat=n_reps)
     tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=n_samples*n_reps, metric="test_acc1", mode="max")
     search_space = {
@@ -59,11 +58,7 @@ def main():
         # "lr": tune.grid_search([0.001, 0.01, 0.1]),
         # "weight_decay": tune.grid_search([0.0005, 0.005, .05]),
     }
-    tuner = tune.Tuner(
-        objective_with_resources,
-        param_space=search_space,
-        tune_config=tune_config,
-    )
+    tuner = tune.Tuner(objective_with_resources, param_space=search_space, tune_config=tune_config)
     results = tuner.fit()
     print(results.get_best_result(metric="test_acc1", mode="max").config)
 
