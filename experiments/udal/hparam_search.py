@@ -1,10 +1,8 @@
 import ray
 import ray.tune as tune
-from ray.tune.search.optuna import OptunaSearch
 from ray.tune.search.bayesopt import BayesOptSearch
 from ray.tune.search.repeater import Repeater
 
-import os
 
 import torch
 import torch.nn as nn
@@ -16,7 +14,7 @@ from dal_toolbox.models import deterministic
 def objective(config):
     device = 'cuda'
     seed = config['__trial_index__']
-    
+
     torch.manual_seed(seed)
     ds_path = '/datasets'
     train_ds, ds_info = cifar.build_cifar10('train', ds_path, return_info=True)
