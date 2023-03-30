@@ -1,66 +1,174 @@
+import hydra
+
 import ray
 import ray.tune as tune
-from ray.tune.search.bayesopt import BayesOptSearch
-from ray.tune.search.repeater import Repeater
-
 
 import torch
 import torch.nn as nn
 
-from dal_toolbox.datasets import cifar
+from torch.utils.data import random_split
+
+from ray.tune.search.bayesopt import BayesOptSearch
+from ray.tune.search.repeater import Repeater
+
+from dal_toolbox import datasets
 from dal_toolbox.models import deterministic
+from dal_toolbox.utils import seed_everything
 
 
-def objective(config):
-    device = 'cuda'
-    seed = config['__trial_index__']
+def train(config, args):
+    # Overwrite args
+    args.random_seed = config['__trial_index__']
+    args.model.optimizer.lr = float(config['lr'])
+    args.model.optimizer.weight_decay = float(config['weight_decay'])
 
-    torch.manual_seed(seed)
-    ds_path = '/datasets'
-    train_ds, ds_info = cifar.build_cifar10('train', ds_path, return_info=True)
-    val_ds = cifar.build_cifar10('test', ds_path)
+    print("Using lr: {} and weight_decay: {}".format(args.model.optimizer.lr, args.model.optimizer.weight_decay))
 
-    model = nn.Sequential(nn.Flatten(), nn.Linear((32*32*3), ds_info['n_classes']))
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=config['lr'], weight_decay=.01, momentum=.9, nesterov=True)
-    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100)
-    trainer = deterministic.trainer.DeterministicTrainer(
-        model=model,
-        criterion=criterion,
-        optimizer=optimizer,
-        lr_scheduler=lr_scheduler,
-        device=device,
-        output_dir=None
-    )
+    seed_everything(args.random_seed)
 
-    train_loader = torch.utils.data.DataLoader(train_ds, batch_size=32, sampler=torch.randperm(len(train_ds))[:100])
-    val_loader = torch.utils.data.DataLoader(val_ds, batch_size=32, sampler=torch.randperm(len(val_ds))[:1000])
+    train_ds, val_ds, ds_info = build_datasets(args)
 
-    trainer.train(100, train_loader=train_loader)
+    trainer = build_model(args, n_classes=ds_info['n_classes'])
+
+    train_indices = torch.randperm(len(train_ds))[:args.budget]
+    train_loader = torch.utils.data.DataLoader(train_ds, batch_size=args.model.batch_size, sampler=train_indices)
+    trainer.train(args.model.n_epochs, train_loader=train_loader)
+
+    val_loader = torch.utils.data.DataLoader(val_ds, batch_size=args.model.batch_size)
     test_stats = trainer.evaluate(dataloader=val_loader)
 
     return test_stats
 
 
-def main():
-    distributed = False
-    n_reps = 3
-    n_samples = 10
+@hydra.main(version_base=None, config_path="./configs", config_name="hparam_search")
+def main(args):
+    # Setup Search space
+    search_space, points_to_evaluate = build_search_space(args)
+    search_alg = BayesOptSearch(points_to_evaluate=points_to_evaluate)
+    search_alg = Repeater(search_alg, repeat=args.n_reps)
+    tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=args.n_opt_samples *
+                                  args.n_reps, metric="test_nll", mode="max")
 
-    objective_with_resources = tune.with_resources(objective, resources={'cpu': 8, 'gpu': 1})
-    if distributed:
+    # Setup tuner and objective
+    objective = tune.with_resources(train, resources={'cpu': 8, 'gpu': 1})
+    objective = tune.with_parameters(objective, args=args)
+    if args.distributed:
         ray.init(address='auto')
-    search_alg = BayesOptSearch()
-    search_alg = Repeater(search_alg, repeat=n_reps)
-    tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=n_samples*n_reps, metric="test_acc1", mode="max")
-    search_space = {
-        "lr": tune.uniform(0, 1),
-        # "lr": tune.grid_search([0.001, 0.01, 0.1]),
-        # "weight_decay": tune.grid_search([0.0005, 0.005, .05]),
-    }
-    tuner = tune.Tuner(objective_with_resources, param_space=search_space, tune_config=tune_config)
+    tuner = tune.Tuner(objective, param_space=search_space, tune_config=tune_config)
     results = tuner.fit()
-    print(results.get_best_result(metric="test_acc1", mode="max").config)
+    print('Best NLL Hyperparameter: {}'.format(results.get_best_result(metric="test_nll", mode="max").config))
+    print('Best Acc Hyperparameter: {}'.format(results.get_best_result(metric="test_acc1", mode="max").config))
+
+
+def build_search_space(args):
+    points_to_evaluate = None
+    if args.model.name == 'resnet18_deterministic':
+        search_space = {
+            "lr": tune.uniform(1e-4, .5),
+            "weight_decay": tune.uniform(0, .1),
+        }
+        points_to_evaluate = [
+            {"lr": 1e-1, "weight_decay": 5e-4},
+            {"lr": 1e-2, "weight_decay": 0.05},
+            {"lr": 1e-2, "weight_decay": 0.005},
+        ]
+    else:
+        raise NotImplementedError('Model {} not implemented.'.format(args.model.name))
+    return search_space, points_to_evaluate
+
+
+def build_datasets(args):
+
+    if args.dataset.name == 'CIFAR10':
+        train_ds, ds_info = datasets.cifar.build_cifar10('train', args.dataset_path, return_info=True)
+
+    elif args.dataset.name == 'CIFAR100':
+        train_ds, ds_info = datasets.cifar.build_cifar100('train', args.dataset_path, return_info=True)
+
+    elif args.dataset.name == 'SVHN':
+        train_ds, ds_info = datasets.svhn.build_svhn('train', args.dataset_path, return_info=True)
+
+    else:
+        raise NotImplementedError('Dataset not available')
+
+    # Random split
+    generator = torch.Generator().manual_seed(args.random_seed)
+    n_val = int(args.val_split * len(train_ds))
+    n_train = len(train_ds) - n_val
+    train_ds, val_ds = random_split(train_ds, lengths=[n_train, n_val], generator=generator)
+
+    return train_ds, val_ds, ds_info
+
+
+def build_model(args, **kwargs):
+    n_classes = kwargs['n_classes']
+
+    if args.model.name == 'resnet18_deterministic':
+        model = deterministic.resnet.ResNet18(n_classes)
+        criterion = nn.CrossEntropyLoss()
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+            nesterov=True,
+        )
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        trainer = deterministic.trainer.DeterministicTrainer(
+            model=model,
+            criterion=criterion,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            device=args.device,
+            output_dir=args.output_dir
+        )
+
+    elif args.model.name == 'resnet18_labelsmoothing':
+        model = deterministic.resnet.ResNet18(n_classes)
+        criterion = nn.CrossEntropyLoss(label_smoothing=args.model.label_smoothing)
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+            nesterov=True,
+        )
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        trainer = deterministic.trainer.DeterministicTrainer(
+            model=model,
+            criterion=criterion,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            device=args.device,
+            output_dir=args.output_dir
+        )
+
+    elif args.model.name == 'resnet18_mixup':
+        model = deterministic.resnet.ResNet18(n_classes)
+        criterion = nn.CrossEntropyLoss()
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+            nesterov=True,
+        )
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        trainer = deterministic.trainer.DeterministicMixupTrainer(
+            model=model,
+            criterion=criterion,
+            mixup_alpha=args.model.mixup_alpha,
+            n_classes=n_classes,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            device=args.device,
+            output_dir=args.output_dir
+        )
+
+    else:
+        raise NotImplementedError()
+
+    return trainer
 
 
 if __name__ == '__main__':
