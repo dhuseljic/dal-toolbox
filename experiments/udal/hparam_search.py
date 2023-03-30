@@ -59,7 +59,7 @@ def main(args):
 
     # Init ray, if we are using slurm, set cpu and gpus
     adress = 'auto' if args.distributed else None
-    num_cpus = os.environ.get('SLURM_CPUS_PER_TASK', None)
+    num_cpus = int(os.environ.get('SLURM_CPUS_PER_TASK', None))
     num_gpus = torch.cuda.device_count()
     ray.init(address=adress, num_cpus=num_cpus, num_gpus=num_gpus)
 
