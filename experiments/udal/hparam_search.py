@@ -21,6 +21,10 @@ def train(config, args):
     args.random_seed = config['__trial_index__']
     args.model.optimizer.lr = float(config['lr'])
     args.model.optimizer.weight_decay = float(config['weight_decay'])
+    if 'mixup_alpha' in config.keys():
+        args.model.mixup_alpha = float(config['mixup_alpha'])
+    if 'label_smoothing' in config.keys():
+        args.model.label_smoothing = float(config['label_smoothing'])
 
     print("Using lr: {} and weight_decay: {}".format(args.model.optimizer.lr, args.model.optimizer.weight_decay))
 
@@ -70,34 +74,30 @@ def build_search_space(args):
         points_to_evaluate = [
             {"lr": 1e-1, "weight_decay": 5e-4},
             {"lr": 1e-2, "weight_decay": 0.05},
-            {"lr": 1e-2, "weight_decay": 0.005},
+        ]
+    elif args.model.name == 'resnet18_labelsmoothing':
+        search_space = {
+            "lr": tune.uniform(1e-4, .5),
+            "weight_decay": tune.uniform(0, .1),
+            "label_smoothing": tune.uniform(0, .1),
+        }
+        points_to_evaluate = [
+            {"lr": 1e-1, "weight_decay": 5e-4, 'label_smoothing': 0.05},
+            {"lr": 1e-2, "weight_decay": 0.05, 'label_smoothing': 0.05},
+        ]
+    elif args.model.name == 'resnet18_mixup':
+        search_space = {
+            "lr": tune.uniform(1e-4, .5),
+            "weight_decay": tune.uniform(0, .1),
+            "mixup_alpha": tune.uniform(0, .4),
+        }
+        points_to_evaluate = [
+            {"lr": 1e-1, "weight_decay": 5e-4, 'mixup_alpha': 0.1}, # TODO: Check parameter from paper
+            {"lr": 1e-2, "weight_decay": 0.05, 'mixup_alpha': 0.2},
         ]
     else:
         raise NotImplementedError('Model {} not implemented.'.format(args.model.name))
     return search_space, points_to_evaluate
-
-
-def build_datasets(args):
-
-    if args.dataset.name == 'CIFAR10':
-        train_ds, ds_info = datasets.cifar.build_cifar10('train', args.dataset_path, return_info=True)
-
-    elif args.dataset.name == 'CIFAR100':
-        train_ds, ds_info = datasets.cifar.build_cifar100('train', args.dataset_path, return_info=True)
-
-    elif args.dataset.name == 'SVHN':
-        train_ds, ds_info = datasets.svhn.build_svhn('train', args.dataset_path, return_info=True)
-
-    else:
-        raise NotImplementedError('Dataset not available')
-
-    # Random split
-    generator = torch.Generator().manual_seed(args.random_seed)
-    n_val = int(args.val_split * len(train_ds))
-    n_train = len(train_ds) - n_val
-    train_ds, val_ds = random_split(train_ds, lengths=[n_train, n_val], generator=generator)
-
-    return train_ds, val_ds, ds_info
 
 
 def build_model(args, **kwargs):
@@ -169,6 +169,29 @@ def build_model(args, **kwargs):
         raise NotImplementedError()
 
     return trainer
+
+
+def build_datasets(args):
+
+    if args.dataset.name == 'CIFAR10':
+        train_ds, ds_info = datasets.cifar.build_cifar10('train', args.dataset_path, return_info=True)
+
+    elif args.dataset.name == 'CIFAR100':
+        train_ds, ds_info = datasets.cifar.build_cifar100('train', args.dataset_path, return_info=True)
+
+    elif args.dataset.name == 'SVHN':
+        train_ds, ds_info = datasets.svhn.build_svhn('train', args.dataset_path, return_info=True)
+
+    else:
+        raise NotImplementedError('Dataset not available')
+
+    # Random split
+    generator = torch.Generator().manual_seed(args.random_seed)
+    n_val = int(args.val_split * len(train_ds))
+    n_train = len(train_ds) - n_val
+    train_ds, val_ds = random_split(train_ds, lengths=[n_train, n_val], generator=generator)
+
+    return train_ds, val_ds, ds_info
 
 
 if __name__ == '__main__':
