@@ -52,7 +52,7 @@ class DeterministicTrainer(BasicTrainer):
         loss = self.criterion(logits_id, targets_id).item()
         acc1 = generalization.accuracy(logits_id, targets_id, (1,))[0].item()
         nll = torch.nn.CrossEntropyLoss(reduction='mean')(logits_id, targets_id).item()
-        bs = calibration.BrierScore()(probas_id, targets_id).item()
+        brier = calibration.BrierScore()(probas_id, targets_id).item()
         tce = calibration.TopLabelCalibrationError()(probas_id, targets_id).item()
         mce = calibration.MarginalCalibrationError()(probas_id, targets_id).item()
 
@@ -60,7 +60,7 @@ class DeterministicTrainer(BasicTrainer):
             "loss": loss,
             "acc1": acc1,
             "nll": nll,
-            "bs": bs,
+            "brier": brier,
             "tce": tce,
             "mce": mce
         }
