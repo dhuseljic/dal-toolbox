@@ -1,3 +1,4 @@
+import os
 import hydra
 
 import ray
@@ -56,7 +57,13 @@ def main(args):
     # Setup tuner and objective
     objective = tune.with_resources(train, resources={'cpu': 8, 'gpu': 1})
     objective = tune.with_parameters(objective, args=args)
-    ray.init(address='auto' if args.distributed else None)
+
+    # Init ray, if we are using slurm, set cpu and gpus
+    adress = 'auto' if args.distributed else None
+    num_cpus = os.environ.get('SLURM_CPUS_PER_TASK', None)
+    num_gpus = os.environ.get('SLURM_GPUS', None)
+    ray.init(address=adress, num_cpus=num_cpus, num_gpus=num_gpus)
+
     tuner = tune.Tuner(objective, param_space=search_space, tune_config=tune_config)
     results = tuner.fit()
     print('Best NLL Hyperparameter: {}'.format(results.get_best_result(metric="test_nll", mode="max").config))
@@ -91,7 +98,7 @@ def build_search_space(args):
             "mixup_alpha": tune.uniform(0, .4),
         }
         points_to_evaluate = [
-            {"lr": 1e-1, "weight_decay": 5e-4, 'mixup_alpha': 0.1}, # TODO: Check parameter from paper
+            {"lr": 1e-1, "weight_decay": 5e-4, 'mixup_alpha': 0.1},  # TODO: Check parameter from paper
             {"lr": 1e-2, "weight_decay": 0.05, 'mixup_alpha': 0.2},
         ]
     else:
