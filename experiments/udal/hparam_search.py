@@ -56,8 +56,7 @@ def main(args):
     # Setup tuner and objective
     objective = tune.with_resources(train, resources={'cpu': 8, 'gpu': 1})
     objective = tune.with_parameters(objective, args=args)
-    if args.distributed:
-        ray.init(address='auto')
+    ray.init(address='auto' if args.distributed else None)
     tuner = tune.Tuner(objective, param_space=search_space, tune_config=tune_config)
     results = tuner.fit()
     print('Best NLL Hyperparameter: {}'.format(results.get_best_result(metric="test_nll", mode="max").config))
