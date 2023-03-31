@@ -28,7 +28,7 @@ def train(config, args):
     elif 'label_smoothing' in config.keys():
         args.model.label_smoothing = float(config['label_smoothing'])
 
-    print("Using lr: {} and weight_decay: {}".format(args.model.optimizer.lr, args.model.optimizer.weight_decay))
+    print("Using model args: {}".format(args.model))
 
     seed_everything(args.random_seed)
 
