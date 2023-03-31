@@ -1,6 +1,8 @@
 import torch
 import torch.nn.functional as F
 
+import numpy as np
+
 from ..utils.trainer import BasicTrainer
 from ...metrics import generalization, calibration, ood
 from ...utils import MetricLogger, SmoothedValue
@@ -96,7 +98,6 @@ class DeterministicMixupTrainer(DeterministicTrainer):
         super().__init__(model, optimizer, criterion, lr_scheduler, device, output_dir, summary_writer, use_distributed)
         self.n_classes = n_classes
         self.mixup_alpha = mixup_alpha
-        self.beta_dist = torch.distributions.Beta(self.mixup_alpha, self.mixup_alpha)
 
     def train_one_epoch(self, dataloader, epoch=None, print_freq=200):
         self.model.train()
@@ -132,10 +133,9 @@ class DeterministicMixupTrainer(DeterministicTrainer):
         return train_stats
 
     def mixup(self, inputs: torch.Tensor, targets_one_hot: torch.Tensor):
-        lmb = self.beta_dist.sample((len(inputs),)).to(inputs.device)
-        lmb_inputs = lmb.view(-1, 1, 1, 1)
-        lmb_targets = lmb.view(-1, 1)
+        # TODO: to utils?
+        lmb = np.random.beta(self.mixup_alpha, self.mixup_alpha)
         indices = torch.randperm(len(inputs), device=inputs.device, dtype=torch.long)
-        inputs_mixed = lmb_inputs * inputs + (1 - lmb_inputs) * inputs[indices]
-        targets_mixed = lmb_targets * targets_one_hot + (1 - lmb_targets) * targets_one_hot[indices]
+        inputs_mixed = lmb * inputs + (1 - lmb) * inputs[indices]
+        targets_mixed = lmb * targets_one_hot + (1 - lmb) * targets_one_hot[indices]
         return inputs_mixed, targets_mixed
