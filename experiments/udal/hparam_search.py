@@ -1,5 +1,6 @@
 import os
 import hydra
+import logging
 
 import ray
 import ray.tune as tune
@@ -47,6 +48,9 @@ def train(config, args):
 
 @hydra.main(version_base=None, config_path="./configs", config_name="hparam_search")
 def main(args):
+    logger = logging.getLogger()
+    logger.info('Using setup: %s', args)
+    
     # Setup Search space
     search_space, points_to_evaluate = build_search_space(args)
     search_alg = BayesOptSearch(points_to_evaluate=points_to_evaluate)
@@ -55,12 +59,12 @@ def main(args):
                                   args.n_reps, metric="test_nll", mode="min")
 
     # Setup tuner and objective
-    objective = tune.with_resources(train, resources={'cpu': 8, 'gpu': 1})
+    objective = tune.with_resources(train, resources={'cpu': args.cpus_per_trial, 'gpu': args.gpus_per_trial})
     objective = tune.with_parameters(objective, args=args)
 
     # Init ray, if we are using slurm, set cpu and gpus
     adress = 'auto' if args.distributed else None
-    num_cpus = int(os.environ.get('SLURM_CPUS_PER_TASK', 8))
+    num_cpus = int(os.environ.get('SLURM_CPUS_PER_TASK', args.cpus_per_trial))
     num_gpus = torch.cuda.device_count()
     ray.init(address=adress, num_cpus=num_cpus, num_gpus=num_gpus)
 
@@ -98,7 +102,7 @@ def build_search_space(args):
             "mixup_alpha": tune.uniform(.1, .4),
         }
         points_to_evaluate = [
-            {"lr": 1e-1, "weight_decay": 5e-4, 'mixup_alpha': 0.1},  # TODO: Check parameter from paper
+            {"lr": 1e-1, "weight_decay": 5e-4, 'mixup_alpha': 0.1},
             {"lr": 1e-2, "weight_decay": 0.05, 'mixup_alpha': 0.4},
         ]
     else:

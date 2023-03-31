@@ -6,6 +6,9 @@ defaults:
 
 n_opt_samples: 10
 n_reps: 3
+cpus_per_trial: 4
+gpus_per_trial: 1
+
 budget: 2000
 val_split: 0.1
 distributed: False
