@@ -24,7 +24,7 @@ def train(config, args):
     args.model.optimizer.weight_decay = float(config['weight_decay'])
     if 'mixup_alpha' in config.keys():
         args.model.mixup_alpha = float(config['mixup_alpha'])
-    if 'label_smoothing' in config.keys():
+    elif 'label_smoothing' in config.keys():
         args.model.label_smoothing = float(config['label_smoothing'])
 
     print("Using lr: {} and weight_decay: {}".format(args.model.optimizer.lr, args.model.optimizer.weight_decay))
@@ -51,7 +51,8 @@ def main(args):
     search_space, points_to_evaluate = build_search_space(args)
     search_alg = BayesOptSearch(points_to_evaluate=points_to_evaluate)
     search_alg = Repeater(search_alg, repeat=args.n_reps)
-    tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=args.n_opt_samples * args.n_reps, metric="test_nll", mode="min")
+    tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=args.n_opt_samples *
+                                  args.n_reps, metric="test_nll", mode="min")
 
     # Setup tuner and objective
     objective = tune.with_resources(train, resources={'cpu': 8, 'gpu': 1})
