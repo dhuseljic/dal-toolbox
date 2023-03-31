@@ -51,7 +51,7 @@ def main(args):
     search_space, points_to_evaluate = build_search_space(args)
     search_alg = BayesOptSearch(points_to_evaluate=points_to_evaluate)
     search_alg = Repeater(search_alg, repeat=args.n_reps)
-    tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=args.n_opt_samples * args.n_reps, metric="test_nll", mode="max")
+    tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=args.n_opt_samples * args.n_reps, metric="test_nll", mode="min")
 
     # Setup tuner and objective
     objective = tune.with_resources(train, resources={'cpu': 8, 'gpu': 1})
@@ -59,14 +59,14 @@ def main(args):
 
     # Init ray, if we are using slurm, set cpu and gpus
     adress = 'auto' if args.distributed else None
-    num_cpus = int(os.environ.get('SLURM_CPUS_PER_TASK', None))
+    num_cpus = int(os.environ.get('SLURM_CPUS_PER_TASK', 8))
     num_gpus = torch.cuda.device_count()
     ray.init(address=adress, num_cpus=num_cpus, num_gpus=num_gpus)
 
     tuner = tune.Tuner(objective, param_space=search_space, tune_config=tune_config)
     results = tuner.fit()
-    print('Best NLL Hyperparameter: {}'.format(results.get_best_result(metric="test_nll", mode="max").config))
-    print('Best Acc Hyperparameter: {}'.format(results.get_best_result(metric="test_acc1", mode="max").config))
+    print('Best NLL Hyperparameter: {}'.format(results.get_best_result(metric="test_nll", mode="min", scope='avg')).config)
+    print('Best Acc Hyperparameter: {}'.format(results.get_best_result(metric="test_acc1", mode="max", scope='avg').config))
 
 
 def build_search_space(args):
