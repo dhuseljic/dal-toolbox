@@ -57,7 +57,7 @@ def main(args):
     trainer.train(
         n_epochs=args.model.n_epochs,
         train_loader=train_loader,
-        test_loaders={'test_loader_id': test_loader_id},
+        test_loaders={'test_loader': test_loader_id},
         eval_every=args.eval_interval,
         save_every=args.eval_interval,
     )
