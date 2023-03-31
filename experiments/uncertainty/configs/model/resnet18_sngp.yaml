@@ -15,6 +15,6 @@ gp:
   ridge_penalty: 1
   mean_field_factor: 75
 optimizer:
-  lr: 0.08
-  weight_decay: 3e-4
+  lr: 0.1
+  weight_decay: 0.0005
   momentum: .9

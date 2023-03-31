@@ -34,7 +34,6 @@ class BayesianModule(nn.Module):
             mc_probas.append(self.mc_forward(samples, k))
         return torch.cat(mc_probas)
 
-
     @staticmethod
     def unflatten_tensor(input: torch.Tensor, k: int):
         input = input.view([-1, k] + list(input.shape[1:]))
@@ -101,6 +100,7 @@ class _ConsistentMCDropout(nn.Module):
 
         # Flatten MCDI, batch into one dimension again.
         return BayesianModule.flatten_tensor(mc_output)
+
 
 class ConsistentMCDropout(_ConsistentMCDropout):
     r"""Randomly zeroes some of the elements of the input

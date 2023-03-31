@@ -1,7 +1,7 @@
 name: resnet18_mixup
 n_epochs: 200
 batch_size: 128
-alpha: 0.5
+mixup_alpha: 0.4
 optimizer:
   lr: 0.01
   weight_decay: 0.05

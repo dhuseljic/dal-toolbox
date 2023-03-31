@@ -3,7 +3,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 
 class Query(ABC):
-    def __init__(self, random_seed=42):
+    def __init__(self, random_seed=None):
         self.random_seed = random_seed
 
         # set rng which should be used for all random stuff
