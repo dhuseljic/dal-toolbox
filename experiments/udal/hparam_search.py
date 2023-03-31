@@ -66,7 +66,7 @@ def main(args):
 
     tuner = tune.Tuner(objective, param_space=search_space, tune_config=tune_config)
     results = tuner.fit()
-    print('Best NLL Hyperparameter: {}'.format(results.get_best_result().config))
+    print('Best NLL Hyperparameter: {}'.format(results.get_best_result()))
     print('Best Acc Hyperparameter: {}'.format(results.get_best_result(metric="test_acc1", mode="max", scope='avg').config))
 
 
@@ -95,11 +95,11 @@ def build_search_space(args):
         search_space = {
             "lr": tune.uniform(1e-4, .5),
             "weight_decay": tune.uniform(0, .1),
-            "mixup_alpha": tune.uniform(0, .4),
+            "mixup_alpha": tune.uniform(.1, .4),
         }
         points_to_evaluate = [
             {"lr": 1e-1, "weight_decay": 5e-4, 'mixup_alpha': 0.1},  # TODO: Check parameter from paper
-            {"lr": 1e-2, "weight_decay": 0.05, 'mixup_alpha': 0.2},
+            {"lr": 1e-2, "weight_decay": 0.05, 'mixup_alpha': 0.4},
         ]
     else:
         raise NotImplementedError('Model {} not implemented.'.format(args.model.name))
