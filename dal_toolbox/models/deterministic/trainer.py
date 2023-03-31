@@ -94,8 +94,9 @@ class DeterministicTrainer(BasicTrainer):
 class DeterministicMixupTrainer(DeterministicTrainer):
     def __init__(self, model, criterion, mixup_alpha, n_classes, optimizer, lr_scheduler=None, device=None, output_dir=None, summary_writer=None, use_distributed=False):
         super().__init__(model, optimizer, criterion, lr_scheduler, device, output_dir, summary_writer, use_distributed)
-        self.mixup_alpha = mixup_alpha
         self.n_classes = n_classes
+        self.mixup_alpha = mixup_alpha
+        self.beta_dist = torch.distributions.Beta(self.mixup_alpha, self.mixup_alpha)
 
     def train_one_epoch(self, dataloader, epoch=None, print_freq=200):
         self.model.train()
@@ -111,7 +112,7 @@ class DeterministicMixupTrainer(DeterministicTrainer):
             inputs, targets = inputs.to(self.device), targets.to(self.device)
 
             targets_one_hot = F.one_hot(targets, num_classes=self.n_classes)
-            inputs, targets = self.mixup(inputs, targets_one_hot, self.mixup_alpha)
+            inputs, targets = self.mixup(inputs, targets_one_hot)
 
             outputs = self.model(inputs)
             loss = self.criterion(outputs, targets)
@@ -130,9 +131,11 @@ class DeterministicMixupTrainer(DeterministicTrainer):
 
         return train_stats
 
-    def mixup(self, inputs: torch.Tensor, targets_one_hot: torch.Tensor, alpha: float):
-        # TODO: move to utils
+    def mixup(self, inputs: torch.Tensor, targets_one_hot: torch.Tensor):
+        lmb = self.beta_dist.sample((len(inputs),)).to(inputs.device)
+        lmb_inputs = lmb.view(-1, 1, 1, 1)
+        lmb_targets = lmb.view(-1, 1)
         indices = torch.randperm(len(inputs), device=inputs.device, dtype=torch.long)
-        inputs_mixed = alpha * inputs + (1 - alpha) * inputs[indices]
-        targets_mixed = alpha * targets_one_hot + (1 - alpha) * targets_one_hot[indices]
+        inputs_mixed = lmb_inputs * inputs + (1 - lmb_inputs) * inputs[indices]
+        targets_mixed = lmb_targets * targets_one_hot + (1 - lmb_targets) * targets_one_hot[indices]
         return inputs_mixed, targets_mixed

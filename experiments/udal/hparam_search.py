@@ -65,7 +65,7 @@ def main(args):
 
     tuner = tune.Tuner(objective, param_space=search_space, tune_config=tune_config)
     results = tuner.fit()
-    print('Best NLL Hyperparameter: {}'.format(results.get_best_result(metric="test_nll", mode="min", scope='avg')).config)
+    print('Best NLL Hyperparameter: {}'.format(results.get_best_result().config))
     print('Best Acc Hyperparameter: {}'.format(results.get_best_result(metric="test_acc1", mode="max", scope='avg').config))
 
 
