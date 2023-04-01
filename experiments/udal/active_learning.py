@@ -127,6 +127,14 @@ def build_query(args, **kwargs):
             subset_size=args.al_strategy.subset_size,
             device=device,
         )
+    elif args.al_strategy.name == "bayesian_uncertainty":
+        device = kwargs['device']
+        query = uncertainty.BayesianUncertaintySampling(
+            batch_size=256,
+            uncertainty_type=args.al_strategy.uncertainty_type,
+            subset_size=args.al_strategy.subset_size,
+            device=device,
+        )
     elif args.al_strategy.name == "coreset":
         device = kwargs['device']
         query = coreset.CoreSet(subset_size=args.al_strategy.subset_size, device=device)

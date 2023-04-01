@@ -52,7 +52,7 @@ class UncertaintySampling(Query):
 class BayesianUncertaintySampling(UncertaintySampling):
 
     @torch.no_grad()
-    def query(self, model, dataset, acq_size, **kwargs):
+    def query(self, model, dataset, unlabeled_indices, acq_size, **kwargs):
         del kwargs
         if not hasattr(model, 'get_probas'):
             raise ValueError('The method `get_probas` is mandatory to use uncertainty sampling.')
@@ -62,11 +62,11 @@ class BayesianUncertaintySampling(UncertaintySampling):
 
         dataloader = DataLoader(dataset, batch_size=self.batch_size, sampler=unlabeled_indices)
         probas = model.get_probas(dataloader, device=self.device)
-        probas = probas.mean(dim=-1)
+        probas = probas.mean(dim=1)
         scores = self.get_scores(probas)
         _, indices = scores.topk(acq_size)
 
-        actual_indices = [dataset.unlabeled_indices[i] for i in indices]
+        actual_indices = [unlabeled_indices[i] for i in indices]
         return actual_indices
 
 
