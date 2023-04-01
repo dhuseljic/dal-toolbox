@@ -68,6 +68,7 @@ class EnsembleTrainer(BasicTrainer):
 
         # Negative Log Likelihood
         nll = torch.nn.CrossEntropyLoss(reduction='mean')(torch.log(mean_probas_id), targets_id).item()
+        brier = calibration.BrierScore()(mean_probas_id, targets_id).item()
         ensemble_cross_entropy = calibration.EnsembleCrossEntropy()(ensemble_logits_id, targets_id).item()
         gibbs_cross_entropy = calibration.GibsCrossEntropy()(ensemble_logits_id, targets_id).item()
 
@@ -79,6 +80,7 @@ class EnsembleTrainer(BasicTrainer):
             "acc1": acc1,
             "loss": loss,
             "nll": nll,
+            "brier": brier,
             "ensemble_cross_entropy": ensemble_cross_entropy,
             "gibbs_cross_entropy": gibbs_cross_entropy,
             "tce": tce,

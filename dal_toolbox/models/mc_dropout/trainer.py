@@ -64,6 +64,8 @@ class MCDropoutTrainer(BasicTrainer):
 
         # Negative Log Likelihood
         nll = torch.nn.CrossEntropyLoss(reduction='mean')(torch.log(mean_probas_id), targets_id).item()
+        brier = calibration.BrierScore()(mean_probas_id, targets_id).item()
+
 
         # Top- and Marginal Calibration Error
         tce = calibration.TopLabelCalibrationError()(mean_probas_id, targets_id).item()
@@ -74,6 +76,7 @@ class MCDropoutTrainer(BasicTrainer):
             "prec": prec,
             "loss": loss,
             "nll": nll,
+            "brier": brier,
             "tce": tce,
             "mce": mce
         }
