@@ -20,7 +20,7 @@ class UncertaintySampling(Query):
         elif self.uncertainty_type == 'entropy':
             scores = ood.entropy_fn(probas)
         else:
-            NotImplementedError(f"{self.uncertainty_type} is not implemented!")
+            raise NotImplementedError(f"{self.uncertainty_type} is not implemented!")
         return scores
 
     @torch.no_grad()
@@ -46,6 +46,27 @@ class UncertaintySampling(Query):
         _, indices = scores.topk(acq_size)
 
         actual_indices = [unlabeled_indices[i] for i in indices]
+        return actual_indices
+
+
+class BayesianUncertaintySampling(UncertaintySampling):
+
+    @torch.no_grad()
+    def query(self, model, dataset, acq_size, **kwargs):
+        del kwargs
+        if not hasattr(model, 'get_probas'):
+            raise ValueError('The method `get_probas` is mandatory to use uncertainty sampling.')
+
+        if self.subset_size:
+            unlabeled_indices = self.rng.sample(unlabeled_indices, k=self.subset_size)
+
+        dataloader = DataLoader(dataset, batch_size=self.batch_size, sampler=unlabeled_indices)
+        probas = model.get_probas(dataloader, device=self.device)
+        probas = probas.mean(dim=-1)
+        scores = self.get_scores(probas)
+        _, indices = scores.topk(acq_size)
+
+        actual_indices = [dataset.unlabeled_indices[i] for i in indices]
         return actual_indices
 
 
