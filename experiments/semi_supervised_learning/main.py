@@ -72,7 +72,8 @@ def main(args):
     lr_scheduler = model_dict['lr_scheduler']
     if use_distributed:
         model.to(args.device)
-        model = DistributedDataParallel(model)
+        rank = int(os.environ["LOCAL_RANK"])
+        model = DistributedDataParallel(model, device_ids=[rank])
 
     # Adding necessary dataloaders as train kwargs
     if args.ssl_algorithm.name == 'fully_supervised':
