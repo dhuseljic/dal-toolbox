@@ -104,7 +104,7 @@ def train_one_epoch_bertmodel(model, dataloader, epoch, optimizer, scheduler, cr
 
 
 # SSL training methods
-def train_one_epoch_pseudolabel(model, dataloaders, criterion, optimizer, n_iter, p_cutoff, lambda_u, device,
+def train_one_epoch_pseudolabel(model, labeled_loader, unlabeled_loader, criterion, optimizer, lr_scheduler, n_iter, p_cutoff, lambda_u, device,
                                 use_hard_labels=True, unsup_warmup=.4, epoch=None, print_freq=200):
     model.train()
     model.to(device)
@@ -114,8 +114,6 @@ def train_one_epoch_pseudolabel(model, dataloaders, criterion, optimizer, n_iter
     metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
     header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
-    labeled_loader = dataloaders['train_sup']
-    unlabeled_loader = dataloaders['train_unsup']
     unlabeled_iter = iter(unlabeled_loader)
 
     i_iter = epoch*len(labeled_loader)
@@ -157,6 +155,7 @@ def train_one_epoch_pseudolabel(model, dataloaders, criterion, optimizer, n_iter
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        lr_scheduler.step()
 
         # Metrics
         batch_size = x_lb.shape[0]
@@ -169,7 +168,7 @@ def train_one_epoch_pseudolabel(model, dataloaders, criterion, optimizer, n_iter
     return train_stats
 
 
-def train_one_epoch_pimodel(model, dataloaders, criterion, optimizer, n_iter, lambda_u, device, unsup_warmup=.4,
+def train_one_epoch_pimodel(model, labeled_loader, unlabeled_loader_weak_1, unlabeled_loader_weak_2, criterion, optimizer, lr_scheduler, n_iter, lambda_u, device, unsup_warmup=.4,
                             epoch=None, print_freq=200):
     model.train()
     model.to(device)
@@ -179,9 +178,8 @@ def train_one_epoch_pimodel(model, dataloaders, criterion, optimizer, n_iter, la
     metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
     header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
-    labeled_loader = dataloaders['train_sup']
-    unlabeled_iter1 = iter(dataloaders['train_unsup_weak_1'])
-    unlabeled_iter2 = iter(dataloaders['train_unsup_weak_2'])
+    unlabeled_iter1 = iter(unlabeled_loader_weak_1)
+    unlabeled_iter2 = iter(unlabeled_loader_weak_2)
 
     i_iter = epoch*len(labeled_loader)
     for x_lb, y_lb in metric_logger.log_every(labeled_loader, print_freq=print_freq, header=header):
@@ -214,6 +212,7 @@ def train_one_epoch_pimodel(model, dataloaders, criterion, optimizer, n_iter, la
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        lr_scheduler.step()
 
         # Metrics
         batch_size = x_lb.shape[0]
@@ -226,56 +225,117 @@ def train_one_epoch_pimodel(model, dataloaders, criterion, optimizer, n_iter, la
     return train_stats
 
 
-def train_one_epoch_fixmatch(model, dataloaders, criterion, optimizer, device,
-                             lambda_u, p_cutoff, epoch=None, print_freq=100):
-    model.train()
+def train_one_epoch_fixmatch(model, optimizer, lr_scheduler, criterion, device, epoch, labeled_loader, unlabeled_loader_weak, unlabeled_loader_strong, 
+                    p_cutoff, lambda_u, T=1):
     model.to(device)
-    criterion.to(device)
+    model.train()
 
     metric_logger = MetricLogger(delimiter=" ")
     metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
     header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
-    labeled_loader = dataloaders['train_sup']
-    unlabeled_iter1 = iter(dataloaders['train_unsup_weak'])
-    unlabeled_iter2 = iter(dataloaders['train_unsup_strong'])
+    iterator_unlabeled_weak_aug = iter(unlabeled_loader_weak)
+    iterator_unlabeled_strong_aug = iter(unlabeled_loader_strong)
 
-    for x_lb, y_lb in metric_logger.log_every(labeled_loader, print_freq=print_freq, header=header):
-        x_lb, y_lb = x_lb.to(device), y_lb.to(device)
-        x_ulb_weak, _ = next(unlabeled_iter1)
-        x_ulb_weak = x_ulb_weak.to(device)
-        x_ulb_strong, _ = next(unlabeled_iter2)
-        x_ulb_strong = x_ulb_strong.to(device)
+    for x_l, y_l in metric_logger.log_every(labeled_loader, print_freq=50, header=header):
+        (x_w, y_w), (x_s, _)  = next(iterator_unlabeled_weak_aug), next(iterator_unlabeled_strong_aug)
+        x_l = x_l.to(device)
+        y_l = y_l.to(device)
+        x_w = x_w.to(device)
+        x_s = x_s.to(device)
+        y_w = y_w.to(device)
 
-        # Forward Propagation of all samples
-        logits_lb = model(x_lb)
+        # Get all necesseracy model outputs
+        logits_l = model(x_l)
         with torch.no_grad():
-            logits_ulb_weak = model(x_ulb_weak)
-        logits_ulb_strong = model(x_ulb_strong)
+            logits_w = model(x_w)
+        logits_s = model(x_s)
 
-        # Generate pseudo labels and mask
-        probas_ulb_weak = logits_ulb_weak.detach().softmax(dim=-1)
-        max_probas_ulb_weak, pseudo_labels = torch.max(probas_ulb_weak, dim=-1)
-        mask = max_probas_ulb_weak.ge(p_cutoff).to(max_probas_ulb_weak.dtype)
+        # Calculate pseudolabels and mask
+        probas_w = (logits_w/T).softmax(-1)
+        y_probs, y_ps = probas_w.max(-1)
+        mask = y_probs.ge(p_cutoff).to(device)
 
-        # Loss
-        sup_loss = criterion(logits_lb, y_lb)
-        unsup_loss = (F.cross_entropy(logits_ulb_strong, pseudo_labels, reduction='none') * mask).mean()
-        total_loss = sup_loss + lambda_u * unsup_loss
+        # Calculate Loss
+        loss_l = criterion(logits_l, y_l)
+        loss_u = criterion(logits_s, y_ps) * mask
+        loss = loss_l.mean() + lambda_u * loss_u.mean()
 
         # Update Model Weights
         optimizer.zero_grad()
-        total_loss.backward()
+        loss.backward()
         optimizer.step()
+        lr_scheduler.step()
 
-        # Metrics
-        batch_size = x_lb.shape[0]
-        acc1, = generalization.accuracy(logits_lb, y_lb, topk=(1,))
-        metric_logger.update(
-            sup_loss=sup_loss.item(), unsup_loss=unsup_loss.item(), mask_ratio=mask.float().mean().item(),
-            total_loss=total_loss.item(), lr=optimizer.param_groups[0]["lr"]
-        )
+        # Collect Metrics
+        batch_size, ulb_batch_size = x_l.shape[0], x_s.shape[0]
+        acc1, = generalization.accuracy(logits_l, y_l, topk=(1,))
+        pseudo_acc1, = generalization.accuracy(logits_w, y_w, topk=(1,))
+
+        # Log Metrics
+        metric_logger.update(loss=loss.item(), supervised_loss=loss_l.mean().item(), lr=optimizer.param_groups[0]["lr"],
+                             unsupervised_loss=loss_u.mean().item(), mask_ratio=mask.float().mean().item())
         metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
+        metric_logger.meters["pseudo_acc1"].update(pseudo_acc1.item(), n=ulb_batch_size)
+        
     train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
+    return train_stats
 
+
+def train_one_epoch_flexmatch(model, optimizer, lr_scheduler, criterion, device, epoch, labeled_loader, unlabeled_loader_weak, unlabeled_loader_strong, 
+                    unlabeled_loader_indices, p_cutoff, lambda_u, fmth, T=1):
+    model.to(device)
+    model.train()
+
+    metric_logger = MetricLogger(delimiter=" ")
+    metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
+    header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
+
+    iterator_unlabeled_weak_aug = iter(unlabeled_loader_weak)
+    iterator_unlabeled_strong_aug = iter(unlabeled_loader_strong)
+    iterator_unlabeled_indices = iter(unlabeled_loader_indices)
+
+    for x_l, y_l in metric_logger.log_every(labeled_loader, print_freq=50, header=header):
+        (x_w, y_w), (x_s, _), idx  = next(iterator_unlabeled_weak_aug), next(iterator_unlabeled_strong_aug), next(iterator_unlabeled_indices)
+        x_l = x_l.to(device)
+        y_l = y_l.to(device)
+        x_w = x_w.to(device)
+        x_s = x_s.to(device)
+        y_w = y_w.to(device)
+        idx = idx.to(device)    
+
+        # Get all necesseracy model outputs
+        logits_l = model(x_l)
+        with torch.no_grad():
+            logits_w = model(x_w)
+        logits_s = model(x_s)
+
+        # Calculate pseudolabels and mask
+        probas_w = (logits_w/T).softmax(-1)
+        _, y_ps = probas_w.max(-1)
+        mask = fmth.masking(p_cutoff, probas_w, idx)
+
+        # Calculate Loss
+        loss_l = criterion(logits_l, y_l)
+        loss_u = criterion(logits_s, y_ps) * mask
+        loss = loss_l.mean() + lambda_u * loss_u.mean()
+
+        # Update Model Weights
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        lr_scheduler.step()
+
+        # Collect Metrics
+        batch_size, ulb_batch_size = x_l.shape[0], x_s.shape[0]
+        acc1, = generalization.accuracy(logits_l, y_l, topk=(1,))
+        pseudo_acc1, = generalization.accuracy(logits_w, y_w, topk=(1,))
+
+        # Log Metrics
+        metric_logger.update(loss=loss.item(), supervised_loss=loss_l.mean().item(), lr=optimizer.param_groups[0]["lr"],
+                             unsupervised_loss=loss_u.mean().item(), mask_ratio=mask.float().mean().item())
+        metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
+        metric_logger.meters["pseudo_acc1"].update(pseudo_acc1.item(), n=ulb_batch_size)
+        
+    train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
     return train_stats

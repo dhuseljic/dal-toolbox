@@ -10,9 +10,10 @@ from omegaconf import OmegaConf
 
 from dal_toolbox.datasets import build_ssl_dataset
 from dal_toolbox.models import build_ssl_model
+from dal_toolbox.models.utils.ssl_utils import FlexMatchThresholdingHook
 from dal_toolbox.utils import seed_everything
 
-@hydra.main(version_base=None, config_path="./configs", config_name="fixmatch")
+@hydra.main(version_base=None, config_path="./configs", config_name="config")
 def main(args):
     # Initial Setup (Seed, create output folder, SummaryWriter and results-container init)
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
@@ -25,9 +26,10 @@ def main(args):
     logging.info('Building datasets. Creating labeled pool with %s samples and \
         unlabeled pool with %s samples.', args.n_labeled_samples, args.n_unlabeled_samples)
     lb_ds, ulb_ds_weak, ulb_ds_strong, val_ds, ds_info = build_ssl_dataset(args)
-    supervised_loader = DataLoader(lb_ds, batch_size=args.model.batch_size, shuffle=True)
+
+    # TODO: Create some sort of build_dataloader method?
     
-    # Setup dataloaders
+    # Setup samplers and dataloaders
     n_iter_per_epoch = args.model.n_iter // args.model.n_epochs
     supervised_sampler = RandomSampler(lb_ds, num_samples=(n_iter_per_epoch * args.model.batch_size))
     supervised_loader = DataLoader(lb_ds, batch_size=args.model.batch_size, sampler=supervised_sampler)
@@ -36,16 +38,19 @@ def main(args):
                                           args.ssl_algorithm.u_ratio), generator=torch.Generator().manual_seed(args.random_seed))
     random_sampler_strong = RandomSampler(ulb_ds_strong, num_samples=int(n_iter_per_epoch * args.model.batch_size *
                                           args.ssl_algorithm.u_ratio), generator=torch.Generator().manual_seed(args.random_seed))
-    unsupervised_loader_weak = DataLoader(ulb_ds_weak, batch_size=int(
+    random_sampler_idx = RandomSampler(range(len(ulb_ds_weak)), num_samples=int(n_iter_per_epoch * args.model.batch_size *
+                                          args.ssl_algorithm.u_ratio), generator=torch.Generator().manual_seed(args.random_seed))
+    
+    unsupervised_loader_weak_1 = DataLoader(ulb_ds_weak, batch_size=int(
+        args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=random_sampler_weak)
+    unsupervised_loader_weak_2 = DataLoader(ulb_ds_weak, batch_size=int(
         args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=random_sampler_weak)
     unsupervised_loader_strong = DataLoader(ulb_ds_weak, batch_size=int(
         args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=random_sampler_strong)
+    unsupervised_loader_idx = DataLoader(range(len(ulb_ds_weak)), batch_size=int(
+        args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=random_sampler_idx)
+    
     val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)
-    dataloaders = {
-        "train_sup": supervised_loader,
-        "train_unsup_weak": unsupervised_loader_weak,
-        "train_unsup_strong": unsupervised_loader_strong
-    }
 
     # Setup Model
     logging.info('Building model: %s', args.model.name)
@@ -53,15 +58,37 @@ def main(args):
     model, train_one_epoch, evaluate = model_dict['model'], model_dict['train_one_epoch'], model_dict['evaluate']
     lr_scheduler = model_dict['lr_scheduler']
 
+    # Adding necessary dataloaders as train kwargs
+    if args.ssl_algorithm.name == 'fully_supervised':
+        model_dict['train_kwargs']['dataloader'] = supervised_loader
+    else:
+        model_dict['train_kwargs']['labeled_loader'] = supervised_loader
+        if args.ssl_algorithm.name == 'pseudo_labels':
+            model_dict['train_kwargs']['unlabeled_loader'] = unsupervised_loader_weak_1
+        elif args.ssl_algorithm.name == 'pi_model':
+            model_dict['train_kwargs']['unlabeled_loader_weak_1'] = unsupervised_loader_weak_1
+            model_dict['train_kwargs']['unlabeled_loader_weak_2'] = unsupervised_loader_weak_2
+        elif args.ssl_algorithm.name == 'fixmatch':
+            model_dict['train_kwargs']['unlabeled_loader_weak'] = unsupervised_loader_weak_1
+            model_dict['train_kwargs']['unlabeled_loader_strong'] = unsupervised_loader_strong
+        elif args.ssl_algorithm.name == 'flexmatch':
+            model_dict['train_kwargs']['unlabeled_loader_weak'] = unsupervised_loader_weak_1
+            model_dict['train_kwargs']['unlabeled_loader_strong'] = unsupervised_loader_strong
+            model_dict['train_kwargs']['unlabeled_loader_indices'] = unsupervised_loader_idx
+            model_dict['train_kwargs']['fmth'] = FlexMatchThresholdingHook(ulb_dest_len=len(ulb_ds_weak), num_classes=ds_info['n_classes'], thresh_warmup=True)
+        else:
+            assert True, 'No valid ssl_algorithm chosen!'
+        
+
     # Training Process
     history_train, history_test = [], []
     for i_epoch in range(args.model.n_epochs):
         # Train model for one epoch
         logging.info('Training epoch %s', i_epoch)
         train_stats = train_one_epoch(
-            model, dataloaders, **model_dict['train_kwargs']
+            model, **model_dict['train_kwargs'], epoch=i_epoch
         )
-        if lr_scheduler:
+        if lr_scheduler and args.ssl_algorithm.name == 'fully_supervised':
             lr_scheduler.step()
         for key, value in train_stats.items():
             writer.add_scalar(tag=f"train/{key}", scalar_value=value, global_step=i_epoch)
