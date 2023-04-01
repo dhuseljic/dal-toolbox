@@ -6,15 +6,25 @@ import hydra
 
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader, RandomSampler
+from torch.nn.parallel import DistributedDataParallel
+from torch.distributed import destroy_process_group
 from omegaconf import OmegaConf
 
 from dal_toolbox.datasets import build_ssl_dataset
+from dal_toolbox.datasets.samplers import DistributedSampler
 from dal_toolbox.models import build_ssl_model
 from dal_toolbox.models.utils.ssl_utils import FlexMatchThresholdingHook
-from dal_toolbox.utils import seed_everything
+from dal_toolbox.utils import seed_everything, init_distributed_mode
+
 
 @hydra.main(version_base=None, config_path="./configs", config_name="config")
 def main(args):
+    # Check and initialize ddp if possible
+    use_distributed = init_distributed_mode(args)
+    if use_distributed:
+        rank = int(os.environ["LOCAL_RANK"])
+        args.device = f'cuda:{rank}'
+
     # Initial Setup (Seed, create output folder, SummaryWriter and results-container init)
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
@@ -30,17 +40,19 @@ def main(args):
     # TODO: Create some sort of build_dataloader method?
     
     # Setup samplers and dataloaders
+    Sampler = DistributedSampler if use_distributed else RandomSampler
     n_iter_per_epoch = args.model.n_iter // args.model.n_epochs
-    supervised_sampler = RandomSampler(lb_ds, num_samples=(n_iter_per_epoch * args.model.batch_size))
-    supervised_loader = DataLoader(lb_ds, batch_size=args.model.batch_size, sampler=supervised_sampler)
 
-    random_sampler_weak = RandomSampler(ulb_ds_weak, num_samples=int(n_iter_per_epoch * args.model.batch_size *
+    supervised_sampler = Sampler(lb_ds, num_samples=(n_iter_per_epoch * args.model.batch_size))
+    random_sampler_weak = Sampler(ulb_ds_weak, num_samples=int(n_iter_per_epoch * args.model.batch_size *
                                           args.ssl_algorithm.u_ratio), generator=torch.Generator().manual_seed(args.random_seed))
-    random_sampler_strong = RandomSampler(ulb_ds_strong, num_samples=int(n_iter_per_epoch * args.model.batch_size *
+    random_sampler_strong = Sampler(ulb_ds_strong, num_samples=int(n_iter_per_epoch * args.model.batch_size *
                                           args.ssl_algorithm.u_ratio), generator=torch.Generator().manual_seed(args.random_seed))
-    random_sampler_idx = RandomSampler(range(len(ulb_ds_weak)), num_samples=int(n_iter_per_epoch * args.model.batch_size *
+    random_sampler_idx = Sampler(range(len(ulb_ds_weak)), num_samples=int(n_iter_per_epoch * args.model.batch_size *
                                           args.ssl_algorithm.u_ratio), generator=torch.Generator().manual_seed(args.random_seed))
     
+    supervised_loader = DataLoader(lb_ds, batch_size=args.model.batch_size, 
+                                   sampler=supervised_sampler)
     unsupervised_loader_weak_1 = DataLoader(ulb_ds_weak, batch_size=int(
         args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=random_sampler_weak)
     unsupervised_loader_weak_2 = DataLoader(ulb_ds_weak, batch_size=int(
@@ -49,7 +61,6 @@ def main(args):
         args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=random_sampler_strong)
     unsupervised_loader_idx = DataLoader(range(len(ulb_ds_weak)), batch_size=int(
         args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=random_sampler_idx)
-    
     val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)
 
     # Setup Model
@@ -57,6 +68,7 @@ def main(args):
     model_dict = build_ssl_model(args, n_classes=ds_info['n_classes'])
     model, train_one_epoch, evaluate = model_dict['model'], model_dict['train_one_epoch'], model_dict['evaluate']
     lr_scheduler = model_dict['lr_scheduler']
+    model = DistributedDataParallel(model) if use_distributed else model
 
     # Adding necessary dataloaders as train kwargs
     if args.ssl_algorithm.name == 'fully_supervised':
@@ -83,6 +95,10 @@ def main(args):
     # Training Process
     history_train, history_test = [], []
     for i_epoch in range(args.model.n_epochs):
+        if use_distributed:
+            for loader in [supervised_loader, unsupervised_loader_idx, unsupervised_loader_strong, unsupervised_loader_weak_1, unsupervised_loader_weak_2]:
+                loader.sampler.set_epoch(i_epoch)
+
         # Train model for one epoch
         logging.info('Training epoch %s', i_epoch)
         train_stats = train_one_epoch(
@@ -121,6 +137,9 @@ def main(args):
     logging.info("Saving results to %s.", fname)
     with open(fname, 'w') as f:
         json.dump(results, f)
+
+    if use_distributed:
+        destroy_process_group()
 
 
 if __name__ == "__main__":
