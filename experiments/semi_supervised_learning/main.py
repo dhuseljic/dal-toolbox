@@ -70,7 +70,9 @@ def main(args):
     model_dict = build_ssl_model(args, n_classes=ds_info['n_classes'])
     model, train_one_epoch, evaluate = model_dict['model'], model_dict['train_one_epoch'], model_dict['evaluate']
     lr_scheduler = model_dict['lr_scheduler']
-    model = DistributedDataParallel(model) if use_distributed else model
+    if use_distributed:
+        model.to(args.device)
+        model = DistributedDataParallel(model)
 
     # Adding necessary dataloaders as train kwargs
     if args.ssl_algorithm.name == 'fully_supervised':
