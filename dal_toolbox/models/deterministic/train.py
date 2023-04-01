@@ -103,9 +103,10 @@ def train_one_epoch_bertmodel(model, dataloader, epoch, optimizer, scheduler, cr
 #     return train_stats
 
 
+
 # SSL training methods
 def train_one_epoch_pseudolabel(model, labeled_loader, unlabeled_loader, criterion, optimizer, lr_scheduler, n_iter, p_cutoff, lambda_u, device,
-                                use_hard_labels=True, unsup_warmup=.4, epoch=None, print_freq=200):
+                                unsup_warmup=.4, use_hard_labels=True, epoch=None, print_freq=200):
     model.train()
     model.to(device)
     criterion.to(device)
@@ -117,54 +118,45 @@ def train_one_epoch_pseudolabel(model, labeled_loader, unlabeled_loader, criteri
     unlabeled_iter = iter(unlabeled_loader)
 
     i_iter = epoch*len(labeled_loader)
+    for (x_l, y_l) in metric_logger.log_every(labeled_loader, print_freq=print_freq, header=header):
+        x_u, _ = next(unlabeled_iter)
+        x_l, y_l = x_l.to(device), y_l.to(device)
+        x_u = x_u.to(device)
 
-    for (x_lb, y_lb) in metric_logger.log_every(labeled_loader, print_freq=print_freq, header=header):
-        x_lb, y_lb = x_lb.to(device), y_lb.to(device)
-
-        # Supervised
-        logits_lb = model(x_lb)
-        sup_loss = criterion(logits_lb, y_lb)
-
-        # Unsupervised
-        x_ulb, _ = next(unlabeled_iter)
-        x_ulb = x_ulb.to(device)
-
-        # Outputs of unlabeled data but without batch norm
+        # Get all necesseracy model outputs
+        logits_l = model(x_l)
         bn_backup = freeze_bn(model)
-        logits_ulb = model(x_ulb)
+        logits_u = model(x_u)
         unfreeze_bn(model, bn_backup)
 
         # Generate pseudo labels and mask
-        probas_ulb = torch.softmax(logits_ulb.detach(), dim=-1)
+        probas_ulb = torch.softmax(logits_u.detach(), dim=-1)
         max_probas, pseudo_label = torch.max(probas_ulb, dim=-1)
         mask = max_probas.ge(p_cutoff)
 
-        if not use_hard_labels:
-            T = 1
-            probas = torch.softmax(logits_ulb.detach()/T, dim=-1)
-            pseudo_label, _ = probas.max(-1)
-
-        unsup_loss = torch.mean(F.cross_entropy(logits_ulb, pseudo_label, reduction='none') * mask)
+        # Warm Up Factor
         unsup_warmup_factor = np.clip(i_iter / (unsup_warmup*n_iter), a_min=0, a_max=1)
         i_iter += 1
 
-        # Loss thats used for backpropagation
-        loss = sup_loss + unsup_warmup_factor * lambda_u * unsup_loss
+        # Calculate Loss
+        loss_l = criterion(logits_l, y_l)
+        loss_u = torch.mean(F.cross_entropy(logits_u, pseudo_label, reduction='none') * mask)
+        loss = loss_l + unsup_warmup_factor * lambda_u * loss_u
 
-        # Update Model Weights
+        # Backpropagation and Lr-Scheduler-Step
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         lr_scheduler.step()
 
         # Metrics
-        batch_size = x_lb.shape[0]
-        acc1, = generalization.accuracy(logits_lb, y_lb, topk=(1,))
-        metric_logger.update(loss=loss.item(), sup_loss=sup_loss.item(), unsup_loss=unsup_loss.item(),
+        batch_size = x_l.shape[0]
+        acc1, = generalization.accuracy(logits_l, y_l, topk=(1,))
+        metric_logger.update(loss=loss.item(), sup_loss=loss_l.item(), unsup_loss=loss_u.item(),
                              mask_ratio=mask.float().mean().item(), unsup_warmup_factor=unsup_warmup_factor, lr=optimizer.param_groups[0]["lr"])
         metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
-    train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
 
+    train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
     return train_stats
 
 
@@ -182,53 +174,50 @@ def train_one_epoch_pimodel(model, labeled_loader, unlabeled_loader_weak_1, unla
     unlabeled_iter2 = iter(unlabeled_loader_weak_2)
 
     i_iter = epoch*len(labeled_loader)
-    for x_lb, y_lb in metric_logger.log_every(labeled_loader, print_freq=print_freq, header=header):
-        x_lb, y_lb = x_lb.to(device), y_lb.to(device)
+    for x_l, y_l in metric_logger.log_every(labeled_loader, print_freq=print_freq, header=header):
+        (x_w1, _), (x_w2, _) = next(unlabeled_iter1), next(unlabeled_iter2)
+        x_l, y_l = x_l.to(device), y_l.to(device)
+        x_w1 = x_w1.to(device)
+        x_w2 = x_w2.to(device)
 
-        # Supervised
-        logits_lb = model(x_lb)
-        sup_loss = criterion(logits_lb, y_lb)
-
-        # Unsupervised Loss
-        x_ulb_weak_1, _ = next(unlabeled_iter1)
-        x_ulb_weak_1 = x_ulb_weak_1.to(device)
-        x_ulb_weak_2, _ = next(unlabeled_iter2)
-        x_ulb_weak_2 = x_ulb_weak_2.to(device)
-
-        # Outputs of unlabeled data without batch norm
+        # Get all necesseracy model outputs
+        logits_l = model(x_l)
         bn_backup = freeze_bn(model)
-        logits_ulb_weak_1 = model(x_ulb_weak_1)
-        logits_ulb_weak_2 = model(x_ulb_weak_2)
+        logits_w1 = model(x_w1)
+        logits_w2 = model(x_w2)
         unfreeze_bn(model, bn_backup)
 
-        unsup_loss = F.mse_loss(logits_ulb_weak_2.softmax(-1), logits_ulb_weak_1.detach().softmax(-1))
+        # Warm Up Factor
         unsup_warmup_factor = np.clip(i_iter / (unsup_warmup*n_iter), a_min=0, a_max=1)
         i_iter += 1
 
-        # Loss thats used for backpropagation
-        loss = sup_loss + unsup_warmup_factor * lambda_u * unsup_loss
+        # Calculate Loss
+        loss_l = criterion(logits_l, y_l)
+        loss_u = F.mse_loss(logits_w2.softmax(-1), logits_w1.detach().softmax(-1))
+        loss = loss_l + unsup_warmup_factor * lambda_u * loss_u
 
-        # Update Model Weights
+        # Backpropagation and Lr-Scheduler-Step
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         lr_scheduler.step()
 
         # Metrics
-        batch_size = x_lb.shape[0]
-        acc1, = generalization.accuracy(logits_lb, y_lb, topk=(1,))
-        metric_logger.update(loss=loss.item(), sup_loss=sup_loss.item(), unsup_loss=unsup_loss.item(),
+        batch_size = x_l.shape[0]
+        acc1, = generalization.accuracy(logits_l, y_l, topk=(1,))
+        metric_logger.update(loss=loss.item(), sup_loss=loss_l.item(), unsup_loss=loss_u.item(),
                              unsup_warmup_factor=unsup_warmup_factor, lr=optimizer.param_groups[0]["lr"])
         metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
-    train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
 
+    train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
     return train_stats
 
 
-def train_one_epoch_fixmatch(model, optimizer, lr_scheduler, criterion, device, epoch, labeled_loader, unlabeled_loader_weak, unlabeled_loader_strong, 
-                    p_cutoff, lambda_u, T=1):
+def train_one_epoch_fixmatch(model, optimizer, lr_scheduler, criterion, device, labeled_loader, unlabeled_loader_weak, unlabeled_loader_strong, 
+                    p_cutoff, lambda_u, T=1, epoch=None, print_freq=200):
     model.to(device)
     model.train()
+    criterion.to(device)
 
     metric_logger = MetricLogger(delimiter=" ")
     metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
@@ -237,7 +226,7 @@ def train_one_epoch_fixmatch(model, optimizer, lr_scheduler, criterion, device, 
     iterator_unlabeled_weak_aug = iter(unlabeled_loader_weak)
     iterator_unlabeled_strong_aug = iter(unlabeled_loader_strong)
 
-    for x_l, y_l in metric_logger.log_every(labeled_loader, print_freq=50, header=header):
+    for x_l, y_l in metric_logger.log_every(labeled_loader, print_freq=print_freq, header=header):
         (x_w, y_w), (x_s, _)  = next(iterator_unlabeled_weak_aug), next(iterator_unlabeled_strong_aug)
         x_l = x_l.to(device)
         y_l = y_l.to(device)
@@ -258,23 +247,21 @@ def train_one_epoch_fixmatch(model, optimizer, lr_scheduler, criterion, device, 
 
         # Calculate Loss
         loss_l = criterion(logits_l, y_l)
-        loss_u = criterion(logits_s, y_ps) * mask
-        loss = loss_l.mean() + lambda_u * loss_u.mean()
+        loss_u = torch.mean(F.cross_entropy(logits_s, y_ps, reduction='none') * mask)
+        loss = loss_l + lambda_u * loss_u
 
-        # Update Model Weights
+        # Backpropagation and Lr-Scheduler-Step
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         lr_scheduler.step()
 
-        # Collect Metrics
+        # Metrics
         batch_size, ulb_batch_size = x_l.shape[0], x_s.shape[0]
         acc1, = generalization.accuracy(logits_l, y_l, topk=(1,))
         pseudo_acc1, = generalization.accuracy(logits_w, y_w, topk=(1,))
-
-        # Log Metrics
         metric_logger.update(loss=loss.item(), supervised_loss=loss_l.mean().item(), lr=optimizer.param_groups[0]["lr"],
-                             unsupervised_loss=loss_u.mean().item(), mask_ratio=mask.float().mean().item())
+                             unsupervised_loss=loss_u.item(), mask_ratio=mask.float().mean().item())
         metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
         metric_logger.meters["pseudo_acc1"].update(pseudo_acc1.item(), n=ulb_batch_size)
         
@@ -282,10 +269,11 @@ def train_one_epoch_fixmatch(model, optimizer, lr_scheduler, criterion, device, 
     return train_stats
 
 
-def train_one_epoch_flexmatch(model, optimizer, lr_scheduler, criterion, device, epoch, labeled_loader, unlabeled_loader_weak, unlabeled_loader_strong, 
-                    unlabeled_loader_indices, p_cutoff, lambda_u, fmth, T=1):
+def train_one_epoch_flexmatch(model, optimizer, lr_scheduler, criterion, device, labeled_loader, unlabeled_loader_weak, unlabeled_loader_strong, 
+                    unlabeled_loader_indices, p_cutoff, lambda_u, fmth, T=1, epoch=None, print_freq=200):
     model.to(device)
     model.train()
+    criterion.to(device)
 
     metric_logger = MetricLogger(delimiter=" ")
     metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
@@ -295,7 +283,7 @@ def train_one_epoch_flexmatch(model, optimizer, lr_scheduler, criterion, device,
     iterator_unlabeled_strong_aug = iter(unlabeled_loader_strong)
     iterator_unlabeled_indices = iter(unlabeled_loader_indices)
 
-    for x_l, y_l in metric_logger.log_every(labeled_loader, print_freq=50, header=header):
+    for x_l, y_l in metric_logger.log_every(labeled_loader, print_freq=print_freq, header=header):
         (x_w, y_w), (x_s, _), idx  = next(iterator_unlabeled_weak_aug), next(iterator_unlabeled_strong_aug), next(iterator_unlabeled_indices)
         x_l = x_l.to(device)
         y_l = y_l.to(device)
@@ -317,21 +305,19 @@ def train_one_epoch_flexmatch(model, optimizer, lr_scheduler, criterion, device,
 
         # Calculate Loss
         loss_l = criterion(logits_l, y_l)
-        loss_u = criterion(logits_s, y_ps) * mask
-        loss = loss_l.mean() + lambda_u * loss_u.mean()
+        loss_u = torch.mean(F.cross_entropy(logits_s, y_ps, reduction='none') * mask)
+        loss = loss_l + lambda_u * loss_u
 
-        # Update Model Weights
+        # Backpropagation and Lr-Scheduler-Step
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         lr_scheduler.step()
 
-        # Collect Metrics
+        # Metrics
         batch_size, ulb_batch_size = x_l.shape[0], x_s.shape[0]
         acc1, = generalization.accuracy(logits_l, y_l, topk=(1,))
         pseudo_acc1, = generalization.accuracy(logits_w, y_w, topk=(1,))
-
-        # Log Metrics
         metric_logger.update(loss=loss.item(), supervised_loss=loss_l.mean().item(), lr=optimizer.param_groups[0]["lr"],
                              unsupervised_loss=loss_u.mean().item(), mask_ratio=mask.float().mean().item())
         metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
