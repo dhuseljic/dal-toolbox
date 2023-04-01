@@ -2,4 +2,4 @@ name: flexmatch
 u_ratio: 7
 lambda_u: 1
 p_cutoff: 0.95
-T: 1
+T: 0.5

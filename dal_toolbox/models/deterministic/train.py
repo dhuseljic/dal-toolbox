@@ -74,39 +74,14 @@ def train_one_epoch_bertmodel(model, dataloader, epoch, optimizer, scheduler, cr
         Train Accuracy: {train_stats['train_batch_acc_epoch']:.4f}")
     print("--"*40)
     return train_stats
-# def train_one_epoch(model, dataloader, criterion, optimizer, device, epoch=None, print_freq=200):
-#     model.train()
-#     model.to(device)
-#
-#     metric_logger = MetricLogger(delimiter=" ")
-#     metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
-#     header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
-#
-#     # Train the epoch
-#     for inputs, targets in metric_logger.log_every(dataloader, print_freq, header):
-#         inputs, targets = inputs.to(device), targets.to(device)
-#
-#         outputs = model(inputs)
-#
-#         loss = criterion(outputs, targets)
-#
-#         optimizer.zero_grad()
-#         loss.backward()
-#         optimizer.step()
-#
-#         batch_size = inputs.shape[0]
-#         acc1, = generalization.accuracy(outputs, targets, topk=(1,))
-#         metric_logger.update(loss=loss.item(), lr=optimizer.param_groups[0]["lr"])
-#         metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
-#     train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
-#
-#     return train_stats
+
 
 
 
 # SSL training methods
+
 def train_one_epoch_pseudolabel(model, labeled_loader, unlabeled_loader, criterion, optimizer, lr_scheduler, n_iter, p_cutoff, lambda_u, device,
-                                unsup_warmup=.4, use_hard_labels=True, epoch=None, print_freq=200):
+                                unsup_warmup=.4, epoch=None, print_freq=200):
     model.train()
     model.to(device)
     criterion.to(device)
@@ -119,9 +94,9 @@ def train_one_epoch_pseudolabel(model, labeled_loader, unlabeled_loader, criteri
 
     i_iter = epoch*len(labeled_loader)
     for (x_l, y_l) in metric_logger.log_every(labeled_loader, print_freq=print_freq, header=header):
-        x_u, _ = next(unlabeled_iter)
+        x_u, y_u = next(unlabeled_iter)
         x_l, y_l = x_l.to(device), y_l.to(device)
-        x_u = x_u.to(device)
+        x_u, y_u = x_u.to(device), y_u.to(device)
 
         # Get all necesseracy model outputs
         logits_l = model(x_l)
@@ -150,11 +125,13 @@ def train_one_epoch_pseudolabel(model, labeled_loader, unlabeled_loader, criteri
         lr_scheduler.step()
 
         # Metrics
-        batch_size = x_l.shape[0]
+        batch_size_l, batch_size_u = x_l.shape[0], x_u.shape[0]
         acc1, = generalization.accuracy(logits_l, y_l, topk=(1,))
+        pseudo_acc1, = generalization.accuracy(logits_u, y_u, topk=(1,))
         metric_logger.update(loss=loss.item(), sup_loss=loss_l.item(), unsup_loss=loss_u.item(),
                              mask_ratio=mask.float().mean().item(), unsup_warmup_factor=unsup_warmup_factor, lr=optimizer.param_groups[0]["lr"])
-        metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
+        metric_logger.meters["acc1"].update(acc1.item(), n=batch_size_l)
+        metric_logger.meters["pseudo_acc1"].update(pseudo_acc1.item(), n=batch_size_u)
 
     train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
     return train_stats
@@ -175,7 +152,7 @@ def train_one_epoch_pimodel(model, labeled_loader, unlabeled_loader_weak_1, unla
 
     i_iter = epoch*len(labeled_loader)
     for x_l, y_l in metric_logger.log_every(labeled_loader, print_freq=print_freq, header=header):
-        (x_w1, _), (x_w2, _) = next(unlabeled_iter1), next(unlabeled_iter2)
+        (x_w1, a), (x_w2, b) = next(unlabeled_iter1), next(unlabeled_iter2)
         x_l, y_l = x_l.to(device), y_l.to(device)
         x_w1 = x_w1.to(device)
         x_w2 = x_w2.to(device)
@@ -241,7 +218,7 @@ def train_one_epoch_fixmatch(model, optimizer, lr_scheduler, criterion, device, 
         logits_s = model(x_s)
 
         # Calculate pseudolabels and mask
-        probas_w = (logits_w/T).softmax(-1)
+        probas_w = torch.softmax(logits_w / T, dim=-1)
         y_probs, y_ps = probas_w.max(-1)
         mask = y_probs.ge(p_cutoff).to(device)
 
@@ -299,7 +276,7 @@ def train_one_epoch_flexmatch(model, optimizer, lr_scheduler, criterion, device,
         logits_s = model(x_s)
 
         # Calculate pseudolabels and mask
-        probas_w = (logits_w/T).softmax(-1)
+        probas_w = torch.softmax(logits_w / T, dim=-1)
         _, y_ps = probas_w.max(-1)
         mask = fmth.masking(p_cutoff, probas_w, idx)
 

@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:4
 #SBATCH --partition=main
-#SBATCH --job-name=fixmatch-250
+#SBATCH --job-name=flexmatch-250
 #SBATCH --output=/mnt/stud/work/phahn/uncertainty/logs/%x_%A_%a.log
 #SBATCH --array=1-1%1
 source /mnt/stud/home/phahn/.zshrc
@@ -17,6 +17,6 @@ OUTPUT_DIR=/mnt/stud/work/phahn/uncertainty/${SLURM_JOB_NAME}_${SLURM_JOB_ID}_${
 echo "Saving results to $OUTPUT_DIR"
 
 srun torchrun --standalone --nproc_per_node=4 main.py \
-    ssl_algorithm=fixmatch \
+    ssl_algorithm=flexmatch \
     output_dir=$OUTPUT_DIR \
     random_seed=$SLURM_ARRAY_TASK_ID

@@ -44,8 +44,10 @@ def main(args):
     n_iter_per_epoch = args.model.n_iter // args.model.n_epochs
 
     supervised_sampler = Sampler(lb_ds, num_samples=(n_iter_per_epoch * args.model.batch_size))
-    random_sampler_weak = Sampler(ulb_ds_weak, num_samples=int(n_iter_per_epoch * args.model.batch_size *
+    random_sampler_weak_1 = Sampler(ulb_ds_weak, num_samples=int(n_iter_per_epoch * args.model.batch_size *
                                           args.ssl_algorithm.u_ratio), generator=torch.Generator().manual_seed(args.random_seed))
+    random_sampler_weak_2 = Sampler(ulb_ds_weak, num_samples=int(n_iter_per_epoch * args.model.batch_size *
+                                        args.ssl_algorithm.u_ratio), generator=torch.Generator().manual_seed(args.random_seed))
     random_sampler_strong = Sampler(ulb_ds_strong, num_samples=int(n_iter_per_epoch * args.model.batch_size *
                                           args.ssl_algorithm.u_ratio), generator=torch.Generator().manual_seed(args.random_seed))
     random_sampler_idx = Sampler(range(len(ulb_ds_weak)), num_samples=int(n_iter_per_epoch * args.model.batch_size *
@@ -54,9 +56,9 @@ def main(args):
     supervised_loader = DataLoader(lb_ds, batch_size=args.model.batch_size, 
                                    sampler=supervised_sampler)
     unsupervised_loader_weak_1 = DataLoader(ulb_ds_weak, batch_size=int(
-        args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=random_sampler_weak)
+        args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=random_sampler_weak_1)
     unsupervised_loader_weak_2 = DataLoader(ulb_ds_weak, batch_size=int(
-        args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=random_sampler_weak)
+        args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=random_sampler_weak_2)
     unsupervised_loader_strong = DataLoader(ulb_ds_weak, batch_size=int(
         args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=random_sampler_strong)
     unsupervised_loader_idx = DataLoader(range(len(ulb_ds_weak)), batch_size=int(
