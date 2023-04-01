@@ -44,19 +44,19 @@ class EnsembleTrainer(BasicTrainer):
         # Get logits and targets for in-domain-test-set (Number of Members x Number of Samples x Number of Classes)
         ensemble_logits_id, targets_id, = [], []
         for inputs, targets in dataloader:
-            inputs, targets = inputs.to(self.device), targets.to(self.device)
-            ensemble_logits_id.append(self.model.forward_sample(inputs))
+            logits = self.model.forward_sample(inputs.to(self.device)).cpu()
+            ensemble_logits_id.append(logits)
             targets_id.append(targets)
 
         # Transform to tensor
-        ensemble_logits_id = torch.cat(ensemble_logits_id, dim=1).cpu()
-        targets_id = torch.cat(targets_id, dim=0).cpu()
+        ensemble_logits_id = torch.cat(ensemble_logits_id, dim=0)
+        targets_id = torch.cat(targets_id, dim=0)
 
         # Transform into probabilitys
         ensemble_probas_id = ensemble_logits_id.softmax(dim=-1)
 
         # Average of probas per sample
-        mean_probas_id = torch.mean(ensemble_probas_id, dim=0)
+        mean_probas_id = torch.mean(ensemble_probas_id, dim=1)
 
         # Confidence- and entropy-Scores of in domain set logits
         conf_id, _ = mean_probas_id.max(-1)

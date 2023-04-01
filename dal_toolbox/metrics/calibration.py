@@ -91,12 +91,12 @@ class EnsembleCrossEntropy(nn.Module):
         # Remember ensemble_size for nll calculation
         ensemble_size, n_samples, n_classes = logits.shape
 
-        # Reshape to fit CrossEntropy
-        # logits.shape = (EnsembleMembers*Samples, Classes)
-        # labels.shape = (EnsembleMembers*Sampels)
-        labels = torch.broadcast_to(labels.unsqueeze(0), logits.shape[:-1])
-        labels = labels.reshape(ensemble_size*n_samples)
+        # Reshape to fit CrossEntropy 
+        # TODO: check
+        # N x M x C -> N x C x M
+        labels = torch.broadcast_to(labels.view(-1, 1), logits.shape[:-1])
         logits = logits.reshape(ensemble_size*n_samples, n_classes)
+        labels = labels.reshape(ensemble_size*n_samples)
 
         # Non Reduction Cross Entropy
         ce = self.cross_entropy(logits, labels).reshape(-1, 1)
@@ -122,7 +122,7 @@ class GibsCrossEntropy(nn.Module):
         ensemble_size, n_samples, n_classes = logits.shape
 
         # Reshape to fit CrossEntropy
-        labels = torch.broadcast_to(labels.unsqueeze(0), logits.shape[:-1])
+        labels = torch.broadcast_to(labels.unsqueeze(1), logits.shape[:-1])
         labels = labels.reshape(ensemble_size*n_samples)
         logits = logits.reshape(ensemble_size*n_samples, n_classes)
 

@@ -21,18 +21,19 @@ class Ensemble(nn.Module):
         logits = []
         for m in self.models:
             logits.append(m(x))
-        return torch.stack(logits)
+        logits = torch.stack(logits, dim=1)
+        return logits
 
     @torch.inference_mode()
     def get_probas(self, dataloader, device):
         self.to(device)
         self.eval()
-        mc_logits_list = []
+        all_logits = []
         for samples, _ in dataloader:
-            mc_logits = self.forward_sample(samples.to(device))
-            mc_logits_list.append(mc_logits.cpu())
-        mc_logits = torch.cat(mc_logits_list, dim=1)
-        probas = mc_logits.softmax(-1).mean(0)
+            logits = self.forward_sample(samples.to(device))
+            all_logits.append(logits.cpu())
+        logits = torch.cat(all_logits, dim=0)
+        probas = logits.softmax(-1)
         return probas
 
 
