@@ -39,7 +39,7 @@ class MCDropoutTrainer(BasicTrainer):
         dropout_logits_id, targets_id, = [], []
         for inputs, targets in dataloader:
             inputs, targets = inputs.to(self.device), targets.to(self.device)
-            dropout_logits_id.append(self.model.mc_forward(inputs, self.model.k))
+            dropout_logits_id.append(self.model.mc_forward(inputs))
             targets_id.append(targets)
 
         # Transform to tensor
@@ -84,7 +84,7 @@ class MCDropoutTrainer(BasicTrainer):
                 dropout_logits_ood = []
                 for inputs, targets in dataloader_ood:
                     inputs, targets = inputs.to(self.device), targets.to(self.device)
-                    dropout_logits_ood.append(self.model.mc_forward(inputs, self.model.k))
+                    dropout_logits_ood.append(self.model.mc_forward(inputs))
                 dropout_logits_ood = torch.cat(dropout_logits_ood, dim=0).cpu()
                 dropout_probas_ood = dropout_logits_ood.softmax(dim=-1)
                 mean_probas_ood = torch.mean(dropout_probas_ood, dim=1)
