@@ -1,4 +1,5 @@
 import torch
+import random
 import numpy as np
 from torch.utils.data import Subset
 from . import mnist, fashion_mnist, svhn, cifar, tiny_imagenet, imagenet
@@ -210,13 +211,9 @@ def build_ssl_dataset(args):
         train_ds_weak, ds_info = cifar.build_cifar10('ssl_weak', args.dataset_path, return_info=True)
         train_ds_strong = cifar.build_cifar10('ssl_strong', args.dataset_path)
         test_ds = cifar.build_cifar10('test', args.dataset_path)
-
-        lb_idx, ulb_idx = sample_labeled_unlabeled_data(
-            train_ds_weak.targets, ds_info['n_classes'], lb_num_labels=args.n_labeled_samples,
-            ulb_num_labels=args.n_unlabeled_samples)
     else:
         raise NotImplementedError
-    return Subset(train_ds_weak, lb_idx), Subset(train_ds_weak, ulb_idx), Subset(train_ds_strong, ulb_idx), test_ds, ds_info
+    return Subset(train_ds_weak, random.sample(range(len(train_ds_weak)), k=args.n_labeled_samples)), train_ds_weak, train_ds_strong, test_ds, ds_info
 
 
 def sample_labeled_unlabeled_data(target, num_classes,
