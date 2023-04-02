@@ -73,7 +73,7 @@ def main(args):
     if use_distributed:
         model.to(args.device)
         rank = int(os.environ["LOCAL_RANK"])
-        model = DistributedDataParallel(model, device_ids=[rank], broadcast_buffers=False)
+        model = DistributedDataParallel(model, device_ids=[rank], broadcast_buffers=False, find_unused_parameters=True)
 
     # Adding necessary dataloaders as train kwargs
     if args.ssl_algorithm.name == 'fully_supervised':
