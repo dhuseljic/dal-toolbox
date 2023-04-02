@@ -2,7 +2,7 @@ import copy
 import torch
 import torch.nn as nn
 
-from .deterministic import bert, distilbert, roberta, lenet, resnet, wide_resnet
+from .deterministic import bert, distilbert, roberta, lenet, resnet, wide_resnet, wide_resnet_new
 from .deterministic import train as train_deterministic
 from .deterministic import evaluate as eval_deterministic
 
@@ -488,7 +488,7 @@ def build_wide_resnet_pimodel(n_classes, dropout_rate, lr, weight_decay, momentu
     return model_dict
 
 def build_wide_resnet_fixmatch(n_classes, dropout_rate, lr, weight_decay, momentum, device, p_cutoff, lambda_u, n_iter):
-    model = wide_resnet.wide_resnet_28_2(num_classes=n_classes, dropout_rate=dropout_rate)
+    model = wide_resnet_new.wide_resnet_28_2(num_classes=n_classes, dropout_rate=dropout_rate)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=True)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_iter)
     criterion = nn.CrossEntropyLoss()
@@ -505,7 +505,7 @@ def build_wide_resnet_fixmatch(n_classes, dropout_rate, lr, weight_decay, moment
     return model_dict
 
 def build_wide_resnet_flexmatch(n_classes, dropout_rate, lr, weight_decay, momentum, device, p_cutoff, lambda_u, n_iter):
-    model = wide_resnet.wide_resnet_28_2(num_classes=n_classes, dropout_rate=dropout_rate)
+    model = wide_resnet_new.wide_resnet_28_2(num_classes=n_classes, dropout_rate=dropout_rate)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=True)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_iter)
     criterion = nn.CrossEntropyLoss()
