@@ -427,8 +427,7 @@ def build_ssl_model(args, **kwargs):
             device=args.device,
             # SSL Parameters
             lambda_u=args.ssl_algorithm.lambda_u,
-            p_cutoff=args.ssl_algorithm.p_cutoff,
-            T=args.ssl_algorithm.T
+            p_cutoff=args.ssl_algorithm.p_cutoff
         )
     elif args.model.name == 'wideresnet282_deterministic' and args.ssl_algorithm.name == 'flexmatch':
         model_dict = build_wide_resnet_flexmatch(
@@ -441,8 +440,7 @@ def build_ssl_model(args, **kwargs):
             device=args.device,
             # SSL Parameters
             lambda_u=args.ssl_algorithm.lambda_u,
-            p_cutoff=args.ssl_algorithm.p_cutoff,
-            T=args.ssl_algorithm.T
+            p_cutoff=args.ssl_algorithm.p_cutoff
         )
     else:
         raise NotImplementedError()
@@ -489,7 +487,7 @@ def build_wide_resnet_pimodel(n_classes, dropout_rate, lr, weight_decay, momentu
     }
     return model_dict
 
-def build_wide_resnet_fixmatch(n_classes, dropout_rate, lr, weight_decay, momentum, device, p_cutoff, lambda_u, n_iter, T):
+def build_wide_resnet_fixmatch(n_classes, dropout_rate, lr, weight_decay, momentum, device, p_cutoff, lambda_u, n_iter):
     model = wide_resnet.wide_resnet_28_2(num_classes=n_classes, dropout_rate=dropout_rate)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=True)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_iter)
@@ -501,12 +499,12 @@ def build_wide_resnet_fixmatch(n_classes, dropout_rate, lr, weight_decay, moment
         'evaluate': eval_deterministic.evaluate,
         'lr_scheduler': lr_scheduler,
         'train_kwargs': dict(optimizer=optimizer, lr_scheduler=lr_scheduler, criterion=criterion, device=device,
-                             lambda_u=lambda_u, p_cutoff=p_cutoff, T=T),
+                             lambda_u=lambda_u, p_cutoff=p_cutoff),
         'eval_kwargs': dict(criterion=criterion, device=device),
     }
     return model_dict
 
-def build_wide_resnet_flexmatch(n_classes, dropout_rate, lr, weight_decay, momentum, device, p_cutoff, lambda_u, n_iter, T):
+def build_wide_resnet_flexmatch(n_classes, dropout_rate, lr, weight_decay, momentum, device, p_cutoff, lambda_u, n_iter):
     model = wide_resnet.wide_resnet_28_2(num_classes=n_classes, dropout_rate=dropout_rate)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=momentum, nesterov=True)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=n_iter)
@@ -518,7 +516,7 @@ def build_wide_resnet_flexmatch(n_classes, dropout_rate, lr, weight_decay, momen
         'evaluate': eval_deterministic.evaluate,
         'lr_scheduler': lr_scheduler,
         'train_kwargs': dict(optimizer=optimizer, lr_scheduler=lr_scheduler, criterion=criterion, device=device,
-                             lambda_u=lambda_u, p_cutoff=p_cutoff, T=T),
+                             lambda_u=lambda_u, p_cutoff=p_cutoff),
         'eval_kwargs': dict(criterion=criterion, device=device),
     }
     return model_dict

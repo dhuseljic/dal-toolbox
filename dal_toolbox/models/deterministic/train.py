@@ -134,8 +134,8 @@ def train_one_epoch_pseudolabel(model, labeled_loader, unlabeled_loader, criteri
     return train_stats
 
 
-def train_one_epoch_pimodel(model, labeled_loader, unlabeled_loader_weak_1, unlabeled_loader_weak_2, criterion, optimizer, lr_scheduler, n_iter, lambda_u, device, unsup_warmup=.4,
-                            epoch=None, print_freq=200):
+def train_one_epoch_pimodel(model, labeled_loader, unlabeled_loader_weak_1, unlabeled_loader_weak_2, criterion, optimizer, lr_scheduler, 
+                            n_iter, lambda_u, device, unsup_warmup=.4, epoch=None, print_freq=200):
     model.train()
     model.to(device)
     criterion.to(device)
@@ -188,7 +188,7 @@ def train_one_epoch_pimodel(model, labeled_loader, unlabeled_loader_weak_1, unla
 
 
 def train_one_epoch_fixmatch(model, optimizer, lr_scheduler, criterion, device, labeled_loader, unlabeled_loader_weak, unlabeled_loader_strong, 
-                    p_cutoff, lambda_u, T=1, epoch=None, print_freq=200):
+                    p_cutoff, lambda_u, epoch=None, print_freq=200):
     model.to(device)
     model.train()
     criterion.to(device)
@@ -215,7 +215,7 @@ def train_one_epoch_fixmatch(model, optimizer, lr_scheduler, criterion, device, 
         logits_s = model(x_s)
 
         # Calculate pseudolabels and mask
-        probas_w = torch.softmax(logits_w / T, dim=-1)
+        probas_w = torch.softmax(logits_w, dim=-1)
         y_probs, y_ps = probas_w.max(-1)
         mask = y_probs.ge(p_cutoff).to(device)
 
@@ -244,7 +244,7 @@ def train_one_epoch_fixmatch(model, optimizer, lr_scheduler, criterion, device, 
 
 
 def train_one_epoch_flexmatch(model, optimizer, lr_scheduler, criterion, device, labeled_loader, unlabeled_loader_weak, unlabeled_loader_strong, 
-                    unlabeled_loader_indices, p_cutoff, lambda_u, fmth, T=1, epoch=None, print_freq=200):
+                    unlabeled_loader_indices, p_cutoff, lambda_u, fmth, epoch=None, print_freq=200):
     model.to(device)
     model.train()
     criterion.to(device)
@@ -273,7 +273,7 @@ def train_one_epoch_flexmatch(model, optimizer, lr_scheduler, criterion, device,
         logits_s = model(x_s)
 
         # Calculate pseudolabels and mask
-        probas_w = torch.softmax(logits_w / T, dim=-1)
+        probas_w = torch.softmax(logits_w, dim=-1)
         _, y_ps = probas_w.max(-1)
         mask = fmth.masking(p_cutoff, probas_w, idx)
 
