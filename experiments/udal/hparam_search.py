@@ -14,7 +14,7 @@ from ray.tune.search.bayesopt import BayesOptSearch
 from ray.tune.search.repeater import Repeater
 
 from dal_toolbox import datasets
-from dal_toolbox.models import deterministic
+from dal_toolbox.models import deterministic, mc_dropout, ensemble
 from dal_toolbox.utils import seed_everything
 
 
@@ -27,6 +27,8 @@ def train(config, args):
         args.model.mixup_alpha = float(config['mixup_alpha'])
     elif 'label_smoothing' in config.keys():
         args.model.label_smoothing = float(config['label_smoothing'])
+    elif 'dropout_rate' in config.keys():
+        args.model.dropout_rate= float(config['dropout_rate'])
 
     print("Using model args: {}".format(args.model))
 
@@ -105,6 +107,26 @@ def build_search_space(args):
             {"lr": 1e-1, "weight_decay": 5e-4, 'mixup_alpha': 0.1},
             {"lr": 1e-2, "weight_decay": 0.05, 'mixup_alpha': 0.4},
         ]
+    elif args.model.name == 'resnet18_mcdropout':
+        search_space = {
+            "lr": tune.uniform(1e-4, .5),
+            "weight_decay": tune.uniform(0, .1),
+            "dropout_rate": tune.uniform(1e-4, .5),
+        }
+        points_to_evaluate = [
+            {"lr": 1e-1, "weight_decay": 5e-4, 'dropout_rate': 0.1},
+            {"lr": 1e-2, "weight_decay": 0.05, 'dropout_rate': 0.3},
+        ]
+    elif args.model.name == 'resnet18_ensemble':
+        # We only optimize a single value for all members
+        search_space = {
+            "lr": tune.uniform(1e-4, .5),
+            "weight_decay": tune.uniform(0, .1),
+        }
+        points_to_evaluate = [
+            {"lr": 1e-1, "weight_decay": 5e-4},
+            {"lr": 1e-2, "weight_decay": 0.05},
+        ]
     else:
         raise NotImplementedError('Model {} not implemented.'.format(args.model.name))
     return search_space, points_to_evaluate
@@ -173,6 +195,52 @@ def build_model(args, **kwargs):
             lr_scheduler=lr_scheduler,
             device=args.device,
             output_dir=args.output_dir
+        )
+    elif args.model.name == 'resnet18_mcdropout':
+        model = mc_dropout.resnet.DropoutResNet18(n_classes, args.model.n_passes, args.model.dropout_rate)
+        criterion = nn.CrossEntropyLoss()
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+            nesterov=True
+        )
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        trainer = mc_dropout.trainer.MCDropoutTrainer(
+            model=model,
+            optimizer=optimizer,
+            criterion=criterion,
+            lr_scheduler=lr_scheduler,
+            device=args.device,
+            output_dir=args.output_dir,
+        )
+    elif args.model.name == 'resnet18_ensemble':
+        members, lr_schedulers, optimizers = [], [], []
+        for _ in range(args.model.n_member):
+            mem = deterministic.resnet.ResNet18(n_classes)
+            opt = torch.optim.SGD(
+                mem.parameters(),
+                lr=args.model.optimizer.lr,
+                weight_decay=args.model.optimizer.weight_decay,
+                momentum=args.model.optimizer.momentum,
+                nesterov=True
+            )
+            lrs = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.model.n_epochs)
+            members.append(mem)
+            optimizers.append(opt)
+            lr_schedulers.append(lrs)
+        model = ensemble.voting_ensemble.Ensemble(members)
+        criterion = nn.CrossEntropyLoss()
+        optimizer = ensemble.voting_ensemble.EnsembleOptimizer(optimizers)
+        lr_scheduler = ensemble.voting_ensemble.EnsembleLRScheduler(lr_schedulers)
+        trainer = ensemble.trainer.EnsembleTrainer(
+            model=model,
+            criterion=criterion,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            device=args.device,
+            output_dir=args.output_dir,
         )
 
     else:
