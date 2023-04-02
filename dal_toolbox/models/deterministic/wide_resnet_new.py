@@ -104,24 +104,17 @@ class WideResNet(nn.Module):
                 nn.init.xavier_normal_(m.weight.data)
                 m.bias.data.zero_()
 
-    def forward(self, x, only_fc=False, only_feat=False, **kwargs):
+    def forward(self, x):
         """
         Args:
             x: input tensor, depends on only_fc and only_feat flag
             only_fc: only use classifier, input should be features before classifier
             only_feat: only return pooled features
         """
-
-        if only_fc:
-            return self.classifier(x)
         
         out = self.extract(x)
         out = F.adaptive_avg_pool2d(out, 1)
         out = out.view(-1, self.channels)
-
-        if only_feat:
-            return out
-        
         output = self.classifier(out)
         return output
 
