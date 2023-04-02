@@ -21,4 +21,5 @@ echo "Saving results to $OUTPUT_DIR"
 srun torchrun --standalone --nproc_per_node=2 main.py \
     ssl_algorithm=pseudo_labels \
     output_dir=$OUTPUT_DIR \
+    n_labeled_samples=250 \
     random_seed=$SLURM_ARRAY_TASK_ID
