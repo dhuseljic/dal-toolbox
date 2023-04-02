@@ -77,7 +77,6 @@ def train_one_epoch_bertmodel(model, dataloader, epoch, optimizer, scheduler, cr
 
 
 # SSL training methods
-@torch.autograd.detect_anomaly(check_nan=True)
 def train_one_epoch_pseudolabel(model, labeled_loader, unlabeled_loader, criterion, optimizer, lr_scheduler, n_iter, p_cutoff, lambda_u, device,
                                 unsup_warmup=.4, epoch=None, print_freq=200):
     model.train()
