@@ -73,10 +73,7 @@ def main(args):
     if use_distributed:
         model.to(args.device)
         rank = int(os.environ["LOCAL_RANK"])
-        model = DistributedDataParallel(model, device_ids=[rank])
-
-    # Debug
-    torch.autograd.set_detect_anomaly(True)
+        model = DistributedDataParallel(model, device_ids=[rank], broadcast_buffers=False)
 
     # Adding necessary dataloaders as train kwargs
     if args.ssl_algorithm.name == 'fully_supervised':
