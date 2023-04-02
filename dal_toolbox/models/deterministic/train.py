@@ -76,8 +76,6 @@ def train_one_epoch_bertmodel(model, dataloader, epoch, optimizer, scheduler, cr
     return train_stats
 
 
-
-
 # SSL training methods
 
 def train_one_epoch_pseudolabel(model, labeled_loader, unlabeled_loader, criterion, optimizer, lr_scheduler, n_iter, p_cutoff, lambda_u, device,
@@ -101,11 +99,12 @@ def train_one_epoch_pseudolabel(model, labeled_loader, unlabeled_loader, criteri
         # Get all necesseracy model outputs
         logits_l = model(x_l)
         bn_backup = freeze_bn(model)
-        logits_u = model(x_u)
+        with torch.no_grad():
+            logits_u = model(x_u)
         unfreeze_bn(model, bn_backup)
 
         # Generate pseudo labels and mask
-        probas_ulb = torch.softmax(logits_u.detach(), dim=-1)
+        probas_ulb = torch.softmax(logits_u, dim=-1)
         max_probas, pseudo_label = torch.max(probas_ulb, dim=-1)
         mask = max_probas.ge(p_cutoff)
 
