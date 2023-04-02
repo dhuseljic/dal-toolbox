@@ -207,17 +207,16 @@ def create_testsubset(complete_ds, args, hf_name):
 
 def build_ssl_dataset(args):
     if args.dataset == 'CIFAR10':
-        train_ds, ds_info = cifar.build_cifar10('ssl_weak', args.dataset_path, return_info=True)
-        query_ds_weak = cifar.build_cifar10('ssl_weak', args.dataset_path)
-        query_ds_strong = cifar.build_cifar10('ssl_strong', args.dataset_path)
-        test_ds_id = cifar.build_cifar10('test', args.dataset_path)
+        train_ds_weak, ds_info = cifar.build_cifar10('ssl_weak', args.dataset_path, return_info=True)
+        train_ds_strong = cifar.build_cifar10('ssl_strong', args.dataset_path)
+        test_ds = cifar.build_cifar10('test', args.dataset_path)
 
         lb_idx, ulb_idx = sample_labeled_unlabeled_data(
-            train_ds.targets, ds_info['n_classes'], lb_num_labels=args.n_labeled_samples,
+            train_ds_weak.targets, ds_info['n_classes'], lb_num_labels=args.n_labeled_samples,
             ulb_num_labels=args.n_unlabeled_samples)
     else:
         raise NotImplementedError
-    return Subset(train_ds, lb_idx), Subset(query_ds_weak, ulb_idx), Subset(query_ds_strong, ulb_idx), test_ds_id, ds_info
+    return Subset(train_ds_weak, lb_idx), Subset(train_ds_weak, ulb_idx), Subset(train_ds_strong, ulb_idx), test_ds, ds_info
 
 
 def sample_labeled_unlabeled_data(target, num_classes,
