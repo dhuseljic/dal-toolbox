@@ -2,7 +2,7 @@
 #SBATCH --mem=32gb
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
-#SBATCH --gres=gpu:4
+#SBATCH --gres=gpu:2
 #SBATCH --partition=main
 #SBATCH --job-name=flexmatch-250
 #SBATCH --output=/mnt/stud/work/phahn/uncertainty/logs/%x_%A_%a.log
@@ -18,7 +18,7 @@ cd /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation/experiments/semi_supe
 OUTPUT_DIR=/mnt/stud/work/phahn/uncertainty/${SLURM_JOB_NAME}_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}/
 echo "Saving results to $OUTPUT_DIR"
 
-srun torchrun --standalone --nproc_per_node=4 main.py \
+srun torchrun --standalone --nproc_per_node=2 main.py \
     ssl_algorithm=flexmatch \
     n_labeled_samples=250 \
     output_dir=$OUTPUT_DIR \
