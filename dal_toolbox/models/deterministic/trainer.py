@@ -3,6 +3,7 @@ import torch.nn as nn
 import numpy as np
 import torch.nn.functional as F
 
+from ..utils.ssl_utils import FlexMatchThresholdingHook
 from ..utils.trainer import BasicTrainer
 from ..utils import unfreeze_bn, freeze_bn
 from ...metrics import generalization, calibration, ood
@@ -164,11 +165,12 @@ class DeterministicMixupTrainer(DeterministicTrainer):
 
 
 class DeterministicPseudoLabelTrainer(DeterministicTrainer):
-    def __init__(self, model, criterion, n_classes, optimizer, n_iter, p_cutoff, unsup_warmup, lr_scheduler=None, device=None, output_dir=None, summary_writer=None, use_distributed=False):
+    def __init__(self, model, criterion, n_classes, optimizer, n_iter, p_cutoff, unsup_warmup, lambda_u, lr_scheduler=None, device=None, output_dir=None, summary_writer=None, use_distributed=False):
         super().__init__(model, optimizer, criterion, lr_scheduler, device, output_dir, summary_writer, use_distributed)
         self.n_classes = n_classes
         self.ce_loss = nn.CrossEntropyLoss(reduction='none')
         self.n_iter = n_iter
+        self.lambda_u = lambda_u
         self.p_cutoff = p_cutoff
         self.unsup_warmup = unsup_warmup
 
@@ -206,8 +208,8 @@ class DeterministicPseudoLabelTrainer(DeterministicTrainer):
 
             # Calculate Loss
             loss_l = self.criterion(logits_l, y_l)
-            loss_u = torch.mean(self.ce_loss(logits_u, pseudo_label, reduction='none') * mask)
-            loss = loss_l + self.unsup_warmup_factor * self.lambda_u * loss_u
+            loss_u = torch.mean(self.ce_loss(logits_u, pseudo_label) * mask)
+            loss = loss_l + self.unsup_warmup * self.lambda_u * loss_u
 
             # Backpropagation and Lr-Scheduler-Step
             self.optimizer.zero_grad()
@@ -224,6 +226,7 @@ class DeterministicPseudoLabelTrainer(DeterministicTrainer):
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size_l)
             metric_logger.meters["pseudo_acc1"].update(pseudo_acc1.item(), n=batch_size_u)
 
+        metric_logger.synchronize_between_processes()
         train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
         return train_stats
     
@@ -285,6 +288,7 @@ class DeterministicPiModelTrainer(DeterministicTrainer):
                                 unsup_warmup_factor=unsup_warmup_factor, lr=self.optimizer.param_groups[0]["lr"])
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
 
+        metric_logger.synchronize_between_processes()
         train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
         return train_stats
 
@@ -351,13 +355,14 @@ class DeterministicFixMatchTrainer(DeterministicTrainer):
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
             metric_logger.meters["pseudo_acc1"].update(pseudo_acc1.item(), n=ulb_batch_size)
             
+        metric_logger.synchronize_between_processes()
         train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
         return train_stats
     
 
 
 class DeterministicFlexMatchTrainer(DeterministicTrainer):
-    def __init__(self, model, criterion, n_classes, optimizer, n_iter, lambda_u, unsup_warmup, p_cutoff, fmth, lr_scheduler=None, device=None, output_dir=None, summary_writer=None, use_distributed=False):
+    def __init__(self, model, criterion, n_classes, optimizer, n_iter, lambda_u, unsup_warmup, p_cutoff, ulb_ds_len, lr_scheduler=None, device=None, output_dir=None, summary_writer=None, use_distributed=False):
         super().__init__(model, optimizer, criterion, lr_scheduler, device, output_dir, summary_writer, use_distributed)
         self.n_classes = n_classes
         self.lambda_u = lambda_u
@@ -365,7 +370,7 @@ class DeterministicFlexMatchTrainer(DeterministicTrainer):
         self.unsup_warmup = unsup_warmup
         self.p_cutoff = p_cutoff
         self.ce_loss = nn.CrossEntropyLoss(reduction='none')
-        self.fmth = fmth
+        self.fmth = FlexMatchThresholdingHook(ulb_dest_len=ulb_ds_len, num_classes=n_classes, thresh_warmup=True)
 
     def train_one_epoch(self, labeled_loader, unlabeled_loader_weak, unlabeled_loader_strong, unlabeled_loader_indices, epoch=None, print_freq=200):
         self.model.to(self.device)
@@ -419,6 +424,7 @@ class DeterministicFlexMatchTrainer(DeterministicTrainer):
                                 unsupervised_loss=loss_u.mean().item(), mask_ratio=mask.float().mean().item())
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
             metric_logger.meters["pseudo_acc1"].update(pseudo_acc1.item(), n=ulb_batch_size)
-            
+        
+        metric_logger.synchronize_between_processes()
         train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
         return train_stats
