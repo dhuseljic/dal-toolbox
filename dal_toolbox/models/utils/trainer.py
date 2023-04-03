@@ -38,7 +38,7 @@ class BasicTrainer(abc.ABC):
         if self.use_distributed:
             self.model.to(device)
             rank = int(os.environ["LOCAL_RANK"])
-            self.model = DistributedDataParallel(model, device_ids=[rank], broadcast_buffers=False, find_unused_parameters=True)
+            self.model = DistributedDataParallel(model, device_ids=[rank], broadcast_buffers=False)
 
         self.init_model_state = copy.deepcopy(self.model.state_dict())
         self.init_optimizer_state = copy.deepcopy(self.optimizer.state_dict())

@@ -349,7 +349,7 @@ class DeterministicFixMatchTrainer(DeterministicTrainer):
             batch_size, ulb_batch_size = x_l.shape[0], x_s.shape[0]
             acc1, = generalization.accuracy(logits_l, y_l, topk=(1,))
             pseudo_acc1, = generalization.accuracy(logits_w, y_w, topk=(1,))
-            metric_logger.update(loss=loss.item(), supervised_loss=loss_l.mean().item(), lr=self.optimizer.param_groups[0]["lr"],
+            metric_logger.update(loss=loss.item(), supervised_loss=loss_l.item(), lr=self.optimizer.param_groups[0]["lr"],
                                 unsupervised_loss=loss_u.item(), mask_ratio=mask.float().mean().item())
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
             metric_logger.meters["pseudo_acc1"].update(pseudo_acc1.item(), n=ulb_batch_size)
@@ -418,8 +418,8 @@ class DeterministicFlexMatchTrainer(DeterministicTrainer):
             batch_size, ulb_batch_size = x_l.shape[0], x_s.shape[0]
             acc1, = generalization.accuracy(logits_l, y_l, topk=(1,))
             pseudo_acc1, = generalization.accuracy(logits_w, y_w, topk=(1,))
-            metric_logger.update(loss=loss.item(), supervised_loss=loss_l.mean().item(), lr=self.optimizer.param_groups[0]["lr"],
-                                unsupervised_loss=loss_u.mean().item(), mask_ratio=mask.float().mean().item())
+            metric_logger.update(loss=loss.item(), supervised_loss=loss_l.item(), lr=self.optimizer.param_groups[0]["lr"],
+                                unsupervised_loss=loss_u.item(), mask_ratio=mask.float().mean().item())
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
             metric_logger.meters["pseudo_acc1"].update(pseudo_acc1.item(), n=ulb_batch_size)
         
