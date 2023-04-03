@@ -295,12 +295,11 @@ class DeterministicPiModelTrainer(DeterministicTrainer):
 
 
 class DeterministicFixMatchTrainer(DeterministicTrainer):
-    def __init__(self, model, criterion, n_classes, optimizer, n_iter, lambda_u, unsup_warmup, p_cutoff, lr_scheduler=None, device=None, output_dir=None, summary_writer=None, use_distributed=False):
+    def __init__(self, model, criterion, n_classes, optimizer, n_iter, lambda_u, p_cutoff, lr_scheduler=None, device=None, output_dir=None, summary_writer=None, use_distributed=False):
         super().__init__(model, optimizer, criterion, lr_scheduler, device, output_dir, summary_writer, use_distributed)
         self.n_classes = n_classes
         self.lambda_u = lambda_u
         self.n_iter = n_iter
-        self.unsup_warmup = unsup_warmup
         self.p_cutoff = p_cutoff
         self.ce_loss = nn.CrossEntropyLoss(reduction='none')
 
@@ -362,12 +361,11 @@ class DeterministicFixMatchTrainer(DeterministicTrainer):
 
 
 class DeterministicFlexMatchTrainer(DeterministicTrainer):
-    def __init__(self, model, criterion, n_classes, optimizer, n_iter, lambda_u, unsup_warmup, p_cutoff, ulb_ds_len, lr_scheduler=None, device=None, output_dir=None, summary_writer=None, use_distributed=False):
+    def __init__(self, model, criterion, n_classes, optimizer, n_iter, lambda_u, p_cutoff, ulb_ds_len, lr_scheduler=None, device=None, output_dir=None, summary_writer=None, use_distributed=False):
         super().__init__(model, optimizer, criterion, lr_scheduler, device, output_dir, summary_writer, use_distributed)
         self.n_classes = n_classes
         self.lambda_u = lambda_u
         self.n_iter = n_iter
-        self.unsup_warmup = unsup_warmup
         self.p_cutoff = p_cutoff
         self.ce_loss = nn.CrossEntropyLoss(reduction='none')
         self.fmth = FlexMatchThresholdingHook(ulb_dest_len=ulb_ds_len, num_classes=n_classes, thresh_warmup=True)

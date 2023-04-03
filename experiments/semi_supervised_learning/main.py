@@ -7,7 +7,6 @@ import numpy as np
 
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader, RandomSampler, Subset
-from torch.nn.parallel import DistributedDataParallel
 from torch.distributed import destroy_process_group
 from omegaconf import OmegaConf
 
@@ -33,7 +32,7 @@ def main(args):
     misc = {}
     writer = SummaryWriter(log_dir=args.output_dir)
 
-    # Setup Dataset
+    # Setup Dataloaders for training and evaluation
     logging.info('Building datasets. Creating labeled pool with %s samples and \
         unlabeled pool with %s samples.', args.n_labeled_samples, args.n_unlabeled_samples)
     trainloaders, testloaders, num_classes = build_dataloaders(args, use_distributed)
@@ -51,20 +50,15 @@ def main(args):
 
         # Train model for one epoch
         logging.info('Training epoch %s', i_epoch)
-        train_stats = trainer.train_one_epoch(
-            **trainloaders, epoch=i_epoch
-        )
-
+        train_stats = trainer.train_one_epoch(**trainloaders, epoch=i_epoch)
         for key, value in train_stats.items():
             writer.add_scalar(tag=f"train/{key}", scalar_value=value, global_step=i_epoch)
-        logging.info('Training stats: %s', train_stats)
 
         # Evaluate model on test set
         logging.info('Evaluation epoch %s', i_epoch)
         test_stats = trainer.evaluate(**testloaders)
         for key, value in test_stats.items():
             writer.add_scalar(tag=f"test/{key}", scalar_value=value, global_step=i_epoch)
-        logging.info('Evaluation stats: %s', test_stats)
 
         # Save results
         history_train.append(train_stats)
@@ -107,19 +101,20 @@ def build_trainer(args, num_classes, summary_writer, use_distributed):
         trainer = DeterministicPiModelTrainer(
             model=model, n_classes=num_classes, n_iter=args.model.n_iter, unsup_warmup=args.ssl_algorithm.unsup_warmup, 
             optimizer=optimizer, criterion=criterion, lr_scheduler=lr_scheduler, device=args.device, output_dir=args.output_dir, 
-            summary_writer=summary_writer, use_distributed=use_distributed
+            summary_writer=summary_writer, use_distributed=use_distributed, lambda_u=args.ssl_algorithm.lambda_u
         )
     elif args.ssl_algorithm.name == 'fixmatch':
         trainer = DeterministicFixMatchTrainer(
-            model=model, n_classes=num_classes, n_iter=args.model.n_iter, unsup_warmup=args.ssl_algorithm.unsup_warmup, 
+            model=model, n_classes=num_classes, n_iter=args.model.n_iter, p_cutoff=args.ssl_algorithm.p_cutoff,
             optimizer=optimizer, criterion=criterion, lr_scheduler=lr_scheduler, device=args.device, output_dir=args.output_dir, 
-            summary_writer=summary_writer, use_distributed=use_distributed, p_cutoff=args.ssl_algorithm.p_cutoff
+            summary_writer=summary_writer, use_distributed=use_distributed, lambda_u=args.ssl_algorithm.lambda_u
         )
     elif args.ssl_algorithm.name == 'flexmatch':
         trainer = DeterministicFlexMatchTrainer(
-            model=model, n_classes=num_classes, n_iter=args.model.n_iter, unsup_warmup=args.ssl_algorithm.unsup_warmup, 
+            model=model, n_classes=num_classes, n_iter=args.model.n_iter, p_cutoff=args.ssl_algorithm.p_cutoff,
             optimizer=optimizer, criterion=criterion, lr_scheduler=lr_scheduler, device=args.device, output_dir=args.output_dir, 
-            summary_writer=summary_writer, use_distributed=use_distributed, p_cutoff=args.ssl_algorithm.p_cutoff
+            summary_writer=summary_writer, use_distributed=use_distributed, lambda_u=args.ssl_algorithm.lambda_u, 
+            ulb_ds_len=args.n_unlabeled_samples
         )
     else:
         assert True, 'algorithm not kown'
