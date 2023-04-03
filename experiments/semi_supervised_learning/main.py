@@ -146,7 +146,7 @@ def build_dataloaders(args, use_distributed):
     supervised_loader = DataLoader(train_ds_labeled, batch_size=args.model.batch_size, sampler=supervised_sampler)
     unsupervised_loader_weak_1 = DataLoader(train_ds_weak_aug, batch_size=int(args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=random_sampler_weak_1)
     unsupervised_loader_weak_2 = DataLoader(train_ds_weak_aug, batch_size=int(args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=random_sampler_weak_2)
-    unsupervised_loader_strong = DataLoader(train_ds_weak_aug, batch_size=int(args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=random_sampler_strong)
+    unsupervised_loader_strong = DataLoader(train_ds_strong_aug, batch_size=int(args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=random_sampler_strong)
     unsupervised_loader_idx = DataLoader(range(len(train_ds_weak_aug)), batch_size=int(args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=random_sampler_idx)
     val_loader = DataLoader(test_ds, batch_size=args.val_batch_size)
 
