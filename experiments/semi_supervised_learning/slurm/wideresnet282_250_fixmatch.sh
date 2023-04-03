@@ -22,4 +22,5 @@ srun torchrun --standalone --nproc_per_node=2 main.py \
     ssl_algorithm=fixmatch \
     n_labeled_samples=250 \
     output_dir=$OUTPUT_DIR \
-    random_seed=$SLURM_ARRAY_TASK_ID
+    random_seed=$SLURM_ARRAY_TASK_ID \
+    model.batch_size=32
