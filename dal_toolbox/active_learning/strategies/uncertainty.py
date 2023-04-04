@@ -61,9 +61,8 @@ class BayesianUncertaintySampling(UncertaintySampling):
         return scores
 
 
-class VariationRatioSampling(Query):
+class VariationRatioSampling(UncertaintySampling):
 
-    # TODO: should be in own file, so we can use it without the class
     def variation_ratio(self, logits: torch.Tensor) -> torch.Tensor:
         """
         Computes the variation ratio for each sample in a Bayesian model. The variation ratio is
@@ -83,6 +82,7 @@ class VariationRatioSampling(Query):
             ValueError: If logits tensor is not 3-dimensional.
 
         """
+        # TODO: should be in own file, so we can use it without the class
         if logits.ndim != 3:
             raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
         n_member = logits.size(1)
@@ -103,24 +103,16 @@ class VariationRatioSampling(Query):
 
     @torch.no_grad()
     def query(self, model, dataset, unlabeled_indices, acq_size, **kwargs):
-        if not hasattr(model, 'get_probas'):
-            raise ValueError('The method `get_probas` is mandatory to use uncertainty sampling.')
+        if not hasattr(model, 'get_logits'):
+            raise ValueError('The method `get_logits` is mandatory to use variation ratio sampling.')
 
         if self.subset_size:
             unlabeled_indices = self.rng.sample(unlabeled_indices, k=self.subset_size)
 
-        if "collator" in list(kwargs.keys()):
-            dataloader = DataLoader(
-                dataset,
-                batch_size=self.batch_size*2,
-                collate_fn=kwargs['collator'],
-                sampler=unlabeled_indices)
-        else:
-            dataloader = DataLoader(dataset, batch_size=self.batch_size, sampler=unlabeled_indices)
-
-        del kwargs
-        probas = model.get_probas(dataloader, device=self.device)
-        scores = self.variation_ratio(probas)
+        dataloader = DataLoader(dataset, batch_size=self.batch_size,
+                                sampler=unlabeled_indices, collate_fn=kwargs.get("collator"))
+        logits = model.get_logits(dataloader, device=self.device)
+        scores = self.variation_ratio(logits)
         _, indices = scores.topk(acq_size)
 
         actual_indices = [unlabeled_indices[i] for i in indices]
