@@ -28,7 +28,7 @@ def train(config, args):
     elif 'label_smoothing' in config.keys():
         args.model.label_smoothing = float(config['label_smoothing'])
     elif 'dropout_rate' in config.keys():
-        args.model.dropout_rate= float(config['dropout_rate'])
+        args.model.dropout_rate = float(config['dropout_rate'])
 
     print("Using model args: {}".format(args.model))
 
@@ -52,7 +52,7 @@ def train(config, args):
 def main(args):
     logger = logging.getLogger()
     logger.info('Using setup: %s', args)
-    
+
     # Setup Search space
     search_space, points_to_evaluate = build_search_space(args)
     search_alg = BayesOptSearch(points_to_evaluate=points_to_evaluate)
@@ -60,16 +60,15 @@ def main(args):
     tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=args.n_opt_samples *
                                   args.n_reps, metric="test_nll", mode="min")
 
-    # Setup tuner and objective
-    objective = tune.with_resources(train, resources={'cpu': args.cpus_per_trial, 'gpu': args.gpus_per_trial})
-    objective = tune.with_parameters(objective, args=args)
-
     # Init ray, if we are using slurm, set cpu and gpus
     adress = 'auto' if args.distributed else None
     num_cpus = int(os.environ.get('SLURM_CPUS_PER_TASK', args.cpus_per_trial))
     num_gpus = torch.cuda.device_count()
     ray.init(address=adress, num_cpus=num_cpus, num_gpus=num_gpus)
 
+    # Setup tuner and objective
+    objective = tune.with_resources(train, resources={'cpu': num_cpus//num_gpus, 'gpu': args.gpus_per_trial})
+    objective = tune.with_parameters(objective, args=args)
     tuner = tune.Tuner(objective, param_space=search_space, tune_config=tune_config)
     results = tuner.fit()
     print('Best NLL Hyperparameter: {}'.format(results.get_best_result()))
