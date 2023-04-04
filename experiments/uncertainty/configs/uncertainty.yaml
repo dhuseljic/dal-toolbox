@@ -3,7 +3,7 @@ defaults:
   - model: 'resnet18'
 
 dataset: CIFAR10 
-dataset_path: ./data # /mnt/datasets/imagenet/ILSVRC2012/downloads
+dataset_path: ./data/
 ood_datasets: ["SVHN"]
 n_samples: null
 eval_interval: 1

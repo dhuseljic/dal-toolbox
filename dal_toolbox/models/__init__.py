@@ -6,23 +6,18 @@ from .deterministic import bert, distilbert, roberta, lenet, resnet, wide_resnet
 from .deterministic import train as train_deterministic
 from .deterministic import evaluate as eval_deterministic
 
-from .mc_dropout import resnet as resnet_mcdropout
 from .mc_dropout import wide_resnet as wide_resnet_mcdropout
-from .mc_dropout import train as train_mcdropout
-from .mc_dropout import evaluate as eval_mcdropout
 
 from .ensemble import voting_ensemble
 from .ensemble import train as train_ensemble
 from .ensemble import evaluate as eval_ensemble
 
-from .sngp import resnet as resnet_sngp
 from .sngp import wide_resnet as wide_resnet_sngp
-from .sngp import train as train_sngp
-from .sngp import evaluate as eval_sngp
 
 
 def build_model(args, **kwargs):
     n_classes = kwargs['n_classes']
+
     if args.model.name == 'resnet18_labelsmoothing':
         model = resnet.ResNet18(n_classes)
         optimizer = torch.optim.SGD(
@@ -41,6 +36,27 @@ def build_model(args, **kwargs):
             'evaluate': eval_deterministic.evaluate,
             'lr_scheduler': lr_scheduler,
             'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device),
+            'eval_kwargs': dict(criterion=criterion, device=args.device),
+        }
+
+    elif args.model.name == 'resnet18_mixup':
+        model = resnet.ResNet18(n_classes)
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+            nesterov=True,
+        )
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        criterion = nn.CrossEntropyLoss()
+        model_dict = {
+            'model': model,
+            'optimizer': optimizer,
+            'train_one_epoch': train_deterministic.train_one_epoch_mixup,
+            'evaluate': eval_deterministic.evaluate,
+            'lr_scheduler': lr_scheduler,
+            'train_kwargs': dict(optimizer=optimizer, criterion=criterion, device=args.device, alpha=args.model.alpha),
             'eval_kwargs': dict(criterion=criterion, device=args.device),
         }
 
