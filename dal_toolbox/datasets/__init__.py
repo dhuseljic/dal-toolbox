@@ -1,6 +1,4 @@
 import torch
-import random
-import numpy as np
 from torch.utils.data import Subset
 from . import mnist, fashion_mnist, svhn, cifar, tiny_imagenet, imagenet
 from .activeglae import agnews, banks77, dbpedia, fnc1, mnli, qnli, sst2, trec6, wikitalk, yelp5
@@ -205,68 +203,3 @@ def create_testsubset(complete_ds, args, hf_name):
         test_ds_id = complete_ds[hf_name]
     return test_ds_id
 
-
-def build_ssl_dataset(args):
-    if args.dataset == 'CIFAR10':
-        train_ds_weak, ds_info = cifar.build_cifar10('ssl_weak', args.dataset_path, return_info=True)
-        train_ds_strong = cifar.build_cifar10('ssl_strong', args.dataset_path)
-        test_ds = cifar.build_cifar10('test', args.dataset_path)
-    else:
-        raise NotImplementedError
-    return Subset(train_ds_weak, random.sample(range(len(train_ds_weak)), k=args.n_labeled_samples)), train_ds_weak, train_ds_strong, test_ds, ds_info
-
-
-def sample_labeled_unlabeled_data(target, num_classes,
-                                  lb_num_labels, ulb_num_labels=None,
-                                  lb_imbalance_ratio=1.0, ulb_imbalance_ratio=1.0):
-    '''
-    samples for labeled data
-    (sampling with balanced ratio over classes)
-    '''
-    # get samples per class
-    if lb_imbalance_ratio == 1.0:
-        # balanced setting, lb_num_labels is total number of labels for labeled data
-        assert lb_num_labels % num_classes == 0, "lb_num_labels must be divideable by num_classes in balanced setting"
-        lb_samples_per_class = [int(lb_num_labels / num_classes)] * num_classes
-    else:
-        # imbalanced setting, lb_num_labels is the maximum number of labels for class 1
-        lb_samples_per_class = make_imbalance_data(lb_num_labels, num_classes, lb_imbalance_ratio)
-
-    if ulb_imbalance_ratio == 1.0:
-        # balanced setting
-        if ulb_num_labels is not None and ulb_num_labels != 'None':
-            assert ulb_num_labels % num_classes == 0, "ulb_num_labels must be divideable by num_classes in balanced setting"
-            ulb_samples_per_class = [int(ulb_num_labels / num_classes)] * num_classes
-        else:
-            ulb_samples_per_class = None
-    else:
-        # imbalanced setting
-        assert ulb_num_labels is not None, "ulb_num_labels must be set set in imbalanced setting"
-        ulb_samples_per_class = make_imbalance_data(ulb_num_labels, num_classes, ulb_imbalance_ratio)
-
-    lb_idx = []
-    ulb_idx = []
-
-    for c in range(num_classes):
-        idx = np.array([i for i in range(len(target)) if target[i] == c])
-        np.random.shuffle(idx)
-        lb_idx.extend(idx[:lb_samples_per_class[c]])
-        if ulb_samples_per_class is None:
-            ulb_idx.extend(idx[lb_samples_per_class[c]:])
-        else:
-            ulb_idx.extend(idx[lb_samples_per_class[c]:lb_samples_per_class[c]+ulb_samples_per_class[c]])
-
-    return lb_idx, ulb_idx
-
-
-def make_imbalance_data(max_num_labels, num_classes, gamma):
-    mu = np.power(1 / abs(gamma), 1 / (num_classes - 1))
-    samples_per_class = []
-    for c in range(num_classes):
-        if c == (num_classes - 1):
-            samples_per_class.append(int(max_num_labels / abs(gamma)))
-        else:
-            samples_per_class.append(int(max_num_labels * np.power(mu, c)))
-    if gamma < 0:
-        samples_per_class = samples_per_class[::-1]
-    return samples_per_class

@@ -11,8 +11,6 @@ source /mnt/stud/home/phahn/.zshrc
 
 conda activate uncertainty_evaluation
 
-git checkout 47-implement-data-distributed-parallel-for-ssl
-
 cd /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation/experiments/semi_supervised_learning
 
 OUTPUT_DIR=/mnt/stud/work/phahn/uncertainty/${SLURM_JOB_NAME}_${SLURM_JOB_ID}_${SLURM_ARRAY_TASK_ID}/
