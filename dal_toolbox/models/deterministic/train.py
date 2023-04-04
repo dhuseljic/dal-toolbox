@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from torch.autograd import Variable
 import numpy as np
 
 from ..utils import unfreeze_bn, freeze_bn
@@ -275,6 +275,43 @@ def train_one_epoch_fixmatch(model, dataloaders, criterion, optimizer, device,
             sup_loss=sup_loss.item(), unsup_loss=unsup_loss.item(), mask_ratio=mask.float().mean().item(),
             total_loss=total_loss.item(), lr=optimizer.param_groups[0]["lr"]
         )
+        metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
+    train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
+
+    return train_stats
+
+
+def train_one_epoch_mixup(model, dataloader, criterion, optimizer, device, alpha, epoch=None, print_freq=200):
+    model.train()
+    model.to(device)
+    criterion.to(device)
+
+    metric_logger = MetricLogger(delimiter=" ")
+    metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
+    header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
+
+    # Train the epoch
+    for inputs, targets in metric_logger.log_every(dataloader, print_freq, header):
+        inputs, targets = inputs.to(device), targets.to(device)
+        batch_size = inputs.shape[0]
+
+        # Creating Mixup Data
+        lam = 1 if alpha <= 0 else np.random.beta(alpha, alpha)
+        idx_shuffled = torch.randperm(batch_size).to(device)
+        mixed_inputs = lam * inputs + (1 - lam) * inputs[idx_shuffled, :]
+        targets_a, targets_b = targets, targets[idx_shuffled]
+        mixed_inputs, targets_a, targets_b = map(Variable, (mixed_inputs, targets_a, targets_b))
+
+        mixed_outputs = model(mixed_inputs)
+        loss = lam * criterion(mixed_outputs, targets_a) + (1 - lam) * criterion(mixed_outputs, targets_b)
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        _, predicted = torch.max(mixed_outputs.data, 1)
+        acc1 = 100 * (lam * predicted.eq(targets_a.data).cpu().sum().float() + (1 - lam) * predicted.eq(targets_b.data).cpu().sum().float()) / batch_size
+        metric_logger.update(loss=loss.item(), lr=optimizer.param_groups[0]["lr"])
         metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
     train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
 
