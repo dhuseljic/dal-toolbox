@@ -15,12 +15,15 @@ class UncertaintySampling(Query):
         self.device = device
 
     def get_scores(self, probas):
+        if probas.ndim != 2:
+            raise ValueError(f"Input probas tensor must be 2-dimensional, got shape {probas.shape}")
+
         if self.uncertainty_type == 'least_confident':
             scores, _ = probas.min(dim=-1)
         elif self.uncertainty_type == 'entropy':
             scores = ood.entropy_fn(probas)
         else:
-            raise NotImplementedError(f"{self.uncertainty_type} is not implemented!")
+            raise NotImplementedError(f"Type {self.uncertainty_type} is not implemented")
         return scores
 
     @torch.no_grad()
@@ -31,16 +34,9 @@ class UncertaintySampling(Query):
         if self.subset_size:
             unlabeled_indices = self.rng.sample(unlabeled_indices, k=self.subset_size)
 
-        if "collator" in list(kwargs.keys()):
-            dataloader = DataLoader(
-                dataset,
-                batch_size=self.batch_size*2,
-                collate_fn=kwargs['collator'],
-                sampler=unlabeled_indices)
-        else:
-            dataloader = DataLoader(dataset, batch_size=self.batch_size, sampler=unlabeled_indices)
+        dataloader = DataLoader(dataset, batch_size=self.batch_size,
+                                sampler=unlabeled_indices, collate_fn=kwargs.get("collator"))
 
-        del kwargs
         probas = model.get_probas(dataloader, device=self.device)
         scores = self.get_scores(probas)
         _, indices = scores.topk(acq_size)
@@ -51,23 +47,18 @@ class UncertaintySampling(Query):
 
 class BayesianUncertaintySampling(UncertaintySampling):
 
-    @torch.no_grad()
-    def query(self, model, dataset, unlabeled_indices, acq_size, **kwargs):
-        del kwargs
-        if not hasattr(model, 'get_probas'):
-            raise ValueError('The method `get_probas` is mandatory to use uncertainty sampling.')
-
-        if self.subset_size:
-            unlabeled_indices = self.rng.sample(unlabeled_indices, k=self.subset_size)
-
-        dataloader = DataLoader(dataset, batch_size=self.batch_size, sampler=unlabeled_indices)
-        probas = model.get_probas(dataloader, device=self.device)
+    def get_scores(self, probas):
+        if probas.ndim != 3:
+            raise ValueError(f"Input probas tensor must be 3-dimensional, got shape {probas.shape}")
         probas = probas.mean(dim=1)
-        scores = self.get_scores(probas)
-        _, indices = scores.topk(acq_size)
+        if self.uncertainty_type == 'least_confident':
+            scores, _ = probas.min(dim=-1)
+        elif self.uncertainty_type == 'entropy':
+            scores = ood.entropy_fn(probas)
+        else:
+            raise NotImplementedError(f"Type {self.uncertainty_type} is not implemented")
 
-        actual_indices = [unlabeled_indices[i] for i in indices]
-        return actual_indices
+        return scores
 
 
 class VariationRatioSampling(Query):

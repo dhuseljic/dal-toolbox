@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import numpy as np
 import torch.nn.functional as F
-import matplotlib.pyplot as plt
 
 from ..utils import unfreeze_bn, freeze_bn
 from ..utils.ssl_utils import FlexMatchThresholdingHook

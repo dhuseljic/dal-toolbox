@@ -2,7 +2,7 @@ import copy
 import torch
 import torch.nn as nn
 
-from .deterministic import bert, distilbert, roberta, lenet, resnet, wide_resnet, wide_resnet_new
+from .deterministic import bert, distilbert, roberta, lenet, resnet, wide_resnet
 from .deterministic import train as train_deterministic
 from .deterministic import evaluate as eval_deterministic
 
