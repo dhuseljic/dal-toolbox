@@ -5,25 +5,28 @@ from .corruptions import GaussianNoise, RandAugment
 
 def build_cifar10(split, ds_path, mean=(0.4914, 0.4822, 0.4465), std=(0.247, 0.243, 0.262), return_info=False):
     train_transform = transforms.Compose([
+        transforms.Resize(32),
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize(mean, std),
     ])
     ssl_transform_weak = transforms.Compose([
+        transforms.Resize(32),
         transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize(mean, std),
     ])
     ssl_transform_strong = transforms.Compose([
+        transforms.Resize(32),
         transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
         transforms.RandomHorizontalFlip(),
         RandAugment(3, 5),
         transforms.ToTensor(),
         transforms.Normalize(mean, std)
     ])
-    eval_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean, std)])
+    eval_transform = transforms.Compose([transforms.Resize(32), transforms.ToTensor(), transforms.Normalize(mean, std)])
     if split == 'train':
         ds = torchvision.datasets.CIFAR10(ds_path, train=True, download=True, transform=train_transform)
     elif split == 'query':

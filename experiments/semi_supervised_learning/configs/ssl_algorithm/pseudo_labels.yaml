@@ -1,0 +1,5 @@
+name: pseudo_labels
+u_ratio: 1
+lambda_u: 1
+p_cutoff: 0.95
+unsup_warmup: 0.4
