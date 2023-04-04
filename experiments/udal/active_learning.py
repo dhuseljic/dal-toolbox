@@ -124,6 +124,7 @@ def build_query(args, **kwargs):
         query = uncertainty.UncertaintySampling(
             uncertainty_type=args.al_strategy.uncertainty_type,
             subset_size=args.al_strategy.subset_size,
+            random_seed=args.random_seed,
             device=device,
         )
     elif args.al_strategy.name == "bayesian_uncertainty":
@@ -132,6 +133,7 @@ def build_query(args, **kwargs):
             batch_size=256,
             uncertainty_type=args.al_strategy.uncertainty_type,
             subset_size=args.al_strategy.subset_size,
+            random_seed=args.random_seed,
             device=device,
         )
     elif args.al_strategy.name == "coreset":

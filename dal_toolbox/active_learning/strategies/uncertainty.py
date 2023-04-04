@@ -7,8 +7,8 @@ from ...metrics import ood
 
 
 class UncertaintySampling(Query):
-    def __init__(self, batch_size=16, uncertainty_type='entropy', subset_size=None, device='cuda'):
-        super().__init__()
+    def __init__(self, batch_size=16, uncertainty_type='entropy', subset_size=None, device='cuda', random_seed=None):
+        super().__init__(random_seed=random_seed)
         self.uncertainty_type = uncertainty_type
         self.subset_size = subset_size
         self.batch_size = batch_size
@@ -32,7 +32,7 @@ class UncertaintySampling(Query):
             raise ValueError('The method `get_probas` is mandatory to use uncertainty sampling.')
 
         if self.subset_size:
-            unlabeled_indices = self.rng.sample(unlabeled_indices, k=self.subset_size)
+            unlabeled_indices = self.rng.choice(unlabeled_indices, size=self.subset_size, replace=False)
 
         dataloader = DataLoader(dataset, batch_size=self.batch_size,
                                 sampler=unlabeled_indices, collate_fn=kwargs.get("collator"))
@@ -107,7 +107,7 @@ class VariationRatioSampling(UncertaintySampling):
             raise ValueError('The method `get_logits` is mandatory to use variation ratio sampling.')
 
         if self.subset_size:
-            unlabeled_indices = self.rng.sample(unlabeled_indices, k=self.subset_size)
+            unlabeled_indices = self.rng.choice(unlabeled_indices, size=self.subset_size, replace=False)
 
         dataloader = DataLoader(dataset, batch_size=self.batch_size,
                                 sampler=unlabeled_indices, collate_fn=kwargs.get("collator"))
