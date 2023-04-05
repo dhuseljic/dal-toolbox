@@ -117,38 +117,40 @@ def main(args):
 
 
 def build_query(args, **kwargs):
+    device = kwargs.get('device', 'cuda')
     if args.al_strategy.name == "random":
         query = random.RandomSampling(random_seed=args.random_seed)
     elif args.al_strategy.name == "uncertainty":
-        device = kwargs['device']
         query = uncertainty.UncertaintySampling(
+            batch_size=args.model.batch_size,
             uncertainty_type=args.al_strategy.uncertainty_type,
             subset_size=args.al_strategy.subset_size,
             random_seed=args.random_seed,
             device=device,
         )
     elif args.al_strategy.name == "bayesian_uncertainty":
-        device = kwargs['device']
         query = uncertainty.BayesianUncertaintySampling(
-            batch_size=256,
+            batch_size=args.model.batch_size,
             uncertainty_type=args.al_strategy.uncertainty_type,
             subset_size=args.al_strategy.subset_size,
             random_seed=args.random_seed,
             device=device,
         )
+    elif args.al_strategy.name == 'variation_ratio':
+        query = uncertainty.VariationRatioSampling(
+            batch_size=args.model.batch_size,
+            subset_size=args.al_strategy.subset_size,
+            random_seed=args.random_seed,
+            device=device,
+        )
+    elif args.al_strategy.name == 'bald':
+        raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
     elif args.al_strategy.name == "coreset":
         device = kwargs['device']
         query = coreset.CoreSet(subset_size=args.al_strategy.subset_size, device=device)
     elif args.al_strategy.name == "badge":
         device = kwargs['device']
         query = badge.Badge(subset_size=args.al_strategy.subset_size, device=device)
-    elif args.al_strategy.name == "predefined":
-        query = predefined.PredefinedSampling(
-            queried_indices_json=args.al_strategy.queried_indices_json,
-            n_acq=args.al_cycle.n_acq,
-            n_init=args.al_cycle.n_init,
-            acq_size=args.al_cycle.acq_size,
-        )
     else:
         raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
     return query

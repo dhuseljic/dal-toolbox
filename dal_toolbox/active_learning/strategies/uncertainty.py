@@ -111,19 +111,8 @@ class VariationRatioSampling(UncertaintySampling):
 
         return var_ratio
 
-    @torch.no_grad()
-    def query(self, model, dataset, unlabeled_indices, acq_size, **kwargs):
-        if not hasattr(model, 'get_logits'):
-            raise ValueError('The method `get_logits` is mandatory to use variation ratio sampling.')
-
-        if self.subset_size:
-            unlabeled_indices = self.rng.choice(unlabeled_indices, size=self.subset_size, replace=False)
-
-        dataloader = DataLoader(dataset, batch_size=self.batch_size,
-                                sampler=unlabeled_indices, collate_fn=kwargs.get("collator"))
-        logits = model.get_logits(dataloader, device=self.device)
-        scores = self.variation_ratio(logits)
-        _, indices = scores.topk(acq_size)
-
-        actual_indices = [unlabeled_indices[i] for i in indices]
-        return actual_indices
+    def get_scores(self, probas):
+        if probas.ndim != 3:
+            raise ValueError(f"Input probas tensor must be 3-dimensional, got shape {probas.shape}")
+        # TODO: change to logits?
+        return self.variation_ratio(probas)
