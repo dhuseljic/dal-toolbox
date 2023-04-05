@@ -304,7 +304,7 @@ def build_model(args, **kwargs):
         )
 
     else:
-        NotImplementedError()
+        raise NotImplementedError()
 
     return trainer
 
