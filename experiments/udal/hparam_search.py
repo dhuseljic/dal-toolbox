@@ -88,7 +88,7 @@ def build_search_space(args):
         ]
     elif args.model.name == 'resnet18_labelsmoothing':
         search_space = {
-            "lr": tune.uniform(1e-4, .5),
+            "lr": tune.uniform(1e-4, .1),
             "weight_decay": tune.uniform(0, .1),
             "label_smoothing": tune.uniform(0, .1),
         }
@@ -98,7 +98,7 @@ def build_search_space(args):
         ]
     elif args.model.name == 'resnet18_mixup':
         search_space = {
-            "lr": tune.uniform(1e-4, .5),
+            "lr": tune.uniform(1e-4, .1),
             "weight_decay": tune.uniform(0, .1),
             "mixup_alpha": tune.uniform(.1, .4),
         }
@@ -108,7 +108,7 @@ def build_search_space(args):
         ]
     elif args.model.name == 'resnet18_mcdropout':
         search_space = {
-            "lr": tune.uniform(1e-4, .5),
+            "lr": tune.uniform(1e-4, .1),
             "weight_decay": tune.uniform(0, .1),
             "dropout_rate": tune.uniform(1e-4, .5),
         }
@@ -119,7 +119,7 @@ def build_search_space(args):
     elif args.model.name == 'resnet18_ensemble':
         # We only optimize a single value for all members
         search_space = {
-            "lr": tune.uniform(1e-4, .5),
+            "lr": tune.uniform(1e-4, .1),
             "weight_decay": tune.uniform(0, .1),
         }
         points_to_evaluate = [
