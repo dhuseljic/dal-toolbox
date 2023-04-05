@@ -83,8 +83,8 @@ def build_search_space(args):
             "weight_decay": tune.uniform(0, .1),
         }
         points_to_evaluate = [
-            {"lr": 1e-1, "weight_decay": 5e-4},
-            {"lr": 1e-2, "weight_decay": 0.05},
+            {"lr": 1e-2, "weight_decay": 5e-3},
+            {"lr": 1e-2, "weight_decay": 5e-2},
         ]
     elif args.model.name == 'resnet18_labelsmoothing':
         search_space = {
@@ -93,8 +93,8 @@ def build_search_space(args):
             "label_smoothing": tune.uniform(0, .1),
         }
         points_to_evaluate = [
-            {"lr": 1e-1, "weight_decay": 5e-4, 'label_smoothing': 0.05},
-            {"lr": 1e-2, "weight_decay": 0.05, 'label_smoothing': 0.05},
+            {"lr": 1e-2, "weight_decay": 5e-3, 'label_smoothing': 0.05},
+            {"lr": 1e-2, "weight_decay": 5e-2, 'label_smoothing': 0.05},
         ]
     elif args.model.name == 'resnet18_mixup':
         search_space = {
@@ -103,8 +103,8 @@ def build_search_space(args):
             "mixup_alpha": tune.uniform(.1, .4),
         }
         points_to_evaluate = [
-            {"lr": 1e-1, "weight_decay": 5e-4, 'mixup_alpha': 0.1},
-            {"lr": 1e-2, "weight_decay": 0.05, 'mixup_alpha': 0.4},
+            {"lr": 1e-2, "weight_decay": 5e-3, 'mixup_alpha': 0.4},
+            {"lr": 1e-2, "weight_decay": 5e-2, 'mixup_alpha': 0.4},
         ]
     elif args.model.name == 'resnet18_mcdropout':
         search_space = {
@@ -113,8 +113,10 @@ def build_search_space(args):
             "dropout_rate": tune.uniform(1e-4, .5),
         }
         points_to_evaluate = [
-            {"lr": 1e-1, "weight_decay": 5e-4, 'dropout_rate': 0.1},
-            {"lr": 1e-2, "weight_decay": 0.05, 'dropout_rate': 0.3},
+            {"lr": 1e-2, "weight_decay": 5e-3, 'dropout_rate': 0.1},
+            {"lr": 1e-2, "weight_decay": 5e-3, 'dropout_rate': 0.3},
+            {"lr": 1e-2, "weight_decay": 5e-2, 'dropout_rate': 0.1},
+            {"lr": 1e-2, "weight_decay": 5e-2, 'dropout_rate': 0.3},
         ]
     elif args.model.name == 'resnet18_ensemble':
         # We only optimize a single value for all members
@@ -123,8 +125,8 @@ def build_search_space(args):
             "weight_decay": tune.uniform(0, .1),
         }
         points_to_evaluate = [
-            {"lr": 1e-1, "weight_decay": 5e-4},
-            {"lr": 1e-2, "weight_decay": 0.05},
+            {"lr": 1e-2, "weight_decay": 5e-3},
+            {"lr": 1e-2, "weight_decay": 5e-2},
         ]
     else:
         raise NotImplementedError('Model {} not implemented.'.format(args.model.name))
