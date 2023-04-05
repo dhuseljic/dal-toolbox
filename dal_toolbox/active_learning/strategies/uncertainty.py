@@ -19,7 +19,12 @@ class UncertaintySampling(Query):
             raise ValueError(f"Input probas tensor must be 2-dimensional, got shape {probas.shape}")
 
         if self.uncertainty_type == 'least_confident':
-            scores, _ = probas.min(dim=-1)
+            scores, _ = probas.max(dim=-1)
+            scores = 1 - scores
+        elif self.uncertainty_type == 'margin':
+            top_probas, _ = torch.topk(probas, k=2, dim=-1)
+            scores = top_probas[:, 0] - top_probas[:, 1]
+            scores = 1 - scores
         elif self.uncertainty_type == 'entropy':
             scores = ood.entropy_fn(probas)
         else:
@@ -50,9 +55,14 @@ class BayesianUncertaintySampling(UncertaintySampling):
     def get_scores(self, probas):
         if probas.ndim != 3:
             raise ValueError(f"Input probas tensor must be 3-dimensional, got shape {probas.shape}")
-        probas = probas.mean(dim=1)
+        probas = torch.mean(probas, dim=-1)
         if self.uncertainty_type == 'least_confident':
-            scores, _ = probas.min(dim=-1)
+            scores, _ = probas.max(dim=-1)
+            scores = 1 - scores
+        elif self.uncertainty_type == 'margin':
+            top_probas, _ = torch.topk(probas, k=2, dim=-1)
+            scores = top_probas[:, 0] - top_probas[:, 1]
+            scores = 1 - scores
         elif self.uncertainty_type == 'entropy':
             scores = ood.entropy_fn(probas)
         else:
