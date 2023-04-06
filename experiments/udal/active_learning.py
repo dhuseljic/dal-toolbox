@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader, RandomSampler
 from omegaconf import OmegaConf
 
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp
+from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
 from dal_toolbox.active_learning.data import ALDataset
 from dal_toolbox.utils import seed_everything
 from dal_toolbox import datasets
@@ -169,7 +170,7 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True,
         )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
         trainer = deterministic.trainer.DeterministicTrainer(
             model=model,
             criterion=criterion,
@@ -189,7 +190,7 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True,
         )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
         trainer = deterministic.trainer.DeterministicTrainer(
             model=model,
             criterion=criterion,
@@ -209,7 +210,7 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True,
         )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
         trainer = deterministic.trainer.DeterministicMixupTrainer(
             model=model,
             criterion=criterion,
@@ -231,7 +232,7 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True
         )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
         trainer = mc_dropout.trainer.MCDropoutTrainer(
             model=model,
             optimizer=optimizer,
@@ -252,7 +253,7 @@ def build_model(args, **kwargs):
                 momentum=args.model.optimizer.momentum,
                 nesterov=True
             )
-            lrs = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.model.n_epochs)
+            lrs = CosineAnnealingLRLinearWarmup(opt, num_epochs=args.model.n_epochs, warmup_epochs=10)
             members.append(mem)
             optimizers.append(opt)
             lr_schedulers.append(lrs)
@@ -293,7 +294,7 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True
         )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
         trainer = sngp.trainer.SNGPTrainer(
             model=model,
             criterion=criterion,
