@@ -15,7 +15,7 @@ from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp
 from dal_toolbox.active_learning.data import ALDataset
 from dal_toolbox.utils import seed_everything
 from dal_toolbox import datasets
-from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, predefined
+from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
