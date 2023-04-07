@@ -3,7 +3,7 @@ import torch
 from ..utils.trainer import BasicTrainer
 from ...utils import MetricLogger, SmoothedValue
 from ...metrics import generalization, calibration, ood
-from ..utils.vi import KLCriterion
+from ..utils.variational_inference import KLCriterion
 
 
 class VITrainer(BasicTrainer):
@@ -33,8 +33,8 @@ class VITrainer(BasicTrainer):
 
             nll = self.criterion(logits, targets)
             kl_weight = batch_size / len(dataloader.dataset)
-            kl_loss = kl_weight * self.kl_criterion(self.model)
-            loss = nll + self.kl_temperature * kl_loss
+            kl_loss = self.kl_temperature * kl_weight * self.kl_criterion(self.model)
+            loss = nll + kl_loss
 
             self.optimizer.zero_grad()
             loss.backward()
