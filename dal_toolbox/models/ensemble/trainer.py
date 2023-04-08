@@ -62,15 +62,14 @@ class EnsembleTrainer(BasicTrainer):
         conf_id, _ = mean_probas_id.max(-1)
         entropy_id = ood.entropy_fn(mean_probas_id)
 
-        # Model specific test loss and accuracy for in domain testset
-        acc1 = generalization.accuracy(torch.log(mean_probas_id), targets_id, (1,))[0].item()
-        loss = self.criterion(torch.log(mean_probas_id), targets_id).item()
+        # Compute accuracy
+        acc1 = generalization.accuracy(mean_probas_id, targets_id, (1,))[0].item()
+        # Avg cross entropy of all members
+        loss = calibration.GibsCrossEntropy()(ensemble_logits_id, targets_id).item()
 
-        # Negative Log Likelihood
-        nll = torch.nn.CrossEntropyLoss(reduction='mean')(torch.log(mean_probas_id), targets_id).item()
+        # Cross entropy of ensemble using the predictive distribution
+        nll = calibration.EnsembleCrossEntropy()(ensemble_logits_id, targets_id).item()
         brier = calibration.BrierScore()(mean_probas_id, targets_id).item()
-        ensemble_cross_entropy = calibration.EnsembleCrossEntropy()(ensemble_logits_id, targets_id).item()
-        gibbs_cross_entropy = calibration.GibsCrossEntropy()(ensemble_logits_id, targets_id).item()
 
         # Top- and Marginal Calibration Error
         tce = calibration.TopLabelCalibrationError()(mean_probas_id, targets_id).item()
@@ -81,8 +80,6 @@ class EnsembleTrainer(BasicTrainer):
             "loss": loss,
             "nll": nll,
             "brier": brier,
-            "ensemble_cross_entropy": ensemble_cross_entropy,
-            "gibbs_cross_entropy": gibbs_cross_entropy,
             "tce": tce,
             "mce": mce
         }
