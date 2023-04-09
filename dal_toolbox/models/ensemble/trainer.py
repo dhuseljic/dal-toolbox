@@ -53,25 +53,13 @@ class EnsembleTrainer(BasicTrainer):
         targets_id = torch.cat(targets_id, dim=0)
 
         # Transform into probabilitys
-        ensemble_probas_id = ensemble_logits_id.softmax(dim=-1)
-
-        # Average of probas per sample
-        mean_probas_id = torch.mean(ensemble_probas_id, dim=1)
-
-        # Confidence- and entropy-Scores of in domain set logits
-        conf_id, _ = mean_probas_id.max(-1)
-        entropy_id = ood.entropy_fn(mean_probas_id)
+        mean_probas_id  = ensemble_logits_id.softmax(dim=-1).mean(dim=1)
 
         # Compute accuracy
         acc1 = generalization.accuracy(mean_probas_id, targets_id, (1,))[0].item()
-        # Avg cross entropy of all members
         loss = calibration.GibsCrossEntropy()(ensemble_logits_id, targets_id).item()
-
-        # Cross entropy of ensemble using the predictive distribution
         nll = calibration.EnsembleCrossEntropy()(ensemble_logits_id, targets_id).item()
         brier = calibration.BrierScore()(mean_probas_id, targets_id).item()
-
-        # Top- and Marginal Calibration Error
         tce = calibration.TopLabelCalibrationError()(mean_probas_id, targets_id).item()
         mce = calibration.MarginalCalibrationError()(mean_probas_id, targets_id).item()
 
@@ -83,6 +71,11 @@ class EnsembleTrainer(BasicTrainer):
             "tce": tce,
             "mce": mce
         }
+
+        # TODO:
+        conf_id, _ = mean_probas_id.max(-1)
+        entropy_id = ood.entropy_fn(mean_probas_id)
+        entropy_id = ood.ensemble_entropy_from_logits(ensemble_logits_id)
 
         if dataloaders_ood is None:
             dataloaders_ood = {}

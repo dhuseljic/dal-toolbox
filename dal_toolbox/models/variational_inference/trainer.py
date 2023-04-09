@@ -7,12 +7,22 @@ from ..utils.variational_inference import KLCriterion
 
 
 class VITrainer(BasicTrainer):
-    def __init__(self, model, optimizer, criterion,  grad_norm=.2, kl_temperature=1, kl_reduction='mean', lr_scheduler=None, device=None, output_dir=None, summary_writer=None, use_distributed=False):
+    def __init__(self,
+                 model,
+                 optimizer,
+                 criterion,
+                 grad_norm=5,
+                 kl_temperature=1,
+                 kl_reduction='mean',
+                 lr_scheduler=None,
+                 device=None,
+                 output_dir=None,
+                 summary_writer=None,
+                 use_distributed=False):
         super().__init__(model, optimizer, criterion, lr_scheduler, device, output_dir, summary_writer, use_distributed)
         self.kl_temperature = kl_temperature
         self.kl_reduction = kl_reduction
         self.kl_criterion = KLCriterion(reduction=kl_reduction)
-
         self.grad_norm = grad_norm
 
     def train_one_epoch(self, dataloader, epoch=None, print_freq=200):
@@ -70,14 +80,13 @@ class VITrainer(BasicTrainer):
             mc_logits.append(logits)
         mc_logits = torch.stack(mc_logits, dim=1)
         targets_id = torch.cat(all_targets)
-        mc_probas = mc_logits.softmax(dim=-1)
-        probas_id = mc_probas.mean(dim=1)
-        logits_id = probas_id.log()
+        probas_id = mc_logits.softmax(dim=-1).mean(dim=1)
 
         # Model specific test loss and accuracy for in domain testset
         loss = (self.criterion(logits, targets_id) + self.kl_temperature * self.kl_criterion(self.model)).item()
-        acc1 = generalization.accuracy(logits_id, targets_id, (1,))[0].item()
-        nll = torch.nn.CrossEntropyLoss(reduction='mean')(logits_id, targets_id).item()
+        acc1 = generalization.accuracy(probas_id, targets_id, (1,))[0].item()
+        nll = calibration.EnsembleCrossEntropy()(mc_logits, targets_id).item()
+        gibbs_cross_entropy = calibration.GibbsCrossEntropy()(mc_logits, targets_id).item()
         brier = calibration.BrierScore()(probas_id, targets_id).item()
         tce = calibration.TopLabelCalibrationError()(probas_id, targets_id).item()
         mce = calibration.MarginalCalibrationError()(probas_id, targets_id).item()
@@ -86,6 +95,7 @@ class VITrainer(BasicTrainer):
             "loss": loss,
             "acc1": acc1,
             "nll": nll,
+            "gibbs_cross_entropy": gibbs_cross_entropy,
             "brier": brier,
             "tce": tce,
             "mce": mce
@@ -94,24 +104,24 @@ class VITrainer(BasicTrainer):
         if dataloaders_ood is None:
             dataloaders_ood = {}
 
-        for name, dataloader_ood in dataloaders_ood.items():
-            # Forward prop out of distribution
-            logits_ood, _ = self.collect_predictions(dataloader_ood)
-            probas_ood = logits_ood.softmax(-1)
+        # for name, dataloader_ood in dataloaders_ood.items():
+        #     # Forward prop out of distribution
+        #     logits_ood, _ = self.collect_predictions(dataloader_ood)
+        #     probas_ood = logits_ood.softmax(-1)
 
-            # Confidence- and entropy-Scores of out of domain logits
-            entropy_id = ood.entropy_fn(probas_id)
-            entropy_ood = ood.entropy_fn(probas_ood)
+        #     # Confidence- and entropy-Scores of out of domain logits
+        #     entropy_id = ood.entropy_fn(probas_id)
+        #     entropy_ood = ood.entropy_fn(probas_ood)
 
-            # Area under the Precision-Recall-Curve
-            ood_aupr = ood.ood_aupr(entropy_id, entropy_ood)
+        #     # Area under the Precision-Recall-Curve
+        #     ood_aupr = ood.ood_aupr(entropy_id, entropy_ood)
 
-            # Area under the Receiver-Operator-Characteristic-Curve
-            ood_auroc = ood.ood_auroc(entropy_id, entropy_ood)
+        #     # Area under the Receiver-Operator-Characteristic-Curve
+        #     ood_auroc = ood.ood_auroc(entropy_id, entropy_ood)
 
-            # Add to metrics
-            metrics[name+"_auroc"] = ood_auroc
-            metrics[name+"_aupr"] = ood_aupr
+        #     # Add to metrics
+        #     metrics[name+"_auroc"] = ood_auroc
+        #     metrics[name+"_aupr"] = ood_aupr
 
         test_stats = {f"test_{k}": v for k, v in metrics.items()}
         return test_stats

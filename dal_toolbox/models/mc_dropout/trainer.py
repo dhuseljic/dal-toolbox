@@ -41,27 +41,14 @@ class MCDropoutTrainer(BasicTrainer):
             inputs, targets = inputs.to(self.device), targets.to(self.device)
             dropout_logits_id.append(self.model.mc_forward(inputs))
             targets_id.append(targets)
-
-        # Transform to tensor
         dropout_logits_id = torch.cat(dropout_logits_id, dim=0).cpu()
         targets_id = torch.cat(targets_id, dim=0).cpu()
+        mean_probas_id = dropout_logits_id.softmax(dim=-1).mean(dim=1)
 
-        # Transform into probabilitys
-        dropout_probas_id = dropout_logits_id.softmax(dim=-1)
-
-        # Average of probas per sample
-        mean_probas_id = torch.mean(dropout_probas_id, dim=1)
-
-        # Model specific test loss and accuracy for in domain testset
         acc1 = generalization.accuracy(mean_probas_id, targets_id, (1,))[0].item()
-        # Avg cross entropy of all members
         loss = calibration.GibsCrossEntropy()(dropout_logits_id, targets_id).item()
-
-        # Cross entropy of ensemble using the predictive distribution
         nll = calibration.EnsembleCrossEntropy()(dropout_logits_id, targets_id).item()
         brier = calibration.BrierScore()(mean_probas_id, targets_id).item()
-
-        # Top- and Marginal Calibration Error
         tce = calibration.TopLabelCalibrationError()(mean_probas_id, targets_id).item()
         mce = calibration.MarginalCalibrationError()(mean_probas_id, targets_id).item()
 
@@ -74,8 +61,9 @@ class MCDropoutTrainer(BasicTrainer):
             "mce": mce
         }
 
-        # Confidence- and entropy-Scores of in domain set logits
+        # TODO
         conf_id, _ = mean_probas_id.max(-1)
+        entropy_id = ood.ensemble_entropy_from_logits(dropout_logits_id)
         entropy_id = ood.entropy_fn(mean_probas_id)
 
         if dataloaders_ood:

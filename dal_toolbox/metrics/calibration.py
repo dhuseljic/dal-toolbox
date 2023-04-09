@@ -112,7 +112,7 @@ class EnsembleCrossEntropy(nn.Module):
         return torch.mean(ce)
 
 
-class GibsCrossEntropy(nn.Module):
+class GibbsCrossEntropy(nn.Module):
     """Average cross entropy of ensemble members.
 
     For each datapoint (x,y), the ensemble's Gibbs cross entropy is:
