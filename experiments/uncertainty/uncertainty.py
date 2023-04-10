@@ -10,7 +10,7 @@ from omegaconf import OmegaConf
 from torch.utils.data import DataLoader, Subset, RandomSampler, DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
 from dal_toolbox.datasets import build_dataset, build_ood_datasets
-from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp
+from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp, variational_inference
 from dal_toolbox.utils import seed_everything, init_distributed_mode
 
 
@@ -218,6 +218,28 @@ def build_model(args, **kwargs):
             lr_scheduler=lr_scheduler,
             device=args.device,
             output_dir=args.output_dir,
+        )
+
+    elif args.model.name == 'resnet18_vi':
+        model = variational_inference.resnet.BayesianResNet18(num_classes=10, prior_sigma=args.model.vi.prior_sigma)
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum,
+        )
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        criterion = nn.CrossEntropyLoss()
+        trainer = variational_inference.trainer.VITrainer(
+            model=model,
+            criterion=criterion,
+            optimizer=optimizer,
+            grad_norm=args.model.optimizer.grad_norm,
+            lr_scheduler=lr_scheduler,
+            mc_samples=args.model.vi.mc_samples,
+            kl_temperature=args.model.vi.kl_temperature,
+            device=args.device,
+            output_dir=args.output_dir
         )
 
     else:

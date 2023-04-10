@@ -11,6 +11,7 @@ class VITrainer(BasicTrainer):
                  model,
                  optimizer,
                  criterion,
+                 mc_samples=10,
                  grad_norm=5,
                  kl_temperature=1,
                  kl_reduction='mean',
@@ -24,6 +25,7 @@ class VITrainer(BasicTrainer):
         self.kl_reduction = kl_reduction
         self.kl_criterion = KLCriterion(reduction=kl_reduction)
         self.grad_norm = grad_norm
+        self.mc_samples = mc_samples
 
     def train_one_epoch(self, dataloader, epoch=None, print_freq=200):
         self.model.train()
@@ -69,8 +71,7 @@ class VITrainer(BasicTrainer):
         # Forward prop in distribution
         mc_logits = []
         all_targets = []
-        mc_samples = 10
-        for i_sample in range(mc_samples):
+        for i_sample in range(self.mc_samples):
             logits = []
             for inputs, tar in dataloader:
                 if i_sample == 0:
