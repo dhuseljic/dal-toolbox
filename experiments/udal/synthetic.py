@@ -22,6 +22,7 @@ from torch.optim import SGD
 from dal_toolbox.models.deterministic.resnet import ResNet18
 from dal_toolbox.models import ensemble
 from dal_toolbox.metrics.ood import ensemble_entropy_from_logits
+from dal_toolbox.metrics import generalization
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="synthetic")
@@ -93,8 +94,34 @@ def main(args):
         history = trainer.train(args.model.n_epochs, train_loader)
         cycle_results['train_history'] = history['train_history']
 
-        # Evaluate resulting model
-        test_stats = trainer.evaluate(val_loader)
+        # Evaluate resulting model using the ground truth probabilities
+        # test_stats = trainer.evaluate(val_loader)
+        logging.info('Testing using the ground truth probabilties..')
+        model = trainer.model
+        logits = []
+        gt_probas = []
+        targets = []
+        for _inputs, _targets in val_loader:
+            with torch.no_grad():
+                _logits = model(_inputs.to(args.device)).cpu()
+            logits.append(_logits)
+            targets.append(_targets)
+            gt_probas.append(_inputs.mean(dim=(1, 2, 3)))
+        logits = torch.cat(logits)
+        targets = torch.cat(targets)
+        gt_probas = torch.cat(gt_probas)
+        gt_probas = torch.stack((1-gt_probas, gt_probas), dim=1)
+
+        # Note that TCE does not make sense as the brier just describes it without binning
+        acc1, = generalization.accuracy(logits, targets)
+        nll = nn.CrossEntropyLoss(reduction='mean')(logits, gt_probas)
+        brier = nn.MSELoss(reduction='mean')(logits.softmax(-1), gt_probas)
+        test_stats = dict(
+            test_acc1=acc1.item(),
+            test_nll=nll.item(),
+            test_brier=brier.item(),
+        )
+        logging.info('Test stats %s', test_stats)
         cycle_results['test_stats'] = test_stats
 
         # Log stuff
