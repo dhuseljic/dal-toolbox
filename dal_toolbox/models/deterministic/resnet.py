@@ -79,6 +79,7 @@ class ResNet18(nn.Module):
         logits = torch.cat(all_logits)
         return logits
 
+    @torch.inference_mode()
     def get_probas(self, dataloader, device):
         logits = self.get_logits(dataloader=dataloader, device=device)
         probas = logits.softmax(-1)
