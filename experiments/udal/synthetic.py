@@ -24,7 +24,7 @@ from dal_toolbox.models import ensemble
 from dal_toolbox.metrics.ood import ensemble_entropy_from_logits
 
 
-@hydra.main(version_base=None, config_path="./configs", config_name="aleatoric")
+@hydra.main(version_base=None, config_path="./configs", config_name="synthetic")
 def main(args):
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
@@ -212,12 +212,6 @@ class Epistemic(query.Query):
         actual_indices = [unlabeled_indices[i] for i in indices]
 
         return actual_indices
-
-
-
-        
-
-
 
 
 if __name__ == "__main__":
