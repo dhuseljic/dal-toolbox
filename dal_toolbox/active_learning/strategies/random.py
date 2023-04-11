@@ -5,7 +5,8 @@ from .query import Query
 
 
 class RandomSampling(Query):
-    def query(self, unlabeled_indices, acq_size, **kwargs):
+    def query(self, unlabeled_indices, acq_size, **kwargs) -> list:
         del kwargs  # del unused kwargs
         indices = self.rng.choice(unlabeled_indices, size=acq_size, replace=False)
+        indices = indices.tolist()
         return indices
