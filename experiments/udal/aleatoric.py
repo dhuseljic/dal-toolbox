@@ -1,11 +1,10 @@
 import os
 import time
-import copy
 import json
 import logging
 
-import numpy as np
 import torch
+import torch.nn as nn
 import hydra
 
 from torch.utils.tensorboard import SummaryWriter
@@ -16,7 +15,13 @@ from dal_toolbox.active_learning.data import ALDataset
 from dal_toolbox.utils import seed_everything
 from dal_toolbox.active_learning.strategies import random, uncertainty, query
 from dal_toolbox.metrics.ood import entropy_fn
+
 from active_learning import build_model
+from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim import SGD
+from dal_toolbox.models.deterministic.resnet import ResNet18
+from dal_toolbox.models import ensemble
+from dal_toolbox.metrics.ood import ensemble_entropy_from_logits
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="aleatoric")
@@ -123,12 +128,20 @@ def build_query(args, **kwargs):
         query = uncertainty.UncertaintySampling(uncertainty_type=args.al_strategy.uncertainty_type, device=device,)
     elif args.al_strategy.name == "aleatoric":
         query = Aleatoric()
+    elif args.al_strategy.name == "epistemic":
+        query = Epistemic(
+            ensemble_size=20,
+            num_epochs=20,
+            lr=1e-2,
+            momentum=0.9,
+            weight_decay=0.01,
+            device=kwargs['device'],
+        )
     else:
         raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
     return query
 
 
-# Defines aleatoric sampling
 class Aleatoric(query.Query):
 
     @torch.no_grad()
@@ -146,6 +159,65 @@ class Aleatoric(query.Query):
 
         actual_indices = [unlabeled_indices[i] for i in indices]
         return actual_indices
+
+
+class Epistemic(query.Query):
+    def __init__(self, ensemble_size, num_epochs, lr, weight_decay, momentum, device, random_seed=None):
+        super().__init__(random_seed)
+        self.num_epochs = num_epochs
+        self.ensemble_size = ensemble_size
+        self.num_classes = 2
+        self.device = device
+        self.lr = lr
+        self.weight_decay = weight_decay
+        self.momentum = momentum
+
+    def build_ensemble(self):
+        members = [ResNet18(num_classes=self.num_classes) for _ in range(self.ensemble_size)]
+        optimizers = [SGD(mem.parameters(), lr=self.lr, weight_decay=self.weight_decay,
+                          momentum=self.momentum) for mem in members]
+        lr_schedulers = [CosineAnnealingLR(opt, T_max=self.num_epochs) for opt in optimizers]
+
+        model = ensemble.voting_ensemble.Ensemble(members)
+        criterion = nn.CrossEntropyLoss()
+        optimizer = ensemble.voting_ensemble.EnsembleOptimizer(optimizers)
+        lr_scheduler = ensemble.voting_ensemble.EnsembleLRScheduler(lr_schedulers)
+        trainer = ensemble.trainer.EnsembleTrainer(
+            model=model,
+            criterion=criterion,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            device=self.device,
+        )
+        return trainer
+
+    def query(self, dataset, unlabeled_indices, acq_size, **kwargs):
+        del kwargs
+
+        # Train ensemble
+        trainer = self.build_ensemble()
+        labeled_indices = [idx for idx in range(len(dataset)) if idx not in unlabeled_indices]
+        train_loader = DataLoader(dataset, sampler=labeled_indices, batch_size=64)
+        trainer.train(n_epochs=self.num_epochs, train_loader=train_loader)
+
+        # Select with highest epistemic uncertainty
+        unlabeled_loader = DataLoader(dataset, sampler=unlabeled_indices, batch_size=64)
+        logits = []
+        for inputs, _ in unlabeled_loader:
+            with torch.no_grad():
+                logits.append(trainer.model.forward_sample(inputs.to(self.device)).cpu())
+        logits = torch.cat(logits)
+        scores = ensemble_entropy_from_logits(logits)
+        _, indices = scores.topk(acq_size)
+        actual_indices = [unlabeled_indices[i] for i in indices]
+
+        return actual_indices
+
+
+
+        
+
+
 
 
 if __name__ == "__main__":
