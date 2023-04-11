@@ -4,7 +4,7 @@ n_epochs: 200
 vi:
   mc_samples: 10
   prior_sigma: .001
-  kl_temperature: 100
+  kl_temperature: 10
 
 optimizer:
   lr: 0.1
