@@ -46,7 +46,7 @@ class MCDropoutTrainer(BasicTrainer):
         mean_probas_id = dropout_logits_id.softmax(dim=-1).mean(dim=1)
 
         acc1 = generalization.accuracy(mean_probas_id, targets_id, (1,))[0].item()
-        loss = calibration.GibsCrossEntropy()(dropout_logits_id, targets_id).item()
+        loss = calibration.GibbsCrossEntropy()(dropout_logits_id, targets_id).item()
         nll = calibration.EnsembleCrossEntropy()(dropout_logits_id, targets_id).item()
         brier = calibration.BrierScore()(mean_probas_id, targets_id).item()
         tce = calibration.TopLabelCalibrationError()(mean_probas_id, targets_id).item()
@@ -64,7 +64,7 @@ class MCDropoutTrainer(BasicTrainer):
         # TODO
         conf_id, _ = mean_probas_id.max(-1)
         entropy_id = ood.ensemble_entropy_from_logits(dropout_logits_id)
-        entropy_id = ood.entropy_fn(mean_probas_id)
+        # entropy_id = ood.entropy_fn(mean_probas_id)
 
         if dataloaders_ood:
             for name, dataloader_ood in dataloaders_ood.items():
