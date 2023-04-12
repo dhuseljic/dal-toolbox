@@ -7,6 +7,8 @@ import torch
 import torch.nn as nn
 import hydra
 
+import numpy as np
+
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader, RandomSampler, TensorDataset, Subset
 from omegaconf import OmegaConf
@@ -24,6 +26,8 @@ from dal_toolbox.models import ensemble
 from dal_toolbox.metrics.ood import ensemble_entropy_from_logits
 from dal_toolbox.metrics import generalization
 
+def gt_proba_mapping(pixel_sum): 
+    return 1 / (1 + np.exp(-(pixel_sum / .05) + 10))
 
 @hydra.main(version_base=None, config_path="./configs", config_name="synthetic")
 def main(args):
@@ -104,9 +108,10 @@ def main(args):
         for _inputs, _targets in val_loader:
             with torch.no_grad():
                 _logits = model(_inputs.to(args.device)).cpu()
+            _gt_probas = gt_proba_mapping(_inputs.mean(dim=(1, 2, 3)))
             logits.append(_logits)
             targets.append(_targets)
-            gt_probas.append(_inputs.mean(dim=(1, 2, 3)))
+            gt_probas.append(_gt_probas)
         logits = torch.cat(logits)
         targets = torch.cat(targets)
         gt_probas = torch.cat(gt_probas)
