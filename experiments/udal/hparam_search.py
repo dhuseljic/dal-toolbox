@@ -20,7 +20,8 @@ from dal_toolbox.utils import seed_everything
 
 def train(config, args):
     # Overwrite args
-    args.random_seed = config['__trial_index__']
+    if args.n_reps > 1:
+        args.random_seed = config['__trial_index__']
     args.model.optimizer.lr = float(config['lr'])
     args.model.optimizer.weight_decay = float(config['weight_decay'])
     if 'mixup_alpha' in config.keys():
