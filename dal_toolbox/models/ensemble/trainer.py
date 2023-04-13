@@ -57,7 +57,7 @@ class EnsembleTrainer(BasicTrainer):
 
         # Compute accuracy
         acc1 = generalization.accuracy(mean_probas_id, targets_id, (1,))[0].item()
-        loss = calibration.GibsCrossEntropy()(ensemble_logits_id, targets_id).item()
+        loss = calibration.GibbsCrossEntropy()(ensemble_logits_id, targets_id).item()
         nll = calibration.EnsembleCrossEntropy()(ensemble_logits_id, targets_id).item()
         brier = calibration.BrierScore()(mean_probas_id, targets_id).item()
         tce = calibration.TopLabelCalibrationError()(mean_probas_id, targets_id).item()
