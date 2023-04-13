@@ -56,9 +56,10 @@ def main(args):
     # Setup Search space
     search_space, points_to_evaluate = build_search_space(args)
     search_alg = BayesOptSearch(points_to_evaluate=points_to_evaluate)
-    search_alg = Repeater(search_alg, repeat=args.n_reps)
-    tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=args.n_opt_samples *
-                                  args.n_reps, metric="test_nll", mode="min")
+    if args.n_reps > 1:
+        search_alg = Repeater(search_alg, repeat=args.n_reps)
+    num_samples = args.n_opt_samples * args.n_reps
+    tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=num_samples, metric="test_nll", mode="min")
 
     # Init ray, if we are using slurm, set cpu and gpus
     adress = 'auto' if args.distributed else None
