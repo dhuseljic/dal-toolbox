@@ -11,7 +11,6 @@ import torch.nn as nn
 from torch.utils.data import random_split
 
 from ray.tune.search.bayesopt import BayesOptSearch
-from ray.tune.search.repeater import Repeater
 
 from dal_toolbox import datasets
 from dal_toolbox.models import deterministic, mc_dropout, ensemble
@@ -19,9 +18,6 @@ from dal_toolbox.utils import seed_everything
 
 
 def train(config, args):
-    # Overwrite args
-    if args.n_reps > 1:
-        args.random_seed = config['__trial_index__']
     args.model.optimizer.lr = float(config['lr'])
     args.model.optimizer.weight_decay = float(config['weight_decay'])
     if 'mixup_alpha' in config.keys():
@@ -36,7 +32,6 @@ def train(config, args):
     seed_everything(args.random_seed)
 
     train_ds, val_ds, ds_info = build_datasets(args)
-
     trainer = build_model(args, n_classes=ds_info['n_classes'])
 
     train_indices = torch.randperm(len(train_ds))[:args.budget]
@@ -54,23 +49,22 @@ def main(args):
     logger = logging.getLogger()
     logger.info('Using setup: %s', args)
 
-    # Setup Search space
-    search_space, points_to_evaluate = build_search_space(args)
-    search_alg = BayesOptSearch(points_to_evaluate=points_to_evaluate)
-    if args.n_reps > 1:
-        search_alg = Repeater(search_alg, repeat=args.n_reps)
-    num_samples = args.n_opt_samples * args.n_reps
-    tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=num_samples, metric="test_nll", mode="min")
-
     # Init ray, if we are using slurm, set cpu and gpus
     adress = 'auto' if args.distributed else None
     num_cpus = int(os.environ.get('SLURM_CPUS_PER_TASK', args.cpus_per_trial))
     num_gpus = torch.cuda.device_count()
     ray.init(address=adress, num_cpus=num_cpus, num_gpus=num_gpus)
 
-    # Setup tuner and objective
+    # Setup Search space
+    search_space, points_to_evaluate = build_search_space(args)
+    search_alg = BayesOptSearch(points_to_evaluate=points_to_evaluate)
+    tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=args.n_opt_samples, metric="test_nll", mode="min")
+
+    # Setup objective
     objective = tune.with_resources(train, resources={'cpu': num_cpus//num_gpus, 'gpu': args.gpus_per_trial})
     objective = tune.with_parameters(objective, args=args)
+
+    # Start hyperparameter search
     tuner = tune.Tuner(objective, param_space=search_space, tune_config=tune_config)
     results = tuner.fit()
     print('Best NLL Hyperparameter: {}'.format(results.get_best_result()))
@@ -256,13 +250,10 @@ def build_datasets(args):
 
     if args.dataset.name == 'CIFAR10':
         train_ds, ds_info = datasets.cifar.build_cifar10('train', args.dataset_path, return_info=True)
-
     elif args.dataset.name == 'CIFAR100':
         train_ds, ds_info = datasets.cifar.build_cifar100('train', args.dataset_path, return_info=True)
-
     elif args.dataset.name == 'SVHN':
         train_ds, ds_info = datasets.svhn.build_svhn('train', args.dataset_path, return_info=True)
-
     else:
         raise NotImplementedError('Dataset not available')
 
