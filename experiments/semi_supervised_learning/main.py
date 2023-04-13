@@ -11,6 +11,7 @@ from torch.distributed import destroy_process_group
 from omegaconf import OmegaConf
 
 from dal_toolbox.datasets.cifar import build_cifar10
+from dal_toolbox.datasets.ssl_wrapper import build_ssl_dataset
 from dal_toolbox.datasets.samplers import DistributedSampler
 from dal_toolbox.models.deterministic.wide_resnet import wide_resnet_28_2
 from dal_toolbox.utils import seed_everything, init_distributed_mode
@@ -35,28 +36,28 @@ def main(args):
     # Setup Dataloaders for training and evaluation
     logging.info('Building datasets. Creating labeled pool with %s samples and \
         unlabeled pool with %s samples.', args.n_labeled_samples, args.n_unlabeled_samples)
-    trainloaders, testloaders, num_classes = build_dataloaders(args, use_distributed)
+    supervised_loader, unsupervised_loader, validation_loader, info = build_dataloaders(args, use_distributed)
 
     # Setup Model
     logging.info('Building model: %s', args.model.name)
-    trainer = build_trainer(args, num_classes, writer, use_distributed)
+    trainer = build_trainer(args, info['n_classes'], writer, use_distributed)
 
     # Training Process
     history_train, history_test = [], []
     for i_epoch in range(args.model.n_epochs):
         if use_distributed:
-            for loader in trainloaders.values():
-                loader.sampler.set_epoch(i_epoch)
+            supervised_loader.sampler.set_epoch(i_epoch)
+            unsupervised_loader.sampler.set_epoch(i_epoch)
 
         # Train model for one epoch
         logging.info('Training epoch %s', i_epoch)
-        train_stats = trainer.train_one_epoch(**trainloaders, epoch=i_epoch)
+        train_stats = trainer.train_one_epoch(supervised_loader, unsupervised_loader, epoch=i_epoch)
         for key, value in train_stats.items():
             writer.add_scalar(tag=f"train/{key}", scalar_value=value, global_step=i_epoch)
 
         # Evaluate model on test set
         logging.info('Evaluation epoch %s', i_epoch)
-        test_stats = trainer.evaluate(**testloaders)
+        test_stats = trainer.evaluate(validation_loader)
         for key, value in test_stats.items():
             writer.add_scalar(tag=f"test/{key}", scalar_value=value, global_step=i_epoch)
 
@@ -66,7 +67,7 @@ def main(args):
 
     # Indices of torchvision dset are int64 which are not json compatible
     misc = {
-        "labeled_indices": [int(i) for i in trainloaders['labeled_loader'].indices],
+        "labeled_indices": info['labeled_indices'],
     }
 
     results = {
@@ -123,57 +124,25 @@ def build_trainer(args, num_classes, summary_writer, use_distributed):
 
 
 def build_dataloaders(args, use_distributed):
-    train_ds_weak_aug, info = build_cifar10('ssl_weak', './data', return_info=True)
-    num_classes = info['n_classes']
-    train_ds_strong_aug = build_cifar10('ssl_strong', './data')
+    train_ds, info = build_cifar10('train', './data', return_info=True)
+    train_ssl_ds = build_ssl_dataset(args.ssl_algorithm.name, './data')
     test_ds = build_cifar10('test', './data')
+
+    labeled_indices = sample_balanced_subset(train_ds.targets, num_classes=info['n_classes'], num_samples=args.n_labeled_samples)
+    train_ds_labeled = Subset(train_ds, labeled_indices)
+    info['labeled_indices'] = labeled_indices
 
     Sampler = DistributedSampler if use_distributed else RandomSampler
     n_iter_per_epoch = args.model.n_iter // args.model.n_epochs
 
-    labeled_indices = sample_balanced_subset(train_ds_weak_aug.targets, num_classes, args.n_labeled_samples)
-    train_ds_labeled = Subset(train_ds_weak_aug, labeled_indices)
-
-    seed = args.random_seed + 12345
-    g_1, g_2, g_3, g_4 = torch.Generator().manual_seed(seed), torch.Generator().manual_seed(seed), torch.Generator().manual_seed(seed), torch.Generator().manual_seed(seed)
-
     supervised_sampler = Sampler(train_ds_labeled, num_samples=(n_iter_per_epoch * args.model.batch_size))
-    random_sampler_weak_1 = Sampler(train_ds_weak_aug, num_samples=int(n_iter_per_epoch * args.model.batch_size * args.ssl_algorithm.u_ratio), generator=g_1)
-    random_sampler_weak_2 = Sampler(train_ds_weak_aug, num_samples=int(n_iter_per_epoch * args.model.batch_size * args.ssl_algorithm.u_ratio), generator=g_2)
-    random_sampler_strong = Sampler(train_ds_strong_aug, num_samples=int(n_iter_per_epoch * args.model.batch_size * args.ssl_algorithm.u_ratio), generator=g_3)
-    random_sampler_idx = Sampler(range(len(train_ds_weak_aug)), num_samples=int(n_iter_per_epoch * args.model.batch_size * args.ssl_algorithm.u_ratio), generator=g_4)
+    unsupervised_sampler = Sampler(train_ssl_ds.ds, num_samples=int(n_iter_per_epoch * args.model.batch_size * args.ssl_algorithm.u_ratio), generator=torch.Generator().manual_seed(args.random_seed))
     
     supervised_loader = DataLoader(train_ds_labeled, batch_size=args.model.batch_size, sampler=supervised_sampler)
-    unsupervised_loader_weak_1 = DataLoader(train_ds_weak_aug, batch_size=int(args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=random_sampler_weak_1)
-    unsupervised_loader_weak_2 = DataLoader(train_ds_weak_aug, batch_size=int(args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=random_sampler_weak_2)
-    unsupervised_loader_strong = DataLoader(train_ds_strong_aug, batch_size=int(args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=random_sampler_strong)
-    unsupervised_loader_idx = DataLoader(range(len(train_ds_weak_aug)), batch_size=int(args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=random_sampler_idx)
-    val_loader = DataLoader(test_ds, batch_size=args.val_batch_size)
+    unsupervised_loader = DataLoader(train_ssl_ds, batch_size=int(args.model.batch_size*args.ssl_algorithm.u_ratio), sampler=unsupervised_sampler)
+    validation_loader = DataLoader(test_ds, batch_size=args.val_batch_size)
 
-    trainloaders, testloaders = {}, {}
-
-    # Creating a Dataloader Dict
-    if args.ssl_algorithm.name == 'fully_supervised':
-        trainloaders['dataloader'] = supervised_loader
-    else:
-        trainloaders['labeled_loader'] = supervised_loader
-        if args.ssl_algorithm.name == 'pseudo_labels':
-            trainloaders['unlabeled_loader'] = unsupervised_loader_weak_1
-        elif args.ssl_algorithm.name == 'pi_model':
-            trainloaders['unlabeled_loader_weak_1'] = unsupervised_loader_weak_1
-            trainloaders['unlabeled_loader_weak_2'] = unsupervised_loader_weak_2
-        elif args.ssl_algorithm.name == 'fixmatch':
-            trainloaders['unlabeled_loader_weak'] = unsupervised_loader_weak_1
-            trainloaders['unlabeled_loader_strong'] = unsupervised_loader_strong
-        elif args.ssl_algorithm.name == 'flexmatch':
-            trainloaders['unlabeled_loader_weak'] = unsupervised_loader_weak_1
-            trainloaders['unlabeled_loader_strong'] = unsupervised_loader_strong
-            trainloaders['unlabeled_loader_indices'] = unsupervised_loader_idx
-        else:
-            assert True, 'No valid ssl_algorithm chosen!'
-    testloaders['dataloader'] = val_loader
-
-    return trainloaders, testloaders, num_classes
+    return supervised_loader, unsupervised_loader, validation_loader, info
 
 
 def sample_balanced_subset(targets, num_classes, num_samples):
