@@ -1,25 +1,29 @@
 #!/bin/bash
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem-per-cpu=32gb
-#SBATCH --gres=gpu:0
+#SBATCH --cpus-per-task=32
+#SBATCH --mem-per-cpu=16gb
+#SBATCH --gres=gpu:4
 #SBATCH --partition=main
-#SBATCH --job-name=ray_test
-#SBATCH --output=/mnt/work/dhuseljic/logs/hparams/%A_%a_%x.out
-#SBATCH --array=1-3%3
+#SBATCH --job-name=bayes_opt
+#SBATCH --output=/mnt/work/dhuseljic/logs/udal/bayes_opt/%A_%a_%x.out
+#SBATCH --array=1-1
+##SBATCH --exclude=gpu-v100-[1-4]
 date;hostname;pwd
-cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/
 source activate uncertainty_evaluation
+cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/
 
-head_node=irmo
-if [ "$SLURM_ARRAY_TASK_ID" -eq 1 ]; then
-    srun -w $head_node ray start --num-cpus 1 --head --port=9876 --block &
-    python -u hparam.py
-else
-    srun ray start --num-cpus $SLURM_CPUS_PER_TASK --address $head_node.ies.uni-kassel.de:9876 --block
-fi
+# model=resnet18
+# model=resnet18_labelsmoothing
+# model=resnet18_mixup
+# model=resnet18_mcdropout
+model=resnet18_ensemble 
 
-# Connect to ray master
-# srun -w $head_node ray start --num-cpus $SLURM_CPUS_PER_TASK --head --port=9876 --block &
-# &
-# srun ray stop
+python -u hparam_search.py \
+	n_opt_samples=150 \
+	model=$model \
+	gpus_per_trial=0.5 \
+	model.batch_size=32 \
+	model.n_epochs=200 \
+	budget=3456 \
+	dataset=CIFAR100 \
+	dataset_path=/mnt/work/dhuseljic/datasets

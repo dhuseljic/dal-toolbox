@@ -57,17 +57,18 @@ def main(args):
 
     # Setup Search space
     search_space, points_to_evaluate = build_search_space(args)
-    search_alg = BayesOptSearch(points_to_evaluate=points_to_evaluate)
+    search_alg = BayesOptSearch(points_to_evaluate=points_to_evaluate, random_search_steps=20)
     tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=args.n_opt_samples, metric="test_nll", mode="min")
 
     # Setup objective
-    objective = tune.with_resources(train, resources={'cpu': num_cpus//num_gpus, 'gpu': args.gpus_per_trial})
+    objective = tune.with_resources(train, resources={'cpu': num_cpus//(num_gpus / args.gpus_per_trial), 'gpu': args.gpus_per_trial})
     objective = tune.with_parameters(objective, args=args)
 
     # Start hyperparameter search
     tuner = tune.Tuner(objective, param_space=search_space, tune_config=tune_config)
     results = tuner.fit()
-    print('Best NLL Hyperparameter: {}'.format(results.get_best_result()))
+    print('Best NLL Stats: {}'.format(results.get_best_result().metrics))
+    print('Best NLL Hyperparameter: {}'.format(results.get_best_result().config))
     print('Best Acc Hyperparameter: {}'.format(results.get_best_result(metric="test_acc1", mode="max").config))
 
 
