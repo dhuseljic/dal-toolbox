@@ -28,7 +28,9 @@ from dal_toolbox.metrics import generalization
 
 
 def gt_proba_mapping(pixel_sum):
-    return 1 / (1 + np.exp(-(pixel_sum / .05) + 10))
+    val = np.cos(pixel_sum*2*np.pi)+1
+    val = val / 2
+    return val
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="synthetic")
