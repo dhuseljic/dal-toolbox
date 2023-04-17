@@ -4,7 +4,7 @@ import torch.nn.init as init
 import torch.nn.functional as F
 import numpy as np
 
-from ..utils.bayesian_module import BayesianModule, ConsistentMCDropout2d
+from ..utils.mcdropout import MCDropoutModule, ConsistentMCDropout2d
 from ...metrics import generalization, ood, calibration
 from ...utils import MetricLogger, SmoothedValue
 
@@ -59,9 +59,9 @@ def dropout_wide_resnet_28_10(num_classes, n_mc_passes, dropout_rate=0.3):
     return model
 
 
-class DropoutWideResNet(BayesianModule):
+class DropoutWideResNet(MCDropoutModule):
     def __init__(self, depth, widen_factor, num_classes=10, k=None, dropout_rate=0.1):
-        super(BayesianModule, self).__init__()
+        super(MCDropoutModule, self).__init__()
         self.in_planes = 16
         self.depth = depth
         self.widen_factor = widen_factor

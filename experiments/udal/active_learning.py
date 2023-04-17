@@ -12,10 +12,11 @@ from torch.utils.data import DataLoader, RandomSampler
 from omegaconf import OmegaConf
 
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp
+from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
 from dal_toolbox.active_learning.data import ALDataset
 from dal_toolbox.utils import seed_everything
 from dal_toolbox import datasets
-from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, predefined
+from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
@@ -117,28 +118,40 @@ def main(args):
 
 
 def build_query(args, **kwargs):
+    device = kwargs.get('device', 'cuda')
     if args.al_strategy.name == "random":
         query = random.RandomSampling(random_seed=args.random_seed)
     elif args.al_strategy.name == "uncertainty":
-        device = kwargs['device']
         query = uncertainty.UncertaintySampling(
+            batch_size=args.model.batch_size,
             uncertainty_type=args.al_strategy.uncertainty_type,
             subset_size=args.al_strategy.subset_size,
+            random_seed=args.random_seed,
             device=device,
         )
+    elif args.al_strategy.name == "bayesian_uncertainty":
+        query = uncertainty.BayesianUncertaintySampling(
+            batch_size=args.model.batch_size,
+            uncertainty_type=args.al_strategy.uncertainty_type,
+            subset_size=args.al_strategy.subset_size,
+            random_seed=args.random_seed,
+            device=device,
+        )
+    elif args.al_strategy.name == 'variation_ratio':
+        query = uncertainty.VariationRatioSampling(
+            batch_size=args.model.batch_size,
+            subset_size=args.al_strategy.subset_size,
+            random_seed=args.random_seed,
+            device=device,
+        )
+    elif args.al_strategy.name == 'bald':
+        raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
     elif args.al_strategy.name == "coreset":
         device = kwargs['device']
         query = coreset.CoreSet(subset_size=args.al_strategy.subset_size, device=device)
     elif args.al_strategy.name == "badge":
         device = kwargs['device']
         query = badge.Badge(subset_size=args.al_strategy.subset_size, device=device)
-    elif args.al_strategy.name == "predefined":
-        query = predefined.PredefinedSampling(
-            queried_indices_json=args.al_strategy.queried_indices_json,
-            n_acq=args.al_cycle.n_acq,
-            n_init=args.al_cycle.n_init,
-            acq_size=args.al_cycle.acq_size,
-        )
     else:
         raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
     return query
@@ -157,7 +170,7 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True,
         )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
         trainer = deterministic.trainer.DeterministicTrainer(
             model=model,
             criterion=criterion,
@@ -177,7 +190,7 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True,
         )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
         trainer = deterministic.trainer.DeterministicTrainer(
             model=model,
             criterion=criterion,
@@ -197,7 +210,7 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True,
         )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
         trainer = deterministic.trainer.DeterministicMixupTrainer(
             model=model,
             criterion=criterion,
@@ -219,7 +232,7 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True
         )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
         trainer = mc_dropout.trainer.MCDropoutTrainer(
             model=model,
             optimizer=optimizer,
@@ -240,7 +253,7 @@ def build_model(args, **kwargs):
                 momentum=args.model.optimizer.momentum,
                 nesterov=True
             )
-            lrs = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.model.n_epochs)
+            lrs = CosineAnnealingLRLinearWarmup(opt, num_epochs=args.model.n_epochs, warmup_epochs=10)
             members.append(mem)
             optimizers.append(opt)
             lr_schedulers.append(lrs)
@@ -281,7 +294,7 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True
         )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
         trainer = sngp.trainer.SNGPTrainer(
             model=model,
             criterion=criterion,
@@ -292,7 +305,7 @@ def build_model(args, **kwargs):
         )
 
     else:
-        NotImplementedError()
+        raise NotImplementedError()
 
     return trainer
 

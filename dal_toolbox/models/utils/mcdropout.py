@@ -3,35 +3,34 @@ import torch.nn as nn
 from tqdm.auto import tqdm
 
 
-class BayesianModule(nn.Module):
+class MCDropoutModule(nn.Module):
     """A module that we can sample multiple times from given a single input batch.
 
     To be efficient, the module allows for a part of the forward pass to be deterministic.
     """
+    n_passes = None
 
-    k = None
-
-    def __init__(self):
+    def __init__(self, n_passes):
         super().__init__()
+        MCDropoutModule.n_passes = n_passes
 
     # Returns B x n x output
-    def mc_forward(self, input_B: torch.Tensor, k: int):
-        BayesianModule.k = k
-        mc_input_BK = BayesianModule.mc_tensor(input_B, k)
+    def mc_forward(self, input_B: torch.Tensor):
+        mc_input_BK = MCDropoutModule.mc_tensor(input_B, MCDropoutModule.n_passes)
         mc_output_BK = self.mc_forward_impl(mc_input_BK)
-        mc_output_B_K = BayesianModule.unflatten_tensor(mc_output_BK, k)
+        mc_output_B_K = MCDropoutModule.unflatten_tensor(mc_output_BK, MCDropoutModule.n_passes)
         return mc_output_B_K
 
     def mc_forward_impl(self, mc_input_BK: torch.Tensor):
         return mc_input_BK
 
-    def get_mc_logits(self, dataloader, k, device):
+    def get_mc_logits(self, dataloader, device):
         mc_probas = []
         self.to(device)
         self.eval()
         for samples, _ in tqdm(dataloader):
             samples = samples.to(device)
-            mc_probas.append(self.mc_forward(samples, k))
+            mc_probas.append(self.mc_forward(samples))
         return torch.cat(mc_probas)
 
     @staticmethod
@@ -82,24 +81,23 @@ class _ConsistentMCDropout(nn.Module):
         if self.p == 0.0:
             return input
 
-        k = BayesianModule.k
         if self.training:
             # Create a new mask on each call and for each batch element.
-            k = input.shape[0]
-            mask = self._create_mask(input, k)
+            mask = self._create_mask(input, input.shape[0])
         else:
             if self.mask is None:
                 # print('recreating mask', self)
                 # Recreate mask.
-                self.mask = self._create_mask(input, k)
+                self.mask = self._create_mask(input, MCDropoutModule.n_passes)
 
             mask = self.mask
 
-        mc_input = BayesianModule.unflatten_tensor(input, k)
+        k = input.shape[0] if self.training else 10
+        mc_input = MCDropoutModule.unflatten_tensor(input, k)
         mc_output = mc_input.masked_fill(mask, 0) / (1 - self.p)
 
         # Flatten MCDI, batch into one dimension again.
-        return BayesianModule.flatten_tensor(mc_output)
+        return MCDropoutModule.flatten_tensor(mc_output)
 
 
 class ConsistentMCDropout(_ConsistentMCDropout):

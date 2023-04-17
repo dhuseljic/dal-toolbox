@@ -44,34 +44,22 @@ class EnsembleTrainer(BasicTrainer):
         # Get logits and targets for in-domain-test-set (Number of Members x Number of Samples x Number of Classes)
         ensemble_logits_id, targets_id, = [], []
         for inputs, targets in dataloader:
-            inputs, targets = inputs.to(self.device), targets.to(self.device)
-            ensemble_logits_id.append(self.model.forward_sample(inputs))
+            logits = self.model.forward_sample(inputs.to(self.device)).cpu()
+            ensemble_logits_id.append(logits)
             targets_id.append(targets)
 
         # Transform to tensor
-        ensemble_logits_id = torch.cat(ensemble_logits_id, dim=1).cpu()
-        targets_id = torch.cat(targets_id, dim=0).cpu()
+        ensemble_logits_id = torch.cat(ensemble_logits_id, dim=0)
+        targets_id = torch.cat(targets_id, dim=0)
 
         # Transform into probabilitys
-        ensemble_probas_id = ensemble_logits_id.softmax(dim=-1)
+        mean_probas_id  = ensemble_logits_id.softmax(dim=-1).mean(dim=1)
 
-        # Average of probas per sample
-        mean_probas_id = torch.mean(ensemble_probas_id, dim=0)
-
-        # Confidence- and entropy-Scores of in domain set logits
-        conf_id, _ = mean_probas_id.max(-1)
-        entropy_id = ood.entropy_fn(mean_probas_id)
-
-        # Model specific test loss and accuracy for in domain testset
-        acc1 = generalization.accuracy(torch.log(mean_probas_id), targets_id, (1,))[0].item()
-        loss = self.criterion(torch.log(mean_probas_id), targets_id).item()
-
-        # Negative Log Likelihood
-        nll = torch.nn.CrossEntropyLoss(reduction='mean')(torch.log(mean_probas_id), targets_id).item()
-        ensemble_cross_entropy = calibration.EnsembleCrossEntropy()(ensemble_logits_id, targets_id).item()
-        gibbs_cross_entropy = calibration.GibsCrossEntropy()(ensemble_logits_id, targets_id).item()
-
-        # Top- and Marginal Calibration Error
+        # Compute accuracy
+        acc1 = generalization.accuracy(mean_probas_id, targets_id, (1,))[0].item()
+        loss = calibration.GibbsCrossEntropy()(ensemble_logits_id, targets_id).item()
+        nll = calibration.EnsembleCrossEntropy()(ensemble_logits_id, targets_id).item()
+        brier = calibration.BrierScore()(mean_probas_id, targets_id).item()
         tce = calibration.TopLabelCalibrationError()(mean_probas_id, targets_id).item()
         mce = calibration.MarginalCalibrationError()(mean_probas_id, targets_id).item()
 
@@ -79,11 +67,15 @@ class EnsembleTrainer(BasicTrainer):
             "acc1": acc1,
             "loss": loss,
             "nll": nll,
-            "ensemble_cross_entropy": ensemble_cross_entropy,
-            "gibbs_cross_entropy": gibbs_cross_entropy,
+            "brier": brier,
             "tce": tce,
             "mce": mce
         }
+
+        # TODO:
+        conf_id, _ = mean_probas_id.max(-1)
+        entropy_id = ood.entropy_fn(mean_probas_id)
+        entropy_id = ood.ensemble_entropy_from_logits(ensemble_logits_id)
 
         if dataloaders_ood is None:
             dataloaders_ood = {}

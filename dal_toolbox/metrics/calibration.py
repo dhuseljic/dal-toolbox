@@ -3,74 +3,145 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from sklearn import metrics
+
+
+class BrierScoreDecomposition(nn.Module):
+    # From: https://github.com/tensorflow/probability/blob/v0.19.0/tensorflow_probability/python/stats/calibration.py
+    @torch.no_grad()
+    def forward(self, logits, targets):
+        n_samples, n_classes = logits.shape
+
+        preds = logits.argmax(dim=-1)
+        confusion_matrix = metrics.confusion_matrix(targets, preds, labels=range(n_classes)).T
+        confusion_matrix = torch.from_numpy(confusion_matrix).float()
+
+        # n_k
+        dist_weights = torch.sum(confusion_matrix, dim=-1)
+        dist_weights = dist_weights / torch.sum(dist_weights, dim=-1, keepdim=True)
+
+        # o_k_bar
+        pbar = torch.sum(confusion_matrix, dim=-2)
+        pbar = pbar / torch.sum(pbar, dim=-1, keepdim=True)
+
+        # o_bar
+        eps = torch.finfo(confusion_matrix.dtype).eps
+        dist_mean = confusion_matrix / (torch.sum(confusion_matrix, dim=-1, keepdim=True) + eps)
+
+        uncertainty = - torch.sum(torch.square(pbar), dim=-1)
+
+        resolution = torch.square(pbar.unsqueeze(-1) - dist_mean)
+        resolution = torch.sum(dist_weights * torch.sum(resolution, dim=-1), dim=-1)
+
+        # f_k
+        prob_true = dist_mean[preds]
+
+        log_prob_true = prob_true.log()
+        log_prob_pred = logits - torch.logsumexp(logits, dim=-1, keepdim=True)
+
+        log_reliability = torch.logsumexp(2 * log_sub_exp(log_prob_pred, log_prob_true), dim=-1)
+        log_reliability = torch.logsumexp(log_reliability, dim=-1)
+        reliabilty = torch.exp(log_reliability - math.log(n_samples))
+        out = {
+            'uncertainty': uncertainty.item(),
+            'resolution': resolution.item(),
+            'reliability': reliabilty.item(),
+        }
+        return out
+
+
+def log_sub_exp(x, y):
+    larger = torch.max(x, y)
+    smaller = torch.min(x, y)
+    zero = torch.zeros_like(larger)
+    result = larger + log1mexp(torch.max(larger - smaller, zero))
+    return result
+
+
+def log1mexp(x,):
+    x = torch.abs(x)
+    return torch.where(x < math.log(2), torch.log(-torch.expm1(-x)), torch.log1p(-torch.exp(-x)))
+
 
 class BrierScore(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.mse = nn.MSELoss()
-
     def forward(self, probas, labels):
-        N, D = probas.shape
-        assert len(labels) == N, "Probas and Labels must be of the same size"
-        assert len(labels.unique()) == D, "Missing labels?"
-        labels_onehot = F.one_hot(labels, num_classes=D)
-        score = self.mse(probas, labels_onehot)
+        n_samples, n_classes = probas.shape
+        assert len(labels) == n_samples, "Probas and Labels must be of the same size"
+        labels_onehot = F.one_hot(labels, num_classes=n_classes)
+        score = torch.sum(F.mse_loss(probas, labels_onehot, reduction='none'), -1)
+        score = torch.mean(score)
+
+        # Note: Tensorflow ignores the addition by one. To be consistent with the decomposition, we also ignore it.
+        # probas_label = torch.sum(probas * labels_onehot, -1)
+        # score = torch.sum(probas**2, dim=-1) - 2 * probas_label +1
+        # score = torch.mean(score, -1)
         return score
 
 
 class EnsembleCrossEntropy(nn.Module):
+    """Cross entropy for a ensemble of predictions.
+
+    For each datapoint (x,y), the ensemble's negative log-probability is:
+
+    ```
+    -log p(y|x) = -log 1/ensemble_size sum_{m=1}^{ensemble_size} p(y|x,theta_m)
+                = -log sum_{m=1}^{ensemble_size} exp(log p(y|x,theta_m)) + log ensemble_size.
+    ```
+
+    Reference:
+        https://github.com/google-research/robustness_metrics/blob/master/robustness_metrics/metrics/information_criteria.py#L74-L89
+
+    """
+
     def __init__(self):
         super().__init__()
         self.cross_entropy = nn.CrossEntropyLoss(reduction='none')
 
     def forward(self, logits: torch.Tensor, labels: torch.Tensor):
-        """
-        logits.shape = (EnsembleMembers, Samples, Classes)
-        labels.shape = (Samples)
-        """
-        # Remember ensemble_size for nll calculation
-        ensemble_size, n_samples, n_classes = logits.shape
+        if logits.ndim != 3:
+            raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
+        num_samples, ensemble_size, _ = logits.shape
 
-        # Reshape to fit CrossEntropy
-        # logits.shape = (EnsembleMembers*Samples, Classes)
-        # labels.shape = (EnsembleMembers*Sampels)
-        labels = torch.broadcast_to(labels.unsqueeze(0), logits.shape[:-1])
-        labels = labels.reshape(ensemble_size*n_samples)
-        logits = logits.reshape(ensemble_size*n_samples, n_classes)
+        # Reshape logits from N x M x C -> N x C x M
+        _logits = logits.permute(0, 2, 1)
+        # Expand labels from N -> N x M
+        _labels = labels.view(-1, 1).expand(num_samples, ensemble_size)
+        ce = self.cross_entropy(_logits, _labels)
+        ce = -torch.logsumexp(-ce, dim=-1) + math.log(ensemble_size)
 
-        # Non Reduction Cross Entropy
-        ce = self.cross_entropy(logits, labels).reshape(-1, 1)
-
-        # Reduce LogSumExp + log of Ensemble Size
-        nll = -torch.logsumexp(-ce, dim=1) + math.log(ensemble_size)
-
-        # Return Average
-        return torch.mean(nll)
+        return torch.mean(ce)
 
 
-class GibsCrossEntropy(nn.Module):
+class GibbsCrossEntropy(nn.Module):
+    """Average cross entropy of ensemble members.
+
+    For each datapoint (x,y), the ensemble's Gibbs cross entropy is:
+
+    ```
+    - (1/ensemble_size) sum_{m=1}^ensemble_size log p(y|x,theta_m).
+    ```
+
+    Reference:
+        https://github.com/google-research/robustness_metrics/blob/master/robustness_metrics/metrics/information_criteria.py#L92-L155
+
+    """
+
     def __init__(self):
         super().__init__()
         self.cross_entropy = nn.CrossEntropyLoss(reduction='none')
 
     def forward(self, logits: torch.Tensor, labels: torch.Tensor):
-        """
-        logits.shape = (EnsembleMembers, Samples, Classes)
-        labels.shape = (Samples)
-        """
-        # Remember ensemble_size for nll calculation
-        ensemble_size, n_samples, n_classes = logits.shape
+        num_samples, ensemble_size, _ = logits.shape
 
-        # Reshape to fit CrossEntropy
-        labels = torch.broadcast_to(labels.unsqueeze(0), logits.shape[:-1])
-        labels = labels.reshape(ensemble_size*n_samples)
-        logits = logits.reshape(ensemble_size*n_samples, n_classes)
+        # Reshape logits from N x M x C -> N x C x M
+        _logits = logits.permute(0, 2, 1)
+        # Expand labels from N -> N x M
+        _labels = labels.view(-1, 1).expand(num_samples, ensemble_size)
 
-        # Non Reduction Cross Entropy
-        nll = self.cross_entropy(logits, labels).reshape(-1, 1)
+        ce = self.cross_entropy(_logits, _labels)
+        ce = torch.mean(ce, dim=-1)
 
-        # Return Average
-        return torch.mean(nll)
+        return torch.mean(ce)
 
 
 def calibration_error(confs: torch.Tensor, accs: torch.Tensor, n_samples: torch.Tensor, p: int = 2):

@@ -2,16 +2,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..utils.bayesian_module import BayesianModule, ConsistentMCDropout2d
+from ..utils.mcdropout import MCDropoutModule, ConsistentMCDropout2d
 
 
-class DropoutResNet18(BayesianModule):
-    def __init__(self, num_classes=10, k=None, dropout_rate=0.2):
-        super(BayesianModule, self).__init__()
+class DropoutResNet18(MCDropoutModule):
+    def __init__(self, num_classes=10, n_passes=10, dropout_rate=0.2):
+        super().__init__(n_passes=n_passes)
         self.in_planes = 64
         self.block = DropoutBasicBlock
         self.num_blocks = [2, 2, 2, 2]
-        self.k = k
+        self.n_passes = n_passes
         self.dropout_rate = dropout_rate
 
         self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
@@ -54,10 +54,10 @@ class DropoutResNet18(BayesianModule):
         self.eval()
         mc_logits_list = []
         for samples, _ in dataloader:
-            mc_logits = self.mc_forward(samples.to(device), k=self.k)
+            mc_logits = self.mc_forward(samples.to(device))
             mc_logits_list.append(mc_logits.cpu())
         mc_logits = torch.cat(mc_logits_list)
-        probas = mc_logits.softmax(-1).mean(1)
+        probas = mc_logits.softmax(-1)
         return probas
 
 

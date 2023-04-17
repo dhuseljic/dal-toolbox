@@ -6,7 +6,7 @@
 #SBATCH --partition=main
 #SBATCH --array=1-3%10
 #SBATCH --job-name=al_random_resnet18-labelsmoothing_cifar10
-#SBATCH --output=/mnt/work/dhuseljic/logs/active_learning/%A_%a__%x.log
+#SBATCH --output=/mnt/work/dhuseljic/logs/udal/active_learning/%A_%a__%x.log
 date;hostname;pwd
 source /mnt/home/dhuseljic/.zshrc
 conda activate uncertainty_evaluation
@@ -26,13 +26,14 @@ n_acq=19
 random_seed=$SLURM_ARRAY_TASK_ID
 init_pool_file=/mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/initial_pools/CIFAR10/random_${n_init}_seed${random_seed}.json
 
-output_dir=/mnt/work/deep_al/results/active_learning/${dataset}/${model}/${al_strat}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/
+output_dir=/mnt/work/deep_al/results/udaludal//active_learning/${dataset}/${model}/${al_strat}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/
 
 echo "Starting script. Writing results to ${output_dir}"
 srun python -u active_learning.py \
 	model=$model \
-	model.optimizer.lr=1e-2 \
-	model.optimizer.weight_decay=5e-2 \
+	model.optimizer.lr=0.036314684357690086 \
+	model.optimizer.weight_decay=0.033749147650261144 \
+	model.label_smoothing=0.026745243993206828 \
 	dataset=$dataset \
 	dataset_path=/mnt/work/dhuseljic/datasets \
 	al_strategy=$al_strat \

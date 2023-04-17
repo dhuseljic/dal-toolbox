@@ -1,4 +1,5 @@
 import torch.nn as nn
+from . import lr_scheduler
 
 
 def freeze_bn(model):

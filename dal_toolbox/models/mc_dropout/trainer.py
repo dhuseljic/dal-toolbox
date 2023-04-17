@@ -39,44 +39,32 @@ class MCDropoutTrainer(BasicTrainer):
         dropout_logits_id, targets_id, = [], []
         for inputs, targets in dataloader:
             inputs, targets = inputs.to(self.device), targets.to(self.device)
-            dropout_logits_id.append(self.model.mc_forward(inputs, self.model.k))
+            dropout_logits_id.append(self.model.mc_forward(inputs))
             targets_id.append(targets)
-
-        # Transform to tensor
         dropout_logits_id = torch.cat(dropout_logits_id, dim=0).cpu()
         targets_id = torch.cat(targets_id, dim=0).cpu()
+        mean_probas_id = dropout_logits_id.softmax(dim=-1).mean(dim=1)
 
-        # Transform into probabilitys
-        dropout_probas_id = dropout_logits_id.softmax(dim=-1)
-
-        # Average of probas per sample
-        mean_probas_id = torch.mean(dropout_probas_id, dim=1)
-        mean_probas_id = ood.clamp_probas(mean_probas_id)
-
-        # Confidence- and entropy-Scores of in domain set logits
-        conf_id, _ = mean_probas_id.max(-1)
-        entropy_id = ood.entropy_fn(mean_probas_id)
-
-        # Model specific test loss and accuracy for in domain testset
-        acc1 = generalization.accuracy(torch.log(mean_probas_id), targets_id, (1,))[0].item()
-        prec = generalization.avg_precision(mean_probas_id, targets_id)
-        loss = self.criterion(torch.log(mean_probas_id), targets_id).item()
-
-        # Negative Log Likelihood
-        nll = torch.nn.CrossEntropyLoss(reduction='mean')(torch.log(mean_probas_id), targets_id).item()
-
-        # Top- and Marginal Calibration Error
+        acc1 = generalization.accuracy(mean_probas_id, targets_id, (1,))[0].item()
+        loss = calibration.GibbsCrossEntropy()(dropout_logits_id, targets_id).item()
+        nll = calibration.EnsembleCrossEntropy()(dropout_logits_id, targets_id).item()
+        brier = calibration.BrierScore()(mean_probas_id, targets_id).item()
         tce = calibration.TopLabelCalibrationError()(mean_probas_id, targets_id).item()
         mce = calibration.MarginalCalibrationError()(mean_probas_id, targets_id).item()
 
         metrics = {
             "acc1": acc1,
-            "prec": prec,
             "loss": loss,
             "nll": nll,
+            "brier": brier,
             "tce": tce,
             "mce": mce
         }
+
+        # TODO
+        conf_id, _ = mean_probas_id.max(-1)
+        entropy_id = ood.ensemble_entropy_from_logits(dropout_logits_id)
+        # entropy_id = ood.entropy_fn(mean_probas_id)
 
         if dataloaders_ood:
             for name, dataloader_ood in dataloaders_ood.items():
@@ -84,7 +72,7 @@ class MCDropoutTrainer(BasicTrainer):
                 dropout_logits_ood = []
                 for inputs, targets in dataloader_ood:
                     inputs, targets = inputs.to(self.device), targets.to(self.device)
-                    dropout_logits_ood.append(self.model.mc_forward(inputs, self.model.k))
+                    dropout_logits_ood.append(self.model.mc_forward(inputs))
                 dropout_logits_ood = torch.cat(dropout_logits_ood, dim=0).cpu()
                 dropout_probas_ood = dropout_logits_ood.softmax(dim=-1)
                 mean_probas_ood = torch.mean(dropout_probas_ood, dim=1)

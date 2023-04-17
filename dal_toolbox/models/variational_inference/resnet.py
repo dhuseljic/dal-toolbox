@@ -1,22 +1,27 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from ..utils.variational_inference import BayesianConv2d, BayesianLinear
 
 
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, in_planes, planes, stride=1):
+    def __init__(self, in_planes, planes, stride=1, prior_sigma=1):
         super(BasicBlock, self).__init__()
-        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.prior_sigma = prior_sigma
+        self.conv1 = BayesianConv2d(in_planes, planes, kernel_size=3, stride=stride,
+                                    padding=1, bias=False, prior_sigma=prior_sigma)
         self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv2 = BayesianConv2d(planes, planes, kernel_size=3, stride=1,
+                                    padding=1, bias=False, prior_sigma=prior_sigma)
         self.bn2 = nn.BatchNorm2d(planes)
 
         self.shortcut = nn.Sequential()
         if stride != 1 or in_planes != self.expansion*planes:
             self.shortcut = nn.Sequential(
-                nn.Conv2d(in_planes, self.expansion*planes, kernel_size=1, stride=stride, bias=False),
+                BayesianConv2d(in_planes, self.expansion*planes, kernel_size=1,
+                               stride=stride, bias=False, prior_sigma=prior_sigma),
                 nn.BatchNorm2d(self.expansion*planes)
             )
 
@@ -28,29 +33,30 @@ class BasicBlock(nn.Module):
         return out
 
 
-class ResNet18(nn.Module):
-    def __init__(self, num_classes):
-        super(ResNet18, self).__init__()
+class BayesianResNet18(nn.Module):
+    def __init__(self, num_classes, prior_sigma=1):
+        super(BayesianResNet18, self).__init__()
         self.in_planes = 64
         self.block = BasicBlock
         self.num_blocks = [2, 2, 2, 2]
         self.num_classes = num_classes
+        self.prior_sigma = prior_sigma
 
         # Init layer does not have a kernel size of 7 since cifar has a smaller
         # size of 32x32
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv1 = BayesianConv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False, prior_sigma=prior_sigma)
         self.bn1 = nn.BatchNorm2d(64)
         self.layer1 = self._make_layer(self.block, 64, self.num_blocks[0], stride=1)
         self.layer2 = self._make_layer(self.block, 128, self.num_blocks[1], stride=2)
         self.layer3 = self._make_layer(self.block, 256, self.num_blocks[2], stride=2)
         self.layer4 = self._make_layer(self.block, 512, self.num_blocks[3], stride=2)
-        self.linear = nn.Linear(512*self.block.expansion, self.num_classes)
+        self.linear = BayesianLinear(512*self.block.expansion, self.num_classes, prior_sigma=prior_sigma)
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)
         layers = []
         for stride in strides:
-            layers.append(block(self.in_planes, planes, stride))
+            layers.append(block(self.in_planes, planes, stride, prior_sigma=self.prior_sigma))
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
 
@@ -68,8 +74,16 @@ class ResNet18(nn.Module):
             out = (out, features)
         return out
 
+    @torch.no_grad()
+    def forward_sample(self, x, mc_samples=10):
+        mc_logits = []
+        for _ in range(mc_samples):
+            mc_logits.append(self.forward(x))
+        mc_logits = torch.stack(mc_logits, dim=1)
+        return mc_logits
+
     @torch.inference_mode()
-    def get_logits(self, dataloader, device):
+    def get_probas(self, dataloader, device):
         self.to(device)
         self.eval()
         all_logits = []
@@ -77,11 +91,6 @@ class ResNet18(nn.Module):
             logits = self(samples.to(device))
             all_logits.append(logits)
         logits = torch.cat(all_logits)
-        return logits
-
-    @torch.inference_mode()
-    def get_probas(self, dataloader, device):
-        logits = self.get_logits(dataloader=dataloader, device=device)
         probas = logits.softmax(-1)
         return probas
 
