@@ -17,6 +17,8 @@ def build_cifar10(split, ds_path, mean=(0.4914, 0.4822, 0.4465), std=(0.247, 0.2
         ds = torchvision.datasets.CIFAR10(ds_path, train=True, download=True, transform=train_transform)
     elif split == 'query':
         ds = torchvision.datasets.CIFAR10(ds_path, train=True, download=True, transform=eval_transform)
+    elif split == 'raw':
+        ds = torchvision.datasets.CIFAR10(ds_path, train=True, download=True)
     elif split == 'test':
         ds = torchvision.datasets.CIFAR10(ds_path, train=False, download=True, transform=eval_transform)
 

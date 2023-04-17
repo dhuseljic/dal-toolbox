@@ -9,7 +9,6 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader, RandomSampler, Subset
 from torch.distributed import destroy_process_group
 from omegaconf import OmegaConf
-import torchvision
 from torchvision import transforms
 
 from dal_toolbox.datasets.cifar import build_cifar10
@@ -130,7 +129,7 @@ def build_trainer(args, num_classes, summary_writer, use_distributed):
 def build_ssl_dataset(args):
     if args.dataset == 'CIFAR10':
         mean, std = (0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.262)
-        ds = torchvision.datasets.CIFAR10(args.dataset_path, train=True, download=True)
+        ds = build_cifar10('raw', args.dataset_path)
         transform_weak = transforms.Compose([
             transforms.Resize(32),
             transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
