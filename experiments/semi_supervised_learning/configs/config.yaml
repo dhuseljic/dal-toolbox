@@ -1,6 +1,6 @@
 defaults:
   - model: wideresnet282
-  - ssl_algorithm: fully_supervised
+  - ssl_algorithm: pseudo_labels
 
 dataset: CIFAR10
 dataset_path: ./data/

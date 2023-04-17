@@ -241,7 +241,7 @@ class DeterministicPiModelTrainer(DeterministicTrainer):
         self.n_iter = n_iter
         self.unsup_warmup =  unsup_warmup
 
-    def train_one_epoch(self, labeled_loader, unlabeled_loader_weak_1, unlabeled_loader_weak_2, epoch=None, print_freq=200):
+    def train_one_epoch(self, labeled_loader, unlabeled_loader, epoch=None, print_freq=200):
         self.model.train()
         self.model.to(self.device)
         self.criterion.to(self.device)
@@ -250,12 +250,11 @@ class DeterministicPiModelTrainer(DeterministicTrainer):
         metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
         header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
-        unlabeled_iter1 = iter(unlabeled_loader_weak_1)
-        unlabeled_iter2 = iter(unlabeled_loader_weak_2)
+        unlabeled_iter = iter(unlabeled_loader)
 
         i_iter = epoch*len(labeled_loader)
         for x_l, y_l in metric_logger.log_every(labeled_loader, print_freq=print_freq, header=header):
-            (x_w1, a), (x_w2, b) = next(unlabeled_iter1), next(unlabeled_iter2)
+            (x_w1, x_w2, t) = next(unlabeled_iter)
             x_l, y_l = x_l.to(self.device), y_l.to(self.device)
             x_w1 = x_w1.to(self.device)
             x_w2 = x_w2.to(self.device)
@@ -304,7 +303,7 @@ class DeterministicFixMatchTrainer(DeterministicTrainer):
         self.p_cutoff = p_cutoff
         self.ce_loss = nn.CrossEntropyLoss(reduction='none')
 
-    def train_one_epoch(self, labeled_loader, unlabeled_loader_weak, unlabeled_loader_strong, epoch=None, print_freq=200):
+    def train_one_epoch(self, labeled_loader, unlabeled_loader, epoch=None, print_freq=200):
         self.model.to(self.device)
         self.model.train()
         self.criterion.to(self.device)
@@ -313,16 +312,13 @@ class DeterministicFixMatchTrainer(DeterministicTrainer):
         metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
         header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
-        iterator_unlabeled_weak_aug = iter(unlabeled_loader_weak)
-        iterator_unlabeled_strong_aug = iter(unlabeled_loader_strong)
+        unlabeled_iter = iter(unlabeled_loader)
 
         for x_l, y_l in metric_logger.log_every(labeled_loader, print_freq=print_freq, header=header):
-            (x_w, y_w), (x_s, _)  = next(iterator_unlabeled_weak_aug), next(iterator_unlabeled_strong_aug)
-            x_l = x_l.to(self.device)
-            y_l = y_l.to(self.device)
-            x_w = x_w.to(self.device)
+            x_w, x_s, y = next(unlabeled_iter)
+            x_l, y_l = x_l.to(self.device), y_l.to(self.device)
+            x_w, y = x_w.to(self.device), y.to(self.device)
             x_s = x_s.to(self.device)
-            y_w = y_w.to(self.device)
 
             # Get all necesseracy model outputs
             logits_l = self.model(x_l)
@@ -349,7 +345,7 @@ class DeterministicFixMatchTrainer(DeterministicTrainer):
             # Metrics
             batch_size, ulb_batch_size = x_l.shape[0], x_s.shape[0]
             acc1, = generalization.accuracy(logits_l, y_l, topk=(1,))
-            pseudo_acc1, = generalization.accuracy(logits_w, y_w, topk=(1,))
+            pseudo_acc1, = generalization.accuracy(logits_w, y, topk=(1,))
             metric_logger.update(loss=loss.item(), supervised_loss=loss_l.item(), lr=self.optimizer.param_groups[0]["lr"],
                                 unsupervised_loss=loss_u.item(), mask_ratio=mask.float().mean().item())
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
@@ -371,7 +367,7 @@ class DeterministicFlexMatchTrainer(DeterministicTrainer):
         self.ce_loss = nn.CrossEntropyLoss(reduction='none')
         self.fmth = FlexMatchThresholdingHook(ulb_dest_len=ulb_ds_len, num_classes=n_classes, thresh_warmup=True)
 
-    def train_one_epoch(self, labeled_loader, unlabeled_loader_weak, unlabeled_loader_strong, unlabeled_loader_indices, epoch=None, print_freq=200):
+    def train_one_epoch(self, labeled_loader, unlabeled_loader, epoch=None, print_freq=200):
         self.model.to(self.device)
         self.model.train()
         self.criterion.to(self.device)
@@ -380,17 +376,15 @@ class DeterministicFlexMatchTrainer(DeterministicTrainer):
         metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
         header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
-        iterator_unlabeled_weak_aug = iter(unlabeled_loader_weak)
-        iterator_unlabeled_strong_aug = iter(unlabeled_loader_strong)
-        iterator_unlabeled_indices = iter(unlabeled_loader_indices)
+        unlabeled_iter = iter(unlabeled_loader)
 
         for x_l, y_l in metric_logger.log_every(labeled_loader, print_freq=print_freq, header=header):
-            (x_w, y_w), (x_s, _), idx  = next(iterator_unlabeled_weak_aug), next(iterator_unlabeled_strong_aug), next(iterator_unlabeled_indices)
+            x_w, x_s, y, idx  = next(unlabeled_iter)
             x_l = x_l.to(self.device)
             y_l = y_l.to(self.device)
             x_w = x_w.to(self.device)
             x_s = x_s.to(self.device)
-            y_w = y_w.to(self.device)
+            y = y.to(self.device)
             idx = idx.to(self.device)    
 
             # Get all necesseracy model outputs
@@ -418,7 +412,7 @@ class DeterministicFlexMatchTrainer(DeterministicTrainer):
             # Metrics
             batch_size, ulb_batch_size = x_l.shape[0], x_s.shape[0]
             acc1, = generalization.accuracy(logits_l, y_l, topk=(1,))
-            pseudo_acc1, = generalization.accuracy(logits_w, y_w, topk=(1,))
+            pseudo_acc1, = generalization.accuracy(logits_w, y, topk=(1,))
             metric_logger.update(loss=loss.item(), supervised_loss=loss_l.item(), lr=self.optimizer.param_groups[0]["lr"],
                                 unsupervised_loss=loss_u.item(), mask_ratio=mask.float().mean().item())
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
