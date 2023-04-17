@@ -9,9 +9,13 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader, RandomSampler, Subset
 from torch.distributed import destroy_process_group
 from omegaconf import OmegaConf
+import torchvision
+from torchvision import transforms
 
 from dal_toolbox.datasets.cifar import build_cifar10
-from dal_toolbox.datasets.ssl_wrapper import build_ssl_dataset
+from dal_toolbox.datasets.ssl_wrapper import PseudoLabelWrapper, PiModelWrapper, FixMatchWrapper, FlexMatchWrapper
+from dal_toolbox.datasets.corruptions import RandAugment
+from dal_toolbox.datasets.utils import sample_balanced_subset
 from dal_toolbox.datasets.samplers import DistributedSampler
 from dal_toolbox.models.deterministic.wide_resnet import wide_resnet_28_2
 from dal_toolbox.utils import seed_everything, init_distributed_mode
@@ -123,9 +127,66 @@ def build_trainer(args, num_classes, summary_writer, use_distributed):
 
 
 
+def build_ssl_dataset(args):
+    if args.dataset == 'CIFAR10':
+        mean, std = (0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.262)
+        ds = torchvision.datasets.CIFAR10(args.dataset_path, train=True, download=True)
+        transform_weak = transforms.Compose([
+            transforms.Resize(32),
+            transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean, std),
+        ])
+        transform_strong = transforms.Compose([
+            transforms.Resize(32),
+            transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            transforms.RandomHorizontalFlip(),
+            RandAugment(3, 5),
+            transforms.ToTensor(),
+            transforms.Normalize(mean, std)
+        ])
+    else:
+        NotImplementedError()
+
+
+    if args.ssl_algorithm.name == 'pseudo_labels':
+        ds = PseudoLabelWrapper(
+            ds=ds,
+            ds_path=args.dataset_path,
+            transforms_weak=transform_weak,
+            transforms_strong=transform_strong
+            )
+    elif args.ssl_algorithm.name == 'pi_model':
+        ds = PiModelWrapper(
+            ds=ds,
+            ds_path=args.dataset_path,
+            transforms_weak=transform_weak,
+            transforms_strong=transform_strong
+            )
+    elif args.ssl_algorithm.name == 'fixmatch':
+        ds = FixMatchWrapper(
+            ds=ds,
+            ds_path=args.dataset_path,
+            transforms_weak=transform_weak,
+            transforms_strong=transform_strong
+            )
+    elif args.ssl_algorithm.name == 'flexmatch':
+        ds = FlexMatchWrapper(
+            ds=ds,
+            ds_path=args.dataset_path,
+            transforms_weak=transform_weak,
+            transforms_strong=transform_strong
+            )
+    else:
+        assert True, 'algorithm not kown'
+    return ds
+
+
+
 def build_dataloaders(args, use_distributed):
     train_ds, info = build_cifar10('train', './data', return_info=True)
-    train_ssl_ds = build_ssl_dataset(args.ssl_algorithm.name, './data')
+    train_ssl_ds = build_ssl_dataset(args)
     test_ds = build_cifar10('test', './data')
 
     labeled_indices = sample_balanced_subset(train_ds.targets, num_classes=info['n_classes'], num_samples=args.n_labeled_samples)
@@ -144,22 +205,6 @@ def build_dataloaders(args, use_distributed):
 
     return supervised_loader, unsupervised_loader, validation_loader, info
 
-
-def sample_balanced_subset(targets, num_classes, num_samples):
-    '''
-    samples for labeled data
-    (sampling with balanced ratio over classes)
-    '''
-    # Get samples per class
-    assert num_samples % num_classes == 0, "lb_num_labels must be divideable by num_classes in balanced setting"
-    lb_samples_per_class = [int(num_samples / num_classes)] * num_classes
-
-    val_pool = []
-    for c in range(num_classes):
-        idx = np.array([i for i in range(len(targets)) if targets[i] == c])
-        np.random.shuffle(idx)
-        val_pool.extend(idx[:lb_samples_per_class[c]])
-    return [int(i) for i in val_pool]
 
 
 if __name__ == "__main__":

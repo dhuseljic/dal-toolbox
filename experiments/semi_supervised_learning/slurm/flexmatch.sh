@@ -6,7 +6,7 @@
 #SBATCH --partition=main
 #SBATCH --job-name=flexmatch-250
 #SBATCH --output=/mnt/stud/work/phahn/uncertainty/logs/%x_%A_%a.log
-#SBATCH --array=1-1%1
+#SBATCH --array=1-2%2
 source /mnt/stud/home/phahn/.zshrc
 
 conda activate uncertainty_evaluation
