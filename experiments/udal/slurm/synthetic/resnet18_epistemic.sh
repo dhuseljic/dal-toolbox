@@ -9,7 +9,6 @@
 #SBATCH --output=/mnt/work/dhuseljic/logs/udal/synthetic/%A_%a__%x.log
 date;hostname;pwd
 source activate uncertainty_evaluation
-
 cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/
 
 model=resnet18
@@ -18,7 +17,7 @@ dataset_path=/mnt/work/dhuseljic/datasets/pixel_sum_dataset.pth
 al_strat=epistemic
 n_init=2
 acq_size=2
-n_acq=19
+n_acq=49
 random_seed=$SLURM_ARRAY_TASK_ID
 
 output_dir=/mnt/work/deep_al/results/udal/synthetic/${model}/${al_strat}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/
