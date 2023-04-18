@@ -188,7 +188,9 @@ class Aleatoric(query.Query):
         gt_probas_pos = []
         for idx in unlabeled_indices:
             img, _ = dataset[idx]
-            gt_probas_pos.append(img.mean())
+            rel_pixel_sum = img.mean()
+            gt_proba_pos = gt_proba_mapping(rel_pixel_sum)
+            gt_probas_pos.append(gt_proba_pos)
         gt_probas_pos = torch.stack(gt_probas_pos)
         gt_probas = torch.stack((1-gt_probas_pos, gt_probas_pos), dim=1)
         scores = entropy_fn(gt_probas)
