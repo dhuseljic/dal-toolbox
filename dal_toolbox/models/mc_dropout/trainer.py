@@ -79,7 +79,7 @@ class MCDropoutTrainer(BasicTrainer):
                 auroc = ood.ood_auroc(entropy_id, entropy_ood)
 
                 # Add to metrics
-                metrics[name+"auroc"] = auroc
-                metrics[name+"aupr"] = aupr
+                metrics[name+"_auroc"] = auroc
+                metrics[name+"_aupr"] = aupr
 
         return {f"test_{k}": v for k, v in metrics.items()}

@@ -46,9 +46,12 @@ def main(args):
         al_dataset.random_init(n_samples=args.al_cycle.n_init)
     queried_indices['cycle0'] = al_dataset.labeled_indices
 
-    logging.info('Building ood datasets.')
-    ood_datasets = build_ood_datasets(args)
-    ood_loaders = {name: DataLoader(ds, batch_size=args.val_batch_size) for name, ds in ood_datasets.items()}
+    if args.ood_datasets:
+        logging.info('Building ood datasets.')
+        ood_datasets = build_ood_datasets(args)
+        ood_loaders = {name: DataLoader(ds, batch_size=args.val_batch_size) for name, ds in ood_datasets.items()}
+    else:
+        ood_loaders = None
 
     # Setup Model
     logging.info('Building model: %s', args.model.name)
