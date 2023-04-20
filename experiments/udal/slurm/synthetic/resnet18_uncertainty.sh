@@ -17,7 +17,7 @@ dataset_path=/mnt/work/dhuseljic/datasets/pixel_sum_dataset.pth
 al_strat=uncertainty
 n_init=2
 acq_size=2
-n_acq=49
+n_acq=29
 random_seed=$SLURM_ARRAY_TASK_ID
 
 output_dir=/mnt/work/deep_al/results/udal/synthetic/${model}/${al_strat}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/

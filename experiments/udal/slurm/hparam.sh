@@ -21,9 +21,9 @@ model=resnet18_ensemble
 python -u hparam_search.py \
 	n_opt_samples=250 \
 	model=$model \
-	gpus_per_trial=0.3 \
+	gpus_per_trial=0.5 \
 	model.batch_size=32 \
 	model.n_epochs=200 \
-	budget=3456 \
-	dataset=CIFAR100 \
+	budget=2000 \
+	dataset=CIFAR10 \
 	dataset_path=/mnt/work/dhuseljic/datasets
