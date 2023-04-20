@@ -38,6 +38,7 @@ class UncertaintySampling(Query):
 
         if self.subset_size:
             unlabeled_indices = self.rng.choice(unlabeled_indices, size=self.subset_size, replace=False)
+            unlabeled_indices = unlabeled_indices.tolist()
 
         dataloader = DataLoader(dataset, batch_size=self.batch_size,
                                 sampler=unlabeled_indices, collate_fn=kwargs.get("collator"))
