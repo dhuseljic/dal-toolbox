@@ -61,39 +61,25 @@ class MCDropoutTrainer(BasicTrainer):
             "mce": mce
         }
 
-        # TODO
-        conf_id, _ = mean_probas_id.max(-1)
-        entropy_id = ood.ensemble_entropy_from_logits(dropout_logits_id)
-        # entropy_id = ood.entropy_fn(mean_probas_id)
-
         if dataloaders_ood:
             for name, dataloader_ood in dataloaders_ood.items():
+
                 # Forward prop out of distribution
                 dropout_logits_ood = []
                 for inputs, targets in dataloader_ood:
                     inputs, targets = inputs.to(self.device), targets.to(self.device)
                     dropout_logits_ood.append(self.model.mc_forward(inputs))
                 dropout_logits_ood = torch.cat(dropout_logits_ood, dim=0).cpu()
-                dropout_probas_ood = dropout_logits_ood.softmax(dim=-1)
-                mean_probas_ood = torch.mean(dropout_probas_ood, dim=1)
-                mean_probas_ood = ood.clamp_probas(mean_probas_ood)
 
-                # Confidence- and entropy-Scores of out of domain logits
-                conf_ood, _ = mean_probas_ood.max(-1)
-                entropy_ood = ood.entropy_fn(mean_probas_ood)
+                # Compute entropy scores
+                entropy_id = ood.ensemble_entropy_from_logits(dropout_logits_id)
+                entropy_ood = ood.ensemble_entropy_from_logits(dropout_logits_ood)
 
-                # Area under the Precision-Recall-Curve
-                entropy_aupr = ood.ood_aupr(entropy_id, entropy_ood)
-                conf_aupr = ood.ood_aupr(1-conf_id, 1-conf_ood)
-
-                # Area under the Receiver-Operator-Characteristic-Curve
-                entropy_auroc = ood.ood_auroc(entropy_id, entropy_ood)
-                conf_auroc = ood.ood_auroc(1-conf_id, 1-conf_ood)
+                aupr = ood.ood_aupr(entropy_id, entropy_ood)
+                auroc = ood.ood_auroc(entropy_id, entropy_ood)
 
                 # Add to metrics
-                metrics[name+"_entropy_auroc"] = entropy_auroc
-                metrics[name+"_conf_auroc"] = conf_auroc
-                metrics[name+"_entropy_aupr"] = entropy_aupr
-                metrics[name+"_conf_aupr"] = conf_aupr
+                metrics[name+"auroc"] = auroc
+                metrics[name+"aupr"] = aupr
 
         return {f"test_{k}": v for k, v in metrics.items()}

@@ -46,6 +46,10 @@ def main(args):
         al_dataset.random_init(n_samples=args.al_cycle.n_init)
     queried_indices['cycle0'] = al_dataset.labeled_indices
 
+    logging.info('Building ood datasets.')
+    ood_datasets = build_ood_datasets(args)
+    ood_loaders = {name: DataLoader(ds, batch_size=args.val_batch_size) for name, ds in ood_datasets.items()}
+
     # Setup Model
     logging.info('Building model: %s', args.model.name)
     trainer = build_model(args, n_classes=ds_info['n_classes'])
@@ -88,7 +92,7 @@ def main(args):
         cycle_results['train_history'] = history['train_history']
 
         # Evaluate resulting model
-        test_stats = trainer.evaluate(val_loader)
+        test_stats = trainer.evaluate(val_loader, dataloaders_ood=ood_loaders)
         cycle_results['test_stats'] = test_stats
 
         # Log
@@ -331,6 +335,23 @@ def build_datasets(args):
         raise NotImplementedError('Dataset not available')
 
     return train_ds, query_ds, test_ds_id, ds_info
+
+
+def build_ood_datasets(args):
+
+    ood_datasets = {}
+    for ds_name in args.ood_datasets:
+        if ds_name == 'CIFAR10':
+            ood_ds = datasets.cifar.build_cifar10('test', args.dataset_path)
+        elif ds_name == 'CIFAR100':
+            ood_ds = datasets.cifar.build_cifar100('test', args.dataset_path)
+        elif ds_name == 'SVHN':
+            ood_ds = datasets.svhn.build_svhn('test', args.dataset_path)
+        else:
+            raise NotImplementedError(f'Dataset {ds_name} not implemented.')
+        ood_datasets[ds_name] = ood_ds
+
+    return ood_datasets
 
 
 if __name__ == "__main__":
