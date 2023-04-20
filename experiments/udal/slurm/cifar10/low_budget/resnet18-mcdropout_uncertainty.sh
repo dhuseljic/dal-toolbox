@@ -8,15 +8,13 @@
 #SBATCH --job-name=al_uncertainty_resnet18-mcdropout_cifar10
 #SBATCH --output=/mnt/work/dhuseljic/logs/udal/active_learning/%A_%a_%x.log
 date;hostname;pwd
-source /mnt/home/dhuseljic/.zshrc
-conda activate uncertainty_evaluation
+source activate uncertainty_evaluation
 
 cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/
-export CUDA_LAUNCH_BLOCKING=1
-export HYDRA_FULL_ERROR=1
 
 model=resnet18_mcdropout
 dataset=CIFAR10
+ood_datasets=\[CIFAR100,\ SVHN\]
 
 al_strat=bayesian_uncertainty
 n_init=100
@@ -30,10 +28,13 @@ output_dir=/mnt/work/deep_al/results/udal/active_learning/${dataset}/${model}/${
 echo "Starting script. Writing results to ${output_dir}"
 srun python -u active_learning.py \
 	model=$model \
-	model.optimizer.lr=0.0766450142252356 \
-	model.optimizer.weight_decay=0.014745096744053244 \
+	model.batch_size=32 \
+	model.dropout_rate=0.2 \
+	model.optimizer.lr=0.01 \
+	model.optimizer.weight_decay=0.005 \
 	dataset=$dataset \
 	dataset_path=/mnt/work/dhuseljic/datasets \
+	ood_datasets=$ood_datasets \
 	al_strategy=$al_strat \
 	al_cycle.n_init=$n_init \
 	al_cycle.init_pool_file=$init_pool_file \
