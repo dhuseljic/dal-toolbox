@@ -17,7 +17,7 @@ from dal_toolbox.models.deterministic import wide_resnet
 from dal_toolbox.models.deterministic.train import train_one_epoch
 from dal_toolbox.models.deterministic.evaluate import evaluate
 from dal_toolbox.utils import seed_everything, init_distributed_mode
-from dal_toolbox.models.deterministic.trainer import BasicTrainer
+from dal_toolbox.models.deterministic.trainer import DeterministicTrainer
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="config")
@@ -57,13 +57,11 @@ def main(args):
     criterion = nn.CrossEntropyLoss()
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
 
-    trainer = BasicTrainer(
+    trainer = DeterministicTrainer(
         model=model,
         optimizer=optimizer,
         criterion=criterion,
         lr_scheduler=lr_scheduler,
-        train_one_epoch=train_one_epoch,
-        evaluate=evaluate,
         device=args.device,
         use_distributed=use_distributed,
     )
