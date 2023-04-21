@@ -76,7 +76,8 @@ class RandomFeatureGaussianProcess(nn.Module):
         # scale inputs
         self.kernel_scale = kernel_scale
         self.normalize_input = normalize_input
-        self.layer_norm = nn.LayerNorm(in_features)
+        if normalize_input:
+            self.layer_norm = nn.LayerNorm(in_features)
 
         # Random features
         self.scale_random_features = scale_random_features
