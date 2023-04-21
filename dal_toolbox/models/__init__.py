@@ -155,6 +155,6 @@ def build_model(args, **kwargs):
         }
 
     else:
-        raise NotImplementedError(f'Model {args.model} not implemented.')
+        raise NotImplementedError(f'Model {args.model.name} not implemented.')
 
     return model_dict
