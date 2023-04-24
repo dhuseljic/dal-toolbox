@@ -129,17 +129,15 @@ def build_query(args, **kwargs):
     if args.al_strategy.name == "random":
         query = random.RandomSampling(random_seed=args.random_seed)
     elif args.al_strategy.name == "uncertainty":
-        query = uncertainty.UncertaintySampling(
+        query = uncertainty.EntropySampling(
             batch_size=args.model.batch_size,
-            uncertainty_type=args.al_strategy.uncertainty_type,
             subset_size=args.al_strategy.subset_size,
             random_seed=args.random_seed,
             device=device,
         )
     elif args.al_strategy.name == "bayesian_uncertainty":
-        query = uncertainty.BayesianUncertaintySampling(
+        query = uncertainty.BayesianEntropySampling(
             batch_size=args.model.batch_size,
-            uncertainty_type=args.al_strategy.uncertainty_type,
             subset_size=args.al_strategy.subset_size,
             random_seed=args.random_seed,
             device=device,
