@@ -9,6 +9,12 @@ version_path = os.path.join(os.path.dirname(__file__), 'dal_toolbox')
 sys.path.append(version_path)
 from version import __version__  # pylint: disable=g-import-not-at-top
 
+def requirements():
+    with open("requirements.txt", "r") as file:
+        lines = file.readlines()
+        lines = [line.rstrip() for line in lines]
+    return lines
+
 setup(
     name='dal_toolbox',
     version=__version__,
@@ -18,7 +24,7 @@ setup(
     url='https://git.ies.uni-kassel.de/dhuseljic/uncertainty-evaluation',
     license='BSD 3-Clause',
     packages=find_packages(),
-    install_requires=[ ],
+    install_requires=requirements(),
     extras_require={
     },
     classifiers=[
