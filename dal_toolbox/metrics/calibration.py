@@ -73,7 +73,7 @@ def log_sub_exp(x, y):
     return result
 
 
-def log1mexp(x,):
+def log1mexp(x):
     x = torch.abs(x)
     return torch.where(x < math.log(2), torch.log(-torch.expm1(-x)), torch.log1p(-torch.exp(-x)))
 
@@ -261,7 +261,7 @@ class GeneralCalibrationError(nn.Module):
         upper_bounds = torch.cat([edges, torch.Tensor([1.])])
         return upper_bounds
 
-    def get_upper_bounds(self, probas, targets):
+    def _get_upper_bounds(self, probas, targets):
         if self.binning_scheme == 'even' and self.num_bins is not None:
             upper_bounds = torch.linspace(0, 1, steps=self.num_bins+1)[1:]
         elif self.binning_scheme == 'adaptive' and self.num_bins is not None:
@@ -295,7 +295,7 @@ class GeneralCalibrationError(nn.Module):
             probas = torch.squeeze(probas[probas > self.threshold])
 
             # Get Bounds
-            upper_bounds = self.get_upper_bounds(probas, targets)
+            upper_bounds = self._get_upper_bounds(probas, targets)
 
             calibration_error = self._compute_calibration_error(probas, targets, upper_bounds)
         else:
@@ -306,7 +306,7 @@ class GeneralCalibrationError(nn.Module):
                     targets_class = targets_one_hot[:, k]
                     targets_class = targets_class[probas_class > self.threshold]
                     probas_class = probas_class[probas_class > self.threshold]
-                    upper_bounds = self.get_upper_bounds(probas_class, targets_class)
+                    upper_bounds = self._get_upper_bounds(probas_class, targets_class)
 
                     class_calibration_error = self._compute_calibration_error(probas_class, targets_class, upper_bounds)
                     calibration_error_list.append(class_calibration_error / num_classes)
@@ -318,7 +318,7 @@ class GeneralCalibrationError(nn.Module):
                     targets_class = targets_class[probas_class > self.threshold]
                     probas_class = probas_class[probas_class > self.threshold]
 
-                    upper_bounds = self.get_upper_bounds(probas_class, targets_class)
+                    upper_bounds = self._get_upper_bounds(probas_class, targets_class)
                     class_calibration_error = self._compute_calibration_error(probas_class, targets_class, upper_bounds)
                     calibration_error_list.append(class_calibration_error / num_classes)
             calibration_error = torch.stack(calibration_error_list).sum()
@@ -329,7 +329,6 @@ class GeneralCalibrationError(nn.Module):
         return calibration_error
 
     def _compute_calibration_error(self, probas, targets, upper_bounds):
-        # Compute GCE
         probas = probas.view(-1)
         targets = targets.view(-1)
 

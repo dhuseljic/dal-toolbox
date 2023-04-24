@@ -4,32 +4,15 @@ from torch.utils.data import DataLoader
 
 from .query import Query
 from ...metrics import ood
+from abc import ABC, abstractmethod
 
 
-class UncertaintySampling(Query):
-    def __init__(self, batch_size=16, uncertainty_type='entropy', subset_size=None, device='cuda', random_seed=None):
+class UncertaintySampling(Query, ABC):
+    def __init__(self, batch_size=64, subset_size=None, device='cuda', random_seed=None):
         super().__init__(random_seed=random_seed)
-        self.uncertainty_type = uncertainty_type
         self.subset_size = subset_size
         self.batch_size = batch_size
         self.device = device
-
-    def get_scores(self, probas):
-        if probas.ndim != 2:
-            raise ValueError(f"Input probas tensor must be 2-dimensional, got shape {probas.shape}")
-
-        if self.uncertainty_type == 'least_confident':
-            scores, _ = probas.max(dim=-1)
-            scores = 1 - scores
-        elif self.uncertainty_type == 'margin':
-            top_probas, _ = torch.topk(probas, k=2, dim=-1)
-            scores = top_probas[:, 0] - top_probas[:, 1]
-            scores = 1 - scores
-        elif self.uncertainty_type == 'entropy':
-            scores = ood.entropy_fn(probas)
-        else:
-            raise NotImplementedError(f"Type {self.uncertainty_type} is not implemented")
-        return scores
 
     @torch.no_grad()
     def query(self, model, dataset, unlabeled_indices, acq_size, **kwargs):
@@ -50,31 +33,69 @@ class UncertaintySampling(Query):
         actual_indices = [unlabeled_indices[i] for i in indices]
         return actual_indices
 
+    @abstractmethod
+    def get_scores(self, probas):
+        pass
 
-class BayesianUncertaintySampling(UncertaintySampling):
 
+class EntropySampling(UncertaintySampling):
+    def get_scores(self, probas):
+        if probas.ndim != 2:
+            raise ValueError(f"Input probas tensor must be 2-dimensional, got shape {probas.shape}")
+        return ood.entropy_fn(probas)
+
+
+class LeastConfidentSampling(UncertaintySampling):
+    def get_scores(self, probas):
+        if probas.ndim != 2:
+            raise ValueError(f"Input probas tensor must be 2-dimensional, got shape {probas.shape}")
+        scores, _ = probas.max(dim=-1)
+        scores = 1 - scores
+        return scores
+
+
+class MarginSampling(UncertaintySampling):
+    def get_scores(self, probas):
+        if probas.ndim != 2:
+            raise ValueError(f"Input probas tensor must be 2-dimensional, got shape {probas.shape}")
+        top_probas, _ = torch.topk(probas, k=2, dim=-1)
+        scores = top_probas[:, 0] - top_probas[:, 1]
+        scores = 1 - scores
+        return scores
+
+
+class BayesianEntropySampling(UncertaintySampling):
     def get_scores(self, probas):
         if probas.ndim != 3:
             raise ValueError(f"Input probas tensor must be 3-dimensional, got shape {probas.shape}")
         probas = torch.mean(probas, dim=-1)
-        if self.uncertainty_type == 'least_confident':
-            scores, _ = probas.max(dim=-1)
-            scores = 1 - scores
-        elif self.uncertainty_type == 'margin':
-            top_probas, _ = torch.topk(probas, k=2, dim=-1)
-            scores = top_probas[:, 0] - top_probas[:, 1]
-            scores = 1 - scores
-        elif self.uncertainty_type == 'entropy':
-            scores = ood.entropy_fn(probas)
-        else:
-            raise NotImplementedError(f"Type {self.uncertainty_type} is not implemented")
+        return ood.entropy_fn(probas)
 
+
+class BayesianLeastConfidentSampling(UncertaintySampling):
+    def get_scores(self, probas):
+        if probas.ndim != 3:
+            raise ValueError(f"Input probas tensor must be 3-dimensional, got shape {probas.shape}")
+        probas = torch.mean(probas, dim=-1)
+        scores, _ = probas.max(dim=-1)
+        scores = 1 - scores
+        return scores
+
+
+class BayesianMarginSampling(UncertaintySampling):
+    def get_scores(self, probas):
+        if probas.ndim != 3:
+            raise ValueError(f"Input probas tensor must be 3-dimensional, got shape {probas.shape}")
+        probas = torch.mean(probas, dim=-1)
+        top_probas, _ = torch.topk(probas, k=2, dim=-1)
+        scores = top_probas[:, 0] - top_probas[:, 1]
+        scores = 1 - scores
         return scores
 
 
 class VariationRatioSampling(UncertaintySampling):
 
-    def variation_ratio(self, logits: torch.Tensor) -> torch.Tensor:
+    def _variation_ratio(self, logits: torch.Tensor) -> torch.Tensor:
         """
         Computes the variation ratio for each sample in a Bayesian model. The variation ratio is
             the proportion of predicted class labels that are not the modal class prediction. 
@@ -115,5 +136,5 @@ class VariationRatioSampling(UncertaintySampling):
     def get_scores(self, probas):
         if probas.ndim != 3:
             raise ValueError(f"Input probas tensor must be 3-dimensional, got shape {probas.shape}")
-        # TODO: change to logits?
-        return self.variation_ratio(probas)
+        # TODO(dhuseljic): change to logits?
+        return self._variation_ratio(probas)
