@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
 #SBATCH --array=1-25%10
-#SBATCH --job-name=al_uncertainty_resnet18_aleatoric
+#SBATCH --job-name=al_synthetic_resnet18_uncertainty
 #SBATCH --output=/mnt/work/dhuseljic/logs/udal/synthetic/%A_%a__%x.log
 date;hostname;pwd
 source activate uncertainty_evaluation
@@ -17,7 +17,7 @@ dataset_path=/mnt/work/dhuseljic/datasets/pixel_sum_dataset.pth
 al_strat=uncertainty
 n_init=2
 acq_size=2
-n_acq=19
+n_acq=29
 random_seed=$SLURM_ARRAY_TASK_ID
 
 output_dir=/mnt/work/deep_al/results/udal/synthetic/${model}/${al_strat}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/

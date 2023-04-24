@@ -8,12 +8,13 @@ conda env create -f environment.yml
 ```
 
 ### Development
-In order to develop it is best to use :
+To start developing it is best to use:
 ```
+conda create -n dal-toolbox python=3.9
 pip install -e .
 ```
 ## Experiments
-All major experiments are stored in the folder `experiments`. This were you would write new experiments
+All major experiments are stored in the folder `experiments`.
 
 ## Notebooks
 We provide [notebooks](notebooks) that give examples of how to work with this repository. 

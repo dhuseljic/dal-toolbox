@@ -119,7 +119,7 @@ class BasicTrainer(abc.ABC):
         return {'train_history': self.train_history, 'test_history': self.test_history}
 
     @torch.no_grad()
-    def evaluate(self, dataloader, dataloaders_ood=None):
+    def evaluate(self, dataloader, dataloaders_ood: dict = None):
         self.logger.info('Evaluation with %s instances..', len(dataloader.dataset))
         if dataloaders_ood:
             for name, dl in dataloaders_ood.items():
