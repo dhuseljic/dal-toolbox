@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+
 from sklearn.metrics import precision_score
 from sklearn.metrics import auc
 from sklearn.metrics import balanced_accuracy_score
@@ -57,9 +58,3 @@ def area_under_curve(metric):
     auc_y = np.array(metric)
     span_x = (auc_x[-1] - auc_x[0]) # taken from: revisiting uncertainty dalnlp 
     return (auc(auc_x, auc_y) / span_x).round(3)
-
-
-
-
-
-
