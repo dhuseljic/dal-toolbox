@@ -6,6 +6,21 @@ import torch.nn.functional as F
 from sklearn import metrics
 
 
+class BrierScore(nn.Module):
+    def forward(self, probas, labels):
+        n_samples, n_classes = probas.shape
+        assert len(labels) == n_samples, "Probas and Labels must be of the same size"
+        labels_onehot = F.one_hot(labels, num_classes=n_classes)
+        score = torch.sum(F.mse_loss(probas, labels_onehot, reduction='none'), -1)
+        score = torch.mean(score)
+
+        # Note: Tensorflow ignores the addition by one. To be consistent with the decomposition, we also ignore it.
+        # probas_label = torch.sum(probas * labels_onehot, -1)
+        # score = torch.sum(probas**2, dim=-1) - 2 * probas_label +1
+        # score = torch.mean(score, -1)
+        return score
+
+
 class BrierScoreDecomposition(nn.Module):
     # From: https://github.com/tensorflow/probability/blob/v0.19.0/tensorflow_probability/python/stats/calibration.py
     @torch.no_grad()
@@ -61,21 +76,6 @@ def log_sub_exp(x, y):
 def log1mexp(x,):
     x = torch.abs(x)
     return torch.where(x < math.log(2), torch.log(-torch.expm1(-x)), torch.log1p(-torch.exp(-x)))
-
-
-class BrierScore(nn.Module):
-    def forward(self, probas, labels):
-        n_samples, n_classes = probas.shape
-        assert len(labels) == n_samples, "Probas and Labels must be of the same size"
-        labels_onehot = F.one_hot(labels, num_classes=n_classes)
-        score = torch.sum(F.mse_loss(probas, labels_onehot, reduction='none'), -1)
-        score = torch.mean(score)
-
-        # Note: Tensorflow ignores the addition by one. To be consistent with the decomposition, we also ignore it.
-        # probas_label = torch.sum(probas * labels_onehot, -1)
-        # score = torch.sum(probas**2, dim=-1) - 2 * probas_label +1
-        # score = torch.mean(score, -1)
-        return score
 
 
 class EnsembleCrossEntropy(nn.Module):
@@ -189,10 +189,11 @@ class TopLabelCalibrationError(nn.Module):
 class MarginalCalibrationError(nn.Module):
     """Computes the calibration plot for each class."""
 
-    def __init__(self, n_bins=15, p=2):
+    def __init__(self, n_bins=15, p=1, threshold=0.01):
         super().__init__()
         self.n_bins = n_bins
         self.p = p
+        self.threshold = threshold
 
     def forward(self, probas: torch.Tensor, labels: torch.Tensor):
         bins = torch.linspace(0, 1, self.n_bins+1)
@@ -201,14 +202,17 @@ class MarginalCalibrationError(nn.Module):
         # Save calibration plots in results
         self.results = []
         for i_cls in range(n_classes):
-            label = (labels == i_cls).long()
-            proba = probas[:, i_cls]
+            labels_cls = (labels == i_cls).long()
+            probas_cls = probas[:, i_cls]
+
+            labels_cls = labels_cls[probas_cls > self.threshold]
+            probas_cls = probas_cls[probas_cls > self.threshold]
 
             confs = torch.Tensor(self.n_bins)
             accs = torch.Tensor(self.n_bins)
             n_samples = torch.Tensor(self.n_bins)
             for i_bin, (bin_start, bin_end) in enumerate(zip(bins[:-1], bins[1:])):
-                in_bin = (bin_start < proba) & (proba < bin_end)
+                in_bin = (bin_start < probas_cls) & (probas_cls < bin_end)
                 n_samples[i_bin] = in_bin.sum()
 
                 if in_bin.sum() == 0:
@@ -216,8 +220,8 @@ class MarginalCalibrationError(nn.Module):
                     accs[i_bin] = float('nan')
                     continue
 
-                bin_conf = proba[in_bin].mean()
-                bin_acc = (label[in_bin] == 1).float().mean()
+                bin_conf = probas_cls[in_bin].mean()
+                bin_acc = (labels_cls[in_bin] == 1).float().mean()
 
                 confs[i_bin] = bin_conf
                 accs[i_bin] = bin_acc
@@ -226,3 +230,164 @@ class MarginalCalibrationError(nn.Module):
         sq_ces = [calibration_error(d['confs'], d['accs'], d['n_samples'], self.p)**self.p for d in self.results]
         mce = torch.Tensor(sq_ces).mean()**(1/self.p)
         return mce
+
+
+# From https://github.com/google-research/robustness_metrics/robustness_metrics/metrics/uncertainty.py#L1464-L1648
+class GeneralCalibrationError(nn.Module):
+    def __init__(self,
+                 binning_scheme: str,
+                 max_prob: bool,
+                 class_conditional: bool,
+                 norm: str,
+                 num_bins: int,
+                 threshold: float,
+                 ):
+        super().__init__()
+        self.binning_scheme = binning_scheme
+        self.max_prob = max_prob
+        self.class_conditional = class_conditional
+        self.norm = norm
+        self.num_bins = num_bins
+        self.threshold = threshold
+
+    def _get_adaptive_bins(self, probas, num_bins):
+        """Returns upper edges for binning an equal number of datapoints per bin."""
+        probas = probas.view(-1)
+        edge_indices = torch.linspace(0, probas.numel(), num_bins+1)[:-1]
+        edge_indices = torch.round(edge_indices).long()
+        edge_indices = torch.minimum(edge_indices, torch.tensor(probas.numel()-1))
+        sorted_probas = torch.sort(probas).values
+        edges = sorted_probas[edge_indices]
+        upper_bounds = torch.cat([edges, torch.Tensor([1.])])
+        return upper_bounds
+
+    def get_upper_bounds(self, probas, targets):
+        if self.binning_scheme == 'even' and self.num_bins is not None:
+            upper_bounds = torch.linspace(0, 1, steps=self.num_bins+1)[1:]
+        elif self.binning_scheme == 'adaptive' and self.num_bins is not None:
+            upper_bounds = self._get_adaptive_bins(probas, num_bins=self.num_bins)
+        elif self.binning_scheme == "even" and self.num_bins is None:
+            # TODO(dhuseljic): implement this
+            # upper_bounds = get_mon_sweep_bins(probas, targets, binning_scheme=self.binning_scheme)
+            raise NotImplementedError('Binning not implemented')
+        elif self.binning_scheme == "adaptive" and self.num_bins is None:
+            # TODO(dhuseljic): implement this
+            # upper_bounds = get_mon_sweep_bins(probas, targets, binning_scheme=self.binning_scheme)
+            raise NotImplementedError('Binning not implemented')
+        else:
+            raise NotImplementedError('Binning not implemented')
+        return upper_bounds
+
+    @torch.no_grad()
+    def forward(self, probas, targets):
+        num_classes = probas.shape[-1]
+        targets_one_hot = F.one_hot(targets, num_classes=num_classes)
+
+        if not self.class_conditional:
+            # only top pred
+            if self.max_prob:
+                preds = probas.argmax(-1)
+                probas = probas[range(len(probas)), preds]
+                targets_one_hot = targets_one_hot[range(len(probas)), preds]
+
+            # Threshold
+            targets = torch.squeeze(targets_one_hot[probas > self.threshold])
+            probas = torch.squeeze(probas[probas > self.threshold])
+
+            # Get Bounds
+            upper_bounds = self.get_upper_bounds(probas, targets)
+
+            calibration_error = self._compute_calibration_error(probas, targets, upper_bounds)
+        else:
+            calibration_error_list = []
+            for k in range(num_classes):
+                if not self.max_prob:
+                    probas_class = probas[:, k]
+                    targets_class = targets_one_hot[:, k]
+                    targets_class = targets_class[probas_class > self.threshold]
+                    probas_class = probas_class[probas_class > self.threshold]
+                    upper_bounds = self.get_upper_bounds(probas_class, targets_class)
+
+                    class_calibration_error = self._compute_calibration_error(probas_class, targets_class, upper_bounds)
+                    calibration_error_list.append(class_calibration_error / num_classes)
+                else:
+                    preds = probas.argmax(-1)
+                    targets_class = targets_one_hot[preds == k][:, k]
+                    probas_class = probas[preds == k][:, k]
+
+                    targets_class = targets_class[probas_class > self.threshold]
+                    probas_class = probas_class[probas_class > self.threshold]
+
+                    upper_bounds = self.get_upper_bounds(probas_class, targets_class)
+                    class_calibration_error = self._compute_calibration_error(probas_class, targets_class, upper_bounds)
+                    calibration_error_list.append(class_calibration_error / num_classes)
+            calibration_error = torch.stack(calibration_error_list).sum()
+
+        if self.norm == 'l2':
+            calibration_error = torch.sqrt(calibration_error)
+
+        return calibration_error
+
+    def _compute_calibration_error(self, probas, targets, upper_bounds):
+        # Compute GCE
+        probas = probas.view(-1)
+        targets = targets.view(-1)
+
+        bin_indices = torch.bucketize(probas, upper_bounds, right=True)
+        if self.num_bins is None:
+            self.num_bins = 0
+        sums = torch.bincount(bin_indices, weights=probas, minlength=self.num_bins)
+        sums = sums.float()
+        counts = torch.bincount(bin_indices, minlength=self.num_bins)
+        counts = counts + torch.finfo(sums.dtype).eps
+        confidences = sums / counts
+        accuracies = torch.bincount(bin_indices, weights=targets.float(), minlength=self.num_bins) / counts
+        calibration_errors = accuracies - confidences
+
+        if self.norm == 'l1':
+            calibration_errors_normed = calibration_errors
+        elif self.norm == 'l2':
+            calibration_errors_normed = torch.square(calibration_errors)
+        else:
+            raise ValueError(f'Unknown norm, got {self.norm}')
+        weighting = counts / probas.numel()
+        weighted_calibration_errors = weighting * calibration_errors_normed
+
+        error = torch.sum(torch.abs(weighted_calibration_errors))
+        return error
+
+
+class ExpectedCalibrationError(GeneralCalibrationError):
+    def __init__(self, num_bins: int = 15):
+        super().__init__(
+            binning_scheme='even',
+            max_prob=True,
+            class_conditional=False,
+            norm='l1',
+            num_bins=num_bins,
+            threshold=0
+        )
+
+
+class StaticCalibrationError(GeneralCalibrationError):
+    def __init__(self, num_bins: int = 15, threshold: float = 0.01):
+        super().__init__(
+            binning_scheme='even',
+            max_prob=False,
+            class_conditional=True,
+            norm='l1',
+            num_bins=num_bins,
+            threshold=threshold
+        )
+
+
+class AdaptiveCalibrationError(GeneralCalibrationError):
+    def __init__(self, num_bins: int = 15, threshold: float = 0.01):
+        super().__init__(
+            binning_scheme='adaptive',
+            max_prob=False,
+            class_conditional=True,
+            norm='l1',
+            num_bins=num_bins,
+            threshold=threshold
+        )
