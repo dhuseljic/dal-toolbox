@@ -3,6 +3,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import torchmetrics
+
 from sklearn import metrics
 
 
@@ -78,7 +80,7 @@ def log1mexp(x):
     return torch.where(x < math.log(2), torch.log(-torch.expm1(-x)), torch.log1p(-torch.exp(-x)))
 
 
-class EnsembleCrossEntropy(nn.Module):
+class EnsembleCrossEntropy(torchmetrics.Metric):
     """Cross entropy for a ensemble of predictions.
 
     For each datapoint (x,y), the ensemble's negative log-probability is:
@@ -95,9 +97,10 @@ class EnsembleCrossEntropy(nn.Module):
 
     def __init__(self):
         super().__init__()
-        self.cross_entropy = nn.CrossEntropyLoss(reduction='none')
+        self.cross_entropy = torch.nn.CrossEntropyLoss(reduction='none')
+        self.add_state('cross_entropy_list', default=[], dist_reduce_fx='cat')
 
-    def forward(self, logits: torch.Tensor, labels: torch.Tensor):
+    def update(self, logits: torch.Tensor, targets: torch.Tensor):
         if logits.ndim != 3:
             raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
         num_samples, ensemble_size, _ = logits.shape
@@ -105,14 +108,17 @@ class EnsembleCrossEntropy(nn.Module):
         # Reshape logits from N x M x C -> N x C x M
         _logits = logits.permute(0, 2, 1)
         # Expand labels from N -> N x M
-        _labels = labels.view(-1, 1).expand(num_samples, ensemble_size)
-        ce = self.cross_entropy(_logits, _labels)
+        _targets = targets.view(-1, 1).expand(num_samples, ensemble_size)
+        ce = self.cross_entropy(_logits, _targets)
         ce = -torch.logsumexp(-ce, dim=-1) + math.log(ensemble_size)
+        self.cross_entropy_list.append(ce)
 
-        return torch.mean(ce)
+    def compute(self):
+        cross_entropies = torch.cat(self.cross_entropy_list, dim=0)
+        return torch.mean(cross_entropies)
 
 
-class GibbsCrossEntropy(nn.Module):
+class GibbsCrossEntropy(torchmetrics.Metric):
     """Average cross entropy of ensemble members.
 
     For each datapoint (x,y), the ensemble's Gibbs cross entropy is:
@@ -128,20 +134,25 @@ class GibbsCrossEntropy(nn.Module):
 
     def __init__(self):
         super().__init__()
-        self.cross_entropy = nn.CrossEntropyLoss(reduction='none')
+        self.add_state('cross_entropy_per_sample', default=[], dist_reduce_fx='cat')
+        self.cross_entropy = torch.nn.CrossEntropyLoss(reduction='none')
 
-    def forward(self, logits: torch.Tensor, labels: torch.Tensor):
+    def update(self, logits: torch.Tensor, targets: torch.Tensor):
+        if logits.ndim != 3:
+            raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
         num_samples, ensemble_size, _ = logits.shape
 
         # Reshape logits from N x M x C -> N x C x M
         _logits = logits.permute(0, 2, 1)
         # Expand labels from N -> N x M
-        _labels = labels.view(-1, 1).expand(num_samples, ensemble_size)
-
-        ce = self.cross_entropy(_logits, _labels)
+        _targets = targets.view(-1, 1).expand(num_samples, ensemble_size)
+        ce = self.cross_entropy(_logits, _targets)
         ce = torch.mean(ce, dim=-1)
+        self.cross_entropy_per_sample.append(ce)
 
-        return torch.mean(ce)
+    def compute(self):
+        cross_entropy_per_sample = torch.cat(self.cross_entropy_per_sample, dim=0)
+        return torch.mean(cross_entropy_per_sample)
 
 
 def calibration_error(confs: torch.Tensor, accs: torch.Tensor, n_samples: torch.Tensor, p: int = 2):
