@@ -8,7 +8,7 @@
 #SBATCH --job-name=al_entropy_resnet18-mixup_svhn
 #SBATCH --output=/mnt/work/dhuseljic/logs/udal/active_learning/%A_%a_%x.log
 date;hostname;pwd
-source activate uncertainty_evaluation
+source activate dal-toolbox
 
 cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/
 
