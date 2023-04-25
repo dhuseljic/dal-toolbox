@@ -8,78 +8,6 @@ import torchmetrics
 from sklearn import metrics
 
 
-class BrierScore(nn.Module):
-    def forward(self, probas, labels):
-        n_samples, n_classes = probas.shape
-        assert len(labels) == n_samples, "Probas and Labels must be of the same size"
-        labels_onehot = F.one_hot(labels, num_classes=n_classes)
-        score = torch.sum(F.mse_loss(probas, labels_onehot, reduction='none'), -1)
-        score = torch.mean(score)
-
-        # Note: Tensorflow ignores the addition by one. To be consistent with the decomposition, we also ignore it.
-        # probas_label = torch.sum(probas * labels_onehot, -1)
-        # score = torch.sum(probas**2, dim=-1) - 2 * probas_label +1
-        # score = torch.mean(score, -1)
-        return score
-
-
-class BrierScoreDecomposition(nn.Module):
-    # From: https://github.com/tensorflow/probability/blob/v0.19.0/tensorflow_probability/python/stats/calibration.py
-    @torch.no_grad()
-    def forward(self, logits, targets):
-        n_samples, n_classes = logits.shape
-
-        preds = logits.argmax(dim=-1)
-        confusion_matrix = metrics.confusion_matrix(targets, preds, labels=range(n_classes)).T
-        confusion_matrix = torch.from_numpy(confusion_matrix).float()
-
-        # n_k
-        dist_weights = torch.sum(confusion_matrix, dim=-1)
-        dist_weights = dist_weights / torch.sum(dist_weights, dim=-1, keepdim=True)
-
-        # o_k_bar
-        pbar = torch.sum(confusion_matrix, dim=-2)
-        pbar = pbar / torch.sum(pbar, dim=-1, keepdim=True)
-
-        # o_bar
-        eps = torch.finfo(confusion_matrix.dtype).eps
-        dist_mean = confusion_matrix / (torch.sum(confusion_matrix, dim=-1, keepdim=True) + eps)
-
-        uncertainty = - torch.sum(torch.square(pbar), dim=-1)
-
-        resolution = torch.square(pbar.unsqueeze(-1) - dist_mean)
-        resolution = torch.sum(dist_weights * torch.sum(resolution, dim=-1), dim=-1)
-
-        # f_k
-        prob_true = dist_mean[preds]
-
-        log_prob_true = prob_true.log()
-        log_prob_pred = logits - torch.logsumexp(logits, dim=-1, keepdim=True)
-
-        log_reliability = torch.logsumexp(2 * log_sub_exp(log_prob_pred, log_prob_true), dim=-1)
-        log_reliability = torch.logsumexp(log_reliability, dim=-1)
-        reliabilty = torch.exp(log_reliability - math.log(n_samples))
-        out = {
-            'uncertainty': uncertainty.item(),
-            'resolution': resolution.item(),
-            'reliability': reliabilty.item(),
-        }
-        return out
-
-
-def log_sub_exp(x, y):
-    larger = torch.max(x, y)
-    smaller = torch.min(x, y)
-    zero = torch.zeros_like(larger)
-    result = larger + log1mexp(torch.max(larger - smaller, zero))
-    return result
-
-
-def log1mexp(x):
-    x = torch.abs(x)
-    return torch.where(x < math.log(2), torch.log(-torch.expm1(-x)), torch.log1p(-torch.exp(-x)))
-
-
 class EnsembleCrossEntropy(torchmetrics.Metric):
     """Cross entropy for a ensemble of predictions.
 
@@ -153,6 +81,86 @@ class GibbsCrossEntropy(torchmetrics.Metric):
     def compute(self):
         cross_entropy_per_sample = torch.cat(self.cross_entropy_per_sample, dim=0)
         return torch.mean(cross_entropy_per_sample)
+
+
+class BrierScore(torchmetrics.Metric):
+    def __init__(self):
+        super().__init__()
+        self.add_state('brier_score_list', default=[], dist_reduce_fx='cat')
+
+    def update(self, probas, labels):
+        num_samples, num_classes = probas.shape
+        assert len(labels) == num_samples, "Probas and Labels must be of the same size"
+        labels_onehot = F.one_hot(labels, num_classes=num_classes)
+        score = torch.sum(F.mse_loss(probas, labels_onehot, reduction='none'), dim=-1)
+        # Note: Tensorflow ignores the addition by one. To be consistent with the decomposition, we also ignore it.
+        # probas_label = torch.sum(probas * labels_onehot, -1)
+        # score = torch.sum(probas**2, dim=-1) - 2 * probas_label +1
+        # score = torch.mean(score, -1)
+
+        self.brier_score_list.append(score)
+
+    def compute(self):
+        brier_scores = torch.cat(self.brier_score_list, dim=0)
+        return torch.mean(brier_scores)
+
+
+class BrierScoreDecomposition(nn.Module):
+    # TODO(dhuseljic): Transform to torchmetrics
+    # From: https://github.com/tensorflow/probability/blob/v0.19.0/tensorflow_probability/python/stats/calibration.py
+    @torch.no_grad()
+    def forward(self, logits, targets):
+        n_samples, n_classes = logits.shape
+
+        preds = logits.argmax(dim=-1)
+        confusion_matrix = metrics.confusion_matrix(targets, preds, labels=range(n_classes)).T
+        confusion_matrix = torch.from_numpy(confusion_matrix).float()
+
+        # n_k
+        dist_weights = torch.sum(confusion_matrix, dim=-1)
+        dist_weights = dist_weights / torch.sum(dist_weights, dim=-1, keepdim=True)
+
+        # o_k_bar
+        pbar = torch.sum(confusion_matrix, dim=-2)
+        pbar = pbar / torch.sum(pbar, dim=-1, keepdim=True)
+
+        # o_bar
+        eps = torch.finfo(confusion_matrix.dtype).eps
+        dist_mean = confusion_matrix / (torch.sum(confusion_matrix, dim=-1, keepdim=True) + eps)
+
+        uncertainty = - torch.sum(torch.square(pbar), dim=-1)
+
+        resolution = torch.square(pbar.unsqueeze(-1) - dist_mean)
+        resolution = torch.sum(dist_weights * torch.sum(resolution, dim=-1), dim=-1)
+
+        # f_k
+        prob_true = dist_mean[preds]
+
+        log_prob_true = prob_true.log()
+        log_prob_pred = logits - torch.logsumexp(logits, dim=-1, keepdim=True)
+
+        log_reliability = torch.logsumexp(2 * log_sub_exp(log_prob_pred, log_prob_true), dim=-1)
+        log_reliability = torch.logsumexp(log_reliability, dim=-1)
+        reliabilty = torch.exp(log_reliability - math.log(n_samples))
+        out = {
+            'uncertainty': uncertainty.item(),
+            'resolution': resolution.item(),
+            'reliability': reliabilty.item(),
+        }
+        return out
+
+
+def log_sub_exp(x, y):
+    larger = torch.max(x, y)
+    smaller = torch.min(x, y)
+    zero = torch.zeros_like(larger)
+    result = larger + log1mexp(torch.max(larger - smaller, zero))
+    return result
+
+
+def log1mexp(x):
+    x = torch.abs(x)
+    return torch.where(x < math.log(2), torch.log(-torch.expm1(-x)), torch.log1p(-torch.exp(-x)))
 
 
 def calibration_error(confs: torch.Tensor, accs: torch.Tensor, n_samples: torch.Tensor, p: int = 2):
