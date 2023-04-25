@@ -128,14 +128,30 @@ def build_query(args, **kwargs):
     device = kwargs.get('device', 'cuda')
     if args.al_strategy.name == "random":
         query = random.RandomSampling(random_seed=args.random_seed)
-    elif args.al_strategy.name == "uncertainty":
+    # Aleatoric Strategies
+    elif args.al_strategy.name == "least_confident":
+        query = uncertainty.LeastConfidentSampling(
+            batch_size=args.model.batch_size,
+            subset_size=args.al_strategy.subset_size,
+            random_seed=args.random_seed,
+            device=device,
+        )
+    elif args.al_strategy.name == "margin":
+        query = uncertainty.MarginSampling(
+            batch_size=args.model.batch_size,
+            subset_size=args.al_strategy.subset_size,
+            random_seed=args.random_seed,
+            device=device,
+        )
+    elif args.al_strategy.name == "entropy":
         query = uncertainty.EntropySampling(
             batch_size=args.model.batch_size,
             subset_size=args.al_strategy.subset_size,
             random_seed=args.random_seed,
             device=device,
         )
-    elif args.al_strategy.name == "bayesian_uncertainty":
+    # Epistemic Strategies
+    elif args.al_strategy.name == "bayesian_entropy":
         query = uncertainty.BayesianEntropySampling(
             batch_size=args.model.batch_size,
             subset_size=args.al_strategy.subset_size,
