@@ -5,8 +5,8 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
 #SBATCH --array=1-3%10
-#SBATCH --job-name=al_unc_resnet18-mixup_cifar10
-#SBATCH --output=/mnt/work/dhuseljic/logs/udal/active_learning/%A_%a__%x.log
+#SBATCH --job-name=al_uncertainty_resnet18-labelsmoothing_cifar10
+#SBATCH --output=/mnt/work/dhuseljic/logs/udal/active_learning/%A_%a_%x.log
 date;hostname;pwd
 source /mnt/home/dhuseljic/.zshrc
 conda activate uncertainty_evaluation
@@ -15,8 +15,9 @@ cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/
 export CUDA_LAUNCH_BLOCKING=1
 export HYDRA_FULL_ERROR=1
 
-model=resnet18_mixup
+model=resnet18_labelsmoothing
 dataset=CIFAR10
+dataset_path=/tmp/
 
 al_strat=uncertainty
 n_init=100
@@ -30,9 +31,10 @@ output_dir=/mnt/work/deep_al/results/udal/active_learning/${dataset}/${model}/${
 echo "Starting script. Writing results to ${output_dir}"
 srun python -u active_learning.py \
 	model=$model \
-	model.optimizer.lr=0.06785169912005258 \
-	model.optimizer.weight_decay=0.01005400451438927 \
-	model.mixup_alpha=0.38377989032440996 \
+	model.batch_size=32 \
+	model.label_smoothing=0.05 \
+	model.optimizer.lr=0.01 \
+	model.optimizer.weight_decay=0.005 \
 	dataset=$dataset \
 	dataset_path=/mnt/work/dhuseljic/datasets \
 	al_strategy=$al_strat \
@@ -41,6 +43,6 @@ srun python -u active_learning.py \
 	al_cycle.acq_size=$acq_size \
 	al_cycle.n_acq=$n_acq \
 	output_dir=$output_dir \
-	random_seed=$random_seed 
+	random_seed=$random_seed
 echo "Finished script."
 date
