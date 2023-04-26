@@ -53,10 +53,10 @@ class BasicTrainer(abc.ABC):
     def reset_states(self, reset_model=False):
         self.optimizer.load_state_dict(self.init_optimizer_state)
         self.criterion.load_state_dict(self.init_criterion_state)
-        if reset_model:
-            self.model.load_state_dict(self.init_model_state)
         if self.lr_scheduler:
             self.lr_scheduler.load_state_dict(self.init_scheduler_state)
+        if reset_model:
+            self.model.load_state_dict(self.init_model_state)
 
     def save_checkpoint(self, i_epoch=None):
         self.logger.info('Saving checkpoint..')

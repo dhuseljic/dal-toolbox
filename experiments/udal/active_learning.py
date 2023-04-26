@@ -12,7 +12,6 @@ from torch.utils.data import DataLoader, RandomSampler
 from omegaconf import OmegaConf
 
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp
-from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
 from dal_toolbox.active_learning.data import ALDataset
 from dal_toolbox.utils import seed_everything
 from dal_toolbox import datasets
@@ -127,27 +126,24 @@ def main(args):
 def build_query(args, **kwargs):
     device = kwargs.get('device', 'cuda')
     if args.al_strategy.name == "random":
-        query = random.RandomSampling(random_seed=args.random_seed)
+        query = random.RandomSampling()
     # Aleatoric Strategies
     elif args.al_strategy.name == "least_confident":
         query = uncertainty.LeastConfidentSampling(
             batch_size=args.model.batch_size,
             subset_size=args.al_strategy.subset_size,
-            random_seed=args.random_seed,
             device=device,
         )
     elif args.al_strategy.name == "margin":
         query = uncertainty.MarginSampling(
             batch_size=args.model.batch_size,
             subset_size=args.al_strategy.subset_size,
-            random_seed=args.random_seed,
             device=device,
         )
     elif args.al_strategy.name == "entropy":
         query = uncertainty.EntropySampling(
             batch_size=args.model.batch_size,
             subset_size=args.al_strategy.subset_size,
-            random_seed=args.random_seed,
             device=device,
         )
     # Epistemic Strategies
@@ -155,14 +151,12 @@ def build_query(args, **kwargs):
         query = uncertainty.BayesianEntropySampling(
             batch_size=args.model.batch_size,
             subset_size=args.al_strategy.subset_size,
-            random_seed=args.random_seed,
             device=device,
         )
     elif args.al_strategy.name == 'variation_ratio':
         query = uncertainty.VariationRatioSampling(
             batch_size=args.model.batch_size,
             subset_size=args.al_strategy.subset_size,
-            random_seed=args.random_seed,
             device=device,
         )
     elif args.al_strategy.name == 'bald':
