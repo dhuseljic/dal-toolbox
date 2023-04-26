@@ -27,7 +27,6 @@ srun python -u evaluate.py \
 	model.batch_size=32 \
 	model.optimizer.lr=0.01 \
 	model.optimizer.weight_decay=0.005 \
-	model.mixup_alpha=0.4 \
 	dataset=$dataset \
 	dataset_path=/mnt/work/dhuseljic/datasets \
 	queried_indices_json=$queried_indices_json \
