@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
 #SBATCH --array=1-3%10
-#SBATCH --job-name=al_random_resnet18-vanilla_cifar10
+#SBATCH --job-name=al_margin_resnet18-vanilla_cifar10
 #SBATCH --output=/mnt/work/dhuseljic/logs/udal/active_learning/%A_%a__%x.log
 date;hostname;pwd
 source activate dal-toolbox
