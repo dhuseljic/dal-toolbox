@@ -191,7 +191,7 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True,
         )
-        lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
+        lr_scheduler  = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
         trainer = deterministic.trainer.DeterministicTrainer(
             model=model,
             criterion=criterion,
@@ -211,7 +211,7 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True,
         )
-        lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
+        lr_scheduler  = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
         trainer = deterministic.trainer.DeterministicTrainer(
             model=model,
             criterion=criterion,
@@ -231,7 +231,7 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True,
         )
-        lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
+        lr_scheduler  = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
         trainer = deterministic.trainer.DeterministicMixupTrainer(
             model=model,
             criterion=criterion,
@@ -253,7 +253,7 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True
         )
-        lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
+        lr_scheduler  = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
         trainer = mc_dropout.trainer.MCDropoutTrainer(
             model=model,
             optimizer=optimizer,
@@ -274,7 +274,7 @@ def build_model(args, **kwargs):
                 momentum=args.model.optimizer.momentum,
                 nesterov=True
             )
-            lrs = CosineAnnealingLRLinearWarmup(opt, num_epochs=args.model.n_epochs, warmup_epochs=10)
+            lrs = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
             members.append(mem)
             optimizers.append(opt)
             lr_schedulers.append(lrs)
@@ -315,7 +315,7 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True
         )
-        lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
         trainer = sngp.trainer.SNGPTrainer(
             model=model,
             criterion=criterion,
@@ -336,22 +336,22 @@ def build_datasets(args):
     if args.dataset.name == 'CIFAR10':
         train_ds, ds_info = datasets.cifar.build_cifar10('train', args.dataset_path, return_info=True)
         query_ds = datasets.cifar.build_cifar10('query', args.dataset_path)
-        test_ds_id = datasets.cifar.build_cifar10('test', args.dataset_path)
+        test_ds = datasets.cifar.build_cifar10('test', args.dataset_path)
 
     elif args.dataset.name == 'CIFAR100':
         train_ds, ds_info = datasets.cifar.build_cifar100('train', args.dataset_path, return_info=True)
         query_ds = datasets.cifar.build_cifar100('query', args.dataset_path)
-        test_ds_id = datasets.cifar.build_cifar100('test', args.dataset_path)
+        test_ds = datasets.cifar.build_cifar100('test', args.dataset_path)
 
     elif args.dataset.name == 'SVHN':
         train_ds, ds_info = datasets.svhn.build_svhn('train', args.dataset_path, return_info=True)
         query_ds = datasets.svhn.build_svhn('query', args.dataset_path)
-        test_ds_id = datasets.svhn.build_svhn('test', args.dataset_path)
+        test_ds = datasets.svhn.build_svhn('test', args.dataset_path)
 
     else:
         raise NotImplementedError('Dataset not available')
 
-    return train_ds, query_ds, test_ds_id, ds_info
+    return train_ds, query_ds, test_ds, ds_info
 
 
 def build_ood_datasets(args):
