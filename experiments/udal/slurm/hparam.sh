@@ -2,7 +2,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=32
 #SBATCH --mem-per-cpu=16gb
-#SBATCH --gres=gpu:4
+#SBATCH --gres=gpu:2
 #SBATCH --partition=main
 #SBATCH --job-name=bayes_opt
 #SBATCH --output=/mnt/work/dhuseljic/logs/udal/bayes_opt/%A_%a_%x.out
