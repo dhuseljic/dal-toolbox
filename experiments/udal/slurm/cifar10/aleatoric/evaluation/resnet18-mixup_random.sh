@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
 #SBATCH --array=1-3%10
-#SBATCH --job-name=al_random_resnet18-labelsmoothing_cifar10
+#SBATCH --job-name=al_random_resnet18-mixup_cifar10
 #SBATCH --output=/mnt/work/dhuseljic/logs/udal/active_learning/%A_%a__%x.log
 date;hostname;pwd
 source activate dal-toolbox
@@ -27,6 +27,7 @@ srun python -u evaluate.py \
 	model.batch_size=32 \
 	model.optimizer.lr=0.01 \
 	model.optimizer.weight_decay=0.005 \
+	model.mixup_alpha=0.4 \
 	dataset=$dataset \
 	dataset_path=/mnt/work/dhuseljic/datasets \
 	queried_indices_json=$queried_indices_json \
