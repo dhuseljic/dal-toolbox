@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
 #SBATCH --array=1-3%10
-#SBATCH --job-name=eval_random_resnet18-vanilla_cifar10
+#SBATCH --job-name=eval_least-confident_resnet18-vanilla_cifar10
 #SBATCH --output=/mnt/work/dhuseljic/logs/udal/active_learning/%A_%a__%x.log
 date;hostname;pwd
 source activate dal-toolbox
@@ -13,7 +13,7 @@ cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/
 
 dataset=CIFAR10
 model=resnet18
-al_strat=random
+al_strat=least-confident
 n_init=100
 acq_size=100
 n_acq=19
