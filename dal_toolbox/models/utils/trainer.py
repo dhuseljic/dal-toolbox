@@ -50,12 +50,12 @@ class BasicTrainer(abc.ABC):
         self.test_history: list = []
         self.test_stats: dict = {}
 
-    def reset_states(self, reset_model=False):
+    def reset_states(self, reset_model_parameters=False):
         self.optimizer.load_state_dict(self.init_optimizer_state)
         self.criterion.load_state_dict(self.init_criterion_state)
         if self.lr_scheduler:
             self.lr_scheduler.load_state_dict(self.init_scheduler_state)
-        if reset_model:
+        if reset_model_parameters:
             self.model.load_state_dict(self.init_model_state)
 
     def save_checkpoint(self, i_epoch=None):
