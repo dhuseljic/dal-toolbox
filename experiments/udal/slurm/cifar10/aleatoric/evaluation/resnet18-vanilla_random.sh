@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --array=42-44%10
+#SBATCH --array=1-3%10
 #SBATCH --job-name=al_random_resnet18-vanilla_cifar10
 #SBATCH --output=/mnt/work/dhuseljic/logs/udal/active_learning/%A_%a__%x.log
 date;hostname;pwd
@@ -12,6 +12,11 @@ source activate dal-toolbox
 cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/
 
 dataset=CIFAR10
+model=resnet18
+al_strat=random
+n_init=100
+acq_size=100
+n_acq=19
 random_seed=$SLURM_ARRAY_TASK_ID
 queried_indices_json=/mnt/work/deep_al/results/udal/active_learning/${dataset}/${model}/${al_strat}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/queried_indices.json
 output_dir=/mnt/work/deep_al/results/udal/evaluation/${dataset}/${model}/${al_strat}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/
