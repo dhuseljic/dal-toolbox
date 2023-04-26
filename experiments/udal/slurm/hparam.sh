@@ -15,13 +15,13 @@ cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/
 # model=resnet18
 # model=resnet18_labelsmoothing
 # model=resnet18_mixup
-# model=resnet18_mcdropout
-model=resnet18_ensemble 
+model=resnet18_mcdropout
+# model=resnet18_ensemble 
 
 python -u hparam_search.py \
 	n_opt_samples=250 \
 	model=$model \
-	gpus_per_trial=0.5 \
+	gpus_per_trial=0.25 \
 	model.batch_size=32 \
 	model.n_epochs=200 \
 	budget=2000 \
