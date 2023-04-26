@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
 #SBATCH --array=1-3%10
-#SBATCH --job-name=al_random_resnet18-ls_cifar10
+#SBATCH --job-name=al_margin_resnet18-ls_cifar10
 #SBATCH --output=/mnt/work/dhuseljic/logs/udal/active_learning/%A_%a__%x.log
 date;hostname;pwd
 source activate dal-toolbox
@@ -13,7 +13,7 @@ cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/
 
 model=resnet18_labelsmoothing
 dataset=CIFAR10
-al_strat=random
+al_strat=margin
 n_init=100
 acq_size=100
 n_acq=19
