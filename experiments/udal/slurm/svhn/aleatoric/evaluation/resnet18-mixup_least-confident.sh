@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --array=1-3%10
+#SBATCH --array=0-9%10
 #SBATCH --job-name=eval_lc_resnet18-mixup_svhn
 #SBATCH --output=/mnt/work/dhuseljic/logs/udal/active_learning/%A_%a__%x.log
 date;hostname;pwd
