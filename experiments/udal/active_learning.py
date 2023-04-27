@@ -12,10 +12,11 @@ from torch.utils.data import DataLoader, RandomSampler
 from omegaconf import OmegaConf
 
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp
+from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
 from dal_toolbox.active_learning.data import ALDataset
 from dal_toolbox.utils import seed_everything
 from dal_toolbox import datasets
-from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, predefined
+from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
@@ -44,6 +45,13 @@ def main(args):
         logging.info('Creating random initial labeled pool with %s samples.', args.al_cycle.n_init)
         al_dataset.random_init(n_samples=args.al_cycle.n_init)
     queried_indices['cycle0'] = al_dataset.labeled_indices
+
+    if args.ood_datasets:
+        logging.info('Building ood datasets.')
+        ood_datasets = build_ood_datasets(args)
+        ood_loaders = {name: DataLoader(ds, batch_size=args.val_batch_size) for name, ds in ood_datasets.items()}
+    else:
+        ood_loaders = None
 
     # Setup Model
     logging.info('Building model: %s', args.model.name)
@@ -87,7 +95,7 @@ def main(args):
         cycle_results['train_history'] = history['train_history']
 
         # Evaluate resulting model
-        test_stats = trainer.evaluate(val_loader)
+        test_stats = trainer.evaluate(val_loader, dataloaders_ood=ood_loaders)
         cycle_results['test_stats'] = test_stats
 
         # Log
@@ -117,28 +125,38 @@ def main(args):
 
 
 def build_query(args, **kwargs):
+    device = kwargs.get('device', 'cuda')
     if args.al_strategy.name == "random":
         query = random.RandomSampling(random_seed=args.random_seed)
     elif args.al_strategy.name == "uncertainty":
-        device = kwargs['device']
-        query = uncertainty.UncertaintySampling(
-            uncertainty_type=args.al_strategy.uncertainty_type,
+        query = uncertainty.EntropySampling(
+            batch_size=args.model.batch_size,
             subset_size=args.al_strategy.subset_size,
+            random_seed=args.random_seed,
             device=device,
         )
+    elif args.al_strategy.name == "bayesian_uncertainty":
+        query = uncertainty.BayesianEntropySampling(
+            batch_size=args.model.batch_size,
+            subset_size=args.al_strategy.subset_size,
+            random_seed=args.random_seed,
+            device=device,
+        )
+    elif args.al_strategy.name == 'variation_ratio':
+        query = uncertainty.VariationRatioSampling(
+            batch_size=args.model.batch_size,
+            subset_size=args.al_strategy.subset_size,
+            random_seed=args.random_seed,
+            device=device,
+        )
+    elif args.al_strategy.name == 'bald':
+        raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
     elif args.al_strategy.name == "coreset":
         device = kwargs['device']
         query = coreset.CoreSet(subset_size=args.al_strategy.subset_size, device=device)
     elif args.al_strategy.name == "badge":
         device = kwargs['device']
         query = badge.Badge(subset_size=args.al_strategy.subset_size, device=device)
-    elif args.al_strategy.name == "predefined":
-        query = predefined.PredefinedSampling(
-            queried_indices_json=args.al_strategy.queried_indices_json,
-            n_acq=args.al_cycle.n_acq,
-            n_init=args.al_cycle.n_init,
-            acq_size=args.al_cycle.acq_size,
-        )
     else:
         raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
     return query
@@ -157,7 +175,7 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True,
         )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
         trainer = deterministic.trainer.DeterministicTrainer(
             model=model,
             criterion=criterion,
@@ -177,7 +195,7 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True,
         )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
         trainer = deterministic.trainer.DeterministicTrainer(
             model=model,
             criterion=criterion,
@@ -197,7 +215,7 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True,
         )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
         trainer = deterministic.trainer.DeterministicMixupTrainer(
             model=model,
             criterion=criterion,
@@ -219,7 +237,7 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True
         )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
         trainer = mc_dropout.trainer.MCDropoutTrainer(
             model=model,
             optimizer=optimizer,
@@ -240,7 +258,7 @@ def build_model(args, **kwargs):
                 momentum=args.model.optimizer.momentum,
                 nesterov=True
             )
-            lrs = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.model.n_epochs)
+            lrs = CosineAnnealingLRLinearWarmup(opt, num_epochs=args.model.n_epochs, warmup_epochs=10)
             members.append(mem)
             optimizers.append(opt)
             lr_schedulers.append(lrs)
@@ -281,7 +299,7 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             nesterov=True
         )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
         trainer = sngp.trainer.SNGPTrainer(
             model=model,
             criterion=criterion,
@@ -292,7 +310,7 @@ def build_model(args, **kwargs):
         )
 
     else:
-        NotImplementedError()
+        raise NotImplementedError()
 
     return trainer
 
@@ -318,6 +336,23 @@ def build_datasets(args):
         raise NotImplementedError('Dataset not available')
 
     return train_ds, query_ds, test_ds_id, ds_info
+
+
+def build_ood_datasets(args):
+
+    ood_datasets = {}
+    for ds_name in args.ood_datasets:
+        if ds_name == 'CIFAR10':
+            ood_ds = datasets.cifar.build_cifar10('test', args.dataset_path)
+        elif ds_name == 'CIFAR100':
+            ood_ds = datasets.cifar.build_cifar100('test', args.dataset_path)
+        elif ds_name == 'SVHN':
+            ood_ds = datasets.svhn.build_svhn('test', args.dataset_path)
+        else:
+            raise NotImplementedError(f'Dataset {ds_name} not implemented.')
+        ood_datasets[ds_name] = ood_ds
+
+    return ood_datasets
 
 
 if __name__ == "__main__":

@@ -48,33 +48,27 @@ class SNGPTrainer(DeterministicTrainer):
             targets_id.append(targets)
         logits_id = torch.cat(logits_id, dim=0).cpu()
         targets_id = torch.cat(targets_id, dim=0).cpu()
-
-        # Confidence- and entropy-Scores of in domain set logits
         probas_id = logits_id.softmax(-1)
-        conf_id, _ = probas_id.max(-1)
-        entropy_id = ood.entropy_fn(probas_id)
-        dempster_shafer_id = ood.dempster_shafer_uncertainty(logits_id)
 
         # Model specific test loss and accuracy for in domain testset
         acc1 = generalization.accuracy(logits_id, targets_id, (1,))[0].item()
-        prec = generalization.avg_precision(probas_id, targets_id)
         loss = self.criterion(logits_id, targets_id).item()
-
-        # Negative Log Likelihood
         nll = torch.nn.CrossEntropyLoss(reduction='mean')(logits_id, targets_id).item()
-
-        # Top- and Marginal Calibration Error
         tce = calibration.TopLabelCalibrationError()(probas_id, targets_id).item()
         mce = calibration.MarginalCalibrationError()(probas_id, targets_id).item()
 
         metrics = {
             "acc1": acc1,
-            "prec": prec,
             "loss": loss,
             "nll": nll,
             "tce": tce,
             "mce": mce
         }
+
+        # TODO
+        conf_id, _ = probas_id.max(-1)
+        entropy_id = ood.entropy_fn(probas_id)
+        dempster_shafer_id = ood.dempster_shafer_uncertainty(logits_id)
 
         if dataloaders_ood is None:
             dataloaders_ood = {}

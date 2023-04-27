@@ -32,23 +32,12 @@ class CoreSet(Query):
             raise ValueError('The method `get_representation` is mandatory to use core set sampling.')
 
         if self.subset_size:
-            unlabeled_indices = self.rng.sample(unlabeled_indices, k=self.subset_size)
+            unlabeled_indices = self.rng.choice(unlabeled_indices, size=self.subset_size, replace=False)
 
-        if "collator" in list(kwargs.keys()):
-            unlabeled_dataloader = DataLoader(
-                dataset, 
-                batch_size=self.batch_size*2, 
-                collate_fn=kwargs['collator'],
-                sampler=unlabeled_indices)
-            labeled_dataloader = DataLoader(
-                dataset,
-                batch_size=self.batch_size*2, 
-                collate_fn=kwargs['collator'],
-                sampler=labeled_indices)
-        else:
-            unlabeled_dataloader = DataLoader(dataset, batch_size=self.batch_size, sampler=unlabeled_indices)
-            labeled_dataloader = DataLoader(dataset, batch_size=self.batch_size, sampler=labeled_indices)
-        del kwargs
+        unlabeled_dataloader = DataLoader(dataset, batch_size=self.batch_size,
+                                          sampler=unlabeled_indices, collate_fn=kwargs.get('collator'))
+        labeled_dataloader = DataLoader(dataset, batch_size=self.batch_size,
+                                        sampler=labeled_indices, collate_fn=kwargs.get('collator'))
 
         features_unlabeled = model.get_representation(unlabeled_dataloader, self.device)
         features_labeled = model.get_representation(labeled_dataloader, self.device)

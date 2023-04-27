@@ -17,17 +17,10 @@ class Badge(Query):
             raise ValueError('The method `get_grad_embedding` is mandatory to use badge sampling.')
 
         if self.subset_size:
-            unlabeled_indices = self.rng.sample(unlabeled_indices, k=self.subset_size)
-        
-        if "collator" in list(kwargs.keys()):
-            unlabeled_dataloader = DataLoader(
-                dataset, 
-                batch_size=self.batch_size*2, 
-                collate_fn=kwargs['collator'],
-                sampler=unlabeled_indices)
-        else:
-            unlabeled_dataloader = DataLoader(dataset, batch_size=self.batch_size, sampler=unlabeled_indices)
-        del kwargs
+            unlabeled_indices = self.rng.choice(unlabeled_indices, size=self.subset_size, replace=False)
+
+        unlabeled_dataloader = DataLoader(dataset, batch_size=self.batch_size,
+                                          sampler=unlabeled_indices, collate_fn=kwargs.get("collator"))
 
         grad_embedding = model.get_grad_embedding(unlabeled_dataloader, device=self.device)
         chosen = kmeans_plusplus(grad_embedding.numpy(), acq_size, np_rng=self.np_rng)

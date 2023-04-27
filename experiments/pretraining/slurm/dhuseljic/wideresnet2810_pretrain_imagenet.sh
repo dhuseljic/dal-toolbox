@@ -10,15 +10,16 @@ date;hostname;pwd
 source activate uncertainty_evaluation
 
 # export NCCL_DEBUG=INFO
+rsync -avz /mnt/datasets/imagenet/ILSVRC2012 /scratch
 
 cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/pretraining/
 
-OUTPUT_DIR=/mnt/work/dhuseljic/results/pretraining/
+OUTPUT_DIR=/mnt/work/dhuseljic/results/pretraining/imagenet/
 echo "Saving results to $OUTPUT_DIR"
 
 srun torchrun --standalone --nproc_per_node=4 main.py \
     dataset=Imagenet \
-    dataset_path=/mnt/datasets/imagenet/ILSVRC2012/ \
+    dataset_path=/scratch/ILSVRC2012 \
     model=wideresnet2810 \
     output_dir=$OUTPUT_DIR \
     random_seed=1

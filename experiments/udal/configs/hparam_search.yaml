@@ -1,0 +1,31 @@
+defaults:
+  - _self_
+  - model: resnet18
+  - dataset: CIFAR10
+  - al_strategy: random
+
+n_opt_samples: 10
+n_reps: 3
+cpus_per_trial: 4
+gpus_per_trial: 1
+
+budget: 2000
+val_split: 0.1
+distributed: False
+
+dataset_path: ./data/
+random_seed: 1
+val_batch_size: 128
+print_freq_eval: 100
+print_freq_train: 100
+device: cuda
+
+output_dir: ./output/
+hydra:
+  run:
+    dir: ${output_dir}
+  job_logging:
+    handlers:
+      file:
+        mode: w
+
