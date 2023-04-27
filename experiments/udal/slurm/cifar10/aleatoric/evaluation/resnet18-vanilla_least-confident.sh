@@ -13,7 +13,7 @@ cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/
 
 dataset=CIFAR10
 model=resnet18
-al_strat=least-confident
+al_strat=least_confident
 n_init=100
 acq_size=100
 n_acq=19
