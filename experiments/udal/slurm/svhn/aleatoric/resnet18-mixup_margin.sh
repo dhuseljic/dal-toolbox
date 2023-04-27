@@ -26,9 +26,9 @@ echo "Starting script. Writing results to ${output_dir}"
 srun python -u active_learning.py \
 	model=$model \
 	model.batch_size=32 \
-	model.mixup_alpha=0.4 \
-	model.optimizer.lr=0.01 \
-	model.optimizer.weight_decay=0.005 \
+	model.mixup_alpha=0.07 \
+	model.optimizer.lr=0.06 \
+	model.optimizer.weight_decay=0.001 \
 	dataset=$dataset \
 	dataset_path=/mnt/work/dhuseljic/datasets \
 	al_strategy=$al_strat \
