@@ -23,6 +23,7 @@ init_pool_file=/mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/initial
 output_dir=/mnt/work/deep_al/results/udal/active_learning/${dataset}/${model}/${al_strat}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/
 
 echo "Starting script. Writing results to ${output_dir}"
+echo RUNNING > $output_dir/STATE
 srun python -u active_learning.py \
 	model=$model \
 	model.batch_size=32 \
@@ -38,4 +39,5 @@ srun python -u active_learning.py \
 	output_dir=$output_dir \
 	random_seed=$random_seed 
 echo "Finished script."
+echo FINISHED > $output_dir/STATE
 date
