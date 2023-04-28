@@ -3,6 +3,7 @@ import abc
 import copy
 import time
 import logging
+import datetime
 
 import torch
 
@@ -72,7 +73,9 @@ class BasicTrainer(abc.ABC):
             # "test_history": self.test_history,
         }
         torch.save(checkpoint, checkpoint_path)
-        self.logger.info('Saving took %.2f minutes', (time.time() - start_time)/60)
+        saving_time = (time.time() - start_time)
+        self.logger.info('Saving took %s', str(datetime.timedelta(seconds=int(saving_time))))
+
 
     def train(self, n_epochs, train_loader, test_loaders=None, eval_every=None, save_every=None):
         self.logger.info('Training with %s instances..', len(train_loader.dataset))
@@ -110,7 +113,7 @@ class BasicTrainer(abc.ABC):
                 self.save_checkpoint(i_epoch)
 
         training_time = (time.time() - start_time)
-        self.logger.info('Training took %.2f minutes', training_time/60)
+        self.logger.info('Training took %s', str(datetime.timedelta(seconds=int(training_time))))
         self.logger.info('Training stats of final epoch: %s', train_stats)
 
         # Save final model if output directory is defined
@@ -127,8 +130,9 @@ class BasicTrainer(abc.ABC):
                 self.logger.info('> OOD dataset %s with %s instances..', name, len(dl.dataset))
         start_time = time.time()
         test_stats = self.evaluate_model(dataloader, dataloaders_ood)
+        eval_time = (time.time() - start_time)
         self.logger.info('Evaluation stats: %s', test_stats)
-        self.logger.info('Evaluation took %.2f minutes', (time.time() - start_time)/60)
+        self.logger.info('Evaluation took %s', str(datetime.timedelta(seconds=int(eval_time))))
         return test_stats
 
     @torch.no_grad()
