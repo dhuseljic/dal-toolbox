@@ -36,8 +36,9 @@ class BasicTrainer(abc.ABC):
             os.makedirs(output_dir, exist_ok=True)
 
         if self.use_distributed:
+            self.logger("Using distributed mode.")
             self.model.to(device)
-            rank = int(os.environ["LOCAL_RANK"])
+            rank = torch.distributed.get_rank()
             self.model = DistributedDataParallel(model, device_ids=[rank], broadcast_buffers=False)
 
         self.init_model_state = copy.deepcopy(self.model.state_dict())
