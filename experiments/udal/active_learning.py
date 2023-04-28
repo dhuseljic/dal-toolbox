@@ -161,7 +161,11 @@ def build_query(args, **kwargs):
             device=device,
         )
     elif args.al_strategy.name == 'bald':
-        raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
+        query = uncertainty.BALDSampling(
+            batch_size=args.model.batch_size,
+            subset_size=args.al_strategy.subset_size,
+            device=device,
+        )
     elif args.al_strategy.name == "coreset":
         device = kwargs['device']
         query = coreset.CoreSet(subset_size=args.al_strategy.subset_size, device=device)
@@ -269,7 +273,7 @@ def build_model(args, **kwargs):
                 momentum=args.model.optimizer.momentum,
                 nesterov=True
             )
-            lrs = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
+            lrs = CosineAnnealingLRLinearWarmup(opt, num_epochs=args.model.n_epochs, warmup_epochs=10)
             members.append(mem)
             optimizers.append(opt)
             lr_schedulers.append(lrs)

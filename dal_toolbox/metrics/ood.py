@@ -58,9 +58,9 @@ def clamp_probas(probas):
     return probas.clamp(min=eps, max=1 - eps)
 
 
-def entropy_fn(probas):
+def entropy_fn(probas, dim=-1):
     probas = clamp_probas(probas)
-    return - torch.sum(probas * probas.log(), -1)
+    return - torch.sum(probas * probas.log(), dim=dim)
 
 
 def entropy_from_logits(logits):
