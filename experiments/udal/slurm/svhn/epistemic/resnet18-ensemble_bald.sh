@@ -25,9 +25,11 @@ output_dir=/mnt/work/deep_al/results/udal/active_learning/${dataset}/${model}/${
 echo "Starting script. Writing results to ${output_dir}"
 srun python -u active_learning.py \
 	model=$model \
+	model.batch_size=32 \
 	model.optimizer.lr=0.01 \
 	model.optimizer.weight_decay=0.005 \
 	dataset=$dataset \
+	ood_datasets=\[CIFAR10,\ CIFAR100\] \
 	dataset_path=/mnt/work/dhuseljic/datasets \
 	al_strategy=$al_strat \
 	al_cycle.n_init=$n_init \
