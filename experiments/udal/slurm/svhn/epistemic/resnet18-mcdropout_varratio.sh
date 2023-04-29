@@ -25,9 +25,9 @@ output_dir=/mnt/work/deep_al/results/udal/active_learning/${dataset}/${model}/${
 echo "Starting script. Writing results to ${output_dir}"
 srun python -u active_learning.py \
 	model=$model \
-	model.dropout_rate=0.2 \
+	model.dropout_rate=0.29 \
 	model.optimizer.lr=0.01 \
-	model.optimizer.weight_decay=0.005 \
+	model.optimizer.weight_decay=0.008 \
 	dataset=$dataset \
 	dataset_path=/mnt/work/dhuseljic/datasets \
 	al_strategy=$al_strat \
