@@ -30,6 +30,7 @@ srun python -u active_learning.py \
 	model.optimizer.lr=0.01 \
 	model.optimizer.weight_decay=0.008 \
 	dataset=$dataset \
+	ood_datasets=\[CIFAR10,\ CIFAR100\] \
 	dataset_path=/mnt/work/dhuseljic/datasets \
 	al_strategy=$al_strat \
 	al_cycle.n_init=$n_init \
