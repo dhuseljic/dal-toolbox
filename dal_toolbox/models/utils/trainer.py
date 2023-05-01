@@ -55,7 +55,6 @@ class BasicTrainer(abc.ABC):
         self.num_gpus = torch.cuda.device_count() if num_gpus == 'auto' else num_gpus
         self.fabric = L.Fabric(accelerator='cuda', devices=self.num_gpus, strategy='ddp')
         self.fabric.launch()
-        self.model, self.optimizer = self.fabric.setup(self.model, self.optimizer)
 
         self.train_history: list = []
         self.test_history: list = []
@@ -89,6 +88,8 @@ class BasicTrainer(abc.ABC):
     def train(self, n_epochs, train_loader, test_loaders=None, eval_every=None, save_every=None):
         self.logger.info('Training with %s instances..', len(train_loader.dataset))
         start_time = time.time()
+
+        self.model, self.optimizer = self.fabric.setup(self.model, self.optimizer)
         train_loader = self.fabric.setup_dataloaders(train_loader)
 
         if self.use_distributed:
