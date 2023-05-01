@@ -28,6 +28,7 @@ srun python -u evaluate.py \
 	model.optimizer.lr=0.01 \
 	model.optimizer.weight_decay=0.005 \
 	dataset=$dataset \
+	ood_datasets=\[CIFAR10,\ CIFAR100\] \
 	dataset_path=/mnt/work/dhuseljic/datasets \
 	queried_indices_json=$queried_indices_json \
 	output_dir=$output_dir \
