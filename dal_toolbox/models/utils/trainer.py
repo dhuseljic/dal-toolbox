@@ -7,8 +7,6 @@ import datetime
 
 import torch
 
-import lightning as L
-
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DistributedSampler
 from ...utils import write_scalar_dict
@@ -23,7 +21,6 @@ class BasicTrainer(abc.ABC):
                  device=None,
                  output_dir=None,
                  summary_writer=None,
-                 num_gpus='auto',
                  use_distributed=False):
         self.model = model
         self.optimizer = optimizer
@@ -52,9 +49,9 @@ class BasicTrainer(abc.ABC):
             self.init_scheduler_state = copy.deepcopy(self.lr_scheduler.state_dict())
 
 
-        self.num_gpus = torch.cuda.device_count() if num_gpus == 'auto' else num_gpus
-        self.fabric = L.Fabric(accelerator='cuda', devices=self.num_gpus, strategy='ddp')
-        self.fabric.launch()
+        # self.num_devices = torch.cuda.device_count() if num_devices == 'auto' else num_devices
+        # self.fabric = L.Fabric(accelerator='cuda', devices=self.num_devices, strategy='ddp')
+        # self.fabric.launch()
 
         self.train_history: list = []
         self.test_history: list = []
@@ -89,8 +86,8 @@ class BasicTrainer(abc.ABC):
         self.logger.info('Training with %s instances..', len(train_loader.dataset))
         start_time = time.time()
 
-        self.model, self.optimizer = self.fabric.setup(self.model, self.optimizer)
-        train_loader = self.fabric.setup_dataloaders(train_loader)
+        # self.model, self.optimizer = self.fabric.setup(self.model, self.optimizer)
+        # train_loader = self.fabric.setup_dataloaders(train_loader)
 
         if self.use_distributed:
             if not isinstance(train_loader.sampler, DistributedSampler):

@@ -31,8 +31,7 @@ class DeterministicTrainer(BasicTrainer):
             loss = self.criterion(outputs, targets)
 
             self.optimizer.zero_grad()
-            # loss.backward()
-            self.fabric.backward(loss)
+            loss.backward()
             self.optimizer.step()
 
             batch_size = inputs.shape[0]
