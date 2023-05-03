@@ -138,3 +138,19 @@ class VariationRatioSampling(UncertaintySampling):
             raise ValueError(f"Input probas tensor must be 3-dimensional, got shape {probas.shape}")
         # TODO(dhuseljic): change to logits?
         return self._variation_ratio(probas)
+
+
+class BALDSampling(UncertaintySampling):
+
+    def bald_score(self, probas):
+        mean_probas = torch.mean(probas, dim=1)
+        mean_entropy = ood.entropy_fn(mean_probas)
+        entropy = ood.entropy_fn(probas).mean(-1)
+        score = mean_entropy - entropy
+        return score
+
+    def get_scores(self, probas):
+        if probas.ndim != 3:
+            raise ValueError(f"Input probas tensor must be 3-dimensional, got shape {probas.shape}")
+        scores = self.bald_score(probas)
+        return scores

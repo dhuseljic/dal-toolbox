@@ -30,7 +30,7 @@ class EnsembleTrainer(BasicTrainer):
 
                 batch_size = inputs.shape[0]
                 acc1, = generalization.accuracy(outputs, targets, topk=(1,))
-            
+
                 metric_logger.update(loss=loss.item(), lr=optim.param_groups[0]["lr"])
                 metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
             train_stats.update({f"train_member{i_member}_{k}": meter.global_avg for k,
@@ -50,7 +50,7 @@ class EnsembleTrainer(BasicTrainer):
             targets_id.append(targets)
         ensemble_logits_id = torch.cat(ensemble_logits_id, dim=0)
         targets_id = torch.cat(targets_id, dim=0)
-        mean_probas_id  = ensemble_logits_id.softmax(dim=-1).mean(dim=1)
+        mean_probas_id = ensemble_logits_id.softmax(dim=-1).mean(dim=1)
 
         # Compute accuracy
         acc1 = generalization.accuracy(mean_probas_id, targets_id, (1,))[0].item()
@@ -68,7 +68,6 @@ class EnsembleTrainer(BasicTrainer):
             "tce": tce,
             "mce": mce
         }
-
 
         if dataloaders_ood:
             for name, dataloader_ood in dataloaders_ood.items():

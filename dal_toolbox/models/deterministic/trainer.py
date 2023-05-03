@@ -15,7 +15,7 @@ class DeterministicTrainer(BasicTrainer):
 
     def train_one_epoch(self, dataloader, epoch=None, print_freq=200):
         self.model.train()
-        self.model.to(self.device)
+        # self.model.to(self.device)
         self.criterion.to(self.device)
 
         metric_logger = MetricLogger(delimiter=" ")
@@ -24,7 +24,7 @@ class DeterministicTrainer(BasicTrainer):
 
         # Train the epoch
         for inputs, targets in metric_logger.log_every(dataloader, print_freq, header):
-            inputs, targets = inputs.to(self.device), targets.to(self.device)
+            # inputs, targets = inputs.to(self.device), targets.to(self.device)
 
             outputs = self.model(inputs)
 
@@ -347,13 +347,13 @@ class DeterministicFlexMatchTrainer(DeterministicTrainer):
         unlabeled_iter = iter(unlabeled_loader)
 
         for x_l, y_l in metric_logger.log_every(labeled_loader, print_freq=print_freq, header=header):
-            x_w, x_s, y, idx  = next(unlabeled_iter)
+            x_w, x_s, y, idx = next(unlabeled_iter)
             x_l = x_l.to(self.device)
             y_l = y_l.to(self.device)
             x_w = x_w.to(self.device)
             x_s = x_s.to(self.device)
             y = y.to(self.device)
-            idx = idx.to(self.device)    
+            idx = idx.to(self.device)
 
             # Get all necesseracy model outputs
             logits_l = self.model(x_l)

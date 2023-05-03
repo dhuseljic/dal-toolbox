@@ -90,7 +90,7 @@ def main(args):
         train_sampler = RandomSampler(al_dataset.labeled_dataset, num_samples=args.model.batch_size*iter_per_epoch)
         train_loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.model.batch_size, sampler=train_sampler)
 
-        trainer.reset_states(reset_model=args.al_cycle.cold_start)
+        trainer.reset_states(reset_model_parameters=args.al_cycle.cold_start)
         history = trainer.train(args.model.n_epochs, train_loader=train_loader)
         cycle_results['train_history'] = history['train_history']
 
@@ -127,30 +127,45 @@ def main(args):
 def build_query(args, **kwargs):
     device = kwargs.get('device', 'cuda')
     if args.al_strategy.name == "random":
-        query = random.RandomSampling(random_seed=args.random_seed)
-    elif args.al_strategy.name == "uncertainty":
+        query = random.RandomSampling()
+    # Aleatoric Strategies
+    elif args.al_strategy.name == "least_confident":
+        query = uncertainty.LeastConfidentSampling(
+            batch_size=args.model.batch_size,
+            subset_size=args.al_strategy.subset_size,
+            device=device,
+        )
+    elif args.al_strategy.name == "margin":
+        query = uncertainty.MarginSampling(
+            batch_size=args.model.batch_size,
+            subset_size=args.al_strategy.subset_size,
+            device=device,
+        )
+    elif args.al_strategy.name == "entropy":
         query = uncertainty.EntropySampling(
             batch_size=args.model.batch_size,
             subset_size=args.al_strategy.subset_size,
-            random_seed=args.random_seed,
             device=device,
         )
-    elif args.al_strategy.name == "bayesian_uncertainty":
+    # Epistemic Strategies
+    elif args.al_strategy.name == "bayesian_entropy":
         query = uncertainty.BayesianEntropySampling(
             batch_size=args.model.batch_size,
             subset_size=args.al_strategy.subset_size,
-            random_seed=args.random_seed,
             device=device,
         )
     elif args.al_strategy.name == 'variation_ratio':
         query = uncertainty.VariationRatioSampling(
             batch_size=args.model.batch_size,
             subset_size=args.al_strategy.subset_size,
-            random_seed=args.random_seed,
             device=device,
         )
     elif args.al_strategy.name == 'bald':
-        raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
+        query = uncertainty.BALDSampling(
+            batch_size=args.model.batch_size,
+            subset_size=args.al_strategy.subset_size,
+            device=device,
+        )
     elif args.al_strategy.name == "coreset":
         device = kwargs['device']
         query = coreset.CoreSet(subset_size=args.al_strategy.subset_size, device=device)
@@ -320,22 +335,22 @@ def build_datasets(args):
     if args.dataset.name == 'CIFAR10':
         train_ds, ds_info = datasets.cifar.build_cifar10('train', args.dataset_path, return_info=True)
         query_ds = datasets.cifar.build_cifar10('query', args.dataset_path)
-        test_ds_id = datasets.cifar.build_cifar10('test', args.dataset_path)
+        test_ds = datasets.cifar.build_cifar10('test', args.dataset_path)
 
     elif args.dataset.name == 'CIFAR100':
         train_ds, ds_info = datasets.cifar.build_cifar100('train', args.dataset_path, return_info=True)
         query_ds = datasets.cifar.build_cifar100('query', args.dataset_path)
-        test_ds_id = datasets.cifar.build_cifar100('test', args.dataset_path)
+        test_ds = datasets.cifar.build_cifar100('test', args.dataset_path)
 
     elif args.dataset.name == 'SVHN':
         train_ds, ds_info = datasets.svhn.build_svhn('train', args.dataset_path, return_info=True)
         query_ds = datasets.svhn.build_svhn('query', args.dataset_path)
-        test_ds_id = datasets.svhn.build_svhn('test', args.dataset_path)
+        test_ds = datasets.svhn.build_svhn('test', args.dataset_path)
 
     else:
         raise NotImplementedError('Dataset not available')
 
-    return train_ds, query_ds, test_ds_id, ds_info
+    return train_ds, query_ds, test_ds, ds_info
 
 
 def build_ood_datasets(args):

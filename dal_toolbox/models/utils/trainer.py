@@ -3,6 +3,7 @@ import abc
 import copy
 import time
 import logging
+import datetime
 
 import torch
 
@@ -36,8 +37,9 @@ class BasicTrainer(abc.ABC):
             os.makedirs(output_dir, exist_ok=True)
 
         if self.use_distributed:
+            self.logger("Using distributed mode.")
             self.model.to(device)
-            rank = int(os.environ["LOCAL_RANK"])
+            rank = torch.distributed.get_rank()
             self.model = DistributedDataParallel(model, device_ids=[rank], broadcast_buffers=False)
 
         self.init_model_state = copy.deepcopy(self.model.state_dict())
@@ -46,17 +48,22 @@ class BasicTrainer(abc.ABC):
         if lr_scheduler:
             self.init_scheduler_state = copy.deepcopy(self.lr_scheduler.state_dict())
 
+
+        # self.num_devices = torch.cuda.device_count() if num_devices == 'auto' else num_devices
+        # self.fabric = L.Fabric(accelerator='cuda', devices=self.num_devices, strategy='ddp')
+        # self.fabric.launch()
+
         self.train_history: list = []
         self.test_history: list = []
         self.test_stats: dict = {}
 
-    def reset_states(self, reset_model=False):
+    def reset_states(self, reset_model_parameters=False):
         self.optimizer.load_state_dict(self.init_optimizer_state)
         self.criterion.load_state_dict(self.init_criterion_state)
-        if reset_model:
-            self.model.load_state_dict(self.init_model_state)
         if self.lr_scheduler:
             self.lr_scheduler.load_state_dict(self.init_scheduler_state)
+        if reset_model_parameters:
+            self.model.load_state_dict(self.init_model_state)
 
     def save_checkpoint(self, i_epoch=None):
         self.logger.info('Saving checkpoint..')
@@ -71,11 +78,16 @@ class BasicTrainer(abc.ABC):
             # "test_history": self.test_history,
         }
         torch.save(checkpoint, checkpoint_path)
-        self.logger.info('Saving took %.2f minutes', (time.time() - start_time)/60)
+        saving_time = (time.time() - start_time)
+        self.logger.info('Saving took %s', str(datetime.timedelta(seconds=int(saving_time))))
+
 
     def train(self, n_epochs, train_loader, test_loaders=None, eval_every=None, save_every=None):
         self.logger.info('Training with %s instances..', len(train_loader.dataset))
         start_time = time.time()
+
+        # self.model, self.optimizer = self.fabric.setup(self.model, self.optimizer)
+        # train_loader = self.fabric.setup_dataloaders(train_loader)
 
         if self.use_distributed:
             if not isinstance(train_loader.sampler, DistributedSampler):
@@ -109,7 +121,7 @@ class BasicTrainer(abc.ABC):
                 self.save_checkpoint(i_epoch)
 
         training_time = (time.time() - start_time)
-        self.logger.info('Training took %.2f minutes', training_time/60)
+        self.logger.info('Training took %s', str(datetime.timedelta(seconds=int(training_time))))
         self.logger.info('Training stats of final epoch: %s', train_stats)
 
         # Save final model if output directory is defined
@@ -126,8 +138,9 @@ class BasicTrainer(abc.ABC):
                 self.logger.info('> OOD dataset %s with %s instances..', name, len(dl.dataset))
         start_time = time.time()
         test_stats = self.evaluate_model(dataloader, dataloaders_ood)
+        eval_time = (time.time() - start_time)
         self.logger.info('Evaluation stats: %s', test_stats)
-        self.logger.info('Evaluation took %.2f minutes', (time.time() - start_time)/60)
+        self.logger.info('Evaluation took %s', str(datetime.timedelta(seconds=int(eval_time))))
         return test_stats
 
     @torch.no_grad()

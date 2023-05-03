@@ -12,3 +12,4 @@ wandb/
 *.png
 *.jpg
 *.pth
+.dev
