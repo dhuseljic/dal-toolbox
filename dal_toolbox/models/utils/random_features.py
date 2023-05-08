@@ -132,8 +132,7 @@ class RandomFeatureGaussianProcess(nn.Module):
         # probas = logits.softmax(-1)
         # probas_max = probas.max(1)[0]
         # multiplier = probas_max * (1-probas_max)
-        # TODO(dhuseljic): check lightning behavior here
-        # self.precision_matrix = self.precision_matrix.to(phi)
+        self.precision_matrix = self.precision_matrix.to(phi)  # TODO(dhuseljic): check lightning behavior here
         multiplier = 1
         precision_matrix_minibatch = torch.matmul(multiplier*phi.T, phi)
         if self.cov_momentum > 0:

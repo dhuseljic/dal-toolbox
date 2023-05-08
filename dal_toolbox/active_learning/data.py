@@ -1,7 +1,84 @@
 import random
 
 import torch
-from torch.utils.data import Subset
+import numpy as np
+import lightning as L
+from torch.utils.data import Subset, SubsetRandomSampler
+
+
+class ALDataModule(L.LightningDataModule):
+    def __init__(self, train_dataset, query_dataset=None, train_batch_size=32, seed=None):
+        super().__init__()
+        self.train_ds = train_dataset
+        self.train_batch_size = train_batch_size
+
+        if query_dataset is None:
+            print('Using train_dataset for queries. Make sure that there are no augmentations used.')
+            query_dataset = train_dataset
+        self.query_dataset = query_dataset
+
+        # Set up the indices for unlabeled and labeled pool
+        self.unlabeled_indices = range(len(self.train_ds))
+        self.labeled_indices = []
+
+        # set rng which should be used for all random stuff
+        self._seed = seed
+        if seed is None:
+            self.rng = np.random.mtrand._rand
+        else:
+            self.rng = np.random.RandomState(self._seed)
+
+    def train_dataloader(self):
+        sampler = SubsetRandomSampler(indices=self.labeled_indices)
+        train_loader = torch.utils.data.DataLoader(self.train_ds, batch_size=self.train_batch_size, sampler=sampler)
+        return train_loader
+
+    def val_dataloader(self):
+        raise NotImplementedError()
+
+    def test_dataloader(self):
+        raise NotImplementedError()
+
+    def update_annotations(self, buy_idx: list):
+        """
+            Updates the labeled pool with newly annotated instances.
+
+            Args:
+                buy_idx (list): List of indices which identify samples of the unlabeled pool that should be
+                                transfered to the labeld pool.
+        """
+        self.labeled_indices = list_union(self.labeled_indices, buy_idx)
+        self.unlabeled_indices = list_diff(self.unlabeled_indices, buy_idx)
+
+    def random_init(self, n_samples: int, class_balanced: bool = False):
+        """Randomly annotates instances from the unlabeled pool and adds them to the labeled one.
+
+            Args:
+                n_samples (int): Size of the initial labeld pool.    
+                class_balanced (bool): Whether to use an class balanced initialization.
+        """
+        if len(self.labeled_indices) != 0:
+            raise ValueError('Pools already initialized.')
+
+        if class_balanced:
+            classes = torch.Tensor([self.query_dataset[idx][-1] for idx in self.unlabeled_indices]).long()
+            classes_unique = classes.unique()
+            n_classes = len(classes_unique)
+            n_samples_per_class = n_samples // n_classes
+
+            indices = []
+            for label in classes_unique:
+                unlabeled_indices_lbl = (classes == label).nonzero().squeeze()
+                # indices_lbl = self.rng.sample(unlabeled_indices_lbl.tolist(), k=n_samples_per_class)
+                indices_lbl = self.rng.choice(unlabeled_indices_lbl.tolist(), size=n_samples_per_class, replace=False)
+                indices_lbl = indices_lbl.tolist()
+                indices.extend(indices_lbl)
+        else:
+            # indices = self.rng.sample(self.unlabeled_indices, k=n_samples)
+            indices = self.rng.choice(self.unlabeled_indices, size=n_samples, replace=False)
+            indices = indices.tolist()
+
+        self.update_annotations(indices)
 
 
 class UnlabeledDataset(Subset):
@@ -100,7 +177,7 @@ class ALDataset:
             classes_unique = classes.unique()
             n_classes = len(classes_unique)
             n_samples_per_class = n_samples // n_classes
-            
+
             indices = []
             for label in classes_unique:
                 unlabeled_indices_lbl = (classes == label).nonzero().squeeze()
