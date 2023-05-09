@@ -50,9 +50,7 @@ class DeterministicModule(L.LightningModule):
         # TODO(dhuseljic): discuss with mherde; maybe good for AL
         inputs, targets = batch
         logits = self(inputs)
-        gathered_logits = self.all_gather(logits)
-        gathered_targets = self.all_gather(logits)
-        return gathered_logits, gathered_targets
+        return logits, targets
 
     def configure_optimizers(self):
         optimizer = torch.optim.SGD(self.parameters(), lr=1e-1, momentum=.9, weight_decay=0.01)

@@ -1,4 +1,6 @@
 import lightning as L
+from lightning.pytorch.callbacks import TQDMProgressBar
+from tqdm import tqdm
 
 
 class MetricsHistory(L.Callback):
@@ -26,3 +28,14 @@ class MetricsHistory(L.Callback):
 
     def to_list(self):
         return self.metrics
+
+
+class LitProgressBar(TQDMProgressBar):
+    """LitProgressBar
+
+    Simplified bar as callback to report the training progress.
+    """
+
+    def init_validation_tqdm(self):
+        bar = tqdm(disable=True)
+        return bar

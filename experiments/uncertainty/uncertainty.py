@@ -14,7 +14,7 @@ from dal_toolbox import metrics
 from dal_toolbox.datasets import build_dataset, build_ood_datasets
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp, variational_inference
 
-from lightning.pytorch.callbacks import LearningRateMonitor
+from dal_toolbox.models.utils.callbacks import LitProgressBar
 from dal_toolbox.models.utils.logger import BasicLogger
 
 
@@ -52,7 +52,7 @@ def main(args):
     model = build_model(args, n_classes=ds_info['n_classes'])
     trainer = L.Trainer(
         max_epochs=args.model.n_epochs,
-        callbacks=[LearningRateMonitor()],
+        callbacks=[LitProgressBar()],
         check_val_every_n_epoch=args.eval_interval,
         enable_checkpointing=False,
         enable_progress_bar=True,
