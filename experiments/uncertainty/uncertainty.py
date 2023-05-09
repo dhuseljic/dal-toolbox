@@ -13,10 +13,7 @@ from torch.utils.data import DataLoader, Subset, RandomSampler
 from dal_toolbox import metrics
 from dal_toolbox.datasets import build_dataset, build_ood_datasets
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp, variational_inference
-
-from lightning.pytorch.callbacks import LearningRateMonitor
-from dal_toolbox.models.utils.callbacks import LitProgressBar, Logger
-# from dal_toolbox.models.utils.logger import BasicLogger
+from dal_toolbox.models.utils.callbacks import Logger
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="uncertainty")
@@ -57,7 +54,6 @@ def main(args):
         check_val_every_n_epoch=args.eval_interval,
         enable_checkpointing=False,
         enable_progress_bar=False,
-        # logger=BasicLogger(),
         devices=args.num_devices,
     )
     trainer.fit(model, train_loader, val_dataloaders=test_loader_id)
