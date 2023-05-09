@@ -1,10 +1,9 @@
 import logging
-from lightning.pytorch.loggers.logger import Logger, rank_zero_experiment
+from lightning.pytorch.loggers.logger import Logger
 from lightning.pytorch.utilities import rank_zero_only
 
 
-
-class SimpleLogger(Logger):
+class BasicLogger(Logger):
     """A simple logger that can run on slurm without using TQDM."""
 
     def __init__(self, output_dir=None) -> None:
@@ -14,7 +13,7 @@ class SimpleLogger(Logger):
 
     @property
     def name(self):
-        return "Logger"
+        return "BasicLogger"
 
     @property
     def version(self):
@@ -26,6 +25,8 @@ class SimpleLogger(Logger):
 
     @rank_zero_only
     def log_metrics(self, metrics, step):
+        if 'epoch' not in metrics:
+            return
         epoch = metrics.pop('epoch', None)
         log_msg = f'Epoch [{epoch}] [{step}]:  ' + '  '.join([f'{n}: {m:.4f}' for n, m in metrics.items()])
         self.logger.info(log_msg)

@@ -15,7 +15,7 @@ from dal_toolbox.datasets import build_dataset, build_ood_datasets
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp, variational_inference
 
 from lightning.pytorch.callbacks import LearningRateMonitor
-from dal_toolbox.models.utils.logger import SimpleLogger
+from dal_toolbox.models.utils.logger import BasicLogger
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="uncertainty")
@@ -52,11 +52,11 @@ def main(args):
     model = build_model(args, n_classes=ds_info['n_classes'])
     trainer = L.Trainer(
         max_epochs=args.model.n_epochs,
-        # callbacks=[LearningRateMonitor()],
+        callbacks=[LearningRateMonitor()],
         check_val_every_n_epoch=args.eval_interval,
-        logger=SimpleLogger(),
-        enable_progress_bar=False,
         enable_checkpointing=False,
+        enable_progress_bar=True,
+        logger=BasicLogger(),
         devices=args.num_devices,
     )
     trainer.fit(model, train_loader, val_dataloaders=test_loader_id)
@@ -64,6 +64,7 @@ def main(args):
     # Testing
     logger.info('Starting Testing..')
     predictions = trainer.predict(model, dataloaders=test_loader_id)
+    predictions = model.all_gather(predictions)
     logits = torch.cat([preds[0] for preds in predictions])
     targets = torch.cat([preds[1] for preds in predictions])
     test_stats = {
