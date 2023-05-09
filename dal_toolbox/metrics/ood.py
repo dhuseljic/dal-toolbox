@@ -2,6 +2,8 @@ import math
 import torch
 from sklearn.metrics import roc_auc_score, average_precision_score
 
+import torchmetrics
+
 
 def ood_aupr(score_id: torch.Tensor, score_ood: torch.Tensor):
     """Computes the AUROC and assumes that a higher score is OOD.
@@ -83,3 +85,49 @@ def ensemble_entropy_from_logits(logits):
     probas = log_probas.exp()
     entropy = - torch.sum(probas * log_probas, dim=-1)
     return entropy
+
+
+class OODAUROC(torchmetrics.Metric):
+    def __init__(self):
+        super().__init__()
+        self.add_state('scores_id', default=[], dist_reduce_fx='cat')
+        self.add_state('scores_ood', default=[], dist_reduce_fx='cat')
+
+    def update(self, scores_id: torch.Tensor, scores_ood: torch.Tensor):
+        self.scores_id.append(scores_id)
+        self.scores_ood.append(scores_ood)
+
+    def compute(self):
+        scores_id = torch.cat(self.scores_id)
+        scores_ood = torch.cat(self.scores_ood)
+
+        preds = torch.cat((scores_id, scores_ood))
+        targets = torch.cat((torch.zeros(len(scores_id)), torch.ones(len(scores_ood))))
+        targets = targets.long()
+
+        auroc = torchmetrics.functional.auroc(preds, targets, task='binary')
+        return auroc
+
+
+class OODAUPR(torchmetrics.Metric):
+    def __init__(self):
+        super().__init__()
+        self.add_state('scores_id', default=[], dist_reduce_fx='cat')
+        self.add_state('scores_ood', default=[], dist_reduce_fx='cat')
+
+    def update(self, logits_id: torch.Tensor, logits_ood: torch.Tensor):
+        entropy_id = entropy_from_logits(logits_id)
+        entropy_ood = entropy_from_logits(logits_ood)
+
+        self.scores_id.append(entropy_id)
+        self.scores_ood.append(entropy_ood)
+
+    def compute(self):
+        scores_id = torch.cat(self.scores_id)
+        scores_ood = torch.cat(self.scores_ood)
+
+        preds = torch.cat((scores_id, scores_ood))
+        targets = torch.cat((torch.zeros(len(scores_id)), torch.ones(len(scores_ood))))
+
+        aupr = torchmetrics.functional.average_precision(preds, targets.long(), task='binary')
+        return aupr

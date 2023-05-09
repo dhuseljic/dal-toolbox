@@ -7,15 +7,25 @@ from torch.utils.data import Subset, SubsetRandomSampler
 
 
 class ALDataModule(L.LightningDataModule):
-    def __init__(self, train_dataset, query_dataset=None, train_batch_size=32, seed=None):
+    def __init__(
+            self,
+            train_ds,
+            query_ds=None,
+            train_batch_size: int = 32,
+            predict_batch_size: int = 32,
+            predict_type: str = 'unlabeled',
+            seed: int = None,
+    ):
         super().__init__()
-        self.train_ds = train_dataset
+        self.train_ds = train_ds
         self.train_batch_size = train_batch_size
 
-        if query_dataset is None:
+        if query_ds is None:
             print('Using train_dataset for queries. Make sure that there are no augmentations used.')
-            query_dataset = train_dataset
-        self.query_dataset = query_dataset
+            query_ds = train_ds
+        self.query_ds = query_ds
+        self.predict_batch_size = predict_batch_size
+        self.predict_type = predict_type
 
         # Set up the indices for unlabeled and labeled pool
         self.unlabeled_indices = range(len(self.train_ds))
@@ -32,6 +42,18 @@ class ALDataModule(L.LightningDataModule):
         sampler = SubsetRandomSampler(indices=self.labeled_indices)
         train_loader = torch.utils.data.DataLoader(self.train_ds, batch_size=self.train_batch_size, sampler=sampler)
         return train_loader
+
+    def predict_dataloader(self):
+        if self.predict_type == 'unlabeled':
+            sampler = self.unlabeled_indices
+        elif self.predict_type == 'labeled':
+            sampler = self.labeled_indices
+        elif self.predict_type == 'all':
+            sampler = range(len(self.query_ds))
+        else:
+            raise NotImplementedError(f'The predict type is not implemented, got {self.predict_type}')
+        loader = torch.utils.data.DataLoader(self.query_ds, batch_size=self.train_batch_size, sampler=sampler)
+        return loader
 
     def val_dataloader(self):
         raise NotImplementedError()
@@ -61,7 +83,7 @@ class ALDataModule(L.LightningDataModule):
             raise ValueError('Pools already initialized.')
 
         if class_balanced:
-            classes = torch.Tensor([self.query_dataset[idx][-1] for idx in self.unlabeled_indices]).long()
+            classes = torch.Tensor([self.query_ds[idx][-1] for idx in self.unlabeled_indices]).long()
             classes_unique = classes.unique()
             n_classes = len(classes_unique)
             n_samples_per_class = n_samples // n_classes

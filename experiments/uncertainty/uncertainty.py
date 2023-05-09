@@ -5,26 +5,22 @@ import logging
 import hydra
 import torch
 import torch.nn as nn
+import lightning as L
 
 from omegaconf import OmegaConf
-from torch.utils.data import DataLoader, Subset, RandomSampler, DistributedSampler
-from torch.utils.tensorboard import SummaryWriter
+from torch.utils.data import DataLoader, Subset, RandomSampler
+
+from dal_toolbox import metrics
 from dal_toolbox.datasets import build_dataset, build_ood_datasets
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp, variational_inference
-from dal_toolbox.utils import seed_everything, init_distributed_mode
+from dal_toolbox.models.utils.callbacks import MetricsHistory
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="uncertainty")
 def main(args):
-    use_distributed = init_distributed_mode(args)
-    if use_distributed:
-        rank = int(os.environ["LOCAL_RANK"])
-        args.device = f'cuda:{rank}'
-
     logger = logging.getLogger(__name__)
     logger.info('Using config: \n%s', OmegaConf.to_yaml(args))
-    seed_everything(args.random_seed)
-    writer = SummaryWriter(log_dir=args.output_dir)
+    L.seed_everything(args.random_seed)
     misc = {}
 
     # Load data
@@ -41,27 +37,38 @@ def main(args):
     for name, test_ds_ood in ood_datasets.items():
         logger.info('Test out-of-distribution dataset %s has %s samples.', name, len(test_ds_ood))
 
-    if use_distributed:
-        train_sampler = DistributedSampler(train_ds)
-    else:
-        iter_per_epoch = len(train_ds) // args.model.batch_size + 1
-        train_sampler = RandomSampler(train_ds, num_samples=(iter_per_epoch * args.model.batch_size))
-
+    # Prepare dataloaders
+    iter_per_epoch = len(train_ds) // args.model.batch_size + 1
+    train_sampler = RandomSampler(train_ds, num_samples=(iter_per_epoch * args.model.batch_size))
     train_loader = DataLoader(train_ds, batch_size=args.model.batch_size, sampler=train_sampler)
     test_loader_id = DataLoader(test_ds_id, batch_size=args.test_batch_size)
     test_loaders_ood = {name: DataLoader(test_ds_ood, batch_size=args.test_batch_size)
                         for name, test_ds_ood in ood_datasets.items()}
 
     # Load model
-    trainer = build_model(args, n_samples=len(train_ds), n_classes=ds_info['n_classes'], train_ds=train_ds)
-    trainer.train(
-        n_epochs=args.model.n_epochs,
-        train_loader=train_loader,
-        test_loaders={'test_loader': test_loader_id},
-        eval_every=args.eval_interval,
-        save_every=args.eval_interval,
-    )
-    test_stats = trainer.evaluate(dataloader=test_loader_id, dataloaders_ood=test_loaders_ood)
+    history = MetricsHistory()
+    model = build_model(args, n_samples=len(train_ds), n_classes=ds_info['n_classes'], train_ds=train_ds)
+    trainer = L.Trainer(max_epochs=args.model.n_epochs, callbacks=[history], check_val_every_n_epoch=25)
+    trainer.fit(model, train_loader, val_dataloaders=test_loader_id)
+
+    # Testing
+    predictions = trainer.predict(model, dataloaders=test_loader_id)
+    logits = torch.cat([preds[0] for preds in predictions])
+    targets = torch.cat([preds[1] for preds in predictions])
+    test_stats = {
+        'accuracy': metrics.Accuracy()(logits, targets).item(),
+        'brier': metrics.BrierScore()(logits.softmax(-1), targets).item(),
+    }
+
+    for name, ood_loader in test_loaders_ood.items():
+        predictions_ood = trainer.predict(model, dataloaders=ood_loader)
+        logits_ood = torch.cat([preds[0] for preds in predictions_ood])
+        entropy_id = metrics.entropy_from_logits(logits)
+        entropy_ood = metrics.entropy_from_logits(logits_ood)
+        test_stats.update({
+            f'auroc_{name}': metrics.OODAUROC()(entropy_id, entropy_ood).item(),
+            f'aupr_{name}': metrics.OODAUPR()(entropy_id, entropy_ood).item(),
+        })
     logger.info("Final test results: %s", test_stats)
 
     # Saving results
@@ -69,8 +76,7 @@ def main(args):
     logger.info("Saving results to %s", fname)
     results = {
         'test_stats': test_stats,
-        'train_history': trainer.train_history,
-        'test_history': trainer.test_history,
+        'history': history.to_list(),
         'misc': misc
     }
     with open(fname, 'w') as f:
@@ -82,22 +88,6 @@ def build_model(args, **kwargs):
 
     if args.model.name == 'resnet18_deterministic':
         model = deterministic.resnet.ResNet18(n_classes)
-        criterion = nn.CrossEntropyLoss()
-        optimizer = torch.optim.SGD(
-            model.parameters(),
-            lr=args.model.optimizer.lr,
-            weight_decay=args.model.optimizer.weight_decay,
-            momentum=args.model.optimizer.momentum,
-        )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
-        trainer = deterministic.trainer.DeterministicTrainer(
-            model=model,
-            criterion=criterion,
-            optimizer=optimizer,
-            lr_scheduler=lr_scheduler,
-            device=args.device,
-            output_dir=args.output_dir
-        )
 
     elif args.model.name == 'resnet18_labelsmoothing':
         model = deterministic.resnet.ResNet18(n_classes)
@@ -245,7 +235,7 @@ def build_model(args, **kwargs):
     else:
         raise NotImplementedError(f'{args.model.name} not implemented')
 
-    return trainer
+    return model
 
 
 if __name__ == '__main__':

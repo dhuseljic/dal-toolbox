@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .base import DeterministicModule
+
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -28,7 +30,7 @@ class BasicBlock(nn.Module):
         return out
 
 
-class ResNet18(nn.Module):
+class ResNet18(DeterministicModule):
     def __init__(self, num_classes):
         super(ResNet18, self).__init__()
         self.in_planes = 64
@@ -67,6 +69,11 @@ class ResNet18(nn.Module):
         if return_features:
             out = (out, features)
         return out
+
+    def configure_optimizers(self):
+        # TODO(dhuseljic): Default CIFAR HParams
+        optimizer = torch.optim.SGD(self.parameters(), lr=0.1, momentum=.9, weight_decay=.0005)
+        return optimizer
 
     @torch.inference_mode()
     def get_logits(self, dataloader, device):
