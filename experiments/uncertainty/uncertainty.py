@@ -56,13 +56,14 @@ def main(args):
         check_val_every_n_epoch=args.eval_interval,
         enable_checkpointing=False,
         enable_progress_bar=True,
-        logger=BasicLogger(),
+        # logger=BasicLogger(),
         devices=args.num_devices,
     )
     trainer.fit(model, train_loader, val_dataloaders=test_loader_id)
 
     # Testing
     logger.info('Starting Testing..')
+    trainer = L.Trainer(enable_progress_bar=False, devices=1)
     predictions = trainer.predict(model, dataloaders=test_loader_id)
     logits = torch.cat([preds[0] for preds in predictions])
     targets = torch.cat([preds[1] for preds in predictions])
