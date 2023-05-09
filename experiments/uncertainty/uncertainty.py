@@ -26,9 +26,9 @@ def main(args):
     # Load data
     train_ds, test_ds_id, ds_info = build_dataset(args)
     ood_datasets = build_ood_datasets(args, ds_info['mean'], ds_info['std'])
-    if args.n_samples:
-        logger.info('Creating random training subset with %s samples. Saving indices.', args.n_samples)
-        indices_id = torch.randperm(len(train_ds))[:args.n_samples]
+    if args.num_samples:
+        logger.info('Creating random training subset with %s samples. Saving indices.', args.num_samples)
+        indices_id = torch.randperm(len(train_ds))[:args.num_samples]
         train_ds = Subset(train_ds, indices=indices_id)
         misc['train_indices'] = indices_id.tolist()
 
@@ -47,8 +47,13 @@ def main(args):
 
     # Load model
     history = MetricsHistory()
-    model = build_model(args, n_samples=len(train_ds), n_classes=ds_info['n_classes'], train_ds=train_ds)
-    trainer = L.Trainer(max_epochs=args.model.n_epochs, callbacks=[history], check_val_every_n_epoch=25)
+    model = build_model(args, n_classes=ds_info['n_classes'])
+    trainer = L.Trainer(
+        max_epochs=args.model.n_epochs,
+        callbacks=[history],
+        check_val_every_n_epoch=args.eval_interval,
+        devices=args.num_devices,
+    )
     trainer.fit(model, train_loader, val_dataloaders=test_loader_id)
 
     # Testing
