@@ -73,7 +73,8 @@ class ResNet18(DeterministicModule):
     def configure_optimizers(self):
         # TODO(dhuseljic): Default CIFAR HParams
         optimizer = torch.optim.SGD(self.parameters(), lr=0.1, momentum=.9, weight_decay=.0005)
-        return optimizer
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
+        return {'optimizer': optimizer, 'lr_scheduler': scheduler}
 
     @torch.inference_mode()
     def get_logits(self, dataloader, device):

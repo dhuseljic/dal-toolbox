@@ -14,7 +14,7 @@ from dal_toolbox import metrics
 from dal_toolbox.datasets import build_dataset, build_ood_datasets
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp, variational_inference
 
-from dal_toolbox.models.utils.callbacks import MetricsHistory
+from lightning.pytorch.callbacks import LearningRateMonitor
 from dal_toolbox.models.utils.logger import SimpleLogger
 
 
@@ -49,11 +49,10 @@ def main(args):
 
     # Load model
     logger.info('Starting Training..')
-    history = MetricsHistory()
     model = build_model(args, n_classes=ds_info['n_classes'])
     trainer = L.Trainer(
         max_epochs=args.model.n_epochs,
-        callbacks=[history],
+        # callbacks=[LearningRateMonitor()],
         check_val_every_n_epoch=args.eval_interval,
         logger=SimpleLogger(),
         enable_progress_bar=False,
@@ -86,11 +85,7 @@ def main(args):
     # Saving results
     fname = os.path.join(args.output_dir, 'results_final.json')
     logger.info("Saving results to %s", fname)
-    results = {
-        'test_stats': test_stats,
-        'history': history.to_list(),
-        'misc': misc
-    }
+    results = {'test_stats': test_stats, 'misc': misc}
     with open(fname, 'w') as f:
         json.dump(results, f)
 

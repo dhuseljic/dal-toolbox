@@ -1,4 +1,3 @@
-from typing import Any
 import torch
 import warnings
 import lightning as L
