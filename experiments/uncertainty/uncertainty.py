@@ -64,7 +64,6 @@ def main(args):
     # Testing
     logger.info('Starting Testing..')
     predictions = trainer.predict(model, dataloaders=test_loader_id)
-    predictions = model.all_gather(predictions)
     logits = torch.cat([preds[0] for preds in predictions])
     targets = torch.cat([preds[1] for preds in predictions])
     test_stats = {
