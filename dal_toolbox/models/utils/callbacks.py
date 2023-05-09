@@ -4,6 +4,7 @@ import logging
 import lightning as L
 from lightning.pytorch.callbacks import TQDMProgressBar
 from tqdm import tqdm
+from lightning.pytorch.utilities import rank_zero_only
 
 
 class MetricsHistory(L.Callback):
@@ -49,9 +50,11 @@ class Logger(L.Callback):
         super().__init__()
         self.logger = logging.getLogger(__name__)
 
+    @rank_zero_only
     def on_train_epoch_start(self, trainer, module):
         self.start_time_train = time.time()
 
+    @rank_zero_only
     def on_train_epoch_end(self, trainer, module):
         metrics = {k: v.item() for k, v in trainer.logged_metrics.items()}
         epoch = trainer.current_epoch
