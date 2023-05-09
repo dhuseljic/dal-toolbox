@@ -115,12 +115,9 @@ class OODAUPR(torchmetrics.Metric):
         self.add_state('scores_id', default=[], dist_reduce_fx='cat')
         self.add_state('scores_ood', default=[], dist_reduce_fx='cat')
 
-    def update(self, logits_id: torch.Tensor, logits_ood: torch.Tensor):
-        entropy_id = entropy_from_logits(logits_id)
-        entropy_ood = entropy_from_logits(logits_ood)
-
-        self.scores_id.append(entropy_id)
-        self.scores_ood.append(entropy_ood)
+    def update(self, scores_id: torch.Tensor, scores_ood: torch.Tensor):
+        self.scores_id.append(scores_id)
+        self.scores_ood.append(scores_ood)
 
     def compute(self):
         scores_id = torch.cat(self.scores_id)

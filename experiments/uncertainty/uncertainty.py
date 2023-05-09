@@ -13,7 +13,9 @@ from torch.utils.data import DataLoader, Subset, RandomSampler
 from dal_toolbox import metrics
 from dal_toolbox.datasets import build_dataset, build_ood_datasets
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp, variational_inference
+
 from dal_toolbox.models.utils.callbacks import MetricsHistory
+from dal_toolbox.models.utils.logger import SimpleLogger
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="uncertainty")
@@ -46,17 +48,22 @@ def main(args):
                         for name, test_ds_ood in ood_datasets.items()}
 
     # Load model
+    logger.info('Starting Training..')
     history = MetricsHistory()
     model = build_model(args, n_classes=ds_info['n_classes'])
     trainer = L.Trainer(
         max_epochs=args.model.n_epochs,
         callbacks=[history],
         check_val_every_n_epoch=args.eval_interval,
+        logger=SimpleLogger(),
+        enable_progress_bar=False,
+        enable_checkpointing=False,
         devices=args.num_devices,
     )
     trainer.fit(model, train_loader, val_dataloaders=test_loader_id)
 
     # Testing
+    logger.info('Starting Testing..')
     predictions = trainer.predict(model, dataloaders=test_loader_id)
     logits = torch.cat([preds[0] for preds in predictions])
     targets = torch.cat([preds[1] for preds in predictions])
