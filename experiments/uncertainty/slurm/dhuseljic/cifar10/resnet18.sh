@@ -15,7 +15,7 @@ cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/uncertainty/
 
 model=resnet18
 dataset=CIFAR10
-ood_datasets=[SVHN,\ CIFAR100]
+ood_datasets=\[SVHN,\ CIFAR100\]
 random_seed=$SLURM_ARRAY_TASK_ID
 
 output_dir=/mnt/work/dhuseljic/results/uncertainty/baselines/${dataset}/${model}/seed${random_seed}
