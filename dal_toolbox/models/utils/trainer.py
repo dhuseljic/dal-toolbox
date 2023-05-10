@@ -6,41 +6,38 @@ import logging
 import datetime
 
 import torch
+import lightning as L
 
-from torch.nn.parallel import DistributedDataParallel
-from torch.utils.data import DistributedSampler
 from ...utils import write_scalar_dict
 
 
 class BasicTrainer(abc.ABC):
-    def __init__(self,
-                 model,
-                 optimizer,
-                 criterion,
-                 lr_scheduler=None,
-                 device=None,
-                 output_dir=None,
-                 summary_writer=None,
-                 use_distributed=False):
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
+        criterion: torch.nn.Module,
+        lr_scheduler=None,
+        num_epochs: int = 200,
+        device: str = None,
+        num_devices: int = 'auto',
+        output_dir: str = None,
+        summary_writer=None,
+    ):
+        super().__init__()
         self.model = model
         self.optimizer = optimizer
         self.criterion = criterion
         self.lr_scheduler = lr_scheduler
-
+        self.num_epochs = num_epochs
         self.device = device
-        self.use_distributed = use_distributed
+        self.num_devices = num_devices
+        self.output_dir = output_dir
+        self.summary_writer = summary_writer
 
         self.logger = logging.getLogger(__name__)
-        self.summary_writer = summary_writer
-        self.output_dir = output_dir
         if output_dir is not None:
             os.makedirs(output_dir, exist_ok=True)
-
-        if self.use_distributed:
-            self.logger("Using distributed mode.")
-            self.model.to(device)
-            rank = torch.distributed.get_rank()
-            self.model = DistributedDataParallel(model, device_ids=[rank], broadcast_buffers=False)
 
         self.init_model_state = copy.deepcopy(self.model.state_dict())
         self.init_optimizer_state = copy.deepcopy(self.optimizer.state_dict())
@@ -48,10 +45,9 @@ class BasicTrainer(abc.ABC):
         if lr_scheduler:
             self.init_scheduler_state = copy.deepcopy(self.lr_scheduler.state_dict())
 
-
-        # self.num_devices = torch.cuda.device_count() if num_devices == 'auto' else num_devices
-        # self.fabric = L.Fabric(accelerator='cuda', devices=self.num_devices, strategy='ddp')
-        # self.fabric.launch()
+        self.fabric = L.Fabric(accelerator='cuda', devices=self.num_devices, strategy='ddp')
+        self.fabric.launch()
+        self.fabric.setup(model, optimizer)
 
         self.train_history: list = []
         self.test_history: list = []
@@ -81,24 +77,16 @@ class BasicTrainer(abc.ABC):
         saving_time = (time.time() - start_time)
         self.logger.info('Saving took %s', str(datetime.timedelta(seconds=int(saving_time))))
 
-
-    def train(self, n_epochs, train_loader, test_loaders=None, eval_every=None, save_every=None):
+    def train(self, train_loader, test_loaders=None, eval_every=None, save_every=None):
         self.logger.info('Training with %s instances..', len(train_loader.dataset))
         start_time = time.time()
 
-        # self.model, self.optimizer = self.fabric.setup(self.model, self.optimizer)
-        # train_loader = self.fabric.setup_dataloaders(train_loader)
-
-        if self.use_distributed:
-            if not isinstance(train_loader.sampler, DistributedSampler):
-                raise ValueError('Configure a distributed sampler to use distributed training.')
+        train_loader = self.fabric.setup_dataloaders(train_loader)
 
         self.train_history = []
         self.test_history = []
         self.model.to(self.device)
-        for i_epoch in range(1, n_epochs+1):
-            if self.use_distributed:
-                train_loader.sampler.set_epoch(i_epoch)
+        for i_epoch in range(1, self.num_epochs+1):
 
             train_stats = self.train_one_epoch(dataloader=train_loader, epoch=i_epoch)
             if self.lr_scheduler is not None:
@@ -143,17 +131,9 @@ class BasicTrainer(abc.ABC):
         self.logger.info('Evaluation took %s', str(datetime.timedelta(seconds=int(eval_time))))
         return test_stats
 
-    @torch.no_grad()
-    def collect_predictions(self, dataloader):
-        all_logits = []
-        all_targets = []
-        for inputs, targets in dataloader:
-            inputs = inputs.to(self.device)
-            all_logits.append(self.model(inputs).cpu())
-            all_targets.append(targets)
-        logits = torch.cat(all_logits, dim=0)
-        targets = torch.cat(all_targets, dim=0)
-        return logits, targets
+    def backward(self, loss):
+        self.fabric.backward(loss)
+        # loss.backward()
 
     @abc.abstractmethod
     def train_one_epoch(self, dataloader, epoch):
