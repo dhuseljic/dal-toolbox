@@ -76,8 +76,6 @@ def main(args):
     # predictions = trainer.predict(model, dataloaders=test_loader_id)
     # logits = torch.cat([preds[0] for preds in predictions])
     # targets = torch.cat([preds[1] for preds in predictions])
-    print(logits.shape)
-    print(targets.shape)
 
     test_stats = {
         'accuracy': metrics.Accuracy()(logits, targets).item(),
