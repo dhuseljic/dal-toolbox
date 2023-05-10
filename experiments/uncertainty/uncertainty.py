@@ -60,10 +60,16 @@ def main(args):
 
     # Testing
     logger.info('Starting Testing..')
-    trainer = L.Trainer(enable_progress_bar=True, devices=1)
+
     predictions = trainer.predict(model, dataloaders=test_loader_id)
     logits = torch.cat([preds[0] for preds in predictions])
     targets = torch.cat([preds[1] for preds in predictions])
+
+    # gather all logits
+    logits = torch.cat([l for l in model.all_gather(logits)])
+    print(logits.shape)
+    # targets = torch.cat([t for t in model.all_gather(targets)])
+
     test_stats = {
         'accuracy': metrics.Accuracy()(logits, targets).item(),
         'brier': metrics.BrierScore()(logits.softmax(-1), targets).item(),
@@ -95,65 +101,13 @@ def build_model(args, **kwargs):
         model = deterministic.resnet.ResNet18(n_classes)
 
     elif args.model.name == 'resnet18_labelsmoothing':
-        model = deterministic.resnet.ResNet18(n_classes)
-        criterion = nn.CrossEntropyLoss(label_smoothing=args.model.label_smoothing)
-        optimizer = torch.optim.SGD(
-            model.parameters(),
-            lr=args.model.optimizer.lr,
-            weight_decay=args.model.optimizer.weight_decay,
-            momentum=args.model.optimizer.momentum,
-            nesterov=True,
-        )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
-        trainer = deterministic.trainer.DeterministicTrainer(
-            model=model,
-            criterion=criterion,
-            optimizer=optimizer,
-            lr_scheduler=lr_scheduler,
-            device=args.device,
-            output_dir=args.output_dir
-        )
+        model = deterministic.resnet.ResNet18Labelsmoothing(n_classes, label_smoothing=args.model.label_smoothing)
 
     elif args.model.name == 'resnet18_mixup':
-        model = deterministic.resnet.ResNet18(n_classes)
-        criterion = nn.CrossEntropyLoss()
-        optimizer = torch.optim.SGD(
-            model.parameters(),
-            lr=args.model.optimizer.lr,
-            weight_decay=args.model.optimizer.weight_decay,
-            momentum=args.model.optimizer.momentum,
-            nesterov=True,
-        )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
-        trainer = deterministic.trainer.DeterministicMixupTrainer(
-            model=model,
-            criterion=criterion,
-            mixup_alpha=args.model.mixup_alpha,
-            n_classes=n_classes,
-            optimizer=optimizer,
-            lr_scheduler=lr_scheduler,
-            device=args.device,
-            output_dir=args.output_dir
-        )
+        model = deterministic.resnet.ResNet18Mixup(n_classes, mixup_alpha=.1)
 
     elif args.model.name == 'resnet18_mcdropout':
         model = mc_dropout.resnet.DropoutResNet18(n_classes, args.model.n_passes, args.model.dropout_rate)
-        criterion = nn.CrossEntropyLoss()
-        optimizer = torch.optim.SGD(
-            model.parameters(),
-            lr=args.model.optimizer.lr,
-            weight_decay=args.model.optimizer.weight_decay,
-            momentum=args.model.optimizer.momentum,
-        )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
-        trainer = mc_dropout.trainer.MCDropoutTrainer(
-            model=model,
-            optimizer=optimizer,
-            criterion=criterion,
-            lr_scheduler=lr_scheduler,
-            device=args.device,
-            output_dir=args.output_dir,
-        )
 
     elif args.model.name == 'resnet18_ensemble':
         members, lr_schedulers, optimizers = [], [], []

@@ -17,6 +17,9 @@ class Accuracy(Metric):
 
     def update(self, logits: torch.Tensor, targets: torch.Tensor):
         batch_size = len(logits)
+        if logits.shape == targets.shape:
+            targets = self._convert_one_hot_targets(targets)
+
         if self.topk > 1:
             _, class_preds = logits.topk(self.topk)
             self.num_correct += (class_preds.T == targets[None]).float().sum()
@@ -27,6 +30,9 @@ class Accuracy(Metric):
 
     def compute(self):
         return self.num_correct / self.num_samples
+
+    def _convert_one_hot_targets(self, targets):
+        return targets.argmax(-1)
 
 
 @torch.inference_mode()
