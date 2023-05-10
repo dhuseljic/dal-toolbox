@@ -81,7 +81,7 @@ class BasicTrainer(abc.ABC):
         start_time = time.time()
         checkpoint_path = os.path.join(self.output_dir, fname)
         checkpoint = {
-            "model": self.model.state_dict(),
+            "model": self.model,
             "optimizer": self.optimizer.state_dict(),
             "epoch": i_epoch,
             "lr_scheduler": self.lr_scheduler.state_dict() if self.lr_scheduler else None,
