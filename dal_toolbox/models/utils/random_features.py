@@ -134,7 +134,7 @@ class RandomFeatureGaussianProcess(nn.Module):
         if not is_dist_avail_and_initialized():
             return
         # Sum all precision_matrices
-        dist.all_reduce(self.precision_matrices, op=dist.ReduceOp.SUM)
+        dist.all_reduce(self.precision_matrix, op=dist.ReduceOp.SUM)
         # The init precision matrix is summed world_size times. However, it
         # should be only one time. Thus we need to subtract the
         # init_precision_matrix (1 - world_size)-times
