@@ -95,6 +95,7 @@ def main(args):
             f'aupr_{name}': metrics.OODAUPR()(entropy_id, entropy_ood).item(),
         })
     logger.info("Final test results: %s", test_stats)
+    print(model.state_dict())
 
     # Saving results
     fname = os.path.join(args.output_dir, 'results_final.json')
