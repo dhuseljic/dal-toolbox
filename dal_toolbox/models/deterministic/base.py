@@ -55,10 +55,13 @@ class DeterministicModule(L.LightningModule):
 
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         # TODO(dhuseljic): discuss with mherde; maybe can be used for AL?
+        import logging
+        logger = logging.getLogger(__name__)
+        
         inputs, targets = batch
         logits = self(inputs)
-        print(logits.shape)
-        print(self.all_gather(logits).shape)
+        logger.info(logits.shape)
+        logger.info(self.all_gather(logits).shape)
         return logits, targets
 
     def configure_optimizers(self):
