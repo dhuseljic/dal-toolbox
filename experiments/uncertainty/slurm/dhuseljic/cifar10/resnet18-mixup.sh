@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:2
 #SBATCH --partition=main
-#SBATCH --job-name=uncertainty
+#SBATCH --job-name=uncertainty_resnet18-mixup
 #SBATCH --output=/mnt/work/dhuseljic/logs/uncertainty/%x_%a.log
 #SBATCH --array=1-1%3
 date;hostname;pwd
