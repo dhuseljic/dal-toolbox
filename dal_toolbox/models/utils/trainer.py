@@ -9,7 +9,7 @@ import torch
 import torch.distributed as dist
 import lightning as L
 
-from ...utils import write_scalar_dict
+from ...utils import write_scalar_dict, setup_for_distributed
 
 from lightning.pytorch.utilities import rank_zero_only
 
@@ -62,6 +62,7 @@ class BasicTrainer(abc.ABC):
         )
         self.fabric.launch()
         self.fabric.setup(model, optimizer)
+        setup_for_distributed(self.fabric.global_rank == 0)
 
         self.train_history: list = []
         self.test_history: list = []
