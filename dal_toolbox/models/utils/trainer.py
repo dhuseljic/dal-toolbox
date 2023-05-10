@@ -81,14 +81,15 @@ class BasicTrainer(abc.ABC):
         start_time = time.time()
         checkpoint_path = os.path.join(self.output_dir, fname)
         checkpoint = {
-            "model": self.model,
+            "model": self.model.state_dict(),
             "optimizer": self.optimizer.state_dict(),
             "epoch": i_epoch,
             "lr_scheduler": self.lr_scheduler.state_dict() if self.lr_scheduler else None,
             # "train_history": self.train_history,
             # "test_history": self.test_history,
         }
-        self.fabric.save(checkpoint_path, checkpoint)
+        # self.fabric.save(checkpoint_path, checkpoint)
+        torch.save(checkpoint, checkpoint_path)
         saving_time = (time.time() - start_time)
         self.logger.info('Saving took %s', str(datetime.timedelta(seconds=int(saving_time))))
 
