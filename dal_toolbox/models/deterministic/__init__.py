@@ -10,3 +10,5 @@ from . import wide_resnet
 from . import train
 from . import evaluate
 from . import trainer
+
+from .trainer import DeterministicTrainer

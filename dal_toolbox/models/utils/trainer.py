@@ -8,10 +8,9 @@ import datetime
 import torch
 import torch.distributed as dist
 import lightning as L
+from lightning.pytorch.utilities import rank_zero_only
 
 from ...utils import write_scalar_dict, setup_for_distributed
-
-from lightning.pytorch.utilities import rank_zero_only
 
 
 class BasicTrainer(abc.ABC):
