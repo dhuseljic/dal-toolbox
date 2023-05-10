@@ -117,6 +117,7 @@ def build_model(args, **kwargs):
             lr_scheduler=torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs),
             num_epochs=args.model.n_epochs,
             num_devices=args.num_devices,
+            output_dir=args.output_dir,
         )
         return model, trainer
 
@@ -133,6 +134,7 @@ def build_model(args, **kwargs):
             lr_scheduler=torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs),
             num_epochs=args.model.n_epochs,
             num_devices=args.num_devices,
+            output_dir=args.output_dir,
         )
         return model, trainer
 
@@ -151,6 +153,7 @@ def build_model(args, **kwargs):
             mixup_alpha=args.model.mixup_alpha,
             num_epochs=args.model.n_epochs,
             num_devices=args.num_devices,
+            output_dir=args.output_dir,
         )
         return model, trainer
 

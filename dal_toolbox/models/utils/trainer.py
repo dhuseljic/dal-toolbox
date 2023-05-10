@@ -73,10 +73,10 @@ class BasicTrainer(abc.ABC):
         if reset_model_parameters:
             self.model.load_state_dict(self.init_model_state)
 
-    def save_checkpoint(self, i_epoch=None):
+    def save_checkpoint(self, i_epoch=None, fname="checkpoint.pth"):
         self.logger.info('Saving checkpoint..')
         start_time = time.time()
-        checkpoint_path = os.path.join(self.output_dir, "checkpoint.pth")
+        checkpoint_path = os.path.join(self.output_dir, fname)
         checkpoint = {
             "model": self.model.state_dict(),
             "optimizer": self.optimizer.state_dict(),
@@ -126,7 +126,8 @@ class BasicTrainer(abc.ABC):
 
         # Save final model if output directory is defined
         if self.output_dir is not None:
-            self.save_checkpoint(i_epoch)
+            self.logger.info('Saving final model..')
+            self.save_checkpoint(i_epoch, fname='model_final.pth')
 
         return {'train_history': self.train_history, 'test_history': self.test_history}
 
