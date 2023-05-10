@@ -143,6 +143,17 @@ class BasicTrainer(abc.ABC):
         self.fabric.backward(loss)
         # loss.backward()
 
+    def all_gather(self, val):
+        if not dist.is_available() or not dist.is_initialized():
+            return val
+        gathered_vals = self.fabric.all_gather(val)
+        val = torch.cat([v for v in gathered_vals])
+        # Pure pytorch gather:
+        # gathered_vals = [torch.zeros_like(val) for _ in range(dist.get_world_size())]
+        # dist.all_gather(gathered_vals, val)
+        # val = torch.cat(gathered_vals)
+        return val
+
     @abc.abstractmethod
     def train_one_epoch(self, dataloader, epoch):
         pass
@@ -153,14 +164,3 @@ class BasicTrainer(abc.ABC):
 
     def predict(self, dataloader):
         raise NotImplementedError('Predict method is not implemented.')
-
-    def all_gather(self, val):
-        if not dist.is_available() or not dist.is_initialized():
-            return val
-        # dist.barrier()
-        gathered_vals = self.fabric.all_gather(val)
-        val = torch.cat([v for v in gathered_vals])
-        # gathered_vals = [torch.zeros_like(val) for _ in range(dist.get_world_size())]
-        # dist.all_gather(gathered_vals, val)
-        # val = torch.cat(gathered_vals)
-        return val

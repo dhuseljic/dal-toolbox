@@ -113,7 +113,6 @@ class DeterministicTrainer(BasicTrainer):
 
         logits = torch.cat(logits_list)
         targets = torch.cat(targets_list)
-        
 
         return logits, targets
 
