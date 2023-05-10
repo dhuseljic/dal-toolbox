@@ -47,23 +47,36 @@ def main(args):
 
     # Load model
     logger.info('Starting Training..')
-    model = build_model(args, n_classes=ds_info['n_classes'])
-    trainer = L.Trainer(
-        max_epochs=args.model.n_epochs,
-        callbacks=[Logger()],
-        check_val_every_n_epoch=args.eval_interval,
-        enable_checkpointing=False,
-        enable_progress_bar=False,
-        devices=args.num_devices,
+    model = deterministic.resnet.ResNet18(10)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.005)
+    trainer = deterministic.trainer.DeterministicTrainer(
+        model,
+        optimizer,
+        nn.CrossEntropyLoss(),
+        lr_scheduler=torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200),
+        num_epochs=args.model.n_epochs,
+        num_devices=args.num_devices,
     )
-    trainer.fit(model, train_loader, val_dataloaders=test_loader_id)
+    trainer.fit(train_loader)
+    logits, targets = trainer.predict(test_loader_id)
+
+    # model = build_model(args, n_classes=ds_info['n_classes'])
+    # trainer = L.Trainer(
+    #     max_epochs=args.model.n_epochs,
+    #     callbacks=[Logger()],
+    #     check_val_every_n_epoch=args.eval_interval,
+    #     enable_checkpointing=False,
+    #     enable_progress_bar=False,
+    #     devices=args.num_devices,
+    # )
+    # trainer.fit(model, train_loader, val_dataloaders=test_loader_id)
 
     # Testing
-    logger.info('Starting Testing..')
+    # logger.info('Starting Testing..')
 
-    predictions = trainer.predict(model, dataloaders=test_loader_id)
-    logits = torch.cat([preds[0] for preds in predictions])
-    targets = torch.cat([preds[1] for preds in predictions])
+    # predictions = trainer.predict(model, dataloaders=test_loader_id)
+    # logits = torch.cat([preds[0] for preds in predictions])
+    # targets = torch.cat([preds[1] for preds in predictions])
 
     test_stats = {
         'accuracy': metrics.Accuracy()(logits, targets).item(),
@@ -71,8 +84,9 @@ def main(args):
     }
 
     for name, ood_loader in test_loaders_ood.items():
-        predictions_ood = trainer.predict(model, dataloaders=ood_loader)
-        logits_ood = torch.cat([preds[0] for preds in predictions_ood])
+        # predictions_ood = trainer.predict(model, dataloaders=ood_loader)
+        # logits_ood = torch.cat([preds[0] for preds in predictions_ood])
+        logits_ood, _ = trainer.predict(ood_loader)
         entropy_id = metrics.entropy_from_logits(logits)
         entropy_ood = metrics.entropy_from_logits(logits_ood)
         test_stats.update({

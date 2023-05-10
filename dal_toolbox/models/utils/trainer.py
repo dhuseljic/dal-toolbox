@@ -21,6 +21,7 @@ class BasicTrainer(abc.ABC):
         num_epochs: int = 200,
         device: str = None,
         num_devices: int = 'auto',
+        precision='32-true',
         output_dir: str = None,
         summary_writer=None,
     ):
@@ -32,6 +33,7 @@ class BasicTrainer(abc.ABC):
         self.num_epochs = num_epochs
         self.device = device
         self.num_devices = num_devices
+        self.precision = precision
         self.output_dir = output_dir
         self.summary_writer = summary_writer
 
@@ -45,7 +47,12 @@ class BasicTrainer(abc.ABC):
         if lr_scheduler:
             self.init_scheduler_state = copy.deepcopy(self.lr_scheduler.state_dict())
 
-        self.fabric = L.Fabric(accelerator='cuda', devices=self.num_devices, strategy='ddp')
+        self.fabric = L.Fabric(
+            accelerator='auto',
+            strategy='auto',
+            devices=self.num_devices,
+            precision=precision,
+        )
         self.fabric.launch()
         self.fabric.setup(model, optimizer)
 
@@ -77,7 +84,7 @@ class BasicTrainer(abc.ABC):
         saving_time = (time.time() - start_time)
         self.logger.info('Saving took %s', str(datetime.timedelta(seconds=int(saving_time))))
 
-    def train(self, train_loader, test_loaders=None, eval_every=None, save_every=None):
+    def fit(self, train_loader, test_loaders=None, eval_every=None, save_every=None):
         self.logger.info('Training with %s instances..', len(train_loader.dataset))
         start_time = time.time()
 
@@ -142,3 +149,6 @@ class BasicTrainer(abc.ABC):
     @abc.abstractmethod
     def evaluate_model(self, dataloader, dataloaders_ood):
         pass
+    
+    def predict(self, dataloader):
+        raise NotImplementedError('Predict method is not implemented.')

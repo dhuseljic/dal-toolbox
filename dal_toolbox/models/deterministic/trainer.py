@@ -50,7 +50,7 @@ class DeterministicTrainer(BasicTrainer):
         self.model.to(self.device)
 
         # Forward prop in distribution
-        logits_id, targets_id = self.collect_predictions(dataloader)
+        logits_id, targets_id = self.predict(dataloader)
         probas_id = logits_id.softmax(-1)
 
         # Model specific test loss and accuracy for in domain testset
@@ -75,7 +75,7 @@ class DeterministicTrainer(BasicTrainer):
 
         for name, dataloader_ood in dataloaders_ood.items():
             # Forward prop out of distribution
-            logits_ood, _ = self.collect_predictions(dataloader_ood)
+            logits_ood, _ = self.predict(dataloader_ood)
             probas_ood = logits_ood.softmax(-1)
 
             # Confidence- and entropy-Scores of out of domain logits
@@ -94,6 +94,21 @@ class DeterministicTrainer(BasicTrainer):
 
         test_stats = {f"test_{k}": v for k, v in metrics.items()}
         return test_stats
+
+    @torch.inference_mode()
+    def predict(self, dataloader):
+        self.model.eval()
+        dataloader = self.fabric.setup_dataloaders(dataloader)
+
+        logits_list = []
+        targets_list = []
+        for inputs, targets in dataloader:
+            logits = self.model(inputs)
+            logits_list.append(logits.cpu())
+            targets_list.append(targets.cpu())
+        logits = torch.cat(logits_list)
+        targets = torch.cat(targets_list)
+        return logits, targets
 
 
 class DeterministicMixupTrainer(DeterministicTrainer):
