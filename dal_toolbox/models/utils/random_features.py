@@ -3,6 +3,9 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.distributed as dist
+
+from dal_toolbox.utils import is_dist_avail_and_initialized
 
 
 class RandomFourierFeatures(nn.Module):
@@ -127,12 +130,22 @@ class RandomFeatureGaussianProcess(nn.Module):
         self.precision_matrix.to(device)
         self.covariance_matrix = None
 
+    def synchronize_precision_matrix(self):
+        if not is_dist_avail_and_initialized():
+            return
+        # Sum all precision_matrices
+        dist.all_reduce(self.precision_matrices, op=dist.ReduceOp.SUM)
+        # The init precision matrix is summed world_size times. However, it
+        # should be only one time. Thus we need to subtract the
+        # init_precision_matrix (1 - world_size)-times
+        self.precision_matrix = self.precision_matrix - (dist.get_world_size()-1)*self.init_precision_matrix
+
     @torch.no_grad()
     def update_precision_matrix(self, phi, logits):
         # probas = logits.softmax(-1)
         # probas_max = probas.max(1)[0]
         # multiplier = probas_max * (1-probas_max)
-        self.precision_matrix = self.precision_matrix.to(phi)  # TODO(dhuseljic): check lightning behavior here
+        self.precision_matrix = self.precision_matrix.to(phi)
         multiplier = 1
         precision_matrix_minibatch = torch.matmul(multiplier*phi.T, phi)
         if self.cov_momentum > 0:

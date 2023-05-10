@@ -215,7 +215,10 @@ def build_model(args, **kwargs):
             lr_scheduler=lr_scheduler,
             device=args.device,
             output_dir=args.output_dir,
+            num_epochs=args.model.n_epochs,
+            num_devices=args.num_devices,
         )
+        return model, trainer
 
     elif args.model.name == 'resnet18_vi':
         model = variational_inference.resnet.BayesianResNet18(num_classes=10, prior_sigma=args.model.vi.prior_sigma)

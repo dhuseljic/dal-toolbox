@@ -15,7 +15,6 @@ class DeterministicTrainer(BasicTrainer):
 
     def train_one_epoch(self, dataloader, epoch=None, print_freq=200):
         self.model.train()
-        # self.model.to(self.device)
         self.criterion.to(self.device)
 
         metric_logger = MetricLogger(delimiter=" ")

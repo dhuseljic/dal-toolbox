@@ -13,7 +13,7 @@ class SNGPTrainer(DeterministicTrainer):
         self.criterion.to(self.device)
 
         metric_logger = MetricLogger(delimiter=" ")
-        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
+        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
         header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
         for inputs, targets in metric_logger.log_every(dataloader, print_freq, header):
@@ -31,7 +31,10 @@ class SNGPTrainer(DeterministicTrainer):
             metric_logger.update(loss=loss.item(), lr=self.optimizer.param_groups[0]["lr"])
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
 
+        metric_logger.synchronize_between_processes()
         train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
+        self.model.synchronize_precision_matrix()
+
         return train_stats
 
     @torch.no_grad()
