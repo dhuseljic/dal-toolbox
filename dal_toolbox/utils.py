@@ -20,7 +20,7 @@ from torchvision.utils import make_grid
 
 
 def seed_everything(seed: int):
-    # L.seed_everything(seed, workers=True)
+    L.seed_everything(seed, workers=True)
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
     np.random.seed(seed)
