@@ -138,7 +138,8 @@ class RandomFeatureGaussianProcess(nn.Module):
         # The init precision matrix is summed world_size times. However, it
         # should be only one time. Thus we need to subtract the
         # init_precision_matrix (1 - world_size)-times
-        self.precision_matrix = self.precision_matrix - (dist.get_world_size()-1)*self.init_precision_matrix
+        init_precision_matrix = self.init_precision_matrix.to(self.precision_matrix)
+        self.precision_matrix = self.precision_matrix - (dist.get_world_size()-1)*init_precision_matrix
 
     @torch.no_grad()
     def update_precision_matrix(self, phi, logits):
