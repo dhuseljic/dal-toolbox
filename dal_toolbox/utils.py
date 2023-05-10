@@ -5,6 +5,7 @@ import errno
 import hashlib
 import datetime
 import random
+import logging
 
 import torch
 import torch.distributed as dist
@@ -123,6 +124,7 @@ class SmoothedValue:
 
 class MetricLogger:
     def __init__(self, delimiter="\t"):
+        self.logger = logging.getLogger()
         self.meters = defaultdict(SmoothedValue)
         self.delimiter = delimiter
 
@@ -187,7 +189,7 @@ class MetricLogger:
                 eta_seconds = iter_time.global_avg * (len(iterable) - i)
                 eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
                 if torch.cuda.is_available():
-                    print(
+                    self.logger.info(
                         log_msg.format(
                             i,
                             len(iterable),
@@ -199,7 +201,7 @@ class MetricLogger:
                         )
                     )
                 else:
-                    print(
+                    self.logger.info(
                         log_msg.format(
                             i, len(iterable), eta=eta_string, meters=str(self), time=str(iter_time), data=str(data_time)
                         )
@@ -208,7 +210,7 @@ class MetricLogger:
             end = time.time()
         total_time = time.time() - start_time
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-        print(f"{header} Total time: {total_time_str}")
+        self.logger.info(f"{header} Total time: {total_time_str}")
 
 
 class ExponentialMovingAverage(torch.optim.swa_utils.AveragedModel):

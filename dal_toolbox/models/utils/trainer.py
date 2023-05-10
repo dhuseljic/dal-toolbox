@@ -25,6 +25,8 @@ class BasicTrainer(abc.ABC):
         precision='32-true',
         output_dir: str = None,
         summary_writer=None,
+        eval_every: int = None,
+        save_every: int = None,
     ):
         super().__init__()
         self.model = model
@@ -37,6 +39,8 @@ class BasicTrainer(abc.ABC):
         self.precision = precision
         self.output_dir = output_dir
         self.summary_writer = summary_writer
+        self.eval_every = eval_every
+        self.save_every = save_every
 
         self.logger = logging.getLogger(__name__)
         if output_dir is not None:
@@ -85,7 +89,7 @@ class BasicTrainer(abc.ABC):
         saving_time = (time.time() - start_time)
         self.logger.info('Saving took %s', str(datetime.timedelta(seconds=int(saving_time))))
 
-    def fit(self, train_loader, test_loaders=None, eval_every=None, save_every=None):
+    def fit(self, train_loader, test_loaders=None):
         self.logger.info('Training with %s instances..', len(train_loader.dataset))
         start_time = time.time()
 
@@ -106,14 +110,14 @@ class BasicTrainer(abc.ABC):
                 write_scalar_dict(train_stats, prefix='train', global_step=i_epoch)
 
             # Eval in intervals if test loader exists
-            if test_loaders and i_epoch % eval_every == 0:
+            if test_loaders and i_epoch % self.eval_every == 0:
                 test_loader = test_loaders.get('test_loader')
                 test_loaders_ood = test_loaders.get('test_loaders_ood')
                 test_stats = self.evaluate(dataloader=test_loader, dataloaders_ood=test_loaders_ood)
                 self.test_history.append(test_stats)
 
             # Save checkpoint in intervals if output directory is defined
-            if self.output_dir and save_every and i_epoch % save_every == 0:
+            if self.output_dir and self.save_every and i_epoch % self.save_every == 0:
                 self.save_checkpoint(i_epoch)
 
         training_time = (time.time() - start_time)

@@ -78,6 +78,8 @@ def main(args):
     test_stats = {
         'accuracy': metrics.Accuracy()(logits, targets).item(),
         'brier': metrics.BrierScore()(logits.softmax(-1), targets).item(),
+        'ece': metrics.ExpectedCalibrationError()(logits.softmax(1), targets).item(),
+        'ace': metrics.AdaptiveCalibrationError()(logits.softmax(-1), targets).item(),
     }
 
     for name, ood_loader in test_loaders_ood.items():
@@ -112,7 +114,7 @@ def build_model(args, **kwargs):
             model,
             nn.CrossEntropyLoss(),
             optimizer=optimizer,
-            lr_scheduler=torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200),
+            lr_scheduler=torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs),
             num_epochs=args.model.n_epochs,
             num_devices=args.num_devices,
         )

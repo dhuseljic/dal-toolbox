@@ -253,6 +253,7 @@ class MarginalCalibrationError(nn.Module):
 
 # From https://github.com/google-research/robustness_metrics/robustness_metrics/metrics/uncertainty.py#L1464-L1648
 class GeneralCalibrationError(nn.Module):
+    # Not in torchmetrics format, it is a fullbatch metric since binning depends on all predictions
     def __init__(self,
                  binning_scheme: str,
                  max_prob: bool,
