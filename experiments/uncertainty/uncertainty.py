@@ -12,9 +12,8 @@ from torch.utils.data import DataLoader, Subset, RandomSampler
 
 from dal_toolbox import metrics
 from dal_toolbox import datasets
-from dal_toolbox.datasets import build_ood_datasets
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp, variational_inference
-from dal_toolbox.models.utils.callbacks import Logger
+# from dal_toolbox.models.utils.callbacks import Logger
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="uncertainty")
@@ -70,6 +69,7 @@ def main(args):
 
     # Fabric:
     logits, targets = trainer.predict(test_loader_id)
+    print(logits.shape)
 
     # Lightning:
     # predictions = trainer.predict(model, dataloaders=test_loader_id)
@@ -272,6 +272,23 @@ def build_dataset(args):
         raise NotImplementedError
 
     return train_ds, test_ds, ds_info
+
+
+def build_ood_datasets(args, mean, std):
+    ood_datasets = {}
+    if 'CIFAR10' in args.ood_datasets:
+        test_ds_ood = datasets.cifar.build_cifar10('test', args.dataset_path, mean, std)
+        ood_datasets["CIFAR10"] = test_ds_ood
+
+    if 'CIFAR100' in args.ood_datasets:
+        test_ds_ood = datasets.cifar.build_cifar100('test', args.dataset_path, mean, std)
+        ood_datasets["CIFAR100"] = test_ds_ood
+
+    if 'SVHN' in args.ood_datasets:
+        test_ds_ood = datasets.svhn.build_svhn('test', args.dataset_path, mean, std)
+        ood_datasets["SVHN"] = test_ds_ood
+
+    return ood_datasets
 
 
 if __name__ == '__main__':
