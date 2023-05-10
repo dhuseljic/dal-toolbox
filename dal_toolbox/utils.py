@@ -5,9 +5,9 @@ import errno
 import hashlib
 import datetime
 import random
-import logging
 
 import torch
+import lightning as L
 import torch.distributed as dist
 
 import numpy as np
@@ -20,6 +20,7 @@ from torchvision.utils import make_grid
 
 
 def seed_everything(seed: int):
+    L.seed_everything(seed, workers=True)
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
     np.random.seed(seed)

@@ -13,6 +13,7 @@ from torch.utils.data import DataLoader, Subset, RandomSampler
 from dal_toolbox import metrics
 from dal_toolbox import datasets
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp, variational_inference
+from dal_toolbox.utils import seed_everything
 # from dal_toolbox.models.utils.callbacks import Logger
 
 
@@ -20,7 +21,7 @@ from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp, variat
 def main(args):
     logger = logging.getLogger(__name__)
     logger.info('Using config: \n%s', OmegaConf.to_yaml(args))
-    L.seed_everything(args.random_seed)
+    seed_everything(args.random_seed)
     misc = {}
 
     # Load data
@@ -51,6 +52,7 @@ def main(args):
     # Fabric:
     model, trainer = build_model(args, n_classes=ds_info['n_classes'])
     trainer.fit(train_loader)
+    model.state_dict()
 
     # Lightning:
     # model = build_model(args, n_classes=ds_info['n_classes'])
@@ -69,7 +71,6 @@ def main(args):
 
     # Fabric:
     logits, targets = trainer.predict(test_loader_id)
-    print(logits.shape)
 
     # Lightning:
     # predictions = trainer.predict(model, dataloaders=test_loader_id)
