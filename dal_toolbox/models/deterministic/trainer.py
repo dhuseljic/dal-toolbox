@@ -104,16 +104,16 @@ class DeterministicTrainer(BasicTrainer):
         targets_list = []
         for inputs, targets in dataloader:
             logits = self.model(inputs)
+
+            logits = self.all_gather(logits)
+            targets = self.all_gather(targets)
+
             logits_list.append(logits.cpu())
             targets_list.append(targets.cpu())
 
         logits = torch.cat(logits_list)
         targets = torch.cat(targets_list)
         
-        print('Befor gather', logits.device)
-        logits = self.all_gather(logits)
-        targets = self.all_gather(targets)
-        print('After gather', logits.device)
 
         return logits, targets
 
