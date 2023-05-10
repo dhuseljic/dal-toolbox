@@ -59,9 +59,11 @@ class DeterministicModule(L.LightningModule):
         logits = self(inputs)
 
         gathered_logits = self.all_gather(logits)
-        print(gathered_logits.shape)
+        gathered_targets = self.all_gather(targets)
         logits = torch.cat([l for l in gathered_logits])
-        print(logits.shape)
+        print(gathered_targets)
+        targets = torch.cat([t for t in gathered_targets])
+        print(targets)
 
         return logits, targets
 
