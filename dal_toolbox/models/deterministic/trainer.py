@@ -108,6 +108,9 @@ class DeterministicTrainer(BasicTrainer):
             targets_list.append(targets.cpu())
         logits = torch.cat(logits_list)
         targets = torch.cat(targets_list)
+
+        logits = self.all_gather(logits)
+        targets = self.all_gather(targets)
         return logits, targets
 
 

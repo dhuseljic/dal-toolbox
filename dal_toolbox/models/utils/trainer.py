@@ -6,6 +6,7 @@ import logging
 import datetime
 
 import torch
+import torch.distributed as dist
 import lightning as L
 
 from ...utils import write_scalar_dict
@@ -149,6 +150,13 @@ class BasicTrainer(abc.ABC):
     @abc.abstractmethod
     def evaluate_model(self, dataloader, dataloaders_ood):
         pass
-    
+
     def predict(self, dataloader):
         raise NotImplementedError('Predict method is not implemented.')
+
+    def all_gather(self, val):
+        if not dist.is_available() or not dist.is_initialized():
+            return val
+        gathered_vals = self.fabric.all_gather(val)
+        val = torch.cat([v for v in gathered_vals])
+        return val
