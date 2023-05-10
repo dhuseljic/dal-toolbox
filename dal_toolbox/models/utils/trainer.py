@@ -157,6 +157,7 @@ class BasicTrainer(abc.ABC):
     def all_gather(self, val):
         if not dist.is_available() or not dist.is_initialized():
             return val
+        dist.barrier()
         gathered_vals = self.fabric.all_gather(val)
         val = torch.cat([v for v in gathered_vals])
         return val
