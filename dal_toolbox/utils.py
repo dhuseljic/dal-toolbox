@@ -11,6 +11,7 @@ import torch
 import torch.distributed as dist
 
 import numpy as np
+import pylab as plt
 
 from typing import List, Optional, Tuple
 from collections import defaultdict, deque, OrderedDict
@@ -506,3 +507,41 @@ def set_weight_decay(
         if len(params[key]) > 0:
             param_groups.append({"params": params[key], "weight_decay": params_weight_decay[key]})
     return param_groups
+
+
+def plot_tcp(results: dict, ax=None):
+    """Assumes the results of dal_toolbox.metrics.TopLabelCalibrationPlot."""
+    if ax is None:
+        ax = plt.gca()
+
+    plt.plot([0, 1], [0, 1], linewidth=3, linestyle=':', color='k')
+    plt.plot(results['confs'], results['accs'], '-o', linewidth=2)
+    plt.twinx()
+    plt.grid()
+    bar_x = [conf for conf in results['confs'] if not np.isnan(conf)]
+    bar_y = [n for n in results['n_samples'] if n != 0]
+    plt.bar(bar_x, bar_y, width=.05, alpha=.3)
+
+
+def plot_mcp(results, classes='all', ax=None, plot_bars=False):
+    """Assumes the results of dal_toolbox.metrics.MarginalCalibrationPlot"""
+    if ax is None:
+        ax = plt.gca()
+
+    plt.plot([0, 1], [0, 1], linewidth=3, linestyle=':', color='k')
+    if plot_bars:
+        ax_bar = plt.twinx()
+        plt.grid()
+
+    if classes != 'all':
+        if isinstance(classes, int):
+            classes = [classes]
+        results = [results[i_cls] for i_cls in classes]
+    for results_cls in results:
+        plt.sca(ax)
+        plt.plot(results_cls['confs'], results_cls['accs'], '-o', linewidth=2)
+        if plot_bars:
+            plt.sca(ax_bar)
+            bar_x = [conf for conf in results_cls['confs'] if not np.isnan(conf)]
+            bar_y = [n for n in results_cls['n_samples'] if n != 0]
+            plt.bar(bar_x, bar_y, width=.05, alpha=.3)

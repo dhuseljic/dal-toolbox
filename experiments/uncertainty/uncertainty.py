@@ -11,7 +11,8 @@ from omegaconf import OmegaConf
 from torch.utils.data import DataLoader, Subset, RandomSampler
 
 from dal_toolbox import metrics
-from dal_toolbox.datasets import build_dataset, build_ood_datasets
+from dal_toolbox import datasets
+from dal_toolbox.datasets import build_ood_datasets
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp, variational_inference
 from dal_toolbox.models.utils.callbacks import Logger
 
@@ -249,6 +250,28 @@ def build_model(args, **kwargs):
         raise NotImplementedError(f'{args.model.name} not implemented')
 
     return model
+
+
+def build_dataset(args):
+    if args.dataset == 'CIFAR10':
+        train_ds, ds_info = datasets.cifar.build_cifar10('train', args.dataset_path, return_info=True)
+        test_ds = datasets.cifar.build_cifar10('test', args.dataset_path)
+
+    elif args.dataset == 'CIFAR100':
+        train_ds, ds_info = datasets.cifar.build_cifar100('train', args.dataset_path, return_info=True)
+        test_ds = datasets.cifar.build_cifar100('test', args.dataset_path)
+
+    elif args.dataset == 'SVHN':
+        train_ds, ds_info = datasets.svhn.build_svhn('train', args.dataset_path, return_info=True)
+        test_ds = datasets.svhn.build_svhn('test', args.dataset_path)
+
+    elif args.dataset == 'Imagenet':
+        train_ds, ds_info = datasets.imagenet.build_imagenet('train', args.dataset_path, return_info=True)
+        test_ds = datasets.imagenet.build_imagenet('val', args.dataset_path)
+    else:
+        raise NotImplementedError
+
+    return train_ds, test_ds, ds_info
 
 
 if __name__ == '__main__':

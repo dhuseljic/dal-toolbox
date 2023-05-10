@@ -169,20 +169,19 @@ def calibration_error(confs: torch.Tensor, accs: torch.Tensor, n_samples: torch.
     return ce
 
 
-class TopLabelCalibrationError(nn.Module):
+class TopLabelCalibrationPlot(nn.Module):
     """Computes the calibration plot for each class."""
 
-    def __init__(self, n_bins=15, p=1):
+    def __init__(self, num_bins=15):
         super().__init__()
-        self.n_bins = n_bins
-        self.p = p
+        self.num_bins = num_bins
 
     def forward(self, probas: torch.Tensor, labels: torch.Tensor):
-        bins = torch.linspace(0, 1, self.n_bins+1)
+        bins = torch.linspace(0, 1, self.num_bins+1)
 
-        confs = torch.Tensor(self.n_bins)
-        accs = torch.Tensor(self.n_bins)
-        n_samples = torch.Tensor(self.n_bins)
+        confs = torch.Tensor(self.num_bins)
+        accs = torch.Tensor(self.num_bins)
+        n_samples = torch.Tensor(self.num_bins)
 
         pred_confs, pred_labels = probas.max(dim=-1)
 
@@ -202,20 +201,34 @@ class TopLabelCalibrationError(nn.Module):
             accs[i_bin] = bin_acc
 
         self.results = {'confs': confs, 'accs': accs, 'n_samples': n_samples}
+        # calibration_error(confs, accs, n_samples, self.p)
+        return self.results
+
+
+class TopLabelCalibrationError(TopLabelCalibrationPlot):
+    def __init__(self, num_bins=15, p=1):
+        super().__init__(num_bins)
+        self.p = p
+
+    def forward(self, probas: torch.Tensor, labels: torch.Tensor):
+        results = super().forward(probas, labels)
+        confs = results['confs']
+        accs = results['accs']
+        n_samples = results['n_samples']
         return calibration_error(confs, accs, n_samples, self.p)
 
 
-class MarginalCalibrationError(nn.Module):
+class MarginalCalibrationPlot(nn.Module):
     """Computes the calibration plot for each class."""
 
-    def __init__(self, n_bins=15, p=1, threshold=0.01):
+    def __init__(self, num_bins=15, threshold=0.01):
         super().__init__()
-        self.n_bins = n_bins
-        self.p = p
+        self.num_bins = num_bins
         self.threshold = threshold
+        self.results = []
 
     def forward(self, probas: torch.Tensor, labels: torch.Tensor):
-        bins = torch.linspace(0, 1, self.n_bins+1)
+        bins = torch.linspace(0, 1, self.num_bins+1)
         _, n_classes = probas.shape
 
         # Save calibration plots in results
@@ -227,9 +240,9 @@ class MarginalCalibrationError(nn.Module):
             labels_cls = labels_cls[probas_cls > self.threshold]
             probas_cls = probas_cls[probas_cls > self.threshold]
 
-            confs = torch.Tensor(self.n_bins)
-            accs = torch.Tensor(self.n_bins)
-            n_samples = torch.Tensor(self.n_bins)
+            confs = torch.Tensor(self.num_bins)
+            accs = torch.Tensor(self.num_bins)
+            n_samples = torch.Tensor(self.num_bins)
             for i_bin, (bin_start, bin_end) in enumerate(zip(bins[:-1], bins[1:])):
                 in_bin = (bin_start < probas_cls) & (probas_cls < bin_end)
                 n_samples[i_bin] = in_bin.sum()
@@ -246,9 +259,20 @@ class MarginalCalibrationError(nn.Module):
                 accs[i_bin] = bin_acc
             self.results.append({'confs': confs, 'accs': accs, 'n_samples': n_samples, 'class': i_cls})
 
-        sq_ces = [calibration_error(d['confs'], d['accs'], d['n_samples'], self.p)**self.p for d in self.results]
-        mce = torch.Tensor(sq_ces).mean()**(1/self.p)
-        return mce
+        # sq_ces = [calibration_error(d['confs'], d['accs'], d['n_samples'], self.p)**self.p for d in self.results]
+        # mce = torch.Tensor(sq_ces).mean()**(1/self.p)
+        return self.results
+
+
+class MarginalCalibrationError(MarginalCalibrationPlot):
+    def __init__(self, num_bins=15, threshold=0.01, p=1):
+        super().__init__(num_bins, threshold)
+        self.p = p
+
+    def forward(self, probas: torch.Tensor, labels: torch.Tensor):
+        results = super().forward(probas, labels)
+        sq_ces = [calibration_error(d['confs'], d['accs'], d['n_samples'], self.p)**self.p for d in results]
+        return torch.Tensor(sq_ces).mean()**(1/self.p)
 
 
 # From https://github.com/google-research/robustness_metrics/robustness_metrics/metrics/uncertainty.py#L1464-L1648
