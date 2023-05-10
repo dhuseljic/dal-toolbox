@@ -19,7 +19,7 @@ class DeterministicTrainer(BasicTrainer):
         self.criterion.to(self.device)
 
         metric_logger = MetricLogger(delimiter=" ")
-        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
+        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
         header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
         # Train the epoch
@@ -144,7 +144,7 @@ class DeterministicMixupTrainer(DeterministicTrainer):
         self.criterion.to(self.device)
 
         metric_logger = MetricLogger(delimiter=" ")
-        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
+        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
         header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
         # Train the epoch
@@ -188,7 +188,7 @@ class DeterministicPseudoLabelTrainer(DeterministicTrainer):
         self.criterion.to(self.device)
 
         metric_logger = MetricLogger(delimiter=" ")
-        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
+        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
         header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
         unlabeled_iter = iter(unlabeled_loader)
@@ -253,7 +253,7 @@ class DeterministicPiModelTrainer(DeterministicTrainer):
         self.criterion.to(self.device)
 
         metric_logger = MetricLogger(delimiter=" ")
-        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
+        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
         header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
         unlabeled_iter = iter(unlabeled_loader)
@@ -314,7 +314,7 @@ class DeterministicFixMatchTrainer(DeterministicTrainer):
         self.criterion.to(self.device)
 
         metric_logger = MetricLogger(delimiter=" ")
-        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
+        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
         header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
         unlabeled_iter = iter(unlabeled_loader)
@@ -377,7 +377,7 @@ class DeterministicFlexMatchTrainer(DeterministicTrainer):
         self.criterion.to(self.device)
 
         metric_logger = MetricLogger(delimiter=" ")
-        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
+        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
         header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
         unlabeled_iter = iter(unlabeled_loader)
