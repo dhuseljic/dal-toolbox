@@ -1,6 +1,7 @@
 import warnings
 
 import torch
+import torch.distributed as dist
 import torch.nn as nn
 
 import lightning as L
@@ -58,14 +59,17 @@ class DeterministicModule(L.LightningModule):
         inputs, targets = batch
         logits = self(inputs)
 
-        gathered_logits = self.all_gather(logits)
-        gathered_targets = self.all_gather(targets)
-        logits = torch.cat([l for l in gathered_logits])
-        print(gathered_targets)
-        targets = torch.cat([t for t in gathered_targets])
-        print(targets)
+        logits = self._gather(logits)
+        targets = self._gather(targets)
 
         return logits, targets
+
+    def _gather(self, val):
+        if not dist.is_available() or not dist.is_initialized():
+            return val
+        gathered_val = self.all_gather(val)
+        val = torch.cat([v for v in gathered_val])
+        return val
 
     def configure_optimizers(self):
         optimizer = torch.optim.SGD(self.parameters(), lr=1e-1, momentum=.9, weight_decay=0.01)
