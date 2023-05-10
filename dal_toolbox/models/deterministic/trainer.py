@@ -118,9 +118,24 @@ class DeterministicTrainer(BasicTrainer):
 
 
 class DeterministicMixupTrainer(DeterministicTrainer):
-    def __init__(self, model, criterion, mixup_alpha, n_classes, optimizer, lr_scheduler=None, device=None, output_dir=None, summary_writer=None, use_distributed=False):
-        super().__init__(model, optimizer, criterion, lr_scheduler, device, output_dir, summary_writer, use_distributed)
-        self.n_classes = n_classes
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        criterion: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
+        num_classes: int,
+        lr_scheduler=None,
+        mixup_alpha: float = 0.4,
+        num_epochs: int = 200,
+        device: str = None,
+        num_devices: int = 'auto',
+        precision='32-true',
+        output_dir: str = None,
+        summary_writer=None,
+    ):
+        super().__init__(model, criterion, optimizer, lr_scheduler, num_epochs,
+                         device, num_devices, precision, output_dir, summary_writer)
+        self.num_classes = num_classes
         self.mixup_alpha = mixup_alpha
 
     def train_one_epoch(self, dataloader, epoch=None, print_freq=200):
@@ -136,7 +151,7 @@ class DeterministicMixupTrainer(DeterministicTrainer):
         for inputs, targets in metric_logger.log_every(dataloader, print_freq, header):
             inputs, targets = inputs.to(self.device), targets.to(self.device)
 
-            targets_one_hot = F.one_hot(targets, num_classes=self.n_classes)
+            targets_one_hot = F.one_hot(targets, num_classes=self.num_classes)
             inputs, targets = mixup(inputs, targets_one_hot, mixup_alpha=self.mixup_alpha)
 
             outputs = self.model(inputs)

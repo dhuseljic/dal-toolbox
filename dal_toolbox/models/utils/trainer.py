@@ -16,8 +16,8 @@ class BasicTrainer(abc.ABC):
     def __init__(
         self,
         model: torch.nn.Module,
-        optimizer: torch.optim.Optimizer,
         criterion: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
         lr_scheduler=None,
         num_epochs: int = 200,
         device: str = None,
