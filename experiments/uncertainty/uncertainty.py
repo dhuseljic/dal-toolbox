@@ -65,11 +65,6 @@ def main(args):
     logits = torch.cat([preds[0] for preds in predictions])
     targets = torch.cat([preds[1] for preds in predictions])
 
-    # gather all logits
-    logits = torch.cat([l for l in model.all_gather(logits)])
-    print(logits.shape)
-    # targets = torch.cat([t for t in model.all_gather(targets)])
-
     test_stats = {
         'accuracy': metrics.Accuracy()(logits, targets).item(),
         'brier': metrics.BrierScore()(logits.softmax(-1), targets).item(),

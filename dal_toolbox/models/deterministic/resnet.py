@@ -147,6 +147,7 @@ class ResNet18Labelsmoothing(ResNet18):
         self.loss_fn = nn.CrossEntropyLoss(label_smoothing=label_smoothing)
 
 
+# TODO(dhuseljic): dicuss with marek
 class ResNet18Mixup(ResNet18):
     def __init__(self, num_classes, mixup_alpha):
         super().__init__(num_classes)

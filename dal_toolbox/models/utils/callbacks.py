@@ -51,11 +51,11 @@ class Logger(L.Callback):
         self.logger = logging.getLogger(__name__)
 
     @rank_zero_only
-    def on_train_epoch_start(self, trainer, module):
+    def on_train_epoch_start(self, trainer, pl_module):
         self._start_time_train = time.time()
 
     @rank_zero_only
-    def on_train_epoch_end(self, trainer, module):
+    def on_train_epoch_end(self, trainer, pl_module):
         metrics = {k: v.item() for k, v in trainer.logged_metrics.items()}
         epoch = trainer.current_epoch + 1
 
@@ -66,7 +66,7 @@ class Logger(L.Callback):
     def on_validation_epoch_start(self, trainer, pl_module):
         self._start_time_val = time.time()
 
-    def on_validation_epoch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+    def on_validation_epoch_end(self, trainer, pl_module):
         metrics = {k: v.item() for k, v in trainer.logged_metrics.items()}
 
         eta = datetime.timedelta(seconds=int(time.time() - self._start_time_val))

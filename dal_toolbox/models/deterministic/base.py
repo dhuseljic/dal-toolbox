@@ -57,6 +57,8 @@ class DeterministicModule(L.LightningModule):
         # TODO(dhuseljic): discuss with mherde; maybe can be used for AL?
         inputs, targets = batch
         logits = self(inputs)
+        print(logits.shape)
+        print(self.all_gather(logits).shape)
         return logits, targets
 
     def configure_optimizers(self):
