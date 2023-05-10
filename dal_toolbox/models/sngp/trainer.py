@@ -36,6 +36,29 @@ class SNGPTrainer(DeterministicTrainer):
         self.model.synchronize_precision_matrix()
 
         return train_stats
+    
+    @torch.inference_mode()
+    def predict(self, dataloader):
+        self.model.eval()
+        dataloader = self.fabric.setup_dataloaders(dataloader)
+
+        logits_list = []
+        targets_list = []
+        for inputs, targets in dataloader:
+            logits = self.model(inputs, mean_field=True)
+
+            logits = self.all_gather(logits)
+            targets = self.all_gather(targets)
+
+            logits_list.append(logits.cpu())
+            targets_list.append(targets.cpu())
+
+        logits = torch.cat(logits_list)
+        targets = torch.cat(targets_list)
+
+        return logits, targets
+
+
 
     @torch.no_grad()
     def evaluate_model(self, dataloader, dataloaders_ood=None):
