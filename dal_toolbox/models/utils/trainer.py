@@ -11,6 +11,8 @@ import lightning as L
 
 from ...utils import write_scalar_dict
 
+from lightning.pytorch.utilities import rank_zero_only
+
 
 class BasicTrainer(abc.ABC):
     def __init__(
@@ -73,6 +75,7 @@ class BasicTrainer(abc.ABC):
         if reset_model_parameters:
             self.model.load_state_dict(self.init_model_state)
 
+    @rank_zero_only
     def save_checkpoint(self, i_epoch=None, fname="checkpoint.pth"):
         self.logger.info('Saving checkpoint..')
         start_time = time.time()
@@ -85,7 +88,7 @@ class BasicTrainer(abc.ABC):
             # "train_history": self.train_history,
             # "test_history": self.test_history,
         }
-        torch.save(checkpoint, checkpoint_path)
+        self.fabric.save(checkpoint_path, checkpoint)
         saving_time = (time.time() - start_time)
         self.logger.info('Saving took %s', str(datetime.timedelta(seconds=int(saving_time))))
 
