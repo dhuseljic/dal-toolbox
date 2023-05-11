@@ -52,7 +52,6 @@ def main(args):
     # Fabric:
     model, trainer = build_model(args, n_classes=ds_info['n_classes'])
     trainer.fit(train_loader)
-    model.state_dict()
 
     # Lightning:
     # model = build_model(args, n_classes=ds_info['n_classes'])
@@ -71,6 +70,8 @@ def main(args):
 
     # Fabric:
     logits, targets = trainer.predict(test_loader_id)
+    print(model.bn1.running_mean)
+    print(model.bn1.running_var)
 
     # Lightning:
     # predictions = trainer.predict(model, dataloaders=test_loader_id)

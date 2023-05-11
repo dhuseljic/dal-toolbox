@@ -94,8 +94,7 @@ class DeterministicTrainer(BasicTrainer):
         test_stats = {f"test_{k}": v for k, v in metrics.items()}
         return test_stats
 
-    # @torch.inference_mode()
-    @torch.no_grad()
+    @torch.inference_mode()
     def predict(self, dataloader):
         self.model.eval()
         dataloader = self.fabric.setup_dataloaders(dataloader)
