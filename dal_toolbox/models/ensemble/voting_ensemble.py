@@ -1,21 +1,38 @@
+import copy
+
 import torch
 import torch.nn as nn
 
+from torch.func import stack_module_state, functional_call
+
 
 class Ensemble(nn.Module):
-    def __init__(self, models):
+    def __init__(self, members: list):
         super().__init__()
-        self.members = nn.ModuleList(models)
+        # self.members = nn.ModuleList(models)
+        self.members = nn.ModuleList(members)
 
-    def __iter__(self):
-        for m in self.members:
-            yield m
+        self.num_members = len(members)
+        # self.vmap_setup = False
+        # self.vmap_randomness = 'different'
 
-    def __len__(self):
-        return len(self.members)
+    # def _setup_vmap(self):
+    #     if self.vmap_setup is False:
+    #         self.params, self.buffers = stack_module_state(self.members)
+    #         base_model = copy.deepcopy(self.members[0])
+    #         base_model = base_model.to('meta')
+    #         self._f = lambda params, buffers, x: functional_call(base_model, (params, buffers), (x,))
+    #         self._forward_ensemble = torch.vmap(self._f, in_dims=(0, 0, None), randomness=self.vmap_randomness)
+    #         self.vmap_setup = True
 
     def forward(self, x):
-        raise ValueError('Forward method should only be used on ensemble members.')
+        raise ValueError('Use forward sample to obtain ensemble predictions.')
+
+    # def forward_sample(self, x):
+    #     self._setup_vmap()
+    #     logits = self._forward_ensemble(self.params, self.buffers, x)
+    #     # logits = self._forward_ensemble(*stack_module_state(self.members), x)
+    #     return logits.permute(1, 0, 2)
 
     def forward_sample(self, x):
         logits = []
@@ -23,6 +40,14 @@ class Ensemble(nn.Module):
             logits.append(m(x))
         logits = torch.stack(logits, dim=1)
         return logits
+
+    def __iter__(self):
+        # self.vmap_setup = False
+        for m in self.members:
+            yield m
+
+    def __len__(self):
+        return len(self.members)
 
     @torch.inference_mode()
     def get_probas(self, dataloader, device):

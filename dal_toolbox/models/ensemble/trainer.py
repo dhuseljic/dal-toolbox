@@ -61,7 +61,7 @@ class EnsembleTrainer(BasicTrainer):
                 metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
 
             metric_logger.synchronize_between_processes()
-            train_stats.update({f"train_member{i_member}_{k}": meter.global_avg for k,
+            train_stats.update({f"train_{key}_member{i_member}": meter.global_avg for key,
                                 meter, in metric_logger.meters.items()})
         return train_stats
 
@@ -85,7 +85,6 @@ class EnsembleTrainer(BasicTrainer):
         targets = torch.cat(targets_list)
 
         return logits, targets
-
 
     @torch.no_grad()
     def evaluate_model(self, dataloader, dataloaders_ood=None):
