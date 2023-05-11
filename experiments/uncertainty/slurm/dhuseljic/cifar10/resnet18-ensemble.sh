@@ -12,7 +12,7 @@ date;hostname;pwd
 source activate dal-toolbox
 cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/uncertainty/
 
-model=resnet18
+model=resnet18_ensemble
 dataset=CIFAR10
 ood_datasets='[SVHN, CIFAR100]'
 random_seed=$SLURM_ARRAY_TASK_ID
