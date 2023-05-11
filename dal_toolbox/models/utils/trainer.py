@@ -62,24 +62,22 @@ class BasicTrainer(abc.ABC):
         self.fabric.launch()
         self.fabric.setup(model, optimizer)
         setup_for_distributed(self.fabric.global_rank == 0)
-        # TODO(dhuseljic): necessary?
-        self.model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.model)
 
         self.train_history: list = []
         self.test_history: list = []
         self.test_stats: dict = {}
 
-    def reset_states(self, reset_model_parameters=False):
+    def reset_states(self, reset_model_parameters=True):
         self.optimizer.load_state_dict(self.init_optimizer_state)
         self.criterion.load_state_dict(self.init_criterion_state)
-        if self.lr_scheduler:
-            self.lr_scheduler.load_state_dict(self.init_scheduler_state)
         if reset_model_parameters:
             self.model.load_state_dict(self.init_model_state)
+        if self.lr_scheduler:
+            self.lr_scheduler.load_state_dict(self.init_scheduler_state)
 
     @rank_zero_only
     def save_checkpoint(self, i_epoch=None, fname="checkpoint.pth"):
-        self.logger.info('Saving checkpoint..')
+        self.logger.info('Saving %s..', fname)
         start_time = time.time()
         checkpoint_path = os.path.join(self.output_dir, fname)
         checkpoint = {
@@ -91,11 +89,10 @@ class BasicTrainer(abc.ABC):
             # "test_history": self.test_history,
         }
         self.fabric.save(checkpoint_path, checkpoint)
-        # torch.save(checkpoint, checkpoint_path)
         saving_time = (time.time() - start_time)
         self.logger.info('Saving took %s', str(datetime.timedelta(seconds=int(saving_time))))
 
-    def fit(self, train_loader, test_loaders=None):
+    def fit(self, train_loader, val_loaders=None):
         self.logger.info('Training with %s instances..', len(train_loader.dataset))
         start_time = time.time()
 
@@ -107,6 +104,7 @@ class BasicTrainer(abc.ABC):
         for i_epoch in range(1, self.num_epochs+1):
 
             train_stats = self.train_one_epoch(dataloader=train_loader, epoch=i_epoch)
+            # TODO(dhuseljic): add step after batch or step after epoch
             if self.lr_scheduler is not None:
                 self.lr_scheduler.step()
             self.train_history.append(train_stats)
@@ -116,9 +114,10 @@ class BasicTrainer(abc.ABC):
                 write_scalar_dict(train_stats, prefix='train', global_step=i_epoch)
 
             # Eval in intervals if test loader exists
-            if test_loaders and i_epoch % self.eval_every == 0:
-                test_loader = test_loaders.get('test_loader')
-                test_loaders_ood = test_loaders.get('test_loaders_ood')
+            if val_loaders and i_epoch % self.eval_every == 0:
+                # TODO(dhuseljic): validation not model agnostic
+                test_loader = val_loaders.get('test_loader')
+                test_loaders_ood = val_loaders.get('test_loaders_ood')
                 test_stats = self.evaluate(dataloader=test_loader, dataloaders_ood=test_loaders_ood)
                 self.test_history.append(test_stats)
 

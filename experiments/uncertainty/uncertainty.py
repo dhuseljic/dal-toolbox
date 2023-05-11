@@ -70,8 +70,6 @@ def main(args):
 
     # Fabric:
     logits, targets = trainer.predict(test_loader_id)
-    print(model.bn1.running_mean)
-    print(model.bn1.running_var)
 
     # Lightning:
     # predictions = trainer.predict(model, dataloaders=test_loader_id)
