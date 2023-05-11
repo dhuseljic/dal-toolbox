@@ -53,16 +53,15 @@ class BasicTrainer(abc.ABC):
         if lr_scheduler:
             self.init_scheduler_state = copy.deepcopy(self.lr_scheduler.state_dict())
 
-        self.device = 'cuda'
-        # self.fabric = L.Fabric(
-        #     accelerator='auto',
-        #     strategy='auto',
-        #     devices=self.num_devices,
-        #     precision=precision,
-        # )
-        # self.fabric.launch()
-        # self.fabric.setup(model, optimizer)
-        # setup_for_distributed(self.fabric.global_rank == 0)
+        self.fabric = L.Fabric(
+            accelerator='auto',
+            strategy='auto',
+            devices=self.num_devices,
+            precision=precision,
+        )
+        self.fabric.launch()
+        self.fabric.setup(model, optimizer)
+        setup_for_distributed(self.fabric.global_rank == 0)
 
         self.train_history: list = []
         self.test_history: list = []
@@ -89,8 +88,8 @@ class BasicTrainer(abc.ABC):
             # "train_history": self.train_history,
             # "test_history": self.test_history,
         }
-        # self.fabric.save(checkpoint_path, checkpoint)
-        torch.save(checkpoint, checkpoint_path)
+        self.fabric.save(checkpoint_path, checkpoint)
+        # torch.save(checkpoint, checkpoint_path)
         saving_time = (time.time() - start_time)
         self.logger.info('Saving took %s', str(datetime.timedelta(seconds=int(saving_time))))
 
@@ -98,7 +97,7 @@ class BasicTrainer(abc.ABC):
         self.logger.info('Training with %s instances..', len(train_loader.dataset))
         start_time = time.time()
 
-        # train_loader = self.fabric.setup_dataloaders(train_loader)
+        train_loader = self.fabric.setup_dataloaders(train_loader)
 
         self.train_history = []
         self.test_history = []
@@ -150,13 +149,13 @@ class BasicTrainer(abc.ABC):
         return test_stats
 
     def backward(self, loss):
-        # self.fabric.backward(loss)
-        loss.backward()
+        self.fabric.backward(loss)
+        # loss.backward()
 
     def all_gather(self, val):
         if not dist.is_available() or not dist.is_initialized():
             return val
-        # gathered_vals = self.fabric.all_gather(val)
+        gathered_vals = self.fabric.all_gather(val)
         val = torch.cat([v for v in gathered_vals])
         # Pure pytorch gather:
         # gathered_vals = [torch.zeros_like(val) for _ in range(dist.get_world_size())]

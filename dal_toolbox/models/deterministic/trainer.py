@@ -15,8 +15,8 @@ class DeterministicTrainer(BasicTrainer):
 
     def train_one_epoch(self, dataloader, epoch=None, print_freq=200):
         self.model.train()
-        self.model.to(self.device)
-        self.criterion.to(self.device)
+        # self.model.to(self.device)
+        # self.criterion.to(self.device)
 
         metric_logger = MetricLogger(delimiter=" ")
         metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
@@ -24,7 +24,8 @@ class DeterministicTrainer(BasicTrainer):
 
         # Train the epoch
         for inputs, targets in metric_logger.log_every(dataloader, print_freq, header):
-            inputs, targets = inputs.to(self.device), targets.to(self.device)
+            # inputs = inputs.to(self.device)
+            # targets = targets.to(self.device)
 
             outputs = self.model(inputs)
 
@@ -98,13 +99,14 @@ class DeterministicTrainer(BasicTrainer):
     @torch.inference_mode()
     def predict(self, dataloader):
         self.model.eval()
-        self.model.to(self.device)
-        # dataloader = self.fabric.setup_dataloaders(dataloader)
+        # self.model.to(self.device)
+        dataloader = self.fabric.setup_dataloaders(dataloader)
 
         logits_list = []
         targets_list = []
         for inputs, targets in dataloader:
-            inputs, targets = inputs.to(self.device), targets.to(self.device)
+            # inputs = inputs.to(self.device)
+            # targets = targets.to(self.device)
             logits = self.model(inputs)
 
             logits = self.all_gather(logits)
