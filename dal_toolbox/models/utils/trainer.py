@@ -6,41 +6,46 @@ import logging
 import datetime
 
 import torch
+import torch.distributed as dist
+import lightning as L
+from lightning.pytorch.utilities import rank_zero_only
 
-from torch.nn.parallel import DistributedDataParallel
-from torch.utils.data import DistributedSampler
-from ...utils import write_scalar_dict
+from ...utils import write_scalar_dict, setup_for_distributed
 
 
 class BasicTrainer(abc.ABC):
-    def __init__(self,
-                 model,
-                 optimizer,
-                 criterion,
-                 lr_scheduler=None,
-                 device=None,
-                 output_dir=None,
-                 summary_writer=None,
-                 use_distributed=False):
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        criterion: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
+        lr_scheduler=None,
+        num_epochs: int = 200,
+        device: str = None,
+        num_devices: int = 'auto',
+        precision='32-true',
+        output_dir: str = None,
+        summary_writer=None,
+        eval_every: int = None,
+        save_every: int = None,
+    ):
+        super().__init__()
         self.model = model
         self.optimizer = optimizer
         self.criterion = criterion
         self.lr_scheduler = lr_scheduler
-
+        self.num_epochs = num_epochs
         self.device = device
-        self.use_distributed = use_distributed
+        self.num_devices = num_devices
+        self.precision = precision
+        self.output_dir = output_dir
+        self.summary_writer = summary_writer
+        self.eval_every = eval_every
+        self.save_every = save_every
 
         self.logger = logging.getLogger(__name__)
-        self.summary_writer = summary_writer
-        self.output_dir = output_dir
         if output_dir is not None:
             os.makedirs(output_dir, exist_ok=True)
-
-        if self.use_distributed:
-            self.logger("Using distributed mode.")
-            self.model.to(device)
-            rank = torch.distributed.get_rank()
-            self.model = DistributedDataParallel(model, device_ids=[rank], broadcast_buffers=False)
 
         self.init_model_state = copy.deepcopy(self.model.state_dict())
         self.init_optimizer_state = copy.deepcopy(self.optimizer.state_dict())
@@ -48,27 +53,34 @@ class BasicTrainer(abc.ABC):
         if lr_scheduler:
             self.init_scheduler_state = copy.deepcopy(self.lr_scheduler.state_dict())
 
+        self.fabric = L.Fabric(
+            accelerator='auto',
+            strategy='auto',
+            devices=self.num_devices,
+            precision=precision,
+        )
+        self.fabric.launch()
+        self.model, self.optimizer = self.fabric.setup(self.model, self.optimizer)
 
-        # self.num_devices = torch.cuda.device_count() if num_devices == 'auto' else num_devices
-        # self.fabric = L.Fabric(accelerator='cuda', devices=self.num_devices, strategy='ddp')
-        # self.fabric.launch()
+        setup_for_distributed(self.fabric.global_rank == 0)
 
         self.train_history: list = []
         self.test_history: list = []
         self.test_stats: dict = {}
 
-    def reset_states(self, reset_model_parameters=False):
+    def reset_states(self, reset_model_parameters=True):
         self.optimizer.load_state_dict(self.init_optimizer_state)
         self.criterion.load_state_dict(self.init_criterion_state)
-        if self.lr_scheduler:
-            self.lr_scheduler.load_state_dict(self.init_scheduler_state)
         if reset_model_parameters:
             self.model.load_state_dict(self.init_model_state)
+        if self.lr_scheduler:
+            self.lr_scheduler.load_state_dict(self.init_scheduler_state)
 
-    def save_checkpoint(self, i_epoch=None):
-        self.logger.info('Saving checkpoint..')
+    @rank_zero_only
+    def save_checkpoint(self, i_epoch=None, fname="checkpoint.pth"):
+        self.logger.info('Saving %s..', fname)
         start_time = time.time()
-        checkpoint_path = os.path.join(self.output_dir, "checkpoint.pth")
+        checkpoint_path = os.path.join(self.output_dir, fname)
         checkpoint = {
             "model": self.model.state_dict(),
             "optimizer": self.optimizer.state_dict(),
@@ -77,30 +89,23 @@ class BasicTrainer(abc.ABC):
             # "train_history": self.train_history,
             # "test_history": self.test_history,
         }
-        torch.save(checkpoint, checkpoint_path)
+        self.fabric.save(checkpoint_path, checkpoint)
         saving_time = (time.time() - start_time)
         self.logger.info('Saving took %s', str(datetime.timedelta(seconds=int(saving_time))))
 
-
-    def train(self, n_epochs, train_loader, test_loaders=None, eval_every=None, save_every=None):
+    def fit(self, train_loader, val_loaders=None):
         self.logger.info('Training with %s instances..', len(train_loader.dataset))
         start_time = time.time()
 
-        # self.model, self.optimizer = self.fabric.setup(self.model, self.optimizer)
-        # train_loader = self.fabric.setup_dataloaders(train_loader)
-
-        if self.use_distributed:
-            if not isinstance(train_loader.sampler, DistributedSampler):
-                raise ValueError('Configure a distributed sampler to use distributed training.')
+        train_loader = self.fabric.setup_dataloaders(train_loader)
 
         self.train_history = []
         self.test_history = []
         self.model.to(self.device)
-        for i_epoch in range(1, n_epochs+1):
-            if self.use_distributed:
-                train_loader.sampler.set_epoch(i_epoch)
+        for i_epoch in range(1, self.num_epochs+1):
 
             train_stats = self.train_one_epoch(dataloader=train_loader, epoch=i_epoch)
+            # TODO(dhuseljic): add step after batch or step after epoch
             if self.lr_scheduler is not None:
                 self.lr_scheduler.step()
             self.train_history.append(train_stats)
@@ -110,14 +115,15 @@ class BasicTrainer(abc.ABC):
                 write_scalar_dict(train_stats, prefix='train', global_step=i_epoch)
 
             # Eval in intervals if test loader exists
-            if test_loaders and i_epoch % eval_every == 0:
-                test_loader = test_loaders.get('test_loader')
-                test_loaders_ood = test_loaders.get('test_loaders_ood')
+            if val_loaders and i_epoch % self.eval_every == 0:
+                # TODO(dhuseljic): validation not model agnostic
+                test_loader = val_loaders.get('test_loader')
+                test_loaders_ood = val_loaders.get('test_loaders_ood')
                 test_stats = self.evaluate(dataloader=test_loader, dataloaders_ood=test_loaders_ood)
                 self.test_history.append(test_stats)
 
             # Save checkpoint in intervals if output directory is defined
-            if self.output_dir and save_every and i_epoch % save_every == 0:
+            if self.output_dir and self.save_every and i_epoch % self.save_every == 0:
                 self.save_checkpoint(i_epoch)
 
         training_time = (time.time() - start_time)
@@ -126,7 +132,8 @@ class BasicTrainer(abc.ABC):
 
         # Save final model if output directory is defined
         if self.output_dir is not None:
-            self.save_checkpoint(i_epoch)
+            self.logger.info('Saving final model..')
+            self.save_checkpoint(i_epoch, fname='model_final.pth')
 
         return {'train_history': self.train_history, 'test_history': self.test_history}
 
@@ -143,17 +150,20 @@ class BasicTrainer(abc.ABC):
         self.logger.info('Evaluation took %s', str(datetime.timedelta(seconds=int(eval_time))))
         return test_stats
 
-    @torch.no_grad()
-    def collect_predictions(self, dataloader):
-        all_logits = []
-        all_targets = []
-        for inputs, targets in dataloader:
-            inputs = inputs.to(self.device)
-            all_logits.append(self.model(inputs).cpu())
-            all_targets.append(targets)
-        logits = torch.cat(all_logits, dim=0)
-        targets = torch.cat(all_targets, dim=0)
-        return logits, targets
+    def backward(self, loss):
+        self.fabric.backward(loss)
+        # loss.backward()
+
+    def all_gather(self, val):
+        if not dist.is_available() or not dist.is_initialized():
+            return val
+        gathered_vals = self.fabric.all_gather(val)
+        val = torch.cat([v for v in gathered_vals])
+        # Pure pytorch gather:
+        # gathered_vals = [torch.zeros_like(val) for _ in range(dist.get_world_size())]
+        # dist.all_gather(gathered_vals, val)
+        # val = torch.cat(gathered_vals)
+        return val
 
     @abc.abstractmethod
     def train_one_epoch(self, dataloader, epoch):
@@ -162,3 +172,6 @@ class BasicTrainer(abc.ABC):
     @abc.abstractmethod
     def evaluate_model(self, dataloader, dataloaders_ood):
         pass
+
+    def predict(self, dataloader):
+        raise NotImplementedError('Predict method is not implemented.')

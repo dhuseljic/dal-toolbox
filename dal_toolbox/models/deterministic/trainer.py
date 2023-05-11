@@ -7,7 +7,7 @@ from ..utils import unfreeze_bn, freeze_bn
 from ..utils.ssl_utils import FlexMatchThresholdingHook
 from ..utils.trainer import BasicTrainer
 from ..utils.mixup import mixup
-from ...metrics import generalization, calibration, ood
+from ... import metrics
 from ...utils import MetricLogger, SmoothedValue
 
 
@@ -15,29 +15,24 @@ class DeterministicTrainer(BasicTrainer):
 
     def train_one_epoch(self, dataloader, epoch=None, print_freq=200):
         self.model.train()
-        # self.model.to(self.device)
-        self.criterion.to(self.device)
 
         metric_logger = MetricLogger(delimiter=" ")
-        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
+        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
         header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
-        # Train the epoch
         for inputs, targets in metric_logger.log_every(dataloader, print_freq, header):
-            # inputs, targets = inputs.to(self.device), targets.to(self.device)
 
-            outputs = self.model(inputs)
-
-            loss = self.criterion(outputs, targets)
+            logits = self.model(inputs)
+            loss = self.criterion(logits, targets)
 
             self.optimizer.zero_grad()
-            loss.backward()
+            self.backward(loss)
             self.optimizer.step()
 
             batch_size = inputs.shape[0]
-            acc1, = generalization.accuracy(outputs, targets, topk=(1,))
+            acc1 = metrics.Accuracy()(logits, targets)
             metric_logger.update(loss=loss.item(), lr=self.optimizer.param_groups[0]["lr"])
-            metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
+            metric_logger.meters["acc1"].update(acc1, n=batch_size)
 
         metric_logger.synchronize_between_processes()
         train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
@@ -50,56 +45,76 @@ class DeterministicTrainer(BasicTrainer):
         self.model.to(self.device)
 
         # Forward prop in distribution
-        logits_id, targets_id = self.collect_predictions(dataloader)
+        logits_id, targets_id = self.predict(dataloader)
         probas_id = logits_id.softmax(-1)
 
         # Model specific test loss and accuracy for in domain testset
-        loss = self.criterion(logits_id, targets_id).item()
-        acc1 = generalization.accuracy(logits_id, targets_id, (1,))[0].item()
-        nll = torch.nn.CrossEntropyLoss(reduction='mean')(logits_id, targets_id).item()
-        brier = calibration.BrierScore()(probas_id, targets_id).item()
-        tce = calibration.TopLabelCalibrationError()(probas_id, targets_id).item()
-        mce = calibration.MarginalCalibrationError()(probas_id, targets_id).item()
-
-        metrics = {
-            "loss": loss,
-            "acc1": acc1,
-            "nll": nll,
-            "brier": brier,
-            "tce": tce,
-            "mce": mce
+        test_stats = {
+            "loss": self.criterion(logits_id, targets_id).item(),
+            "accuracy": metrics.Accuracy()(logits_id, targets_id).item(),
+            "nll": torch.nn.CrossEntropyLoss()(logits_id, targets_id).item(),
+            "brier": metrics.BrierScore()(probas_id, targets_id).item(),
+            "tce": metrics.ExpectedCalibrationError()(probas_id, targets_id).item(),
+            "ace": metrics.AdaptiveCalibrationError()(probas_id, targets_id).item(),
         }
-
         if dataloaders_ood is None:
-            dataloaders_ood = {}
+            return test_stats
 
-        for name, dataloader_ood in dataloaders_ood.items():
+        for ds_name, dataloader_ood in dataloaders_ood.items():
             # Forward prop out of distribution
-            logits_ood, _ = self.collect_predictions(dataloader_ood)
-            probas_ood = logits_ood.softmax(-1)
+            logits_ood, _ = self.predict(dataloader_ood)
+            entropy_id = metrics.entropy_from_logits(logits_id)
+            entropy_ood = metrics.entropy_from_logits(logits_ood)
 
-            # Confidence- and entropy-Scores of out of domain logits
-            entropy_id = ood.entropy_fn(probas_id)
-            entropy_ood = ood.entropy_fn(probas_ood)
-
-            # Area under the Precision-Recall-Curve
-            ood_aupr = ood.ood_aupr(entropy_id, entropy_ood)
-
-            # Area under the Receiver-Operator-Characteristic-Curve
-            ood_auroc = ood.ood_auroc(entropy_id, entropy_ood)
+            ood_aupr = metrics.OODAUPR()(entropy_id, entropy_ood).item()
+            ood_auroc = metrics.OODAUROC()(entropy_id, entropy_ood).item()
 
             # Add to metrics
-            metrics[name+"_auroc"] = ood_auroc
-            metrics[name+"_aupr"] = ood_aupr
-
-        test_stats = {f"test_{k}": v for k, v in metrics.items()}
+            test_stats[f"aupr_{ds_name}"] = ood_aupr
+            test_stats[f"auroc_{ds_name}"] = ood_auroc
         return test_stats
+
+    @torch.inference_mode()
+    def predict(self, dataloader):
+        self.model.eval()
+        dataloader = self.fabric.setup_dataloaders(dataloader)
+
+        logits_list = []
+        targets_list = []
+        for inputs, targets in dataloader:
+            logits = self.model(inputs)
+
+            logits = self.all_gather(logits)
+            targets = self.all_gather(targets)
+
+            logits_list.append(logits.cpu())
+            targets_list.append(targets.cpu())
+
+        logits = torch.cat(logits_list)
+        targets = torch.cat(targets_list)
+
+        return logits, targets
 
 
 class DeterministicMixupTrainer(DeterministicTrainer):
-    def __init__(self, model, criterion, mixup_alpha, n_classes, optimizer, lr_scheduler=None, device=None, output_dir=None, summary_writer=None, use_distributed=False):
-        super().__init__(model, optimizer, criterion, lr_scheduler, device, output_dir, summary_writer, use_distributed)
-        self.n_classes = n_classes
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        criterion: torch.nn.Module,
+        optimizer: torch.optim.Optimizer,
+        num_classes: int,
+        lr_scheduler=None,
+        mixup_alpha: float = 0.4,
+        num_epochs: int = 200,
+        device: str = None,
+        num_devices: int = 'auto',
+        precision='32-true',
+        output_dir: str = None,
+        summary_writer=None,
+    ):
+        super().__init__(model, criterion, optimizer, lr_scheduler, num_epochs,
+                         device, num_devices, precision, output_dir, summary_writer)
+        self.num_classes = num_classes
         self.mixup_alpha = mixup_alpha
 
     def train_one_epoch(self, dataloader, epoch=None, print_freq=200):
@@ -108,25 +123,24 @@ class DeterministicMixupTrainer(DeterministicTrainer):
         self.criterion.to(self.device)
 
         metric_logger = MetricLogger(delimiter=" ")
-        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
+        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
         header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
         # Train the epoch
         for inputs, targets in metric_logger.log_every(dataloader, print_freq, header):
             inputs, targets = inputs.to(self.device), targets.to(self.device)
 
-            targets_one_hot = F.one_hot(targets, num_classes=self.n_classes)
+            targets_one_hot = F.one_hot(targets, num_classes=self.num_classes)
             inputs, targets = mixup(inputs, targets_one_hot, mixup_alpha=self.mixup_alpha)
-
-            outputs = self.model(inputs)
-            loss = self.criterion(outputs, targets)
+            logits = self.model(inputs)
+            loss = self.criterion(logits, targets)
 
             self.optimizer.zero_grad()
-            loss.backward()
+            self.backward(loss)
             self.optimizer.step()
 
             batch_size = inputs.shape[0]
-            acc1, = generalization.accuracy(outputs, targets, topk=(1,))
+            acc1 = metrics.Accuracy()(logits, targets)
             metric_logger.update(loss=loss.item(), lr=self.optimizer.param_groups[0]["lr"])
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
 
@@ -152,7 +166,7 @@ class DeterministicPseudoLabelTrainer(DeterministicTrainer):
         self.criterion.to(self.device)
 
         metric_logger = MetricLogger(delimiter=" ")
-        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
+        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
         header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
         unlabeled_iter = iter(unlabeled_loader)
@@ -191,8 +205,8 @@ class DeterministicPseudoLabelTrainer(DeterministicTrainer):
 
             # Metrics
             batch_size_l, batch_size_u = x_l.shape[0], x_u.shape[0]
-            acc1, = generalization.accuracy(logits_l, y_l, topk=(1,))
-            pseudo_acc1, = generalization.accuracy(logits_u, y_u, topk=(1,))
+            acc1 = metrics.Accuracy()(logits_l, y_l)
+            pseudo_acc1 = metrics.Accuracy()(logits_u, y_u)
             metric_logger.update(loss=loss.item(), sup_loss=loss_l.item(), unsup_loss=loss_u.item(),
                                  mask_ratio=mask.float().mean().item(), unsup_warmup_factor=unsup_warmup_factor, lr=self.optimizer.param_groups[0]["lr"])
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size_l)
@@ -217,7 +231,7 @@ class DeterministicPiModelTrainer(DeterministicTrainer):
         self.criterion.to(self.device)
 
         metric_logger = MetricLogger(delimiter=" ")
-        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
+        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
         header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
         unlabeled_iter = iter(unlabeled_loader)
@@ -253,7 +267,7 @@ class DeterministicPiModelTrainer(DeterministicTrainer):
 
             # Metrics
             batch_size = x_l.shape[0]
-            acc1, = generalization.accuracy(logits_l, y_l, topk=(1,))
+            acc1 = metrics.Accuracy()(logits_l, y_l)
             metric_logger.update(loss=loss.item(), sup_loss=loss_l.item(), unsup_loss=loss_u.item(),
                                  unsup_warmup_factor=unsup_warmup_factor, lr=self.optimizer.param_groups[0]["lr"])
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
@@ -278,7 +292,7 @@ class DeterministicFixMatchTrainer(DeterministicTrainer):
         self.criterion.to(self.device)
 
         metric_logger = MetricLogger(delimiter=" ")
-        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
+        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
         header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
         unlabeled_iter = iter(unlabeled_loader)
@@ -313,8 +327,8 @@ class DeterministicFixMatchTrainer(DeterministicTrainer):
 
             # Metrics
             batch_size, ulb_batch_size = x_l.shape[0], x_s.shape[0]
-            acc1, = generalization.accuracy(logits_l, y_l, topk=(1,))
-            pseudo_acc1, = generalization.accuracy(logits_w, y, topk=(1,))
+            acc1 = metrics.Accuracy()(logits_l, y_l)
+            pseudo_acc1 = metrics.Accuracy()(logits_w, y)
             metric_logger.update(loss=loss.item(), supervised_loss=loss_l.item(), lr=self.optimizer.param_groups[0]["lr"],
                                  unsupervised_loss=loss_u.item(), mask_ratio=mask.float().mean().item())
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
@@ -341,7 +355,7 @@ class DeterministicFlexMatchTrainer(DeterministicTrainer):
         self.criterion.to(self.device)
 
         metric_logger = MetricLogger(delimiter=" ")
-        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
+        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
         header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
         unlabeled_iter = iter(unlabeled_loader)
@@ -379,8 +393,8 @@ class DeterministicFlexMatchTrainer(DeterministicTrainer):
 
             # Metrics
             batch_size, ulb_batch_size = x_l.shape[0], x_s.shape[0]
-            acc1, = generalization.accuracy(logits_l, y_l, topk=(1,))
-            pseudo_acc1, = generalization.accuracy(logits_w, y, topk=(1,))
+            acc1 = metrics.Accuracy()(logits_l, y_l)
+            pseudo_acc1 = metrics.Accuracy()(logits_w, y)
             metric_logger.update(loss=loss.item(), supervised_loss=loss_l.item(), lr=self.optimizer.param_groups[0]["lr"],
                                  unsupervised_loss=loss_u.item(), mask_ratio=mask.float().mean().item())
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)

@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from .base import DeterministicModule
+from ..utils.mixup import mixup
+
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -30,7 +33,7 @@ class BasicBlock(nn.Module):
 
 class ResNet18(nn.Module):
     def __init__(self, num_classes):
-        super(ResNet18, self).__init__()
+        super().__init__()
         self.in_planes = 64
         self.block = BasicBlock
         self.num_blocks = [2, 2, 2, 2]
@@ -124,3 +127,30 @@ class ResNet18(nn.Module):
         # Concat all embeddings
         embedding = torch.cat(embedding)
         return embedding
+
+
+# # TODO(dhuseljic): dicuss with marek
+# class ResNet18Labelsmoothing(ResNet18):
+#     def __init__(self, num_classes, label_smoothing):
+#         super().__init__(num_classes)
+#         self.label_smoothing = label_smoothing
+#
+#         if not (0 < label_smoothing < 1):
+#             raise ValueError(f'Label smoothing should be in range between 0 and 1, got {label_smoothing}')
+#
+#         self.loss_fn = nn.CrossEntropyLoss(label_smoothing=label_smoothing)
+#
+#
+# # TODO(dhuseljic): dicuss with marek
+# class ResNet18Mixup(ResNet18):
+#     def __init__(self, num_classes, mixup_alpha):
+#         super().__init__(num_classes)
+#         if not (0 < mixup_alpha < 1):
+#             raise ValueError(f'Mixup should be in range between 0 and 1, got {mixup_alpha}')
+#         self.mixup_alpha = mixup_alpha
+#
+#     def training_step(self, batch):
+#         inputs, targets = batch
+#         targets_one_hot = torch.nn.functional.one_hot(targets, self.num_classes)
+#         batch = mixup(inputs, targets_one_hot, mixup_alpha=self.mixup_alpha)
+#         return super().training_step(batch)

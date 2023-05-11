@@ -9,30 +9,52 @@ class SNGPTrainer(DeterministicTrainer):
     def train_one_epoch(self, dataloader, epoch=None, print_freq=200):
         self.model.train()
         self.model.reset_precision_matrix()
-        self.model.to(self.device)
-        self.criterion.to(self.device)
 
         metric_logger = MetricLogger(delimiter=" ")
-        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
+        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
         header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
         for inputs, targets in metric_logger.log_every(dataloader, print_freq, header):
-            inputs, targets = inputs.to(self.device), targets.to(self.device)
 
-            outputs = self.model(inputs)
-            loss = self.criterion(outputs, targets)
+            logits = self.model(inputs)
+            loss = self.criterion(logits, targets)
 
             self.optimizer.zero_grad()
-            loss.backward()
+            self.backward(loss)
             self.optimizer.step()
 
             batch_size = inputs.shape[0]
-            acc1, = generalization.accuracy(outputs, targets, topk=(1,))
+            acc1, = generalization.accuracy(logits, targets, topk=(1,))
             metric_logger.update(loss=loss.item(), lr=self.optimizer.param_groups[0]["lr"])
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
 
+        self.model.synchronize_precision_matrix()
+        metric_logger.synchronize_between_processes()
         train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
         return train_stats
+    
+    @torch.inference_mode()
+    def predict(self, dataloader):
+        self.model.eval()
+        dataloader = self.fabric.setup_dataloaders(dataloader)
+
+        logits_list = []
+        targets_list = []
+        for inputs, targets in dataloader:
+            logits = self.model(inputs, mean_field=True)
+
+            logits = self.all_gather(logits)
+            targets = self.all_gather(targets)
+
+            logits_list.append(logits.cpu())
+            targets_list.append(targets.cpu())
+
+        logits = torch.cat(logits_list)
+        targets = torch.cat(targets_list)
+
+        return logits, targets
+
+
 
     @torch.no_grad()
     def evaluate_model(self, dataloader, dataloaders_ood=None):
