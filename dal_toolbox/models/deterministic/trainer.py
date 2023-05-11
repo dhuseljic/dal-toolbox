@@ -7,7 +7,7 @@ from ..utils import unfreeze_bn, freeze_bn
 from ..utils.ssl_utils import FlexMatchThresholdingHook
 from ..utils.trainer import BasicTrainer
 from ..utils.mixup import mixup
-from ...metrics import generalization, calibration, ood
+from ... import metrics
 from ...utils import MetricLogger, SmoothedValue
 
 
@@ -27,18 +27,18 @@ class DeterministicTrainer(BasicTrainer):
             # inputs = inputs.to(self.device)
             # targets = targets.to(self.device)
 
-            outputs = self.model(inputs)
-
-            loss = self.criterion(outputs, targets)
+            logits = self.model(inputs)
+            loss = self.criterion(logits, targets)
 
             self.optimizer.zero_grad()
             self.backward(loss)
             self.optimizer.step()
 
             batch_size = inputs.shape[0]
-            acc1, = generalization.accuracy(outputs, targets, topk=(1,))
+            # acc1, = generalization.accuracy(logits, targets, topk=(1,))
+            acc1 = metrics.Accuracy()(logits, targets)
             metric_logger.update(loss=loss.item(), lr=self.optimizer.param_groups[0]["lr"])
-            metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
+            metric_logger.meters["acc1"].update(acc1, n=batch_size)
 
         metric_logger.synchronize_between_processes()
         train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
@@ -56,45 +56,38 @@ class DeterministicTrainer(BasicTrainer):
 
         # Model specific test loss and accuracy for in domain testset
         loss = self.criterion(logits_id, targets_id).item()
-        acc1 = generalization.accuracy(logits_id, targets_id, (1,))[0].item()
+        acc1 = metrics.Accuracy()(logits_id, targets_id)
         nll = torch.nn.CrossEntropyLoss(reduction='mean')(logits_id, targets_id).item()
-        brier = calibration.BrierScore()(probas_id, targets_id).item()
-        tce = calibration.TopLabelCalibrationError()(probas_id, targets_id).item()
-        mce = calibration.MarginalCalibrationError()(probas_id, targets_id).item()
+        brier = metrics.BrierScore()(probas_id, targets_id).item()
+        tce = metrics.ExpectedCalibrationError()(probas_id, targets_id).item()
+        ace = metrics.AdaptiveCalibrationError()(probas_id, targets_id).item()
 
-        metrics = {
+        results = {
             "loss": loss,
             "acc1": acc1,
             "nll": nll,
             "brier": brier,
             "tce": tce,
-            "mce": mce
+            "ace": ace
         }
 
         if dataloaders_ood is None:
-            dataloaders_ood = {}
+            return results
 
-        for name, dataloader_ood in dataloaders_ood.items():
+        for ds_name, dataloader_ood in dataloaders_ood.items():
             # Forward prop out of distribution
             logits_ood, _ = self.predict(dataloader_ood)
-            probas_ood = logits_ood.softmax(-1)
+            entropy_id = metrics.entropy_from_logits(logits_id)
+            entropy_ood = metrics.entropy_from_logits(logits_ood)
 
-            # Confidence- and entropy-Scores of out of domain logits
-            entropy_id = ood.entropy_fn(probas_id)
-            entropy_ood = ood.entropy_fn(probas_ood)
-
-            # Area under the Precision-Recall-Curve
-            ood_aupr = ood.ood_aupr(entropy_id, entropy_ood)
-
-            # Area under the Receiver-Operator-Characteristic-Curve
-            ood_auroc = ood.ood_auroc(entropy_id, entropy_ood)
+            ood_aupr = metrics.OODAUPR()(entropy_id, entropy_ood)
+            ood_auroc = metrics.OODAUROC()(entropy_id, entropy_ood)
 
             # Add to metrics
-            metrics[name+"_auroc"] = ood_auroc
-            metrics[name+"_aupr"] = ood_aupr
-
-        test_stats = {f"test_{k}": v for k, v in metrics.items()}
-        return test_stats
+            results[f"aupr_{ds_name}"] = ood_aupr
+            results[f"auroc_{ds_name}"] = ood_auroc
+        # test_stats = {f"test_{k}": v for k, v in metrics.items()}
+        return results
 
     @torch.inference_mode()
     def predict(self, dataloader):
@@ -157,16 +150,15 @@ class DeterministicMixupTrainer(DeterministicTrainer):
 
             targets_one_hot = F.one_hot(targets, num_classes=self.num_classes)
             inputs, targets = mixup(inputs, targets_one_hot, mixup_alpha=self.mixup_alpha)
-
-            outputs = self.model(inputs)
-            loss = self.criterion(outputs, targets)
+            logits = self.model(inputs)
+            loss = self.criterion(logits, targets)
 
             self.optimizer.zero_grad()
             self.backward(loss)
             self.optimizer.step()
 
             batch_size = inputs.shape[0]
-            acc1, = generalization.accuracy(outputs, targets, topk=(1,))
+            acc1 = metrics.Accuracy()(logits, targets)
             metric_logger.update(loss=loss.item(), lr=self.optimizer.param_groups[0]["lr"])
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
 
@@ -231,8 +223,8 @@ class DeterministicPseudoLabelTrainer(DeterministicTrainer):
 
             # Metrics
             batch_size_l, batch_size_u = x_l.shape[0], x_u.shape[0]
-            acc1, = generalization.accuracy(logits_l, y_l, topk=(1,))
-            pseudo_acc1, = generalization.accuracy(logits_u, y_u, topk=(1,))
+            acc1 = metrics.Accuracy()(logits_l, y_l)
+            pseudo_acc1 = metrics.Accuracy()(logits_u, y_u)
             metric_logger.update(loss=loss.item(), sup_loss=loss_l.item(), unsup_loss=loss_u.item(),
                                  mask_ratio=mask.float().mean().item(), unsup_warmup_factor=unsup_warmup_factor, lr=self.optimizer.param_groups[0]["lr"])
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size_l)
@@ -293,7 +285,7 @@ class DeterministicPiModelTrainer(DeterministicTrainer):
 
             # Metrics
             batch_size = x_l.shape[0]
-            acc1, = generalization.accuracy(logits_l, y_l, topk=(1,))
+            acc1 = metrics.Accuracy()(logits_l, y_l)
             metric_logger.update(loss=loss.item(), sup_loss=loss_l.item(), unsup_loss=loss_u.item(),
                                  unsup_warmup_factor=unsup_warmup_factor, lr=self.optimizer.param_groups[0]["lr"])
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
@@ -353,8 +345,8 @@ class DeterministicFixMatchTrainer(DeterministicTrainer):
 
             # Metrics
             batch_size, ulb_batch_size = x_l.shape[0], x_s.shape[0]
-            acc1, = generalization.accuracy(logits_l, y_l, topk=(1,))
-            pseudo_acc1, = generalization.accuracy(logits_w, y, topk=(1,))
+            acc1 = metrics.Accuracy()(logits_l, y_l)
+            pseudo_acc1 = metrics.Accuracy()(logits_w, y)
             metric_logger.update(loss=loss.item(), supervised_loss=loss_l.item(), lr=self.optimizer.param_groups[0]["lr"],
                                  unsupervised_loss=loss_u.item(), mask_ratio=mask.float().mean().item())
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
@@ -419,8 +411,8 @@ class DeterministicFlexMatchTrainer(DeterministicTrainer):
 
             # Metrics
             batch_size, ulb_batch_size = x_l.shape[0], x_s.shape[0]
-            acc1, = generalization.accuracy(logits_l, y_l, topk=(1,))
-            pseudo_acc1, = generalization.accuracy(logits_w, y, topk=(1,))
+            acc1 = metrics.Accuracy()(logits_l, y_l)
+            pseudo_acc1 = metrics.Accuracy()(logits_w, y)
             metric_logger.update(loss=loss.item(), supervised_loss=loss_l.item(), lr=self.optimizer.param_groups[0]["lr"],
                                  unsupervised_loss=loss_u.item(), mask_ratio=mask.float().mean().item())
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)

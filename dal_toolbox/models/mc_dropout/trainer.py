@@ -83,3 +83,27 @@ class MCDropoutTrainer(BasicTrainer):
                 metrics[name+"_aupr"] = aupr
 
         return {f"test_{k}": v for k, v in metrics.items()}
+
+    @torch.inference_mode()
+    def predict(self, dataloader):
+        self.model.eval()
+        # self.model.to(self.device)
+        dataloader = self.fabric.setup_dataloaders(dataloader)
+
+        logits_list = []
+        targets_list = []
+        for inputs, targets in dataloader:
+            # inputs = inputs.to(self.device)
+            # targets = targets.to(self.device)
+            logits = self.model.mc_forward(inputs)
+
+            logits = self.all_gather(logits)
+            targets = self.all_gather(targets)
+
+            logits_list.append(logits.cpu())
+            targets_list.append(targets.cpu())
+
+        logits = torch.cat(logits_list)
+        targets = torch.cat(targets_list)
+
+        return logits, targets

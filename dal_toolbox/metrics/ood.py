@@ -75,6 +75,15 @@ def entropy_from_logits(logits):
     return entropy
 
 
+def ensemble_log_probas_from_logits(logits):
+    if logits.ndim != 3:
+        raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
+    ensemble_size = logits.size(1)
+    # numerical stable version of avg ensemble probas: log sum_m^M exp log probs_m - log M = log 1/M sum_m probs_m
+    log_probas = torch.logsumexp(logits.log_softmax(-1), dim=1) - math.log(ensemble_size)
+    return log_probas
+
+
 def ensemble_entropy_from_logits(logits):
     # numerical stable version
     if logits.ndim != 3:
