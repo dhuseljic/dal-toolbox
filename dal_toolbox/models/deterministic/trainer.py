@@ -55,24 +55,16 @@ class DeterministicTrainer(BasicTrainer):
         probas_id = logits_id.softmax(-1)
 
         # Model specific test loss and accuracy for in domain testset
-        loss = self.criterion(logits_id, targets_id).item()
-        acc1 = metrics.Accuracy()(logits_id, targets_id)
-        nll = torch.nn.CrossEntropyLoss(reduction='mean')(logits_id, targets_id).item()
-        brier = metrics.BrierScore()(probas_id, targets_id).item()
-        tce = metrics.ExpectedCalibrationError()(probas_id, targets_id).item()
-        ace = metrics.AdaptiveCalibrationError()(probas_id, targets_id).item()
-
-        results = {
-            "loss": loss,
-            "acc1": acc1,
-            "nll": nll,
-            "brier": brier,
-            "tce": tce,
-            "ace": ace
+        test_stats = {
+            "loss": self.criterion(logits_id, targets_id).item(),
+            "accuracy": metrics.Accuracy()(logits_id, targets_id).item(),
+            "nll": torch.nn.CrossEntropyLoss()(logits_id, targets_id).item(),
+            "brier": metrics.BrierScore()(probas_id, targets_id).item(),
+            "tce": metrics.ExpectedCalibrationError()(probas_id, targets_id).item(),
+            "ace": metrics.AdaptiveCalibrationError()(probas_id, targets_id).item(),
         }
-
         if dataloaders_ood is None:
-            return results
+            return test_stats
 
         for ds_name, dataloader_ood in dataloaders_ood.items():
             # Forward prop out of distribution
@@ -80,14 +72,13 @@ class DeterministicTrainer(BasicTrainer):
             entropy_id = metrics.entropy_from_logits(logits_id)
             entropy_ood = metrics.entropy_from_logits(logits_ood)
 
-            ood_aupr = metrics.OODAUPR()(entropy_id, entropy_ood)
-            ood_auroc = metrics.OODAUROC()(entropy_id, entropy_ood)
+            ood_aupr = metrics.OODAUPR()(entropy_id, entropy_ood).item()
+            ood_auroc = metrics.OODAUROC()(entropy_id, entropy_ood).item()
 
             # Add to metrics
-            results[f"aupr_{ds_name}"] = ood_aupr
-            results[f"auroc_{ds_name}"] = ood_auroc
-        # test_stats = {f"test_{k}": v for k, v in metrics.items()}
-        return results
+            test_stats[f"aupr_{ds_name}"] = ood_aupr
+            test_stats[f"auroc_{ds_name}"] = ood_auroc
+        return test_stats
 
     @torch.inference_mode()
     def predict(self, dataloader):

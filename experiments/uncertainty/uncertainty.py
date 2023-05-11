@@ -69,13 +69,13 @@ def main(args):
 
     # Fabric:
     # logits, targets = trainer.predict(test_loader_id)
+    test_stats = trainer.evaluate(test_loader_id, dataloaders_ood=test_loaders_ood)
 
     # Lightning:
     # predictions = trainer.predict(model, dataloaders=test_loader_id)
     # logits = torch.cat([preds[0] for preds in predictions])
     # targets = torch.cat([preds[1] for preds in predictions])
 
-    # TODO(dhuseljic): Bayesian methods not working:
     # logits = metrics.ood.ensemble_log_probas_from_logits(logits)
 
     # Potential Solution for evaluation:
@@ -85,19 +85,6 @@ def main(args):
     #   proba_metrics={'brier_score': metris.BrierScore()},
     # )
     # test_stats = evaluator.evaluate(dataloaders, ood_dataloaders)
-
-    if 'deterministic' in args.model.name: 
-        test_stats = evaluate_deterministic(trainer, test_loader_id, test_loaders_ood)
-    if 'labelsmoothing' in args.model.name: 
-        test_stats = evaluate_deterministic(trainer, test_loader_id, test_loaders_ood)
-    if 'mixup' in args.model.name: 
-        test_stats = evaluate_deterministic(trainer, test_loader_id, test_loaders_ood)
-    elif 'mcdropout' in args.model.name: 
-        test_stats = evaluate_bayesian(trainer, test_loader_id, test_loaders_ood)
-    elif 'ensemble' in args.model.name: 
-        test_stats = evaluate_bayesian(trainer, test_loader_id, test_loaders_ood)
-    elif 'sngp' in args.model.name: 
-        test_stats = evaluate_deterministic(trainer, test_loader_id, test_loaders_ood)
     logger.info("Final test results: %s", test_stats)
 
     # Saving results
@@ -106,56 +93,6 @@ def main(args):
     results = {'test_stats': test_stats, 'misc': misc}
     with open(fname, 'w') as f:
         json.dump(results, f)
-
-
-def evaluate_deterministic(trainer, test_loader, test_loaders_ood):
-    logits, targets = trainer.predict(test_loader)
-    probas = logits.softmax(-1)
-
-    test_stats = {
-        "acc1": metrics.Accuracy()(logits, targets).item(),
-        "nll": torch.nn.CrossEntropyLoss(reduction='mean')(logits, targets).item(),
-        "brier": metrics.BrierScore()(probas, targets).item(),
-        "tce": metrics.ExpectedCalibrationError()(probas, targets).item(),
-        "ace": metrics.AdaptiveCalibrationError()(probas, targets).item(),
-    }
-
-    for name, ood_loader in test_loaders_ood.items():
-        # predictions_ood = trainer.predict(model, dataloaders=ood_loader)
-        # logits_ood = torch.cat([preds[0] for preds in predictions_ood])
-        logits_ood, _ = trainer.predict(ood_loader)
-        entropy_id = metrics.entropy_from_logits(logits)
-        entropy_ood = metrics.entropy_from_logits(logits_ood)
-        test_stats.update({
-            f'auroc_{name}': metrics.OODAUROC()(entropy_id, entropy_ood).item(),
-            f'aupr_{name}': metrics.OODAUPR()(entropy_id, entropy_ood).item(),
-        })
-    return test_stats
-
-
-def evaluate_bayesian(trainer, test_loader, test_loaders_ood):
-    logits, targets = trainer.predict(test_loader)
-    log_probas = metrics.ensemble_log_probas_from_logits(logits)
-
-    test_stats = {
-        "acc1": metrics.Accuracy()(log_probas, targets).item(),
-        "nll": metrics.EnsembleCrossEntropy()(logits, targets).item(),
-        "brier": metrics.BrierScore()(log_probas.exp(), targets).item(),
-        "tce": metrics.ExpectedCalibrationError()(log_probas.exp(), targets).item(),
-        "ace": metrics.AdaptiveCalibrationError()(log_probas.exp(), targets).item(),
-    }
-
-    for name, ood_loader in test_loaders_ood.items():
-        # predictions_ood = trainer.predict(model, dataloaders=ood_loader)
-        # logits_ood = torch.cat([preds[0] for preds in predictions_ood])
-        logits_ood, _ = trainer.predict(ood_loader)
-        entropy_id = metrics.ensemble_entropy_from_logits(logits)
-        entropy_ood = metrics.ensemble_entropy_from_logits(logits_ood)
-        test_stats.update({
-            f'auroc_{name}': metrics.OODAUROC()(entropy_id, entropy_ood).item(),
-            f'aupr_{name}': metrics.OODAUPR()(entropy_id, entropy_ood).item(),
-        })
-    return test_stats
 
 
 def build_model(args, **kwargs):

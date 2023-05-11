@@ -1,29 +1,30 @@
 import torch
 
 from ..utils.trainer import BasicTrainer
-from ...metrics import generalization, calibration, ood
 from ...utils import MetricLogger, SmoothedValue
+from ... import metrics
 
 
 class MCDropoutTrainer(BasicTrainer):
     def train_one_epoch(self, dataloader, epoch=None, print_freq=200):
+
         metric_logger = MetricLogger(delimiter="  ")
-        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value}"))
+        metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
         header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
-        self.model.to(self.device)
+
         self.model.train()
 
-        for X_batch, y_batch in metric_logger.log_every(dataloader, print_freq=print_freq, header=header):
-            X_batch, y_batch = X_batch.to(self.device), y_batch.to(self.device)
-            out = self.model(X_batch)
-            loss = self.criterion(out, y_batch)
-            batch_size = X_batch.size(0)
+        for inputs, targets in metric_logger.log_every(dataloader, print_freq=print_freq, header=header):
+
+            logits = self.model(inputs)
+            loss = self.criterion(logits, targets)
+            batch_size = inputs.size(0)
 
             self.optimizer.zero_grad()
-            loss.backward()
+            self.backward(loss)
             self.optimizer.step()
 
-            acc1, = generalization.accuracy(out.softmax(dim=-1), y_batch, topk=(1,))
+            acc1 = metrics.Accuracy()(logits, targets)
             metric_logger.update(loss=loss.item(), lr=self.optimizer.param_groups[0]["lr"])
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
 
@@ -36,53 +37,35 @@ class MCDropoutTrainer(BasicTrainer):
         self.model.to(self.device)
 
         # Get logits and targets for in-domain-test-set (Number of Samples x Number of Passes x Number of Classes)
-        dropout_logits_id, targets_id, = [], []
-        for inputs, targets in dataloader:
-            inputs, targets = inputs.to(self.device), targets.to(self.device)
-            dropout_logits_id.append(self.model.mc_forward(inputs))
-            targets_id.append(targets)
-        dropout_logits_id = torch.cat(dropout_logits_id, dim=0).cpu()
-        targets_id = torch.cat(targets_id, dim=0).cpu()
-        mean_probas_id = dropout_logits_id.softmax(dim=-1).mean(dim=1)
+        dropout_logits, targets = self.predict(dataloader)
+        log_probas = metrics.ensemble_log_probas_from_logits(dropout_logits)
 
-        acc1 = generalization.accuracy(mean_probas_id, targets_id, (1,))[0].item()
-        loss = calibration.GibbsCrossEntropy()(dropout_logits_id, targets_id).item()
-        nll = calibration.EnsembleCrossEntropy()(dropout_logits_id, targets_id).item()
-        brier = calibration.BrierScore()(mean_probas_id, targets_id).item()
-        tce = calibration.TopLabelCalibrationError()(mean_probas_id, targets_id).item()
-        mce = calibration.MarginalCalibrationError()(mean_probas_id, targets_id).item()
-
-        metrics = {
-            "acc1": acc1,
-            "loss": loss,
-            "nll": nll,
-            "brier": brier,
-            "tce": tce,
-            "mce": mce
+        test_stats = {
+            "accuracy": metrics.Accuracy()(log_probas, targets).item(),
+            "loss": metrics.GibbsCrossEntropy()(dropout_logits, targets).item(),
+            "nll": metrics.EnsembleCrossEntropy()(dropout_logits, targets).item(),
+            "brier": metrics.BrierScore()(log_probas.exp(), targets).item(),
+            "tce": metrics.ExpectedCalibrationError()(log_probas.exp(), targets).item(),
+            "ace": metrics.AdaptiveCalibrationError()(log_probas.exp(), targets).item()
         }
 
-        if dataloaders_ood:
-            for name, dataloader_ood in dataloaders_ood.items():
+        if dataloaders_ood is None:
+            return test_stats
 
-                # Forward prop out of distribution
-                dropout_logits_ood = []
-                for inputs, targets in dataloader_ood:
-                    inputs, targets = inputs.to(self.device), targets.to(self.device)
-                    dropout_logits_ood.append(self.model.mc_forward(inputs))
-                dropout_logits_ood = torch.cat(dropout_logits_ood, dim=0).cpu()
+        for ds_name, dataloader_ood in dataloaders_ood.items():
+            dropout_logits_ood, _ = self.predict(dataloader_ood)
 
-                # Compute entropy scores
-                entropy_id = ood.ensemble_entropy_from_logits(dropout_logits_id)
-                entropy_ood = ood.ensemble_entropy_from_logits(dropout_logits_ood)
+            # Compute entropy scores
+            entropy_id = metrics.ensemble_entropy_from_logits(dropout_logits)
+            entropy_ood = metrics.ensemble_entropy_from_logits(dropout_logits_ood)
 
-                aupr = ood.ood_aupr(entropy_id, entropy_ood)
-                auroc = ood.ood_auroc(entropy_id, entropy_ood)
+            aupr = metrics.ood_aupr(entropy_id, entropy_ood)
+            auroc = metrics.ood_auroc(entropy_id, entropy_ood)
 
-                # Add to metrics
-                metrics[name+"_auroc"] = auroc
-                metrics[name+"_aupr"] = aupr
-
-        return {f"test_{k}": v for k, v in metrics.items()}
+            # Add to metrics
+            test_stats[ds_name+"_auroc"] = auroc
+            test_stats[ds_name+"_aupr"] = aupr
+        return test_stats
 
     @torch.inference_mode()
     def predict(self, dataloader):
