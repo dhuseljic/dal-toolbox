@@ -60,7 +60,7 @@ class BasicTrainer(abc.ABC):
             precision=precision,
         )
         self.fabric.launch()
-        self.fabric.setup(model, optimizer)
+        self.model, self.optimizer = self.fabric.setup(model, optimizer)
         setup_for_distributed(self.fabric.global_rank == 0)
 
         self.train_history: list = []

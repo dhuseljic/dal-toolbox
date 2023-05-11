@@ -23,7 +23,7 @@ class SNGPTrainer(DeterministicTrainer):
             loss = self.criterion(outputs, targets)
 
             self.optimizer.zero_grad()
-            loss.backward()
+            self.backward(loss)
             self.optimizer.step()
 
             batch_size = inputs.shape[0]

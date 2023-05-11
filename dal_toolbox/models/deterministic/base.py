@@ -8,6 +8,8 @@ import lightning as L
 
 from ...metrics.generalization import Accuracy
 
+# TODO(dhuseljic): discuss
+
 
 class DeterministicModule(L.LightningModule):
     def __init__(self):

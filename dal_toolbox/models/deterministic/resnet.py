@@ -31,7 +31,7 @@ class BasicBlock(nn.Module):
         return out
 
 
-class ResNet18(DeterministicModule):
+class ResNet18(nn.Module):
     def __init__(self, num_classes):
         super().__init__()
         self.in_planes = 64
@@ -70,12 +70,6 @@ class ResNet18(DeterministicModule):
         if return_features:
             out = (out, features)
         return out
-
-    def configure_optimizers(self):
-        # TODO(dhuseljic): Default CIFAR HParams
-        optimizer = torch.optim.SGD(self.parameters(), lr=0.1, momentum=.9, weight_decay=.0005)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
-        return {'optimizer': optimizer, 'lr_scheduler': scheduler}
 
     @torch.inference_mode()
     def get_logits(self, dataloader, device):
@@ -135,28 +129,28 @@ class ResNet18(DeterministicModule):
         return embedding
 
 
-# TODO(dhuseljic): dicuss with marek
-class ResNet18Labelsmoothing(ResNet18):
-    def __init__(self, num_classes, label_smoothing):
-        super().__init__(num_classes)
-        self.label_smoothing = label_smoothing
-
-        if not (0 < label_smoothing < 1):
-            raise ValueError(f'Label smoothing should be in range between 0 and 1, got {label_smoothing}')
-
-        self.loss_fn = nn.CrossEntropyLoss(label_smoothing=label_smoothing)
-
-
-# TODO(dhuseljic): dicuss with marek
-class ResNet18Mixup(ResNet18):
-    def __init__(self, num_classes, mixup_alpha):
-        super().__init__(num_classes)
-        if not (0 < mixup_alpha < 1):
-            raise ValueError(f'Mixup should be in range between 0 and 1, got {mixup_alpha}')
-        self.mixup_alpha = mixup_alpha
-
-    def training_step(self, batch):
-        inputs, targets = batch
-        targets_one_hot = torch.nn.functional.one_hot(targets, self.num_classes)
-        batch = mixup(inputs, targets_one_hot, mixup_alpha=self.mixup_alpha)
-        return super().training_step(batch)
+# # TODO(dhuseljic): dicuss with marek
+# class ResNet18Labelsmoothing(ResNet18):
+#     def __init__(self, num_classes, label_smoothing):
+#         super().__init__(num_classes)
+#         self.label_smoothing = label_smoothing
+#
+#         if not (0 < label_smoothing < 1):
+#             raise ValueError(f'Label smoothing should be in range between 0 and 1, got {label_smoothing}')
+#
+#         self.loss_fn = nn.CrossEntropyLoss(label_smoothing=label_smoothing)
+#
+#
+# # TODO(dhuseljic): dicuss with marek
+# class ResNet18Mixup(ResNet18):
+#     def __init__(self, num_classes, mixup_alpha):
+#         super().__init__(num_classes)
+#         if not (0 < mixup_alpha < 1):
+#             raise ValueError(f'Mixup should be in range between 0 and 1, got {mixup_alpha}')
+#         self.mixup_alpha = mixup_alpha
+#
+#     def training_step(self, batch):
+#         inputs, targets = batch
+#         targets_one_hot = torch.nn.functional.one_hot(targets, self.num_classes)
+#         batch = mixup(inputs, targets_one_hot, mixup_alpha=self.mixup_alpha)
+#         return super().training_step(batch)
