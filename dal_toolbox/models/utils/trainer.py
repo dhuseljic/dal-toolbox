@@ -62,6 +62,8 @@ class BasicTrainer(abc.ABC):
         self.fabric.launch()
         self.fabric.setup(model, optimizer)
         setup_for_distributed(self.fabric.global_rank == 0)
+        # TODO(dhuseljic): necessary?
+        self.model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.model)
 
         self.train_history: list = []
         self.test_history: list = []
