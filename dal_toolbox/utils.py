@@ -30,7 +30,7 @@ def seed_everything(seed: int):
     torch.backends.cudnn.benchmark = False
 
 
-def write_scalar_dict(writer, prefix, dict, global_step=None):
+def write_scalar_dict(writer, dict, prefix, global_step=None):
     for key, val in dict.items():
         writer.add_scalar(f'{prefix}/{key}', val, global_step=global_step)
 

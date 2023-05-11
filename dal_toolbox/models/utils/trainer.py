@@ -8,7 +8,9 @@ import datetime
 import torch
 import torch.distributed as dist
 import lightning as L
+
 from lightning.pytorch.utilities import rank_zero_only
+from torch.utils.tensorboard import SummaryWriter
 
 from ...utils import write_scalar_dict, setup_for_distributed
 
@@ -26,7 +28,7 @@ class BasicTrainer(abc.ABC):
         precision='32-true',
         output_dir: str = None,
         summary_writer=None,
-        eval_every: int = None,
+        val_every: int = 1,
         save_every: int = None,
     ):
         super().__init__()
@@ -40,12 +42,13 @@ class BasicTrainer(abc.ABC):
         self.precision = precision
         self.output_dir = output_dir
         self.summary_writer = summary_writer
-        self.eval_every = eval_every
+        self.val_every = val_every
         self.save_every = save_every
 
         self.logger = logging.getLogger(__name__)
         if output_dir is not None:
             os.makedirs(output_dir, exist_ok=True)
+            self.summary_writer = SummaryWriter(output_dir) if summary_writer is None else summary_writer
 
         self.init_model_state = copy.deepcopy(self.model.state_dict())
         self.init_optimizer_state = copy.deepcopy(self.optimizer.state_dict())
@@ -65,8 +68,9 @@ class BasicTrainer(abc.ABC):
         setup_for_distributed(self.fabric.global_rank == 0)
 
         self.train_history: list = []
-        self.test_history: list = []
+        self.val_history: list = []
         self.test_stats: dict = {}
+        self.cur_epoch = 0
 
     def reset_states(self, reset_model_parameters=True):
         self.optimizer.load_state_dict(self.init_optimizer_state)
@@ -100,27 +104,32 @@ class BasicTrainer(abc.ABC):
         train_loader = self.fabric.setup_dataloaders(train_loader)
 
         self.train_history = []
-        self.test_history = []
+        self.val_history = []
         self.model.to(self.device)
         for i_epoch in range(1, self.num_epochs+1):
+            self.cur_epoch = i_epoch
 
             train_stats = self.train_one_epoch(dataloader=train_loader, epoch=i_epoch)
             # TODO(dhuseljic): add step after batch or step after epoch
             if self.lr_scheduler is not None:
                 self.lr_scheduler.step()
-            self.train_history.append(train_stats)
 
             # Logging
+            self.train_history.append(train_stats)
             if self.summary_writer is not None:
-                write_scalar_dict(train_stats, prefix='train', global_step=i_epoch)
+                write_scalar_dict(self.summary_writer, train_stats, prefix='train', global_step=i_epoch)
 
-            # Eval in intervals if test loader exists
-            if val_loaders and i_epoch % self.eval_every == 0:
+            # Validate in intervals if val loader exists
+            if val_loaders and i_epoch % self.val_every == 0:
                 # TODO(dhuseljic): validation not model agnostic
-                test_loader = val_loaders.get('test_loader')
-                test_loaders_ood = val_loaders.get('test_loaders_ood')
-                test_stats = self.evaluate(dataloader=test_loader, dataloaders_ood=test_loaders_ood)
-                self.test_history.append(test_stats)
+                if isinstance(val_loaders, dict):
+                    val_loader = val_loaders.get('val_loader')
+                    val_loader_ood = val_loaders.get('val_loaders_ood')
+                else:
+                    val_loader = val_loaders
+                    val_loader_ood = None
+                val_stats = self.evaluate(dataloader=val_loader, dataloaders_ood=val_loader_ood)
+                self.val_history.append(val_stats)
 
             # Save checkpoint in intervals if output directory is defined
             if self.output_dir and self.save_every and i_epoch % self.save_every == 0:
@@ -135,7 +144,7 @@ class BasicTrainer(abc.ABC):
             self.logger.info('Saving final model..')
             self.save_checkpoint(i_epoch, fname='model_final.pth')
 
-        return {'train_history': self.train_history, 'test_history': self.test_history}
+        return {'train_history': self.train_history, 'test_history': self.val_history}
 
     @torch.no_grad()
     def evaluate(self, dataloader, dataloaders_ood: dict = None):
@@ -146,6 +155,10 @@ class BasicTrainer(abc.ABC):
         start_time = time.time()
         test_stats = self.evaluate_model(dataloader, dataloaders_ood)
         eval_time = (time.time() - start_time)
+
+        if self.summary_writer is not None:
+            write_scalar_dict(self.summary_writer, test_stats, prefix='test', global_step=self.cur_epoch)
+
         self.logger.info('Evaluation stats: %s', test_stats)
         self.logger.info('Evaluation took %s', str(datetime.timedelta(seconds=int(eval_time))))
         return test_stats

@@ -296,6 +296,8 @@ class GeneralCalibrationError(nn.Module):
 
     def _get_adaptive_bins(self, probas, num_bins):
         """Returns upper edges for binning an equal number of datapoints per bin."""
+        if probas.numel() == 0:
+            return torch.linspace(0, 1, steps=self.num_bins+1)[1:]
         probas = probas.view(-1)
         edge_indices = torch.linspace(0, probas.numel(), num_bins+1)[:-1]
         edge_indices = torch.round(edge_indices).long()
