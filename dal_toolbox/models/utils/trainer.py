@@ -11,7 +11,6 @@ import lightning as L
 
 from lightning.pytorch.utilities import rank_zero_only
 from torch.utils.tensorboard import SummaryWriter
-
 from ...utils import write_scalar_dict, setup_for_distributed
 
 
@@ -110,9 +109,6 @@ class BasicTrainer(abc.ABC):
             self.cur_epoch = i_epoch
 
             train_stats = self.train_one_epoch(dataloader=train_loader, epoch=i_epoch)
-            # TODO(dhuseljic): add step after batch or step after epoch
-            if self.lr_scheduler is not None:
-                self.lr_scheduler.step()
 
             # Logging
             self.train_history.append(train_stats)
@@ -166,6 +162,10 @@ class BasicTrainer(abc.ABC):
     def backward(self, loss):
         self.fabric.backward(loss)
         # loss.backward()
+
+    def step_scheduler(self):
+        if self.lr_scheduler is not None:
+            self.lr_scheduler.step()
 
     def all_gather(self, val):
         if not dist.is_available() or not dist.is_initialized():

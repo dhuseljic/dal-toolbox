@@ -60,6 +60,7 @@ class EnsembleTrainer(BasicTrainer):
                 metric_logger.update(loss=loss.item(), lr=optim.param_groups[0]["lr"])
                 metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
 
+            self.step_scheduler()
             metric_logger.synchronize_between_processes()
             train_stats.update({f"train_{key}_member{i_member}": meter.global_avg for key,
                                 meter, in metric_logger.meters.items()})
