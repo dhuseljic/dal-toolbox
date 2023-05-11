@@ -97,7 +97,7 @@ class DeterministicTrainer(BasicTrainer):
     @torch.inference_mode()
     def predict(self, dataloader):
         self.model.eval()
-        dataloader = self.fabric.setup_dataloaders(dataloader)
+        # dataloader = self.fabric.setup_dataloaders(dataloader)
 
         logits_list = []
         targets_list = []
