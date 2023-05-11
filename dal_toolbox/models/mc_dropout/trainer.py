@@ -7,12 +7,11 @@ from ... import metrics
 
 class MCDropoutTrainer(BasicTrainer):
     def train_one_epoch(self, dataloader, epoch=None, print_freq=200):
+        self.model.train()
 
         metric_logger = MetricLogger(delimiter="  ")
         metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
         header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
-
-        self.model.train()
 
         for inputs, targets in metric_logger.log_every(dataloader, print_freq=print_freq, header=header):
 
@@ -27,14 +26,14 @@ class MCDropoutTrainer(BasicTrainer):
             acc1 = metrics.Accuracy()(logits, targets)
             metric_logger.update(loss=loss.item(), lr=self.optimizer.param_groups[0]["lr"])
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
-
+        
+        metric_logger.synchronize_between_processes()
         train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
         return train_stats
 
     @torch.no_grad()
     def evaluate_model(self, dataloader, dataloaders_ood=None):
         self.model.eval()
-        self.model.to(self.device)
 
         # Get logits and targets for in-domain-test-set (Number of Samples x Number of Passes x Number of Classes)
         dropout_logits, targets = self.predict(dataloader)
@@ -51,7 +50,6 @@ class MCDropoutTrainer(BasicTrainer):
 
         if dataloaders_ood is None:
             return test_stats
-
         for ds_name, dataloader_ood in dataloaders_ood.items():
             dropout_logits_ood, _ = self.predict(dataloader_ood)
 
@@ -59,12 +57,13 @@ class MCDropoutTrainer(BasicTrainer):
             entropy_id = metrics.ensemble_entropy_from_logits(dropout_logits)
             entropy_ood = metrics.ensemble_entropy_from_logits(dropout_logits_ood)
 
-            aupr = metrics.ood_aupr(entropy_id, entropy_ood)
-            auroc = metrics.ood_auroc(entropy_id, entropy_ood)
+            aupr = metrics.OODAUPR()(entropy_id, entropy_ood).item()
+            auroc = metrics.OODAUROC()(entropy_id, entropy_ood).item()
 
-            # Add to metrics
-            test_stats[ds_name+"_auroc"] = auroc
-            test_stats[ds_name+"_aupr"] = aupr
+            test_stats.update({
+                f"aupr_{ds_name}": aupr,
+                f"auroc_{ds_name}": auroc,
+            })
         return test_stats
 
     @torch.inference_mode()

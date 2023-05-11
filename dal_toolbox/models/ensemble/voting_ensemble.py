@@ -5,21 +5,21 @@ import torch.nn as nn
 class Ensemble(nn.Module):
     def __init__(self, models):
         super().__init__()
-        self.models = nn.ModuleList(models)
+        self.members = nn.ModuleList(models)
 
     def __iter__(self):
-        for m in self.models:
+        for m in self.members:
             yield m
 
     def __len__(self):
-        return len(self.models)
+        return len(self.members)
 
     def forward(self, x):
         raise ValueError('Forward method should only be used on ensemble members.')
 
     def forward_sample(self, x):
         logits = []
-        for m in self.models:
+        for m in self.members:
             logits.append(m(x))
         logits = torch.stack(logits, dim=1)
         return logits
@@ -71,3 +71,6 @@ class EnsembleOptimizer:
     def __iter__(self):
         for optim in self.optimizers:
             yield optim
+
+    def __len__(self):
+        return len(self.optimizers)

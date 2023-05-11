@@ -183,13 +183,15 @@ def build_model(args, **kwargs):
         optimizer = ensemble.voting_ensemble.EnsembleOptimizer(optimizers)
         lr_scheduler = ensemble.voting_ensemble.EnsembleLRScheduler(lr_schedulers)
         trainer = ensemble.trainer.EnsembleTrainer(
-            model=model,
-            criterion=criterion,
+            model,
+            nn.CrossEntropyLoss(),
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
-            device=args.device,
+            num_epochs=args.model.n_epochs,
+            num_devices=args.num_devices,
             output_dir=args.output_dir,
         )
+        return model, trainer
 
     elif args.model.name == 'resnet18_sngp':
         model = sngp.resnet.resnet18_sngp(

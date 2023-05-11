@@ -15,17 +15,12 @@ class DeterministicTrainer(BasicTrainer):
 
     def train_one_epoch(self, dataloader, epoch=None, print_freq=200):
         self.model.train()
-        # self.model.to(self.device)
-        # self.criterion.to(self.device)
 
         metric_logger = MetricLogger(delimiter=" ")
         metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
         header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
-        # Train the epoch
         for inputs, targets in metric_logger.log_every(dataloader, print_freq, header):
-            # inputs = inputs.to(self.device)
-            # targets = targets.to(self.device)
 
             logits = self.model(inputs)
             loss = self.criterion(logits, targets)
@@ -35,7 +30,6 @@ class DeterministicTrainer(BasicTrainer):
             self.optimizer.step()
 
             batch_size = inputs.shape[0]
-            # acc1, = generalization.accuracy(logits, targets, topk=(1,))
             acc1 = metrics.Accuracy()(logits, targets)
             metric_logger.update(loss=loss.item(), lr=self.optimizer.param_groups[0]["lr"])
             metric_logger.meters["acc1"].update(acc1, n=batch_size)
@@ -83,14 +77,11 @@ class DeterministicTrainer(BasicTrainer):
     @torch.inference_mode()
     def predict(self, dataloader):
         self.model.eval()
-        # self.model.to(self.device)
         dataloader = self.fabric.setup_dataloaders(dataloader)
 
         logits_list = []
         targets_list = []
         for inputs, targets in dataloader:
-            # inputs = inputs.to(self.device)
-            # targets = targets.to(self.device)
             logits = self.model(inputs)
 
             logits = self.all_gather(logits)
