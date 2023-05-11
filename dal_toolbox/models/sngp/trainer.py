@@ -28,6 +28,7 @@ class SNGPTrainer(DeterministicTrainer):
             metric_logger.update(loss=loss.item(), lr=self.optimizer.param_groups[0]["lr"])
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
 
+        self.step_scheduler()
         self.model.synchronize_precision_matrix()
         metric_logger.synchronize_between_processes()
         train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
