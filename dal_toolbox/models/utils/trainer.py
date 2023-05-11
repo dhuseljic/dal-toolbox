@@ -53,6 +53,7 @@ class BasicTrainer(abc.ABC):
         if lr_scheduler:
             self.init_scheduler_state = copy.deepcopy(self.lr_scheduler.state_dict())
 
+        self.device = 'cuda'
         # self.fabric = L.Fabric(
         #     accelerator='auto',
         #     strategy='auto',
