@@ -6,7 +6,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
 #SBATCH --job-name=uncertainty
-#SBATCH --output=/mnt/work/dhuseljic/logs/uncertainty/%j_%x_%a.log
+#SBATCH --output=/mnt/work/dhuseljic/logs/uncertainty/%A_%x_%a.log
 #SBATCH --array=1-1%3
 date;hostname;pwd
 source activate dal-toolbox
