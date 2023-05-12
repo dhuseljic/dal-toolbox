@@ -1,13 +1,13 @@
 #!/bin/bash
 #SBATCH --mem=32gb
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=2
+#SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=4
-#SBATCH --gres=gpu:2
+#SBATCH --gres=gpu:1
 #SBATCH --partition=main
 #SBATCH --job-name=uncertainty_resnet18-ls
 #SBATCH --output=/mnt/work/dhuseljic/logs/uncertainty/%x_%a.log
-#SBATCH --array=1-1%3
+#SBATCH --array=1-3%3
 date;hostname;pwd
 source activate dal-toolbox
 
@@ -29,5 +29,5 @@ srun python -u uncertainty.py \
 	"ood_datasets=$ood_datasets" \
 	output_dir=$output_dir \
 	random_seed=$random_seed \
-	num_devices=2 \
+	num_devices=1 \
 	eval_interval=50

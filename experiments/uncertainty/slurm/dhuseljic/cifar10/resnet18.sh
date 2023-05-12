@@ -7,7 +7,7 @@
 #SBATCH --partition=main
 #SBATCH --job-name=uncertainty_resnet18
 #SBATCH --output=/mnt/work/dhuseljic/logs/uncertainty/%x_%a.log
-#SBATCH --array=1-1%3
+#SBATCH --array=1-3%3
 date;hostname;pwd
 source activate dal-toolbox
 cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/uncertainty/
