@@ -5,16 +5,14 @@ import logging
 import hydra
 import torch
 import torch.nn as nn
-import lightning as L
 
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader, Subset, RandomSampler
 
-from dal_toolbox import metrics
 from dal_toolbox import datasets
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp, variational_inference
 from dal_toolbox.utils import seed_everything
-# from dal_toolbox.models.utils.callbacks import Logger
+# from dal_toolbox.models.utils.callbacks import DummyCallback
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="uncertainty")
@@ -49,11 +47,15 @@ def main(args):
     # Load model
     logger.info('Starting Training..')
 
-    # Fabric:
+    # Own trainer
     model, trainer = build_model(args, n_classes=ds_info['n_classes'])
-    trainer.fit(train_loader)
+    trainer.fit(train_loader, val_loaders=test_loader_id)
+    logger.info('Starting Testing..')
+    test_stats = trainer.evaluate(test_loader_id, dataloaders_ood=test_loaders_ood)
+    logger.info("Final test results: %s", test_stats)
+
     # Lightning:
-    # model = build_model(args, n_classes=ds_info['n_classes'])
+    # model = get_lightning_model()
     # trainer = L.Trainer(
     #     max_epochs=args.model.n_epochs,
     #     callbacks=[Logger()],
@@ -63,29 +65,6 @@ def main(args):
     #     devices=args.num_devices,
     # )
     # trainer.fit(model, train_loader, val_dataloaders=test_loader_id)
-
-    # Testing
-    logger.info('Starting Testing..')
-
-    # Fabric:
-    # logits, targets = trainer.predict(test_loader_id)
-    test_stats = trainer.evaluate(test_loader_id, dataloaders_ood=test_loaders_ood)
-
-    # Lightning:
-    # predictions = trainer.predict(model, dataloaders=test_loader_id)
-    # logits = torch.cat([preds[0] for preds in predictions])
-    # targets = torch.cat([preds[1] for preds in predictions])
-
-    # logits = metrics.ood.ensemble_log_probas_from_logits(logits)
-
-    # Potential Solution for evaluation:
-    # evaluator = deterministic.evaluator.DeterministicEvaluator(
-    #   trainer=trainer,
-    #   logit_metrics={'accuracy': metrics.Accuracy()},
-    #   proba_metrics={'brier_score': metris.BrierScore()},
-    # )
-    # test_stats = evaluator.evaluate(dataloaders, ood_dataloaders)
-    logger.info("Final test results: %s", test_stats)
 
     # Saving results
     fname = os.path.join(args.output_dir, 'results_final.json')
@@ -116,6 +95,7 @@ def build_model(args, **kwargs):
             num_epochs=args.model.n_epochs,
             num_devices=args.num_devices,
             output_dir=args.output_dir,
+            # callbacks=[DummyCallback()]
         )
         return model, trainer
 
