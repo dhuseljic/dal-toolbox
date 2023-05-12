@@ -5,8 +5,8 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --job-name=uncertainty_resnet18
-#SBATCH --output=/mnt/work/dhuseljic/logs/uncertainty/%x_%a.log
+#SBATCH --job-name=uncertainty
+#SBATCH --output=/mnt/work/dhuseljic/logs/uncertainty/%j_%x_%a.log
 #SBATCH --array=1-3%3
 date;hostname;pwd
 source activate dal-toolbox

@@ -5,12 +5,11 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --job-name=uncertainty_resnet18-ls
-#SBATCH --output=/mnt/work/dhuseljic/logs/uncertainty/%x_%a.log
+#SBATCH --job-name=uncertainty
+#SBATCH --output=/mnt/work/dhuseljic/logs/uncertainty/%j_%x_%a.log
 #SBATCH --array=1-3%3
 date;hostname;pwd
 source activate dal-toolbox
-
 cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/uncertainty/
 
 model=resnet18_labelsmoothing
@@ -23,7 +22,6 @@ echo "Writing results to ${output_dir}"
 
 srun python -u uncertainty.py \
 	model=$model \
-	model.n_epochs=200 \
 	dataset=$dataset \
 	dataset_path=/mnt/work/dhuseljic/datasets \
 	"ood_datasets=$ood_datasets" \
