@@ -14,6 +14,7 @@ class MCDropoutTrainer(BasicTrainer):
         header = f"Epoch [{epoch}]" if epoch is not None else "  Train: "
 
         for inputs, targets in metric_logger.log_every(dataloader, print_freq=print_freq, header=header):
+            self.fabric.call("on_train_batch_start", self, self.model)
 
             logits = self.model(inputs)
             loss = self.criterion(logits, targets)
@@ -26,6 +27,7 @@ class MCDropoutTrainer(BasicTrainer):
             acc1 = metrics.Accuracy()(logits, targets)
             metric_logger.update(loss=loss.item(), lr=self.optimizer.param_groups[0]["lr"])
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
+            self.fabric.call("on_train_batch_end", self, self.model)
 
         self.step_scheduler()
         metric_logger.synchronize_between_processes()
