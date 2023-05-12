@@ -102,7 +102,12 @@ def build_model(args, **kwargs):
         # Lightning: model = deterministic.resnet.ResNet18(n_classes)
         # Fabric:
         model = deterministic.resnet.ResNet18(num_classes)
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=0.0005)
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.model.optimizer.lr,
+            momentum=args.model.optimizer.momentum,
+            weight_decay=args.model.optimizer.weight_decay,
+        )
         trainer = deterministic.trainer.DeterministicTrainer(
             model,
             nn.CrossEntropyLoss(),
@@ -119,7 +124,12 @@ def build_model(args, **kwargs):
         # model = deterministic.resnet.ResNet18Labelsmoothing(n_classes, label_smoothing=args.model.label_smoothing)
         # Fabric:
         model = deterministic.resnet.ResNet18(num_classes)
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=0.0005)
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.model.optimizer.lr,
+            momentum=args.model.optimizer.momentum,
+            weight_decay=args.model.optimizer.weight_decay,
+        )
         trainer = deterministic.trainer.DeterministicTrainer(
             model,
             nn.CrossEntropyLoss(label_smoothing=args.model.label_smoothing),
@@ -136,7 +146,12 @@ def build_model(args, **kwargs):
         # model = deterministic.resnet.ResNet18Mixup(n_classes, mixup_alpha=.1)
         # Fabric:
         model = deterministic.resnet.ResNet18(num_classes)
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=0.0005)
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.model.optimizer.lr,
+            momentum=args.model.optimizer.momentum,
+            weight_decay=args.model.optimizer.weight_decay,
+        )
         trainer = deterministic.trainer.DeterministicMixupTrainer(
             model,
             nn.CrossEntropyLoss(),
@@ -152,7 +167,12 @@ def build_model(args, **kwargs):
 
     elif args.model.name == 'resnet18_mcdropout':
         model = mc_dropout.resnet.DropoutResNet18(num_classes, args.model.n_passes, args.model.dropout_rate)
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=0.0005)
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.model.optimizer.lr,
+            momentum=args.model.optimizer.momentum,
+            weight_decay=args.model.optimizer.weight_decay,
+        )
         trainer = mc_dropout.trainer.MCDropoutTrainer(
             model,
             nn.CrossEntropyLoss(),
@@ -195,7 +215,7 @@ def build_model(args, **kwargs):
 
     elif args.model.name == 'resnet18_sngp':
         model = sngp.resnet.resnet18_sngp(
-            num_classes=10,
+            num_classes=num_classes,
             input_shape=(3, 32, 32),
             spectral_norm=args.model.spectral_norm.use_spectral_norm,
             norm_bound=args.model.spectral_norm.norm_bound,

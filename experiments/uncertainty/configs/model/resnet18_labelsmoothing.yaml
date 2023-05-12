@@ -1,6 +1,6 @@
 name: resnet18_labelsmoothing
 n_epochs: 200
-batch_size: 128
+batch_size: 64
 label_smoothing: 0.05
 optimizer:
   lr: 0.1
