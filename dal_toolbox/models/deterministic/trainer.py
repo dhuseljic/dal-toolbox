@@ -106,17 +106,20 @@ class DeterministicMixupTrainer(DeterministicTrainer):
         criterion: torch.nn.Module,
         optimizer: torch.optim.Optimizer,
         num_classes: int,
+        mixup_alpha: float,
         lr_scheduler=None,
-        mixup_alpha: float = 0.4,
         num_epochs: int = 200,
+        callbacks: list = [],
         device: str = None,
         num_devices: int = 'auto',
         precision='32-true',
         output_dir: str = None,
         summary_writer=None,
+        val_every: int = 1,
+        save_every: int = None,
     ):
-        super().__init__(model, criterion, optimizer, lr_scheduler, num_epochs,
-                         device, num_devices, precision, output_dir, summary_writer)
+        super().__init__(model, criterion, optimizer, lr_scheduler, num_epochs, callbacks,
+                         device, num_devices, precision, output_dir, summary_writer, val_every, save_every)
         self.num_classes = num_classes
         self.mixup_alpha = mixup_alpha
 
@@ -131,6 +134,7 @@ class DeterministicMixupTrainer(DeterministicTrainer):
 
         # Train the epoch
         for inputs, targets in metric_logger.log_every(dataloader, print_freq, header):
+            self.fabric.call("on_train_batch_start", self, self.model)
             inputs, targets = inputs.to(self.device), targets.to(self.device)
 
             targets_one_hot = F.one_hot(targets, num_classes=self.num_classes)
@@ -146,6 +150,7 @@ class DeterministicMixupTrainer(DeterministicTrainer):
             acc1 = metrics.Accuracy()(logits, targets)
             metric_logger.update(loss=loss.item(), lr=self.optimizer.param_groups[0]["lr"])
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
+            self.fabric.call("on_train_batch_end", self, self.model)
 
         self.step_scheduler()
         metric_logger.synchronize_between_processes()

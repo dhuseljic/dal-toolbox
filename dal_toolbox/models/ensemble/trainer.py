@@ -14,16 +14,17 @@ class EnsembleTrainer(BasicTrainer):
         optimizer: torch.optim.Optimizer,
         lr_scheduler=None,
         num_epochs: int = 200,
+        callbacks: list = [],
         device: str = None,
         num_devices: int = 'auto',
         precision='32-true',
         output_dir: str = None,
         summary_writer=None,
-        eval_every: int = None,
+        val_every: int = 1,
         save_every: int = None,
     ):
-        super().__init__(model, criterion, optimizer, lr_scheduler, num_epochs, device,
-                         num_devices, precision, output_dir, summary_writer, eval_every, save_every)
+        super().__init__(model, criterion, optimizer, lr_scheduler, num_epochs, callbacks,
+                         device, num_devices, precision, output_dir, summary_writer, val_every, save_every)
         # Remove old model
         del self.model
 
@@ -46,6 +47,7 @@ class EnsembleTrainer(BasicTrainer):
 
             # Train the epoch
             for inputs, targets in metric_logger.log_every(dataloader, print_freq, header):
+                self.fabric.call("on_train_batch_start", self, member)
 
                 outputs = member(inputs)
 
@@ -60,6 +62,7 @@ class EnsembleTrainer(BasicTrainer):
                 metric_logger.update(loss=loss.item(), lr=optim.param_groups[0]["lr"])
                 metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
 
+                self.fabric.call("on_train_batch_end", self, member)
             self.step_scheduler()
             metric_logger.synchronize_between_processes()
             train_stats.update({f"train_{key}_member{i_member}": meter.global_avg for key,
