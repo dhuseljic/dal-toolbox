@@ -64,10 +64,10 @@ class EnsembleTrainer(BasicTrainer):
                 metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
 
                 self.fabric.call("on_train_batch_end", self, member)
-            self.step_scheduler()
             metric_logger.synchronize_between_processes()
             train_stats.update({f"train_{key}_member{i_member}": meter.global_avg for key,
                                 meter, in metric_logger.meters.items()})
+        self.step_scheduler()
         return train_stats
 
     @torch.inference_mode()
