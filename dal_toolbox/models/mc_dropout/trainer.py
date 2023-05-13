@@ -8,6 +8,7 @@ from ... import metrics
 class MCDropoutTrainer(BasicTrainer):
     def train_one_epoch(self, dataloader, epoch=None, print_freq=200):
         self.model.train()
+        acc_fn = metrics.Accuracy().to(self.fabric.device)
 
         metric_logger = MetricLogger(delimiter="  ")
         metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
@@ -24,7 +25,7 @@ class MCDropoutTrainer(BasicTrainer):
             self.backward(loss)
             self.optimizer.step()
 
-            acc1 = metrics.Accuracy()(logits, targets)
+            acc1 = acc_fn(logits, targets)
             metric_logger.update(loss=loss.item(), lr=self.optimizer.param_groups[0]["lr"])
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
             self.fabric.call("on_train_batch_end", self, self.model)
