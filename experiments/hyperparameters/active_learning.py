@@ -15,8 +15,9 @@ from dal_toolbox.models.deterministic import DeterministicModel, resnet, Determi
 from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
 from dal_toolbox.active_learning.data import ALDataset
 from dal_toolbox.active_learning.strategies import random, badge
-from dal_toolbox.utils import seed_everything
+from dal_toolbox.utils import seed_everything, is_running_on_slurm
 from dal_toolbox.metrics import Accuracy
+from dal_toolbox.models.utils.callbacks import Logger
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
@@ -104,16 +105,20 @@ def main(args):
         lr_scheduler_params = dict(num_epochs=args.model.num_epochs, warmup_epochs=10)
         model = DeterministicModel(
             resnet.ResNet18(num_classes=ds_info['n_classes']),
+            metrics={'train_acc': Accuracy()},
             optimizer=optimizer,
             optimizer_params=optimizer_params,
             lr_scheduler=lr_scheduler,
             lr_scheduler_params=lr_scheduler_params
         )
-
+        callbacks = []
+        if is_running_on_slurm():
+            callbacks.append(Logger())
         trainer = L.Trainer(
             max_epochs=args.model.num_epochs,
-            # callbacks=[],
             enable_checkpointing=False,
+            callbacks=callbacks,
+            enable_progress_bar=(is_running_on_slurm() is False)
         )
         trainer.fit(model, train_loader)
 
