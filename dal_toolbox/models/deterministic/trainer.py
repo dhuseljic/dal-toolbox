@@ -15,6 +15,7 @@ class DeterministicTrainer(BasicTrainer):
 
     def train_one_epoch(self, dataloader, epoch=None, print_freq=200):
         self.model.train()
+        acc_fn = metrics.Accuracy().to(self.fabric.device)
 
         metric_logger = MetricLogger(delimiter=" ")
         metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
@@ -31,7 +32,7 @@ class DeterministicTrainer(BasicTrainer):
             self.optimizer.step()
 
             batch_size = inputs.shape[0]
-            acc1 = metrics.Accuracy()(logits, targets)
+            acc1 = acc_fn(logits, targets)
             metric_logger.update(loss=loss.item(), lr=self.optimizer.param_groups[0]["lr"])
             metric_logger.meters["acc1"].update(acc1, n=batch_size)
 
@@ -127,6 +128,7 @@ class DeterministicMixupTrainer(DeterministicTrainer):
         self.model.train()
         self.model.to(self.device)
         self.criterion.to(self.device)
+        acc_fn = metrics.Accuracy().to(self.fabric.device)
 
         metric_logger = MetricLogger(delimiter=" ")
         metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
@@ -147,7 +149,7 @@ class DeterministicMixupTrainer(DeterministicTrainer):
             self.optimizer.step()
 
             batch_size = inputs.shape[0]
-            acc1 = metrics.Accuracy()(logits, targets)
+            acc1 = acc_fn(logits, targets)
             metric_logger.update(loss=loss.item(), lr=self.optimizer.param_groups[0]["lr"])
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
             self.fabric.call("on_train_batch_end", self, self.model)
@@ -172,6 +174,7 @@ class DeterministicPseudoLabelTrainer(DeterministicTrainer):
         self.model.train()
         self.model.to(self.device)
         self.criterion.to(self.device)
+        acc_fn = metrics.Accuracy().to(self.fabric.device)
 
         metric_logger = MetricLogger(delimiter=" ")
         metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
@@ -213,8 +216,8 @@ class DeterministicPseudoLabelTrainer(DeterministicTrainer):
 
             # Metrics
             batch_size_l, batch_size_u = x_l.shape[0], x_u.shape[0]
-            acc1 = metrics.Accuracy()(logits_l, y_l)
-            pseudo_acc1 = metrics.Accuracy()(logits_u, y_u)
+            acc1 = acc_fn(logits_l, y_l)
+            pseudo_acc1 = acc_fn(logits_u, y_u)
             metric_logger.update(loss=loss.item(), sup_loss=loss_l.item(), unsup_loss=loss_u.item(),
                                  mask_ratio=mask.float().mean().item(), unsup_warmup_factor=unsup_warmup_factor, lr=self.optimizer.param_groups[0]["lr"])
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size_l)
@@ -237,6 +240,7 @@ class DeterministicPiModelTrainer(DeterministicTrainer):
         self.model.train()
         self.model.to(self.device)
         self.criterion.to(self.device)
+        acc_fn = metrics.Accuracy().to(self.fabric.device)
 
         metric_logger = MetricLogger(delimiter=" ")
         metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
@@ -275,7 +279,7 @@ class DeterministicPiModelTrainer(DeterministicTrainer):
 
             # Metrics
             batch_size = x_l.shape[0]
-            acc1 = metrics.Accuracy()(logits_l, y_l)
+            acc1 = acc_fn(logits_l, y_l)
             metric_logger.update(loss=loss.item(), sup_loss=loss_l.item(), unsup_loss=loss_u.item(),
                                  unsup_warmup_factor=unsup_warmup_factor, lr=self.optimizer.param_groups[0]["lr"])
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)

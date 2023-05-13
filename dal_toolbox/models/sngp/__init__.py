@@ -5,5 +5,5 @@ from . import evaluate
 from . import trainer
 from . import wide_resnet
 
-from .trainer import SNGPTrainer
-from .base import SNGPModule
+from .trainer import *
+from .base import *

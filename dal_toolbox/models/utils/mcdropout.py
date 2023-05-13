@@ -21,17 +21,8 @@ class MCDropoutModule(nn.Module):
         mc_output_B_K = MCDropoutModule.unflatten_tensor(mc_output_BK, MCDropoutModule.n_passes)
         return mc_output_B_K
 
-    def mc_forward_impl(self, mc_input_BK: torch.Tensor):
-        return mc_input_BK
-
-    def get_mc_logits(self, dataloader, device):
-        mc_probas = []
-        self.to(device)
-        self.eval()
-        for samples, _ in tqdm(dataloader):
-            samples = samples.to(device)
-            mc_probas.append(self.mc_forward(samples))
-        return torch.cat(mc_probas)
+    def mc_forward_impl(self, *args, **kwargs):
+        return self(*args, **kwargs)
 
     @staticmethod
     def unflatten_tensor(input: torch.Tensor, k: int):
