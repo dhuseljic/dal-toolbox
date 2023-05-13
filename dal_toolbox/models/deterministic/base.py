@@ -1,60 +1,37 @@
 import warnings
 
 import torch
+import torch.nn.functional as F
 import torch.distributed as dist
 import torch.nn as nn
-
 import lightning as L
 
-from ...metrics.generalization import Accuracy
-
-# TODO(dhuseljic): discuss
+from ..utils.mixup import mixup
 
 
-class DeterministicModule(L.LightningModule):
-    def __init__(self):
-        # TODO(dhuseljic): discuss with marek, one could add mixup here?
+class DeterministicModel(L.LightningModule):
+    def __init__(self, model, metrics=None):
         super().__init__()
-
-        self.train_accuracy = Accuracy()
-        self.val_accuracy = Accuracy()
-        self.test_accuracy = Accuracy()
-
+        self.model = model
+        self.metrics = nn.ModuleDict(metrics)
         self.loss_fn = nn.CrossEntropyLoss()
+
+    def forward(self, *args, **kwargs):
+        return self.model.forward(*args, **kwargs)
 
     def training_step(self, batch):
         inputs, targets = batch
 
         logits = self(inputs)
         loss = self.loss_fn(logits, targets)
-        self.train_accuracy(logits, targets)
+        self.log('train_loss', loss, prog_bar=True)
 
-        train_stats = {'train_loss': loss, 'train_acc': self.train_accuracy}
-        self.log_dict(train_stats, prog_bar=True)
+        if self.metrics is not None:
+            metrics = {metric_name: metric(logits, targets) for metric_name, metric in self.metrics.items()}
+            self.log_dict(self.metrics, prog_bar=True)
         return loss
 
-    def validation_step(self, batch, batch_idx):
-        # TODO(dhuseljic): how to handle?
-        inputs, targets = batch
-        logits = self(inputs)
-        loss = self.loss_fn(logits, targets)
-
-        self.val_accuracy(logits, targets)
-
-        val_stats = {'val_loss': loss, 'val_acc': self.val_accuracy}
-        self.log_dict(val_stats, prog_bar=True)
-        return loss
-
-    def test_step(self, batch, batch_idx):
-        inputs, targets = batch
-        logits = self(inputs)
-        loss = self.loss_fn(logits, targets)
-
-        self.test_accuracy(logits, targets)
-
-        val_stats = {'test_loss': loss, 'test_acc': self.test_accuracy}
-        self.log_dict(val_stats, prog_bar=True)
-        return loss
+    # TODO(dhuseljic): write basic validation step
 
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         # TODO(dhuseljic): discuss with mherde; maybe can be used for AL?
@@ -63,7 +40,6 @@ class DeterministicModule(L.LightningModule):
 
         logits = self._gather(logits)
         targets = self._gather(targets)
-
         return logits, targets
 
     def _gather(self, val):
@@ -77,3 +53,22 @@ class DeterministicModule(L.LightningModule):
         optimizer = torch.optim.SGD(self.parameters(), lr=1e-1, momentum=.9, weight_decay=0.01)
         warnings.warn(f'Using default optimizer: {optimizer}.')
         return optimizer
+
+
+class DeterministicLabelsmoothingModel(DeterministicModel):
+    def __init__(self, model, label_smoothing, metrics=None):
+        super().__init__(model, metrics)
+        self.loss_fn = nn.CrossEntropyLoss(label_smoothing=label_smoothing)
+
+
+class DeterministicMixupModel(DeterministicModel):
+    def __init__(self, model, num_classes, mixup_alpha, metrics=None):
+        super().__init__(model, metrics)
+        self.num_classes = num_classes
+        self.mixup_alpha = mixup_alpha
+
+    def training_step(self, batch):
+        inputs, targets = batch
+        targets_one_hot = F.one_hot(targets, self.num_classes)
+        batch_mixup = mixup(inputs, targets_one_hot, self.mixup_alpha)
+        return super().training_step(batch_mixup)
