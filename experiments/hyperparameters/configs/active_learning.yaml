@@ -12,7 +12,7 @@ al_cycle:
   n_init: 100
   init_pool_file: null
   acq_size: 100
-  n_acq: 9
+  n_acq: 39
   cold_start: True
 
 

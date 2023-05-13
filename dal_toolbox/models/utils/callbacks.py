@@ -7,7 +7,7 @@ from tqdm import tqdm
 from lightning.pytorch.utilities import rank_zero_only
 
 
-class MetricsHistory(L.Callback):
+class MetricHistory(L.Callback):
     """PyTorch Lightning callback for collecting metrics across training steps."""
 
     def __init__(self):
@@ -34,18 +34,7 @@ class MetricsHistory(L.Callback):
         return self.metrics
 
 
-class LitProgressBar(TQDMProgressBar):
-    """LitProgressBar
-
-    Simplified bar as callback to report the training progress.
-    """
-
-    def init_validation_tqdm(self):
-        bar = tqdm(disable=True)
-        return bar
-
-
-class Logger(L.Callback):
+class MetricLogger(L.Callback):
     def __init__(self):
         super().__init__()
         self.logger = logging.getLogger(__name__)
