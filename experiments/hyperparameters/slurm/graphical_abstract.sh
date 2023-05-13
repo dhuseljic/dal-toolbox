@@ -27,7 +27,7 @@ random_seed=${random_seeds[$index / 9]}
 output_dir=/mnt/work/dhuseljic/results/hyperparameters/lr${learning_rate}_wd${weight_decay}/seed${random_seed}
 
 # Run the deep learning script with the current hyperparameters
-echo python -u active_learning.py \
+python -u active_learning.py \
     model.optimizer.lr=$learning_rate \
     model.optimizer.weight_decay=$weight_decay \
     random_seed=$random_seed \
