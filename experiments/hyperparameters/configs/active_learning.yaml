@@ -1,0 +1,27 @@
+defaults:
+  - _self_
+  - al_strategy: random
+  - model: resnet18
+
+dataset: CIFAR10
+dataset_path: ./data/
+random_seed: 1
+device: cuda
+
+al_cycle:
+  n_init: 100
+  init_pool_file: null
+  acq_size: 100
+  n_acq: 9
+  cold_start: True
+
+
+output_dir: ./output/
+hydra:
+  run:
+    dir: ${output_dir}
+  job_logging:
+    handlers:
+      file:
+        mode: w
+

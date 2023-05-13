@@ -1,19 +1,24 @@
-import warnings
-
 import torch
 import torch.nn.functional as F
 import torch.distributed as dist
 import torch.nn as nn
 import lightning as L
 
+from lightning.pytorch.utilities.rank_zero import rank_zero_warn
+
 from ..utils.mixup import mixup
 
 
 class DeterministicModel(L.LightningModule):
-    def __init__(self, model, metrics=None):
+    def __init__(self, model, optimizer=None, optimizer_params=None, lr_scheduler=None, lr_scheduler_params=None, metrics=None):
         super().__init__()
         self.model = model
         self.metrics = nn.ModuleDict(metrics)
+        self.optimizer = optimizer
+        self.optimizer_params = optimizer_params
+        self.lr_scheduler = lr_scheduler
+        self.lr_scheduler_params = lr_scheduler_params
+
         self.loss_fn = nn.CrossEntropyLoss()
 
     def forward(self, *args, **kwargs):
@@ -50,9 +55,18 @@ class DeterministicModel(L.LightningModule):
         return val
 
     def configure_optimizers(self):
-        optimizer = torch.optim.SGD(self.parameters(), lr=1e-1, momentum=.9, weight_decay=0.01)
-        warnings.warn(f'Using default optimizer: {optimizer}.')
-        return optimizer
+        if self.optimizer is None:
+            optimizer = torch.optim.SGD(self.parameters(), lr=1e-1, momentum=.9, weight_decay=0.01)
+            rank_zero_warn(f'Using default optimizer: {optimizer}.')
+        else:
+            optimizer_params = {} if self.optimizer_params is None else self.optimizer_params
+            optimizer = self.optimizer(self.parameters(), **optimizer_params)
+
+        if self.lr_scheduler is None:
+            return optimizer
+        lr_scheduler_params = {} if self.lr_scheduler_params is None else self.lr_scheduler_params
+        lr_scheduler = self.lr_scheduler(optimizer, **lr_scheduler_params)
+        return {'optimizer': optimizer, 'lr_scheduler': lr_scheduler}
 
 
 class DeterministicLabelsmoothingModel(DeterministicModel):
