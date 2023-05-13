@@ -39,6 +39,7 @@ class EnsembleTrainer(BasicTrainer):
     def train_one_epoch(self, dataloader, epoch=None, print_freq=200):
         train_stats = {}
         self.model.train()
+        acc_fn = metrics.Accuracy().to(self.fabric.device)
 
         for i_member, (member, optim) in enumerate(zip(self.model, self.optimizer)):
             metric_logger = MetricLogger(delimiter=" ")
@@ -58,7 +59,7 @@ class EnsembleTrainer(BasicTrainer):
                 optim.step()
 
                 batch_size = inputs.shape[0]
-                acc1 = metrics.Accuracy()(outputs, targets)
+                acc1 = acc_fn(outputs, targets)
                 metric_logger.update(loss=loss.item(), lr=optim.param_groups[0]["lr"])
                 metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
 
