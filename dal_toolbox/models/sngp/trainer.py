@@ -1,14 +1,26 @@
 import torch
 
 from ..deterministic.trainer import DeterministicTrainer
+from ..utils.random_features import RandomFeatureGaussianProcess
 from ...utils import MetricLogger, SmoothedValue
 from ...metrics import generalization, calibration, ood
 
 
 class SNGPTrainer(DeterministicTrainer):
+
+    def _reset_precision_matrix(self):
+        for m in self.model.modules():
+            if isinstance(m, RandomFeatureGaussianProcess):
+                m.reset_precision_matrix()
+
+    def _synchronize_precision_matrix(self):
+        for m in self.model.modules():
+            if isinstance(m, RandomFeatureGaussianProcess):
+                m.synchronize_precision_matrix()
+
     def train_one_epoch(self, dataloader, epoch=None, print_freq=200):
         self.model.train()
-        self.model.reset_precision_matrix()
+        self._reset_precision_matrix()
 
         metric_logger = MetricLogger(delimiter=" ")
         metric_logger.add_meter("lr", SmoothedValue(window_size=1, fmt="{value:.4f}"))
@@ -30,13 +42,12 @@ class SNGPTrainer(DeterministicTrainer):
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
 
             self.fabric.call("on_train_batch_end", self, self.model)
-
         self.step_scheduler()
-        self.model.synchronize_precision_matrix()
+        self._synchronize_precision_matrix()
         metric_logger.synchronize_between_processes()
         train_stats = {f"train_{k}": meter.global_avg for k, meter, in metric_logger.meters.items()}
         return train_stats
-    
+
     @torch.inference_mode()
     def predict(self, dataloader):
         self.model.eval()
@@ -57,8 +68,6 @@ class SNGPTrainer(DeterministicTrainer):
         targets = torch.cat(targets_list)
 
         return logits, targets
-
-
 
     @torch.no_grad()
     def evaluate_model(self, dataloader, dataloaders_ood=None):
