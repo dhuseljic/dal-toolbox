@@ -5,7 +5,7 @@
 #SBATCH --output=/mnt/work/dhuseljic/logs/hyperparameters/%A_graphical_abstract_%a.out
 #SBATCH --ntasks=1
 #SBATCH --mem=32GB
-#SBATCH --array=0-8
+#SBATCH --array=0-26
 # Array currently configured for random_seed 1 only
 date;hostname;pwd
 source activate dal-toolbox
@@ -24,7 +24,7 @@ learning_rate=${learning_rates[$index % 3]}
 weight_decay=${weight_decays[$index / 3 % 3]}
 random_seed=${random_seeds[$index / 9]}
 
-output_dir=/mnt/work/dhuseljic/results/hyperparameters/lr${learning_rate}_wd${weight_decay}/seed${random_seed}
+output_dir=/mnt/work/dhuseljic/results/hyperparameters/graphical_abstract/random/lr${learning_rate}_wd${weight_decay}/seed${random_seed}
 
 # Run the deep learning script with the current hyperparameters
 python -u active_learning.py \
