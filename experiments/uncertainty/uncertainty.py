@@ -14,7 +14,6 @@ from dal_toolbox import datasets
 from dal_toolbox import metrics
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp, variational_inference
 from dal_toolbox.utils import seed_everything
-# from dal_toolbox.models.utils.callbacks import DummyCallback
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="uncertainty")
@@ -65,11 +64,11 @@ def main(args):
     targets_id = torch.cat([pred[1] for pred in predictions_id])
 
     predictions_ood = trainer.predict(model, test_loaders_ood)
-    logits_ood = {}
+    logits_ood_dict = {}
     for ds_name, predictions in zip(test_loaders_ood, predictions_ood):
-        logits_ood[ds_name] = torch.cat([pred[0] for pred in predictions])
+        logits_ood_dict[ds_name] = torch.cat([pred[0] for pred in predictions])
 
-    test_stats = evaluate(logits_id, targets_id, logits_ood)
+    test_stats = evaluate(logits_id, targets_id, logits_ood_dict)
     logging.info('Test Stats: %s', test_stats)
 
     # Saving results
@@ -80,9 +79,12 @@ def main(args):
         json.dump(results, f)
 
 
-def evaluate(logits_id, targets_id, logits_ood=None):
+def evaluate(logits_id, targets_id, logits_ood_dict=None):
     # Model specific test loss and accuracy for in domain testset
     test_stats = {}
+    if logits_id.ndim == 3:
+        log_probas = metrics.ensemble_log_probas_from_logits(logits_id)
+        logits_id = log_probas
 
     # Test stats for in-distribution
     test_stats.update({
@@ -95,8 +97,11 @@ def evaluate(logits_id, targets_id, logits_ood=None):
 
     # Test stats for out-of-distribution
     entropy_id = metrics.entropy_from_logits(logits_id)
-    for ds_name, logits_ood in logits_ood.items():
-        entropy_ood = metrics.entropy_from_logits(logits_ood)
+    for ds_name, logits_ood in logits_ood_dict.items():
+        if logits_ood.ndim == 3:
+            entropy_ood = metrics.ensemble_entropy_from_logits(logits_ood)
+        else:
+            entropy_ood = metrics.entropy_from_logits(logits_ood_dict)
         test_stats.update({
             f"aupr_{ds_name}": metrics.OODAUPR()(entropy_id, entropy_ood).item(),
             f"auroc_{ds_name}": metrics.OODAUROC()(entropy_id, entropy_ood).item()
@@ -159,7 +164,7 @@ def build_model(args, **kwargs):
             mixup_alpha=args.model.mixup_alpha,
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
-            train_metrics={'train_acc': metrics.Accuracy()}
+            train_metrics={'train_acc': metrics.Accuracy()},
         )
         return model
 
@@ -171,16 +176,14 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             weight_decay=args.model.optimizer.weight_decay,
         )
-        trainer = mc_dropout.trainer.MCDropoutTrainer(
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        model = mc_dropout.MCDropoutModel(
             model,
-            nn.CrossEntropyLoss(),
-            optimizer=optimizer,
-            lr_scheduler=torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs),
-            num_epochs=args.model.n_epochs,
-            num_devices=args.num_devices,
-            output_dir=args.output_dir,
+            optimizer,
+            lr_scheduler,
+            train_metrics={'train_acc': metrics.Accuracy()},
         )
-        return model, trainer
+        return model
 
     elif args.model.name == 'resnet18_ensemble':
         members, lr_schedulers, optimizers = [], [], []

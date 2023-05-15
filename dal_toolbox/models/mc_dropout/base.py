@@ -11,23 +11,22 @@ class MCDropoutModel(BaseModule):
 
         logits = self(inputs)
         loss = self.loss_fn(logits, targets)
-        self.log('train_loss', loss, prog_bar=True)
 
-        if self.train_metrics is not None:
-            metrics = {metric_name: metric(logits, targets) for metric_name, metric in self.train_metrics.items()}
-            self.log_dict(self.train_metrics, prog_bar=True)
+        self.log('train_loss', loss, prog_bar=True)
+        self.log_train_metrics(logits, targets)
+
         return loss
 
     def validation_step(self, batch, batch_idx):
+        # TODO(dhuseljic): Validation with MC forward? might take a long time
         inputs, targets = batch
 
         logits = self(inputs)
         loss = self.loss_fn(logits, targets)
-        self.log('val_loss', loss, prog_bar=True)
 
-        if self.val_metrics is not None:
-            metrics = {metric_name: metric(logits, targets) for metric_name, metric in self.val_metrics.items()}
-            self.log_dict(self.val_metrics, prog_bar=True)
+        self.log('val_loss', loss, prog_bar=True)
+        self.val_metrics(logits, targets)
+
         return loss
 
     def predict_step(self, batch, batch_idx, dataloader_idx=0):

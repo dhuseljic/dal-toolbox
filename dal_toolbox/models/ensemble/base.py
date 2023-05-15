@@ -1,7 +1,6 @@
 
 import torch
 import torch.nn as nn
-import lightning as L
 
 from lightning.pytorch.utilities.rank_zero import rank_zero_warn
 from ..utils.base import BaseModule
@@ -12,21 +11,21 @@ class EnsembleModel(BaseModule):
 
     def __init__(
             self,
-            member_list: list,
+            model_list: list,
+            loss_fn=nn.CrossEntropyLoss(),
             optimizer_list: list = None,
             lr_scheduler_list: list = None,
             train_metrics: dict = None,
             val_metrics: dict = None,
-            loss_fn=nn.CrossEntropyLoss(),
-            val_loss_fn=GibbsCrossEntropy()
+            val_loss_fn=GibbsCrossEntropy(),
     ):
-        super().__init__(None, None, None, train_metrics, val_metrics, loss_fn)
-        self.members = nn.ModuleList(member_list)
+        super().__init__(None, loss_fn, None, None, train_metrics, val_metrics)
+        self.members = nn.ModuleList(model_list)
         self.optimizer_list = optimizer_list
         self.lr_scheduler_list = lr_scheduler_list
 
-        self.automatic_optimization = False
         self.val_loss_fn = val_loss_fn
+        self.automatic_optimization = False
 
     def forward(self, x):
         logits_list = []
@@ -44,10 +43,10 @@ class EnsembleModel(BaseModule):
             optimizer.zero_grad()
             self.manual_backward(loss)
             optimizer.step()
-            self.log(f'loss_member{i}', loss, prog_bar=True)
+
+            self.log(f'train_loss_member{i}', loss, prog_bar=True)
             if self.trainer.is_last_batch:
                 lr_scheduler.step()
-
             # TODO: How to handle metrics
 
     def validation_step(self, batch, batch_idx):
@@ -77,7 +76,7 @@ class EnsembleModel(BaseModule):
             for member in self.members:
                 optimizer = torch.optim.SGD(member.parameters(), lr=1e-1, momentum=.9)
                 optimizers.append(optimizer)
-            rank_zero_warn(f'Using default optimizer: {optimizer}.')
+            rank_zero_warn(f'Using default optimizer for all ensemble members: {optimizer}.')
             return optimizers
 
         if self.lr_scheduler_list is None:

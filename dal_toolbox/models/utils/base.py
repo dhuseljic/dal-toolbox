@@ -13,23 +13,19 @@ class BaseModule(L.LightningModule, abc.ABC):
     def __init__(
             self,
             model: nn.Module,
+            loss_fn=nn.CrossEntropyLoss(),
             optimizer: torch.optim.Optimizer = None,
-            # optimizer_params: dict = None,
             lr_scheduler: torch.optim.lr_scheduler.LRScheduler = None,
-            # lr_scheduler_params: dict = None,
             train_metrics: dict = None,
             val_metrics: dict = None,
-            loss_fn=nn.CrossEntropyLoss(),
     ):
         super().__init__()
         self.model = model
+        self.loss_fn = loss_fn
         self.optimizer = optimizer
-        # self.optimizer_params = optimizer_params
         self.lr_scheduler = lr_scheduler
-        # self.lr_scheduler_params = lr_scheduler_params
         self.train_metrics = nn.ModuleDict(train_metrics)
         self.val_metrics = nn.ModuleDict(val_metrics)
-        self.loss_fn = loss_fn
 
         # TODO(dhuseljic): optimizer and lrscheduler as args?
         # init_optimizer_state = copy.deepcopy(self.optimizer.state_dict())
@@ -54,14 +50,16 @@ class BaseModule(L.LightningModule, abc.ABC):
         if self.lr_scheduler is None:
             return self.optimizer
         return {'optimizer': self.optimizer, 'lr_scheduler': self.lr_scheduler}
-        # else:
-        #     optimizer_params = {} if self.optimizer_params is None else self.optimizer_params
-        #     optimizer = self.optimizer(self.parameters(), **optimizer_params)
-        # if self.lr_scheduler is None:
-        #     return optimizer
-        # lr_scheduler_params = {} if self.lr_scheduler_params is None else self.lr_scheduler_params
-        # lr_scheduler = self.lr_scheduler(optimizer, **lr_scheduler_params)
-        # return {'optimizer': optimizer, 'lr_scheduler': lr_scheduler}
+
+    def log_train_metrics(self, logits, targets):
+        if self.train_metrics is not None:
+            metrics = {metric_name: metric(logits, targets) for metric_name, metric in self.train_metrics.items()}
+            self.log_dict(self.train_metrics, prog_bar=True)
+
+    def log_val_metrics(self, logits, targets):
+        if self.val_metrics is not None:
+            metrics = {metric_name: metric(logits, targets) for metric_name, metric in self.val_metrics.items()}
+            self.log_dict(self.val_metrics, prog_bar=True)
 
     # TODO(dhuseljic): Discuss
     @torch.inference_mode()
