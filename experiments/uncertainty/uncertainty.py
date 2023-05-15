@@ -14,6 +14,7 @@ from dal_toolbox import datasets
 from dal_toolbox import metrics
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp, variational_inference
 from dal_toolbox.utils import seed_everything
+from dal_toolbox.models.utils.callbacks import MetricLogger
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="uncertainty")
@@ -82,9 +83,7 @@ def main(args):
 def evaluate(logits_id, targets_id, logits_ood_dict=None):
     # Model specific test loss and accuracy for in domain testset
     test_stats = {}
-    if logits_id.ndim == 3:
-        log_probas = metrics.ensemble_log_probas_from_logits(logits_id)
-        logits_id = log_probas
+    logits_id = metrics.ensemble_log_probas_from_logits(logits_id) if logits_id.ndim == 3 else logits_id
 
     # Test stats for in-distribution
     test_stats.update({
@@ -98,10 +97,10 @@ def evaluate(logits_id, targets_id, logits_ood_dict=None):
     # Test stats for out-of-distribution
     entropy_id = metrics.entropy_from_logits(logits_id)
     for ds_name, logits_ood in logits_ood_dict.items():
-        if logits_ood.ndim == 3:
-            entropy_ood = metrics.ensemble_entropy_from_logits(logits_ood)
+        if logits_ood.ndim == 2:
+            entropy_ood = metrics.entropy_from_logits(logits_ood)
         else:
-            entropy_ood = metrics.entropy_from_logits(logits_ood_dict)
+            entropy_ood = metrics.ensemble_entropy_from_logits(logits_ood)
         test_stats.update({
             f"aupr_{ds_name}": metrics.OODAUPR()(entropy_id, entropy_ood).item(),
             f"auroc_{ds_name}": metrics.OODAUROC()(entropy_id, entropy_ood).item()
@@ -123,11 +122,11 @@ def build_model(args, **kwargs):
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
         model = deterministic.DeterministicModel(
             model,
-            optimizer,
-            lr_scheduler,
+            loss_fn=nn.CrossEntropyLoss(),
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
             train_metrics={'train_acc': metrics.Accuracy()}
         )
-        return model
 
     elif args.model.name == 'resnet18_labelsmoothing':
         # Lightning:
@@ -139,14 +138,13 @@ def build_model(args, **kwargs):
             weight_decay=args.model.optimizer.weight_decay,
         )
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
-        model = deterministic.DeterministicLabelsmoothingModel(
+        model = deterministic.DeterministicModel(
             model,
-            label_smoothing=args.model.label_smoothing,
+            loss_fn=nn.CrossEntropyLoss(label_smoothing=args.model.label_smoothing),
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
             train_metrics={'train_acc': metrics.Accuracy()}
         )
-        return model
 
     elif args.model.name == 'resnet18_mixup':
         # Lightning:
@@ -166,7 +164,6 @@ def build_model(args, **kwargs):
             lr_scheduler=lr_scheduler,
             train_metrics={'train_acc': metrics.Accuracy()},
         )
-        return model
 
     elif args.model.name == 'resnet18_mcdropout':
         model = mc_dropout.resnet.DropoutResNet18(num_classes, args.model.n_passes, args.model.dropout_rate)
@@ -179,11 +176,10 @@ def build_model(args, **kwargs):
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
         model = mc_dropout.MCDropoutModel(
             model,
-            optimizer,
-            lr_scheduler,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
             train_metrics={'train_acc': metrics.Accuracy()},
         )
-        return model
 
     elif args.model.name == 'resnet18_ensemble':
         members, lr_schedulers, optimizers = [], [], []
@@ -199,20 +195,11 @@ def build_model(args, **kwargs):
             members.append(mem)
             optimizers.append(opt)
             lr_schedulers.append(lrs)
-        model = ensemble.voting_ensemble.Ensemble(members)
-        criterion = nn.CrossEntropyLoss()
-        optimizer = ensemble.voting_ensemble.EnsembleOptimizer(optimizers)
-        lr_scheduler = ensemble.voting_ensemble.EnsembleLRScheduler(lr_schedulers)
-        trainer = ensemble.trainer.EnsembleTrainer(
-            model,
-            nn.CrossEntropyLoss(),
-            optimizer=optimizer,
-            lr_scheduler=lr_scheduler,
-            num_epochs=args.model.n_epochs,
-            num_devices=args.num_devices,
-            output_dir=args.output_dir,
+        model = ensemble.EnsembleModel(
+            model_list=members,
+            optimizer_list=optimizers,
+            lr_scheduler_list=lr_schedulers,
         )
-        return model, trainer
 
     elif args.model.name == 'resnet18_sngp':
         model = sngp.resnet.resnet18_sngp(
@@ -237,39 +224,11 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
         )
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
-        criterion = nn.CrossEntropyLoss()
-        trainer = sngp.trainer.SNGPTrainer(
+        model = sngp.SNGPModel(
             model=model,
-            criterion=criterion,
+            loss_fn=nn.CrossEntropyLoss(),
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
-            device=args.device,
-            output_dir=args.output_dir,
-            num_epochs=args.model.n_epochs,
-            num_devices=args.num_devices,
-        )
-        return model, trainer
-
-    elif args.model.name == 'resnet18_vi':
-        model = variational_inference.resnet.BayesianResNet18(num_classes=10, prior_sigma=args.model.vi.prior_sigma)
-        optimizer = torch.optim.SGD(
-            model.parameters(),
-            lr=args.model.optimizer.lr,
-            weight_decay=args.model.optimizer.weight_decay,
-            momentum=args.model.optimizer.momentum,
-        )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
-        criterion = nn.CrossEntropyLoss()
-        trainer = variational_inference.trainer.VITrainer(
-            model=model,
-            criterion=criterion,
-            optimizer=optimizer,
-            grad_norm=args.model.optimizer.grad_norm,
-            lr_scheduler=lr_scheduler,
-            mc_samples=args.model.vi.mc_samples,
-            kl_temperature=args.model.vi.kl_temperature,
-            device=args.device,
-            output_dir=args.output_dir
         )
 
     else:
