@@ -3,7 +3,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from .query import Query
-from ...metrics import ood
+from ...metrics import utils
 from abc import ABC, abstractmethod
 
 
@@ -13,33 +13,33 @@ class UncertaintySampling(Query, ABC):
         self.subset_size = subset_size
 
     @torch.no_grad()
-    def query(self, model, al_datamodule, acq_size, **kwargs):
-        if not hasattr(model, 'get_logits'):
-            raise ValueError('The method `get_logits` is mandatory to use uncertainty sampling.')
+    def query(self, model, al_datamodule, acq_size, return_utilities=False, **kwargs):
         unlabeled_dataloader = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
         unlabeled_indices = al_datamodule.unlabeled_indices  # TODO(dhuseljic): get indices from dataloader?
 
         logits = model.get_logits(unlabeled_dataloader)
-        scores = self.get_scores(logits)
+        scores = self.get_utilities(logits)
         _, indices = scores.topk(acq_size)
 
         actual_indices = [unlabeled_indices[i] for i in indices]
+        if return_utilities:
+            return actual_indices, scores
         return actual_indices
 
     @abstractmethod
-    def get_scores(self, logits):
+    def get_utilities(self, logits):
         pass
 
 
 class EntropySampling(UncertaintySampling):
-    def get_scores(self, logits):
+    def get_utilities(self, logits):
         if logits.ndim != 2:
             raise ValueError(f"Input logits tensor must be 2-dimensional, got shape {logits.shape}")
-        return ood.entropy_from_logits(logits)
+        return utils.entropy_from_logits(logits)
 
 
 class LeastConfidentSampling(UncertaintySampling):
-    def get_scores(self, logits):
+    def get_utilities(self, logits):
         if logits.ndim != 2:
             raise ValueError(f"Input logits tensor must be 2-dimensional, got shape {logits.shape}")
         probas = logits.softmax(-1)
@@ -49,7 +49,7 @@ class LeastConfidentSampling(UncertaintySampling):
 
 
 class MarginSampling(UncertaintySampling):
-    def get_scores(self, logits):
+    def get_utilities(self, logits):
         if logits.ndim != 2:
             raise ValueError(f"Input logits tensor must be 2-dimensional, got shape {logits.shape}")
         probas = logits.softmax(-1)
@@ -60,17 +60,17 @@ class MarginSampling(UncertaintySampling):
 
 
 class BayesianEntropySampling(UncertaintySampling):
-    def get_scores(self, logits):
+    def get_utilities(self, logits):
         if logits.ndim != 3:
             raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
-        return ood.ensemble_entropy_from_logits(logits)
+        return utils.ensemble_entropy_from_logits(logits)
 
 
 class BayesianLeastConfidentSampling(UncertaintySampling):
-    def get_scores(self, logits):
+    def get_utilities(self, logits):
         if logits.ndim != 3:
             raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
-        log_probas = ood.ensemble_log_probas_from_logits(logits)
+        log_probas = utils.ensemble_log_probas_from_logits(logits)
         probas = log_probas.exp()
         scores, _ = probas.max(dim=-1)
         scores = 1 - scores
@@ -78,10 +78,10 @@ class BayesianLeastConfidentSampling(UncertaintySampling):
 
 
 class BayesianMarginSampling(UncertaintySampling):
-    def get_scores(self, logits):
+    def get_utilities(self, logits):
         if logits.ndim != 3:
             raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
-        log_probas = ood.ensemble_log_probas_from_logits(logits)
+        log_probas = utils.ensemble_log_probas_from_logits(logits)
         probas = log_probas.exp()
         top_probas, _ = torch.topk(probas, k=2, dim=-1)
         scores = top_probas[:, 0] - top_probas[:, 1]
@@ -90,7 +90,7 @@ class BayesianMarginSampling(UncertaintySampling):
 
 
 class VariationRatioSampling(UncertaintySampling):
-    def get_scores(self, logits):
+    def get_utilities(self, logits):
         if logits.ndim != 3:
             raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
         return self._variation_ratio(logits)
@@ -135,18 +135,17 @@ class VariationRatioSampling(UncertaintySampling):
 
 
 class BALDSampling(UncertaintySampling):
+    def get_utilities(self, logits):
+        if logits.ndim != 3:
+            raise ValueError(f"Input probas tensor must be 3-dimensional, got shape {logits.shape}")
+        scores = self.bald_score(logits)
+        return scores
 
     def bald_score(self, logits):
         # TODO(dhuseljic): implement bald from logits
         probas = logits.softmax(-1)
         mean_probas = torch.mean(probas, dim=1)
-        mean_entropy = ood.entropy_fn(mean_probas)
-        entropy = ood.entropy_fn(probas).mean(-1)
+        mean_entropy = utils.entropy_fn(mean_probas)
+        entropy = utils.entropy_fn(probas).mean(-1)
         score = mean_entropy - entropy
         return score
-
-    def get_scores(self, logits):
-        if logits.ndim != 3:
-            raise ValueError(f"Input probas tensor must be 3-dimensional, got shape {logits.shape}")
-        scores = self.bald_score(logits)
-        return scores

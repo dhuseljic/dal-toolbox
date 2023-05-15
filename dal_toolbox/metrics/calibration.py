@@ -88,9 +88,10 @@ class BrierScore(torchmetrics.Metric):
         super().__init__()
         self.add_state('brier_score_list', default=[], dist_reduce_fx='cat')
 
-    def update(self, probas, labels):
-        num_samples, num_classes = probas.shape
+    def update(self, logits, labels):
+        num_samples, num_classes = logits.shape
         assert len(labels) == num_samples, "Probas and Labels must be of the same size"
+        probas = logits.softmax(dim=-1)
         labels_onehot = F.one_hot(labels, num_classes=num_classes)
         score = torch.sum(F.mse_loss(probas, labels_onehot, reduction='none'), dim=-1)
         # Note: Tensorflow ignores the addition by one. To be consistent with the decomposition, we also ignore it.
@@ -325,9 +326,10 @@ class GeneralCalibrationError(nn.Module):
         return upper_bounds
 
     @torch.no_grad()
-    def forward(self, probas, targets):
-        num_classes = probas.shape[-1]
+    def forward(self, logits, targets):
+        num_classes = logits.shape[-1]
         targets_one_hot = F.one_hot(targets, num_classes=num_classes)
+        probas = F.softmax(logits, dim=-1)
 
         if not self.class_conditional:
             # only top pred

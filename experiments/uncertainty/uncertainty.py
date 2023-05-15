@@ -5,14 +5,16 @@ import logging
 import hydra
 import torch
 import torch.nn as nn
+import lightning as L
 
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader, Subset, RandomSampler
 
 from dal_toolbox import datasets
+from dal_toolbox import metrics
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp, variational_inference
 from dal_toolbox.utils import seed_everything
-# from dal_toolbox.models.utils.callbacks import DummyCallback
+from dal_toolbox.models.utils.callbacks import MetricLogger
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="uncertainty")
@@ -44,27 +46,31 @@ def main(args):
     test_loaders_ood = {name: DataLoader(test_ds_ood, batch_size=args.test_batch_size)
                         for name, test_ds_ood in ood_datasets.items()}
 
-    # Load model
+    # Training
     logger.info('Starting Training..')
+    model = build_model(args, num_classes=ds_info['n_classes'])
+    trainer = L.Trainer(
+        max_epochs=args.model.n_epochs,
+        callbacks=[],
+        check_val_every_n_epoch=args.eval_interval,
+        enable_checkpointing=False,
+        enable_progress_bar=True,
+        devices=args.num_devices,
+    )
+    trainer.fit(model, train_loader)  # , val_dataloaders=test_loader_id)
 
-    # Own trainer
-    model, trainer = build_model(args, n_classes=ds_info['n_classes'])
-    trainer.fit(train_loader, val_loaders=test_loader_id)
-    logger.info('Starting Testing..')
-    test_stats = trainer.evaluate(test_loader_id, dataloaders_ood=test_loaders_ood)
-    logger.info("Final test results: %s", test_stats)
+    # Evaluation
+    predictions_id = trainer.predict(model, test_loader_id)
+    logits_id = torch.cat([pred[0] for pred in predictions_id])
+    targets_id = torch.cat([pred[1] for pred in predictions_id])
 
-    # Lightning:
-    # model = get_lightning_model()
-    # trainer = L.Trainer(
-    #     max_epochs=args.model.n_epochs,
-    #     callbacks=[Logger()],
-    #     check_val_every_n_epoch=args.eval_interval,
-    #     enable_checkpointing=False,
-    #     enable_progress_bar=False,
-    #     devices=args.num_devices,
-    # )
-    # trainer.fit(model, train_loader, val_dataloaders=test_loader_id)
+    predictions_ood = trainer.predict(model, test_loaders_ood)
+    logits_ood_dict = {}
+    for ds_name, predictions in zip(test_loaders_ood, predictions_ood):
+        logits_ood_dict[ds_name] = torch.cat([pred[0] for pred in predictions])
+
+    test_stats = evaluate(logits_id, targets_id, logits_ood_dict)
+    logging.info('Test Stats: %s', test_stats)
 
     # Saving results
     fname = os.path.join(args.output_dir, 'results_final.json')
@@ -74,35 +80,56 @@ def main(args):
         json.dump(results, f)
 
 
+def evaluate(logits_id, targets_id, logits_ood_dict=None):
+    # Model specific test loss and accuracy for in domain testset
+    test_stats = {}
+    logits_id = metrics.ensemble_log_probas_from_logits(logits_id) if logits_id.ndim == 3 else logits_id
+
+    # Test stats for in-distribution
+    test_stats.update({
+        "accuracy": metrics.Accuracy()(logits_id, targets_id).item(),
+        "nll": torch.nn.CrossEntropyLoss()(logits_id, targets_id).item(),
+        "brier": metrics.BrierScore()(logits_id, targets_id).item(),
+        "tce": metrics.ExpectedCalibrationError()(logits_id, targets_id).item(),
+        "ace": metrics.AdaptiveCalibrationError()(logits_id, targets_id).item(),
+    })
+
+    # Test stats for out-of-distribution
+    entropy_id = metrics.entropy_from_logits(logits_id)
+    for ds_name, logits_ood in logits_ood_dict.items():
+        if logits_ood.ndim == 2:
+            entropy_ood = metrics.entropy_from_logits(logits_ood)
+        else:
+            entropy_ood = metrics.ensemble_entropy_from_logits(logits_ood)
+        test_stats.update({
+            f"aupr_{ds_name}": metrics.OODAUPR()(entropy_id, entropy_ood).item(),
+            f"auroc_{ds_name}": metrics.OODAUROC()(entropy_id, entropy_ood).item()
+        })
+    return test_stats
+
+
 def build_model(args, **kwargs):
-    num_classes = kwargs['n_classes']
+    num_classes = kwargs['num_classes']
 
     if args.model.name == 'resnet18_deterministic':
-        # Lightning: model = deterministic.resnet.ResNet18(n_classes)
-        # Fabric:
-        model = deterministic.resnet.ResNet18(num_classes)
+        model = deterministic.resnet.ResNet18(num_classes=num_classes)
         optimizer = torch.optim.SGD(
             model.parameters(),
             lr=args.model.optimizer.lr,
             momentum=args.model.optimizer.momentum,
             weight_decay=args.model.optimizer.weight_decay,
         )
-        trainer = deterministic.trainer.DeterministicTrainer(
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        model = deterministic.DeterministicModel(
             model,
-            nn.CrossEntropyLoss(),
+            loss_fn=nn.CrossEntropyLoss(),
             optimizer=optimizer,
-            lr_scheduler=torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs),
-            num_epochs=args.model.n_epochs,
-            num_devices=args.num_devices,
-            output_dir=args.output_dir,
-            # callbacks=[DummyCallback()]
+            lr_scheduler=lr_scheduler,
+            train_metrics={'train_acc': metrics.Accuracy()}
         )
-        return model, trainer
 
     elif args.model.name == 'resnet18_labelsmoothing':
         # Lightning:
-        # model = deterministic.resnet.ResNet18Labelsmoothing(n_classes, label_smoothing=args.model.label_smoothing)
-        # Fabric:
         model = deterministic.resnet.ResNet18(num_classes)
         optimizer = torch.optim.SGD(
             model.parameters(),
@@ -110,21 +137,17 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             weight_decay=args.model.optimizer.weight_decay,
         )
-        trainer = deterministic.trainer.DeterministicTrainer(
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        model = deterministic.DeterministicModel(
             model,
-            nn.CrossEntropyLoss(label_smoothing=args.model.label_smoothing),
+            loss_fn=nn.CrossEntropyLoss(label_smoothing=args.model.label_smoothing),
             optimizer=optimizer,
-            lr_scheduler=torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs),
-            num_epochs=args.model.n_epochs,
-            num_devices=args.num_devices,
-            output_dir=args.output_dir,
+            lr_scheduler=lr_scheduler,
+            train_metrics={'train_acc': metrics.Accuracy()}
         )
-        return model, trainer
 
     elif args.model.name == 'resnet18_mixup':
         # Lightning:
-        # model = deterministic.resnet.ResNet18Mixup(n_classes, mixup_alpha=.1)
-        # Fabric:
         model = deterministic.resnet.ResNet18(num_classes)
         optimizer = torch.optim.SGD(
             model.parameters(),
@@ -132,18 +155,15 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             weight_decay=args.model.optimizer.weight_decay,
         )
-        trainer = deterministic.trainer.DeterministicMixupTrainer(
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        model = deterministic.DeterministicMixupModel(
             model,
-            nn.CrossEntropyLoss(),
-            optimizer=optimizer,
-            lr_scheduler=torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs),
             num_classes=num_classes,
             mixup_alpha=args.model.mixup_alpha,
-            num_epochs=args.model.n_epochs,
-            num_devices=args.num_devices,
-            output_dir=args.output_dir,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            train_metrics={'train_acc': metrics.Accuracy()},
         )
-        return model, trainer
 
     elif args.model.name == 'resnet18_mcdropout':
         model = mc_dropout.resnet.DropoutResNet18(num_classes, args.model.n_passes, args.model.dropout_rate)
@@ -153,16 +173,13 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
             weight_decay=args.model.optimizer.weight_decay,
         )
-        trainer = mc_dropout.trainer.MCDropoutTrainer(
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
+        model = mc_dropout.MCDropoutModel(
             model,
-            nn.CrossEntropyLoss(),
             optimizer=optimizer,
-            lr_scheduler=torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs),
-            num_epochs=args.model.n_epochs,
-            num_devices=args.num_devices,
-            output_dir=args.output_dir,
+            lr_scheduler=lr_scheduler,
+            train_metrics={'train_acc': metrics.Accuracy()},
         )
-        return model, trainer
 
     elif args.model.name == 'resnet18_ensemble':
         members, lr_schedulers, optimizers = [], [], []
@@ -178,20 +195,11 @@ def build_model(args, **kwargs):
             members.append(mem)
             optimizers.append(opt)
             lr_schedulers.append(lrs)
-        model = ensemble.voting_ensemble.Ensemble(members)
-        criterion = nn.CrossEntropyLoss()
-        optimizer = ensemble.voting_ensemble.EnsembleOptimizer(optimizers)
-        lr_scheduler = ensemble.voting_ensemble.EnsembleLRScheduler(lr_schedulers)
-        trainer = ensemble.trainer.EnsembleTrainer(
-            model,
-            nn.CrossEntropyLoss(),
-            optimizer=optimizer,
-            lr_scheduler=lr_scheduler,
-            num_epochs=args.model.n_epochs,
-            num_devices=args.num_devices,
-            output_dir=args.output_dir,
+        model = ensemble.EnsembleModel(
+            model_list=members,
+            optimizer_list=optimizers,
+            lr_scheduler_list=lr_schedulers,
         )
-        return model, trainer
 
     elif args.model.name == 'resnet18_sngp':
         model = sngp.resnet.resnet18_sngp(
@@ -216,39 +224,11 @@ def build_model(args, **kwargs):
             momentum=args.model.optimizer.momentum,
         )
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
-        criterion = nn.CrossEntropyLoss()
-        trainer = sngp.trainer.SNGPTrainer(
+        model = sngp.SNGPModel(
             model=model,
-            criterion=criterion,
+            loss_fn=nn.CrossEntropyLoss(),
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
-            device=args.device,
-            output_dir=args.output_dir,
-            num_epochs=args.model.n_epochs,
-            num_devices=args.num_devices,
-        )
-        return model, trainer
-
-    elif args.model.name == 'resnet18_vi':
-        model = variational_inference.resnet.BayesianResNet18(num_classes=10, prior_sigma=args.model.vi.prior_sigma)
-        optimizer = torch.optim.SGD(
-            model.parameters(),
-            lr=args.model.optimizer.lr,
-            weight_decay=args.model.optimizer.weight_decay,
-            momentum=args.model.optimizer.momentum,
-        )
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
-        criterion = nn.CrossEntropyLoss()
-        trainer = variational_inference.trainer.VITrainer(
-            model=model,
-            criterion=criterion,
-            optimizer=optimizer,
-            grad_norm=args.model.optimizer.grad_norm,
-            lr_scheduler=lr_scheduler,
-            mc_samples=args.model.vi.mc_samples,
-            kl_temperature=args.model.vi.kl_temperature,
-            device=args.device,
-            output_dir=args.output_dir
         )
 
     else:
