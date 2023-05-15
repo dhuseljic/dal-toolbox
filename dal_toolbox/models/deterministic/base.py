@@ -32,6 +32,14 @@ class DeterministicModel(BaseModule):
             self.log_dict(self.val_metrics, prog_bar=True)
         return loss
 
+    def predict_step(self, batch, batch_idx, dataloader_idx=0):
+        inputs, targets = batch
+        logits = self.model(inputs)
+
+        logits = self._gather(logits)
+        targets = self._gather(targets)
+        return logits, targets
+
 
 class DeterministicLabelsmoothingModel(DeterministicModel):
     def __init__(

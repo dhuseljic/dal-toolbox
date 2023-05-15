@@ -76,22 +76,16 @@ def main(args):
 
         # Train with updated annotations
         logging.info('Training on labeled pool with %s samples', len(al_datamodule.labeled_indices))
-        optimizer = torch.optim.SGD
-        optimizer_params = dict(
+        model = resnet.ResNet18(num_classes=ds_info['n_classes'])
+        optimizer = torch.optim.SGD(
+            model.parameters(),
             lr=args.model.optimizer.lr,
             weight_decay=args.model.optimizer.weight_decay,
             momentum=args.model.optimizer.momentum
         )
-        lr_scheduler = CosineAnnealingLRLinearWarmup
-        lr_scheduler_params = dict(num_epochs=args.model.num_epochs, warmup_epochs=10)
-        model = DeterministicModel(
-            resnet.ResNet18(num_classes=ds_info['n_classes']),
-            train_metrics={'train_acc': Accuracy()},
-            optimizer=optimizer,
-            optimizer_params=optimizer_params,
-            lr_scheduler=lr_scheduler,
-            lr_scheduler_params=lr_scheduler_params
-        )
+        lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.num_epochs, warmup_epochs=10)
+        model = DeterministicModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler,
+                                   train_metrics={'train_acc': Accuracy()},)
 
         callbacks = []
         if is_running_on_slurm():
