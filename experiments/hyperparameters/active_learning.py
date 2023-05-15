@@ -7,7 +7,7 @@ import torch
 import hydra
 
 import lightning as L
-from torch.utils.data import DataLoader, RandomSampler
+from torch.utils.data import DataLoader
 from omegaconf import OmegaConf
 
 from dal_toolbox import datasets

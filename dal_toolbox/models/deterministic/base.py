@@ -20,7 +20,7 @@ class DeterministicModel(BaseModule):
             self.log_dict(self.train_metrics, prog_bar=True)
         return loss
 
-    def validation_step(self, batch):
+    def validation_step(self, batch, batch_idx):
         inputs, targets = batch
 
         logits = self(inputs)
