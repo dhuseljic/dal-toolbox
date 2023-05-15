@@ -24,11 +24,13 @@ learning_rate=${learning_rates[$index % 3]}
 weight_decay=${weight_decays[$index / 3 % 3]}
 random_seed=${random_seeds[$index / 9]}
 
-output_dir=/mnt/work/dhuseljic/results/hyperparameters/graphical_abstract/random/lr${learning_rate}_wd${weight_decay}/seed${random_seed}
+al_strategy=random
+output_dir=/mnt/work/dhuseljic/results/hyperparameters/graphical_abstract/${al_strategy}/lr${learning_rate}_wd${weight_decay}/seed${random_seed}
 
 # Run the deep learning script with the current hyperparameters
 python -u active_learning.py \
     model.optimizer.lr=$learning_rate \
     model.optimizer.weight_decay=$weight_decay \
     random_seed=$random_seed \
+    al_strategy=$al_strategy \
     output_dir=$output_dir
