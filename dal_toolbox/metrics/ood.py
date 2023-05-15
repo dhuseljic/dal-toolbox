@@ -2,6 +2,8 @@ import math
 import torch
 from sklearn.metrics import roc_auc_score, average_precision_score
 
+import torchmetrics
+
 
 def ood_aupr(score_id: torch.Tensor, score_ood: torch.Tensor):
     """Computes the AUROC and assumes that a higher score is OOD.
@@ -58,9 +60,9 @@ def clamp_probas(probas):
     return probas.clamp(min=eps, max=1 - eps)
 
 
-def entropy_fn(probas):
+def entropy_fn(probas, dim=-1):
     probas = clamp_probas(probas)
-    return - torch.sum(probas * probas.log(), -1)
+    return - torch.sum(probas * probas.log(), dim=dim)
 
 
 def entropy_from_logits(logits):
@@ -73,6 +75,15 @@ def entropy_from_logits(logits):
     return entropy
 
 
+def ensemble_log_probas_from_logits(logits):
+    if logits.ndim != 3:
+        raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
+    ensemble_size = logits.size(1)
+    # numerical stable version of avg ensemble probas: log sum_m^M exp log probs_m - log M = log 1/M sum_m probs_m
+    log_probas = torch.logsumexp(logits.log_softmax(-1), dim=1) - math.log(ensemble_size)
+    return log_probas
+
+
 def ensemble_entropy_from_logits(logits):
     # numerical stable version
     if logits.ndim != 3:
@@ -83,3 +94,46 @@ def ensemble_entropy_from_logits(logits):
     probas = log_probas.exp()
     entropy = - torch.sum(probas * log_probas, dim=-1)
     return entropy
+
+
+class OODAUROC(torchmetrics.Metric):
+    def __init__(self):
+        super().__init__()
+        self.add_state('scores_id', default=[], dist_reduce_fx='cat')
+        self.add_state('scores_ood', default=[], dist_reduce_fx='cat')
+
+    def update(self, scores_id: torch.Tensor, scores_ood: torch.Tensor):
+        self.scores_id.append(scores_id)
+        self.scores_ood.append(scores_ood)
+
+    def compute(self):
+        scores_id = torch.cat(self.scores_id)
+        scores_ood = torch.cat(self.scores_ood)
+
+        preds = torch.cat((scores_id, scores_ood))
+        targets = torch.cat((torch.zeros(len(scores_id)), torch.ones(len(scores_ood))))
+        targets = targets.long()
+
+        auroc = torchmetrics.functional.auroc(preds, targets, task='binary')
+        return auroc
+
+
+class OODAUPR(torchmetrics.Metric):
+    def __init__(self):
+        super().__init__()
+        self.add_state('scores_id', default=[], dist_reduce_fx='cat')
+        self.add_state('scores_ood', default=[], dist_reduce_fx='cat')
+
+    def update(self, scores_id: torch.Tensor, scores_ood: torch.Tensor):
+        self.scores_id.append(scores_id)
+        self.scores_ood.append(scores_ood)
+
+    def compute(self):
+        scores_id = torch.cat(self.scores_id)
+        scores_ood = torch.cat(self.scores_ood)
+
+        preds = torch.cat((scores_id, scores_ood))
+        targets = torch.cat((torch.zeros(len(scores_id)), torch.ones(len(scores_ood))))
+
+        aupr = torchmetrics.functional.average_precision(preds, targets.long(), task='binary')
+        return aupr

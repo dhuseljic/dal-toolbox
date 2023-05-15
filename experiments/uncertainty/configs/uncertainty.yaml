@@ -4,12 +4,14 @@ defaults:
 
 dataset: CIFAR10 
 dataset_path: ./data/
-ood_datasets: ["SVHN"]
-n_samples: null
-eval_interval: 1
+ood_datasets: [SVHN, CIFAR100]
+num_samples: null
+eval_interval: 25
 test_batch_size: 64
 random_seed: 42
+
 device: "cuda"
+num_devices: 1
 
 # Define output dir
 output_dir: "./output/"

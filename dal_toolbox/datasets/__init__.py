@@ -4,77 +4,6 @@ from . import mnist, fashion_mnist, svhn, cifar, tiny_imagenet, imagenet
 from .activeglae import agnews, banks77, dbpedia, fnc1, mnli, qnli, sst2, trec6, wikitalk, yelp5
 
 
-def build_dataset(args):
-    if args.dataset == 'MNIST':
-        train_ds, ds_info = mnist.build_mnist('train', args.dataset_path, return_info=True)
-        test_ds = mnist.build_mnist('test', args.dataset_path)
-
-    elif args.dataset == 'FashionMNIST':
-        train_ds, ds_info = fashion_mnist.build_fashionmnist('train', args.dataset_path, return_info=True)
-        test_ds = fashion_mnist.build_fashionmnist('test', args.dataset_path)
-
-    elif args.dataset == 'CIFAR10':
-        train_ds, ds_info = cifar.build_cifar10('train', args.dataset_path, return_info=True)
-        test_ds = cifar.build_cifar10('test', args.dataset_path)
-
-    elif args.dataset == 'CIFAR100':
-        train_ds, ds_info = cifar.build_cifar100('train', args.dataset_path, return_info=True)
-        test_ds = cifar.build_cifar100('test', args.dataset_path)
-
-    elif args.dataset == 'SVHN':
-        train_ds, ds_info = svhn.build_svhn('train', args.dataset_path, return_info=True)
-        test_ds = svhn.build_svhn('test', args.dataset_path)
-
-    elif args.dataset == 'TinyImagenet':
-        train_ds, ds_info = tiny_imagenet.build_tinyimagenet('train', args.dataset_path, return_info=True)
-        test_ds = tiny_imagenet.build_tinyimagenet('test', args.dataset_path)
-
-    elif args.dataset == 'Imagenet':
-        train_ds, ds_info = imagenet.build_imagenet('train', args.dataset_path, return_info=True)
-        test_ds = imagenet.build_imagenet('val', args.dataset_path)
-    else:
-        raise NotImplementedError
-
-    return train_ds, test_ds, ds_info
-
-
-def build_ood_datasets(args, mean, std):
-    ood_datasets = {}
-    if 'MNIST' in args.ood_datasets:
-        test_ds_ood = mnist.build_mnist('test', args.dataset_path, mean, std)
-        ood_datasets["MNIST"] = test_ds_ood
-
-    if 'FashionMNIST' in args.ood_datasets:
-        test_ds_ood = fashion_mnist.build_fashionmnist('test', args.dataset_path, mean, std)
-        ood_datasets["FashionMNIST"] = test_ds_ood
-
-    if 'CIFAR10' in args.ood_datasets:
-        test_ds_ood = cifar.build_cifar10('test', args.dataset_path, mean, std)
-        ood_datasets["CIFAR10"] = test_ds_ood
-
-    if 'CIFAR10-C' in args.ood_datasets:
-        test_ds_ood = cifar.build_cifar10_c(.5, args.dataset_path, mean, std)
-        ood_datasets["CIFAR10-C"] = test_ds_ood
-
-    if 'CIFAR100' in args.ood_datasets:
-        test_ds_ood = cifar.build_cifar100('test', args.dataset_path, mean, std)
-        ood_datasets["CIFAR100"] = test_ds_ood
-
-    if 'SVHN' in args.ood_datasets:
-        test_ds_ood = svhn.build_svhn('test', args.dataset_path, mean, std)
-        ood_datasets["SVHN"] = test_ds_ood
-
-    if 'TinyImagenet' in args.ood_datasets:
-        test_ds_ood = tiny_imagenet.build_tinyimagenet('test', args.dataset_path, mean, std)
-        ood_datasets["TinyImagenet"] = test_ds_ood
-
-    if 'Imagenet' in args.ood_datasets:
-        test_ds_ood = imagenet.build_imagenet('val', args.dataset_path, mean, std)
-        ood_datasets["Imagenet"] = test_ds_ood
-
-    return ood_datasets
-
-
 def build_al_datasets(args):
     if args.dataset.name == 'MNIST':
         train_ds, ds_info = mnist.build_mnist('train', args.dataset_path, return_info=True)
@@ -202,4 +131,3 @@ def create_testsubset(complete_ds, args, hf_name):
     else:
         test_ds_id = complete_ds[hf_name]
     return test_ds_id
-

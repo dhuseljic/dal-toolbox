@@ -6,6 +6,9 @@ class BasicSSLWrapper(torchvision.datasets.VisionDataset):
         self.ds = ds
         self.transforms_weak = transforms_weak
         self.transforms_strong = transforms_strong
+    
+    def __len__(self) -> int:
+        return len(self.ds)
 
 class PseudoLabelWrapper(BasicSSLWrapper):
     def __getitem__(self, idx):

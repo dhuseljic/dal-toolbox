@@ -11,8 +11,7 @@ from omegaconf import OmegaConf
 
 from dal_toolbox.active_learning.data import ALDataset
 from dal_toolbox.utils import seed_everything
-from dal_toolbox.datasets import build_al_datasets
-from active_learning import build_model
+from active_learning import build_model, build_datasets, build_ood_datasets
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="evaluate")
@@ -26,8 +25,14 @@ def main(args):
 
     # Setup Dataset
     logging.info('Building datasets.')
-    train_ds, query_ds, val_ds, ds_info = build_al_datasets(args)
+    train_ds, query_ds, val_ds, ds_info = build_datasets(args)
     val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)
+    if args.ood_datasets:
+        logging.info('Building ood datasets.')
+        ood_datasets = build_ood_datasets(args)
+        ood_loaders = {name: DataLoader(ds, batch_size=args.val_batch_size) for name, ds in ood_datasets.items()}
+    else:
+        ood_loaders = None
     al_dataset = ALDataset(train_ds, query_ds, random_state=args.random_seed)
 
     logging.info('Loading initial labeled pool from %s', args.queried_indices_json)
@@ -55,15 +60,15 @@ def main(args):
 
         # Train with updated annotations
         logging.info('Training on labeled pool with %s samples', len(al_dataset.labeled_dataset))
-        t1 = time.time()
         iter_per_epoch = len(al_dataset.labeled_dataset) // args.model.batch_size + 1
         train_sampler = RandomSampler(al_dataset.labeled_dataset, num_samples=args.model.batch_size*iter_per_epoch)
         train_loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.model.batch_size, sampler=train_sampler)
+        trainer.reset_states(reset_model_parameters=True)
         history = trainer.train(args.model.n_epochs, train_loader)
         cycle_results['train_history'] = history['train_history']
 
         # Evaluate resulting model
-        test_stats = trainer.evaluate(val_loader)
+        test_stats = trainer.evaluate(val_loader, dataloaders_ood=ood_loaders)
         cycle_results['test_stats'] = test_stats
 
         cycle_results.update({

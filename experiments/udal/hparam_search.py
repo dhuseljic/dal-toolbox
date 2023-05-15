@@ -97,7 +97,7 @@ def build_search_space(args):
         search_space = {
             "lr": tune.uniform(1e-4, .1),
             "weight_decay": tune.uniform(0, .1),
-            "mixup_alpha": tune.uniform(.1, .4),
+            "mixup_alpha": tune.uniform(0, .4),
         }
         points_to_evaluate = [
             {"lr": 1e-2, "weight_decay": 5e-3, 'mixup_alpha': 0.4},

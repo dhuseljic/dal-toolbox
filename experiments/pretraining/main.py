@@ -73,7 +73,7 @@ def main(args):
     logging.info("Saving results to %s.", fname)
     results = {
         'train_history': trainer.train_history,
-        'test_history': trainer.test_history,
+        'test_history': trainer.val_history,
         'test_stats': test_stats
     }
     with open(fname, 'w') as f:
