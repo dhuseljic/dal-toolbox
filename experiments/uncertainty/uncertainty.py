@@ -116,7 +116,12 @@ def build_model(args, **kwargs):
             weight_decay=args.model.optimizer.weight_decay,
         )
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.n_epochs)
-        model = deterministic.DeterministicModel(model, optimizer, lr_scheduler)
+        model = deterministic.DeterministicModel(
+            model,
+            optimizer,
+            lr_scheduler,
+            train_metrics={'train_acc': metrics.Accuracy()}
+        )
         return model
 
     elif args.model.name == 'resnet18_labelsmoothing':
@@ -133,7 +138,8 @@ def build_model(args, **kwargs):
             model,
             label_smoothing=args.model.label_smoothing,
             optimizer=optimizer,
-            lr_scheduler=lr_scheduler
+            lr_scheduler=lr_scheduler,
+            train_metrics={'train_acc': metrics.Accuracy()}
         )
         return model
 
@@ -152,7 +158,8 @@ def build_model(args, **kwargs):
             num_classes=num_classes,
             mixup_alpha=args.model.mixup_alpha,
             optimizer=optimizer,
-            lr_scheduler=lr_scheduler
+            lr_scheduler=lr_scheduler,
+            train_metrics={'train_acc': metrics.Accuracy()}
         )
         return model
 
