@@ -3,34 +3,39 @@ import random
 import torch
 import numpy as np
 import lightning as L
-from torch.utils.data import Subset, SubsetRandomSampler
+
+from torch.utils.data import Subset, SubsetRandomSampler, DataLoader, Dataset
+from lightning.pytorch.utilities import rank_zero_warn
 
 
-class ALDataModule(L.LightningDataModule):
+class ActiveLearningDataModule(L.LightningDataModule):
+    # TODO(dhuseljic): Implement for LightningDataModule input.
     def __init__(
             self,
-            train_ds,
-            query_ds=None,
-            train_batch_size: int = 32,
-            predict_batch_size: int = 32,
-            predict_type: str = 'unlabeled',
+            train_dataset: Dataset,
+            train_batch_size: int,
+            query_dataset: Dataset = None,
+            predict_batch_size: int = 256,
             seed: int = None,
     ):
         super().__init__()
-        self.train_ds = train_ds
+        self.train_dataset = train_dataset
         self.train_batch_size = train_batch_size
-
-        if query_ds is None:
-            print('Using train_dataset for queries. Make sure that there are no augmentations used.')
-            query_ds = train_ds
-        self.query_ds = query_ds
+        # TODO: validation dataset?
+        self.query_dataset = QueryDataset(
+            query_dataset) if query_dataset is not None else QueryDataset(dataset=train_dataset)
         self.predict_batch_size = predict_batch_size
-        self.predict_type = predict_type
 
-        # Set up the indices for unlabeled and labeled pool
-        self.unlabeled_indices = range(len(self.train_ds))
+        if query_dataset is None:
+            rank_zero_warn('Using train_dataset for queries. Ensure that there are no augmentations used.')
+
+        self._setup_rng(seed)
+
+        # TODO(dhuseljic): Add property automatically converting to list?
+        self.unlabeled_indices = range(len(self.train_dataset))
         self.labeled_indices = []
 
+    def _setup_rng(self, seed):
         # set rng which should be used for all random stuff
         self._seed = seed
         if seed is None:
@@ -39,27 +44,25 @@ class ALDataModule(L.LightningDataModule):
             self.rng = np.random.RandomState(self._seed)
 
     def train_dataloader(self):
+        # TODO(dhuseljic): Num samples or drop last?
+        # TODO(dhuseljic): Add support for semi-supervised learning loaders.
         sampler = SubsetRandomSampler(indices=self.labeled_indices)
-        train_loader = torch.utils.data.DataLoader(self.train_ds, batch_size=self.train_batch_size, sampler=sampler)
+        train_loader = DataLoader(self.train_dataset, batch_size=self.train_batch_size, sampler=sampler)
         return train_loader
 
-    def predict_dataloader(self):
-        if self.predict_type == 'unlabeled':
-            sampler = self.unlabeled_indices
-        elif self.predict_type == 'labeled':
-            sampler = self.labeled_indices
-        elif self.predict_type == 'all':
-            sampler = range(len(self.query_ds))
-        else:
-            raise NotImplementedError(f'The predict type is not implemented, got {self.predict_type}')
-        loader = torch.utils.data.DataLoader(self.query_ds, batch_size=self.train_batch_size, sampler=sampler)
+    def unlabeled_dataloader(self, subset_size=None):
+        unlabeled_indices = self.unlabeled_indices
+        if subset_size:
+            unlabeled_indices = self.rng.choice(unlabeled_indices, size=subset_size, replace=False)
+            unlabeled_indices = unlabeled_indices.tolist()
+        loader = DataLoader(self.query_dataset, batch_size=self.predict_batch_size, sampler=unlabeled_indices)
         return loader
 
-    def val_dataloader(self):
-        raise NotImplementedError()
+    # def val_dataloader(self):
+    #     raise NotImplementedError()
 
-    def test_dataloader(self):
-        raise NotImplementedError()
+    # def test_dataloader(self):
+    #     raise NotImplementedError()
 
     def update_annotations(self, buy_idx: list):
         """
@@ -83,7 +86,8 @@ class ALDataModule(L.LightningDataModule):
             raise ValueError('Pools already initialized.')
 
         if class_balanced:
-            classes = torch.Tensor([self.query_ds[idx][-1] for idx in self.unlabeled_indices]).long()
+            # TODO(dhuseljic): problematic when data gets loaded e.g., imagenet
+            classes = torch.Tensor([self.query_dataset[idx][1] for idx in self.unlabeled_indices]).long()
             classes_unique = classes.unique()
             n_classes = len(classes_unique)
             n_samples_per_class = n_samples // n_classes
@@ -91,35 +95,26 @@ class ALDataModule(L.LightningDataModule):
             indices = []
             for label in classes_unique:
                 unlabeled_indices_lbl = (classes == label).nonzero().squeeze()
-                # indices_lbl = self.rng.sample(unlabeled_indices_lbl.tolist(), k=n_samples_per_class)
                 indices_lbl = self.rng.choice(unlabeled_indices_lbl.tolist(), size=n_samples_per_class, replace=False)
                 indices_lbl = indices_lbl.tolist()
                 indices.extend(indices_lbl)
         else:
-            # indices = self.rng.sample(self.unlabeled_indices, k=n_samples)
             indices = self.rng.choice(self.unlabeled_indices, size=n_samples, replace=False)
             indices = indices.tolist()
-
         self.update_annotations(indices)
 
 
-class UnlabeledDataset(Subset):
-    def __getitem__(self, idx):
-        x, _ = super().__getitem__(idx)
-        return x, torch.tensor(-1).long()
+class QueryDataset(Subset):
+    """A helper class which returns also the index along with the instances and targets."""
 
-
-class FullDataset(Subset):
-    def __init__(self, dataset, unlabeled_indices):
+    def __init__(self, dataset):
         super().__init__(dataset=dataset, indices=range(len(dataset)))
         self.dataset = dataset
-        self.unlabeled_indices = unlabeled_indices
 
-    def __getitem__(self, idx):
-        x, y = super().__getitem__(idx)
-        if idx in self.unlabeled_indices:
-            return x, torch.tensor(-1).long()
-        return x, y
+    def __getitem__(self, index):
+        # TODO(dhuseljic): discuss with marek, index instead of target? maybe dictionary? leave it like that?
+        instance, target = super().__getitem__(index)
+        return instance, target, index
 
 
 class ALDataset:
@@ -139,17 +134,11 @@ class ALDataset:
 
     @property
     def unlabeled_dataset(self):
-        return UnlabeledDataset(self.query_dataset, indices=self.unlabeled_indices)
+        return Subset(self.query_dataset, indices=self.unlabeled_indices)
 
     @property
     def labeled_dataset(self):
         return Subset(self.train_dataset, indices=self.labeled_indices)
-
-    @property
-    def full_dataset(self):
-        # TODO: Is the train or query dataset required here?
-        # For e.g., semi-supervised learning
-        return FullDataset(self.train_dataset, unlabeled_indices=self.unlabeled_indices)
 
     def update_annotations(self, buy_idx: list):
         """

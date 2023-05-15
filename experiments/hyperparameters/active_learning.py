@@ -11,9 +11,9 @@ from torch.utils.data import DataLoader, RandomSampler
 from omegaconf import OmegaConf
 
 from dal_toolbox import datasets
-from dal_toolbox.models.deterministic import DeterministicModel, resnet, DeterministicTrainer
+from dal_toolbox.models.deterministic import DeterministicModel, resnet
 from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
-from dal_toolbox.active_learning.data import ALDataset
+from dal_toolbox.active_learning.data import ActiveLearningDataModule
 from dal_toolbox.active_learning.strategies import random, badge
 from dal_toolbox.utils import seed_everything, is_running_on_slurm
 from dal_toolbox.metrics import Accuracy
@@ -32,17 +32,18 @@ def main(args):
 
     # Setup Dataset
     logging.info('Building datasets.')
-
     train_ds, ds_info = datasets.cifar.build_cifar10('train', args.dataset_path, return_info=True)
     query_ds = datasets.cifar.build_cifar10('query', args.dataset_path)
-    val_ds = datasets.cifar.build_cifar10('test', args.dataset_path)
-    val_loader = DataLoader(val_ds, batch_size=args.model.val_batch_size)
+    test_ds = datasets.cifar.build_cifar10('test', args.dataset_path)
+    test_loader = DataLoader(test_ds, batch_size=args.model.val_batch_size)
 
-    al_dataset = ALDataset(train_ds, query_ds, random_state=args.random_seed)
-    al_dataset.random_init(n_samples=args.al_cycle.n_init)
-    queried_indices['cycle0'] = al_dataset.labeled_indices
-
-    # logging.info('Building model: %s', args.model.name)
+    al_datamodule = ActiveLearningDataModule(
+        train_dataset=train_ds,
+        query_dataset=query_ds,
+        train_batch_size=args.model.train_batch_size,
+    )
+    al_datamodule.random_init(n_samples=args.al_cycle.n_init)
+    queried_indices['cycle0'] = al_datamodule.labeled_indices
 
     logging.info('Building query strategy: %s', args.al_strategy.name)
     if args.al_strategy.name == "random":
@@ -63,12 +64,13 @@ def main(args):
             logging.info('Querying %s samples with strategy `%s`', args.al_cycle.acq_size, args.al_strategy.name)
             indices = al_strategy.query(
                 model=model,
-                dataset=al_dataset.query_dataset,
-                unlabeled_indices=al_dataset.unlabeled_indices,
-                labeled_indices=al_dataset.labeled_indices,
-                acq_size=args.al_cycle.acq_size
+                al_datamodule=al_datamodule,
+                acq_size=args.al_cycle.acq_size,
+                # dataset=al_dataset.query_dataset,
+                # unlabeled_indices=al_dataset.unlabeled_indices,
+                # labeled_indices=al_dataset.labeled_indices,
             )
-            al_dataset.update_annotations(indices)
+            al_datamodule.update_annotations(indices)
             query_time = time.time() - t1
             logging.info('Querying took %.2f minutes', query_time/60)
             cycle_results['query_indices'] = indices
@@ -76,13 +78,12 @@ def main(args):
             queried_indices[f'cycle{i_acq}'] = indices
 
         # Train with updated annotations
-        logging.info('Training on labeled pool with %s samples', len(al_dataset.labeled_dataset))
-        iter_per_epoch = len(al_dataset.labeled_dataset) // args.model.train_batch_size + 1
-        train_sampler = RandomSampler(al_dataset.labeled_dataset,
-                                      num_samples=args.model.train_batch_size*iter_per_epoch)
-        train_loader = DataLoader(al_dataset.labeled_dataset,
-                                  batch_size=args.model.train_batch_size, sampler=train_sampler)
-
+        logging.info('Training on labeled pool with %s samples', len(al_datamodule.labeled_dataset))
+        # iter_per_epoch = len(al_dataset.labeled_dataset) // args.model.train_batch_size + 1
+        # train_sampler = RandomSampler(al_dataset.labeled_dataset,
+        #                               num_samples=args.model.train_batch_size*iter_per_epoch)
+        # train_loader = DataLoader(al_dataset.labeled_dataset,
+        #                           batch_size=args.model.train_batch_size, sampler=train_sampler)
         # model = resnet.ResNet18(num_classes=ds_info['n_classes'])
         # optimizer = torch.optim.SGD(model.parameters(), lr=0.01, weight_decay=0.005, momentum=0.9)
         # lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
@@ -105,7 +106,7 @@ def main(args):
         lr_scheduler_params = dict(num_epochs=args.model.num_epochs, warmup_epochs=10)
         model = DeterministicModel(
             resnet.ResNet18(num_classes=ds_info['n_classes']),
-            metrics={'train_acc': Accuracy()},
+            train_metrics={'train_acc': Accuracy()},
             optimizer=optimizer,
             optimizer_params=optimizer_params,
             lr_scheduler=lr_scheduler,
@@ -122,22 +123,22 @@ def main(args):
             enable_progress_bar=(is_running_on_slurm() is False),
             default_root_dir=args.output_dir
         )
-        trainer.fit(model, train_loader)
+        trainer.fit(model, al_datamodule)
 
         test_stats = {}
         acc_fn = Accuracy()
-        predictions = trainer.predict(model, val_loader)
-        logits = torch.cat([logits for logits, _ in predictions])
-        targets = torch.cat([targets for _, targets in predictions])
+        predictions = trainer.predict(model, test_loader)
+        logits = torch.cat([pred[0] for pred in predictions])
+        targets = torch.cat([pred[1] for pred in predictions])
         test_stats['accuracy'] = acc_fn(logits, targets).item()
         cycle_results['test_stats'] = test_stats
         logging.info('Cycle test stats: %s', test_stats)
 
         cycle_results.update({
-            "labeled_indices": al_dataset.labeled_indices,
-            "n_labeled_samples": len(al_dataset.labeled_dataset),
-            "unlabeled_indices": al_dataset.unlabeled_indices,
-            "n_unlabeled_samples": len(al_dataset.unlabeled_dataset),
+            "labeled_indices": al_datamodule.labeled_indices,
+            "n_labeled_samples": len(al_datamodule.labeled_dataset),
+            "unlabeled_indices": al_datamodule.unlabeled_indices,
+            "n_unlabeled_samples": len(al_datamodule.unlabeled_dataset),
         })
         results[f'cycle{i_acq}'] = cycle_results
 
