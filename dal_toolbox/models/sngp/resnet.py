@@ -96,8 +96,7 @@ class ResNetSNGP(nn.Module):
         self.n_power_iterations = n_power_iterations
         self.spectral_norm = spectral_norm
 
-        # Init layer does not have a kernel size of 7 since cifar has a smaller
-        # size of 32x32
+        # Init layer does not have a kernel size of 7 since cifar has a smaller size of 32x32
         self.conv1 = SpectralConv2d(3, 64, kernel_size=3, spectral_norm=self.spectral_norm, norm_bound=self.norm_bound,
                                     n_power_iterations=self.n_power_iterations, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
@@ -137,12 +136,6 @@ class ResNetSNGP(nn.Module):
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
 
-    def reset_precision_matrix(self):
-        self.output_layer.reset_precision_matrix()
-
-    def synchronize_precision_matrix(self):
-        self.output_layer.synchronize_precision_matrix()
-
     def forward(self, x, mean_field=False, return_cov=False):
         out = F.relu(self.bn1(self.conv1(x)))
         out = self.layer1(out)
@@ -157,18 +150,6 @@ class ResNetSNGP(nn.Module):
             out = self.output_layer(out, return_cov=return_cov)
         return out
 
-    @torch.inference_mode()
-    def get_probas(self, dataloader, device):
-        self.to(device)
-        self.eval()
-        all_logits = []
-        for samples, _ in dataloader:
-            logits = self(samples.to(device), mean_field=True)
-            all_logits.append(logits)
-        logits = torch.cat(all_logits)
-        probas = logits.softmax(-1)
-        return probas
-
     def forward_feature(self, x):
         out = F.relu(self.bn1(self.conv1(x)))
         out = self.layer1(out)
@@ -179,12 +160,25 @@ class ResNetSNGP(nn.Module):
         return features.squeeze()
 
     @torch.inference_mode()
-    def get_representation(self, dataloader, device):
+    def get_logits(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_logits = []
+        for batch in dataloader:
+            inputs = batch[0]
+            logits = self(inputs.to(device), mean_field=True)
+            all_logits.append(logits)
+        logits = torch.cat(all_logits)
+        return logits
+
+    @torch.inference_mode()
+    def get_representations(self, dataloader, device):
         self.to(device)
         self.eval()
         all_features = []
-        for samples, _ in dataloader:
-            logits = self.forward_feature(samples.to(device))
+        for batch in dataloader:
+            inputs = batch[0]
+            logits = self.forward_feature(inputs.to(device))
             all_features.append(logits)
         features = torch.cat(all_features)
         return features
