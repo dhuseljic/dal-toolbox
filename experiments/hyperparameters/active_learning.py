@@ -66,9 +66,6 @@ def main(args):
                 model=model,
                 al_datamodule=al_datamodule,
                 acq_size=args.al_cycle.acq_size,
-                # dataset=al_dataset.query_dataset,
-                # unlabeled_indices=al_dataset.unlabeled_indices,
-                # labeled_indices=al_dataset.labeled_indices,
             )
             al_datamodule.update_annotations(indices)
             query_time = time.time() - t1
@@ -78,24 +75,7 @@ def main(args):
             queried_indices[f'cycle{i_acq}'] = indices
 
         # Train with updated annotations
-        logging.info('Training on labeled pool with %s samples', len(al_datamodule.labeled_dataset))
-        # iter_per_epoch = len(al_dataset.labeled_dataset) // args.model.train_batch_size + 1
-        # train_sampler = RandomSampler(al_dataset.labeled_dataset,
-        #                               num_samples=args.model.train_batch_size*iter_per_epoch)
-        # train_loader = DataLoader(al_dataset.labeled_dataset,
-        #                           batch_size=args.model.train_batch_size, sampler=train_sampler)
-        # model = resnet.ResNet18(num_classes=ds_info['n_classes'])
-        # optimizer = torch.optim.SGD(model.parameters(), lr=0.01, weight_decay=0.005, momentum=0.9)
-        # lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
-        # trainer = DeterministicTrainer(
-        #     model,
-        #     criterion=nn.CrossEntropyLoss(),
-        #     optimizer=optimizer,
-        #     lr_scheduler=lr_scheduler,
-        # )
-        # trainer.fit(train_loader)
-        # logits, targets = trainer.predict(model, val_loader)
-
+        logging.info('Training on labeled pool with %s samples', len(al_datamodule.labeled_indices))
         optimizer = torch.optim.SGD
         optimizer_params = dict(
             lr=args.model.optimizer.lr,
@@ -136,9 +116,9 @@ def main(args):
 
         cycle_results.update({
             "labeled_indices": al_datamodule.labeled_indices,
-            "n_labeled_samples": len(al_datamodule.labeled_dataset),
+            "n_labeled_samples": len(al_datamodule.labeled_indices),
             "unlabeled_indices": al_datamodule.unlabeled_indices,
-            "n_unlabeled_samples": len(al_datamodule.unlabeled_dataset),
+            "n_unlabeled_samples": len(al_datamodule.unlabeled_indices),
         })
         results[f'cycle{i_acq}'] = cycle_results
 
