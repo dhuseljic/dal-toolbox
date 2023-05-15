@@ -1,0 +1,139 @@
+import os
+import time
+import json
+import logging
+
+import torch
+import hydra
+
+import lightning as L
+from torch.utils.data import DataLoader, RandomSampler
+from omegaconf import OmegaConf
+
+from dal_toolbox import datasets
+from dal_toolbox.models.deterministic import DeterministicModel, resnet
+from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
+from dal_toolbox.active_learning.data import ActiveLearningDataModule
+from dal_toolbox.active_learning.strategies import random, badge
+from dal_toolbox.utils import seed_everything, is_running_on_slurm
+from dal_toolbox.metrics import Accuracy
+from dal_toolbox.models.utils.callbacks import MetricLogger
+
+
+@hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
+def main(args):
+    logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
+    seed_everything(args.random_seed)
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    # Necessary for logging
+    results = {}
+    queried_indices = {}
+
+    # Setup Dataset
+    logging.info('Building datasets.')
+    train_ds, ds_info = datasets.cifar.build_cifar10('train', args.dataset_path, return_info=True)
+    query_ds = datasets.cifar.build_cifar10('query', args.dataset_path)
+    test_ds = datasets.cifar.build_cifar10('test', args.dataset_path)
+    test_loader = DataLoader(test_ds, batch_size=args.model.val_batch_size)
+
+    al_datamodule = ActiveLearningDataModule(
+        train_dataset=train_ds,
+        query_dataset=query_ds,
+        train_batch_size=args.model.train_batch_size,
+    )
+    al_datamodule.random_init(n_samples=args.al_cycle.n_init)
+    queried_indices['cycle0'] = al_datamodule.labeled_indices
+
+    logging.info('Building query strategy: %s', args.al_strategy.name)
+    if args.al_strategy.name == "random":
+        al_strategy = random.RandomSampling()
+    elif args.al_strategy.name == "badge":
+        al_strategy = badge.Badge(subset_size=args.al_strategy.subset_size, device=args.device)
+    else:
+        raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
+
+    # Active Learning Cycles
+    for i_acq in range(0, args.al_cycle.n_acq + 1):
+        logging.info('Starting AL iteration %s / %s', i_acq, args.al_cycle.n_acq)
+        cycle_results = {}
+
+        # Analyse unlabeled set and query most promising data
+        if i_acq != 0:
+            t1 = time.time()
+            logging.info('Querying %s samples with strategy `%s`', args.al_cycle.acq_size, args.al_strategy.name)
+            indices = al_strategy.query(
+                model=model,
+                al_datamodule=al_datamodule,
+                acq_size=args.al_cycle.acq_size,
+            )
+            al_datamodule.update_annotations(indices)
+            query_time = time.time() - t1
+            logging.info('Querying took %.2f minutes', query_time/60)
+            cycle_results['query_indices'] = indices
+            cycle_results['query_time'] = query_time
+            queried_indices[f'cycle{i_acq}'] = indices
+
+        # Train with updated annotations
+        logging.info('Training on labeled pool with %s samples', len(al_datamodule.labeled_indices))
+        optimizer = torch.optim.SGD
+        optimizer_params = dict(
+            lr=args.model.optimizer.lr,
+            weight_decay=args.model.optimizer.weight_decay,
+            momentum=args.model.optimizer.momentum
+        )
+        lr_scheduler = CosineAnnealingLRLinearWarmup
+        lr_scheduler_params = dict(num_epochs=args.model.num_epochs, warmup_epochs=10)
+        model = DeterministicModel(
+            resnet.ResNet18(num_classes=ds_info['n_classes']),
+            train_metrics={'train_acc': Accuracy()},
+            optimizer=optimizer,
+            optimizer_params=optimizer_params,
+            lr_scheduler=lr_scheduler,
+            lr_scheduler_params=lr_scheduler_params
+        )
+
+        callbacks = []
+        if is_running_on_slurm():
+            callbacks.append(MetricLogger())
+        trainer = L.Trainer(
+            max_epochs=args.model.num_epochs,
+            enable_checkpointing=False,
+            callbacks=callbacks,
+            enable_progress_bar=(is_running_on_slurm() is False),
+            default_root_dir=args.output_dir
+        )
+        trainer.fit(model, al_datamodule)
+
+        test_stats = {}
+        acc_fn = Accuracy()
+        predictions = trainer.predict(model, test_loader)
+        logits = torch.cat([pred[0] for pred in predictions])
+        targets = torch.cat([pred[1] for pred in predictions])
+        test_stats['accuracy'] = acc_fn(logits, targets).item()
+        cycle_results['test_stats'] = test_stats
+        logging.info('Cycle test stats: %s', test_stats)
+
+        cycle_results.update({
+            "labeled_indices": al_datamodule.labeled_indices,
+            "n_labeled_samples": len(al_datamodule.labeled_indices),
+            "unlabeled_indices": al_datamodule.unlabeled_indices,
+            "n_unlabeled_samples": len(al_datamodule.unlabeled_indices),
+        })
+        results[f'cycle{i_acq}'] = cycle_results
+
+    # Save results
+    file_name = os.path.join(args.output_dir, 'results.json')
+    logging.info("Saving results to %s.", file_name)
+    with open(file_name, 'w', encoding='utf-8') as f:
+        json.dump(results, f)
+
+    # Save indices
+    file_name = os.path.join(args.output_dir, 'queried_indices.json')
+    logging.info("Saving queried indices to %s.", file_name)
+    with open(file_name, 'w', encoding='utf-8') as f:
+        json.dump(queried_indices, f, sort_keys=False)
+
+
+if __name__ == "__main__":
+    main()

@@ -287,6 +287,10 @@ def is_main_process():
     return get_rank() == 0
 
 
+def is_running_on_slurm():
+    return 'SLURM_JOB_ID' in os.environ
+
+
 def save_on_master(*args, **kwargs):
     if is_main_process():
         torch.save(*args, **kwargs)
