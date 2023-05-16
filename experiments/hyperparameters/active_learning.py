@@ -7,9 +7,9 @@ import torch
 import hydra
 
 import lightning as L
-from torch.utils.data import DataLoader
-from omegaconf import OmegaConf
 
+from omegaconf import OmegaConf
+from torch.utils.data import DataLoader
 from dal_toolbox import datasets
 from dal_toolbox.models.deterministic import DeterministicModel, resnet
 from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
@@ -95,7 +95,7 @@ def main(args):
             enable_checkpointing=False,
             callbacks=callbacks,
             enable_progress_bar=(is_running_on_slurm() is False),
-            default_root_dir=args.output_dir
+            default_root_dir=args.output_dir,
         )
         trainer.fit(model, al_datamodule)
 
