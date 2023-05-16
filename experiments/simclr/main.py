@@ -11,6 +11,8 @@ import torch
 
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 
+from dal_toolbox.models.deterministic import resnet
+
 
 @hydra.main(version_base=None, config_path="./config", config_name="config")
 def main(args):
@@ -30,23 +32,26 @@ def main(args):
         random_seed=args.random_seed
     )
 
-    optimizer = torch.optim.AdamW
-    optimizer_params = args.model.optimizer
+    model = resnet.ResNet18(4*args.model.hidden_dim) # num_classes is the output size of the last linear layer
+    optimizer = torch.optim.AdamW(
+        params = model.parameters(),
+        lr = args.model.optimizer.lr,
+        weight_decay = args.model.optimizer.weight_decay
+    )
 
-    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR
-    lr_scheduler_params = {
-        'T_max' : args.model.n_epochs,
-        'eta_min' : args.model.optimizer.lr / 50
-    }
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer = optimizer,
+        T_max = args.model.n_epochs,
+        eta_min = args.model.optimizer.lr / 50
+    )
 
     # Create a Model Module
     model = simclr.SimCLR(
+        model=model,
+        optimizer=optimizer,
+        lr_scheduler=lr_scheduler,
         hidden_dim=args.model.hidden_dim,
         temperature=args.model.temperature,
-        optimizer=optimizer,
-        optimizer_params=optimizer_params,
-        lr_scheduler=lr_scheduler,
-        lr_scheduler_params=lr_scheduler_params,
     )
 
     # Create a Trainer Module

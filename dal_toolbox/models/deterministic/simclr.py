@@ -11,17 +11,15 @@ import logging
 class SimCLR(DeterministicModel):
     def __init__(
         self,
-        hidden_dim: int,
-        temperature: float,
+        model,
         optimizer: torch.optim.Optimizer = None,
-        optimizer_params: dict = None,
         lr_scheduler: torch.optim.lr_scheduler.LRScheduler = None,
-        lr_scheduler_params: dict = None,
+        temperature: float = 1,
+        hidden_dim: int = 128,
         train_metrics: dict = None,
         val_metrics: dict = None,
     ):
-        model = resnet.ResNet18(4*hidden_dim) # num_classes is the output size of the last linear layer
-        super().__init__(model, optimizer, optimizer_params, lr_scheduler, lr_scheduler_params, train_metrics, val_metrics)
+        super().__init__(model=model, optimizer=optimizer, lr_scheduler=lr_scheduler, train_metrics=train_metrics, val_metrics=val_metrics)
 
         assert temperature > 0.0, "The temperature must be a positive float!"
         # The MLP for g(.) consists of Linear->ReLU->Linear
