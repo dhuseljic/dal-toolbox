@@ -61,3 +61,16 @@ def dempster_shafer_uncertainty(logits):
     num_classes = logits.shape[-1]
     belief_mass = torch.sum(torch.exp(logits), dim=-1)
     return num_classes / (belief_mass + num_classes)
+
+
+def log_sub_exp(x, y):
+    larger = torch.max(x, y)
+    smaller = torch.min(x, y)
+    zero = torch.zeros_like(larger)
+    result = larger + log1mexp(torch.max(larger - smaller, zero))
+    return result
+
+
+def log1mexp(x):
+    x = torch.abs(x)
+    return torch.where(x < math.log(2), torch.log(-torch.expm1(-x)), torch.log1p(-torch.exp(-x)))

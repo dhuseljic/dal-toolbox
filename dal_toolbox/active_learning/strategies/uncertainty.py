@@ -13,7 +13,7 @@ class UncertaintySampling(Query, ABC):
         self.subset_size = subset_size
 
     @torch.no_grad()
-    def query(self, model, al_datamodule, acq_size, return_utilities=False, **kwargs):
+    def query(self, *, model, al_datamodule, acq_size, return_utilities=False, **kwargs):
         unlabeled_dataloader = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
         unlabeled_indices = al_datamodule.unlabeled_indices  # TODO(dhuseljic): get indices from dataloader?
 

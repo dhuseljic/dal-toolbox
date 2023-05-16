@@ -1,11 +1,12 @@
-import random
 
 import torch
 import numpy as np
 import lightning as L
 
-from torch.utils.data import Subset, SubsetRandomSampler, DataLoader, Dataset
+from torch.utils.data import Subset, RandomSampler, DataLoader, Dataset
+
 from lightning.pytorch.utilities import rank_zero_warn
+from lightning.pytorch.utilities.exceptions import MisconfigurationException
 
 
 class ActiveLearningDataModule(L.LightningDataModule):
@@ -13,17 +14,19 @@ class ActiveLearningDataModule(L.LightningDataModule):
     def __init__(
             self,
             train_dataset: Dataset,
-            train_batch_size: int,
             query_dataset: Dataset = None,
+            val_dataset: Dataset = None,
+            test_dataset: Dataset = None,
+            train_batch_size: int = 64,
             predict_batch_size: int = 256,
             seed: int = None,
     ):
         super().__init__()
         self.train_dataset = train_dataset
+        self.val_dataset = val_dataset
+        self.test_dataset = test_dataset
+        self.query_dataset = QueryDataset(query_dataset) if query_dataset else QueryDataset(dataset=train_dataset)
         self.train_batch_size = train_batch_size
-        # TODO: validation dataset?
-        self.query_dataset = QueryDataset(
-            query_dataset) if query_dataset is not None else QueryDataset(dataset=train_dataset)
         self.predict_batch_size = predict_batch_size
 
         if query_dataset is None:
@@ -31,8 +34,7 @@ class ActiveLearningDataModule(L.LightningDataModule):
 
         self._setup_rng(seed)
 
-        # TODO(dhuseljic): Add property automatically converting to list?
-        self.unlabeled_indices = range(len(self.train_dataset))
+        self.unlabeled_indices = list(range(len(self.train_dataset)))
         self.labeled_indices = []
 
     def _setup_rng(self, seed):
@@ -44,13 +46,21 @@ class ActiveLearningDataModule(L.LightningDataModule):
             self.rng = np.random.RandomState(self._seed)
 
     def train_dataloader(self):
-        # TODO(dhuseljic): Num samples or drop last?
         # TODO(dhuseljic): Add support for semi-supervised learning loaders.
-        sampler = SubsetRandomSampler(indices=self.labeled_indices)
-        train_loader = DataLoader(self.train_dataset, batch_size=self.train_batch_size, sampler=sampler)
+        labeled_dataset = Subset(self.train_dataset, indices=self.labeled_indices)
+        iter_per_epoch = len(labeled_dataset) // self.train_batch_size + 1
+        sampler = RandomSampler(labeled_dataset, num_samples=(iter_per_epoch * self.train_batch_size))
+        train_loader = DataLoader(labeled_dataset, batch_size=self.train_batch_size, sampler=sampler)
         return train_loader
 
+    # def val_dataloader(self):
+    #     return None
+
+    # def test_dataloader(self):
+    #     raise NotImplementedError()
+
     def unlabeled_dataloader(self, subset_size=None):
+        """Returns a dataloader for the unlabeled pool where instances are not augmentated."""
         unlabeled_indices = self.unlabeled_indices
         if subset_size:
             unlabeled_indices = self.rng.choice(unlabeled_indices, size=subset_size, replace=False)
@@ -58,11 +68,25 @@ class ActiveLearningDataModule(L.LightningDataModule):
         loader = DataLoader(self.query_dataset, batch_size=self.predict_batch_size, sampler=unlabeled_indices)
         return loader
 
-    # def val_dataloader(self):
-    #     raise NotImplementedError()
+    def labeled_dataloader(self, subset_size=None):
+        """Returns a dataloader for the labeled pool where instances are not augmentated."""
+        labeled_indices = self.labeled_indices
+        if subset_size:
+            labeled_indices = self.rng.choice(labeled_indices, size=subset_size, replace=False)
+            labeled_indices = labeled_indices.tolist()
+        loader = DataLoader(self.query_dataset, batch_size=self.predict_batch_size, sampler=labeled_indices)
+        return loader
 
-    # def test_dataloader(self):
-    #     raise NotImplementedError()
+    def state_dict(self):
+        state_dict = {
+            'labeled_indices': self.labeled_indices,
+            'unlabeled_indices': self.unlabeled_indices,
+        }
+        return state_dict
+
+    def load_state_dict(self, state_dict):
+        self.labeled_indices = state_dict['labeled_indices']
+        self.unlabeled_indices = state_dict['unlabeled_indices']
 
     def update_annotations(self, buy_idx: list):
         """
@@ -118,6 +142,7 @@ class QueryDataset(Subset):
 
 
 class ALDataset:
+    # TODO: Update?
     def __init__(self, train_dataset, query_dataset=None, random_state=None):
         # Differenciating between train and query, since train can contain additional transformations
         # for optimal training performance
@@ -130,7 +155,15 @@ class ALDataset:
         # Set up the indices for unlabeled and labeled pool
         self.unlabeled_indices = range(len(self.train_dataset))
         self.labeled_indices = []
-        self.rng = random.Random(random_state)
+        self._setup_rng(random_state)
+
+    def _setup_rng(self, seed):
+        # set rng which should be used for all random stuff
+        self._seed = seed
+        if seed is None:
+            self.rng = np.random.mtrand._rand
+        else:
+            self.rng = np.random.RandomState(self._seed)
 
     @property
     def unlabeled_dataset(self):
@@ -198,6 +231,35 @@ class ALDataset:
             indices = self.rng.sample(self.unlabeled_indices, k=n_samples)
 
         self.update_annotations(indices)
+
+
+class ALModule(ActiveLearningDataModule):
+    # TODO(dhuseljic): How ot get query dataset from datamodule of lightning
+    def __init__(self, datamodule: L.LightningDataModule, predict_batch_size: int = 256, seed: int = None):
+        # Get datasets
+        datamodule.prepare_data()
+        datamodule.setup('fit')
+        datamodule.setup('validate')
+        datamodule.setup('test')
+        train_loader = datamodule.train_dataloader()
+
+        train_dataset = train_loader.dataset
+        train_batch_size = train_loader.batch_size
+
+        try:
+            val_dataloader = datamodule.val_dataloader()
+            val_dataset = val_dataloader.dataset
+        except MisconfigurationException:
+            print('Did not find validation dataloader. Using none.')
+            val_dataset = None
+
+        try:
+            test_dataloader = datamodule.test_dataloader()
+            test_dataset = test_dataloader.dataset
+        except MisconfigurationException:
+            print('Did not find test dataloader. Using none.')
+            test_dataset = None
+        super().__init__(train_dataset, train_dataset, val_dataset, test_dataset, train_batch_size, predict_batch_size, seed=seed)
 
 
 def list_union(a: list, b: list):

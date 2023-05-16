@@ -12,9 +12,7 @@ class Badge(Query):
         self.batch_size = batch_size
         self.device = device
 
-    def query(self, model, al_datamodule, acq_size, **kwargs):
-        if not hasattr(model, 'get_grad_representations'):
-            raise ValueError('The method `get_grad_representations` is mandatory to use badge sampling.')
+    def query(self, *, model, al_datamodule, acq_size, **kwargs):
         unlabeled_dataloader = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
         unlabeled_indices = al_datamodule.unlabeled_indices  # TODO(dhuseljic): get indices from dataloader?
 
