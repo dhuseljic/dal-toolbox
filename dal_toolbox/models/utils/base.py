@@ -1,4 +1,5 @@
 import abc
+import copy
 import functools
 
 import torch
@@ -28,10 +29,10 @@ class BaseModule(L.LightningModule, abc.ABC):
         self.train_metrics = nn.ModuleDict(train_metrics)
         self.val_metrics = nn.ModuleDict(val_metrics)
 
-        # TODO(dhuseljic): optimizer and lrscheduler as args?
-        # init_optimizer_state = copy.deepcopy(self.optimizer.state_dict())
-        # init_model_state = copy.deepcopy(self.model.state_dict())
-        # init_scheduler_state = copy.deepcopy(self.lr_scheduler.state_dict())
+        # TODO(dhuseljic): not working with functools
+        self.init_optimizer_state = copy.deepcopy(self.optimizer.state_dict())
+        self.init_model_state = copy.deepcopy(self.model.state_dict())
+        self.init_scheduler_state = copy.deepcopy(self.lr_scheduler.state_dict())
 
     def forward(self, *args, **kwargs):
         return self.model.forward(*args, **kwargs)
@@ -42,6 +43,14 @@ class BaseModule(L.LightningModule, abc.ABC):
         gathered_val = self.all_gather(val)
         val = torch.cat([v for v in gathered_val])
         return val
+
+    def reset_states(self, reset_model_parameters=True):
+        if reset_model_parameters:
+            self.model.load_state_dict(self.init_model_state)
+        self.optimizer.load_state_dict(self.init_optimizer_state)
+        if self.lr_scheduler:
+            self.lr_scheduler.load_state_dict(self.init_scheduler_state)
+        self.configure_optimizers()
 
     def configure_optimizers(self):
         if self.optimizer is None:
