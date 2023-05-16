@@ -4,7 +4,7 @@ import logging
 import lightning as L
 from lightning.pytorch.utilities import rank_zero_only
 from collections import defaultdict
-from dal_toolbox import utils
+from dal_toolbox.utils import SmoothedValue
 
 
 class MetricHistory(L.Callback):
@@ -41,7 +41,7 @@ class MetricLogger(L.Callback):
         self.delimiter = delimiter
 
         self.logger = logging.getLogger(__name__)
-        self.meters = defaultdict(utils.SmoothedValue)
+        self.meters = defaultdict(SmoothedValue)
 
     def __str__(self):
         loss_str = []
@@ -53,15 +53,13 @@ class MetricLogger(L.Callback):
     def on_train_epoch_start(self, trainer, pl_module):
         self._start_time_train = time.time()
 
-        # Define Logging stuff
         self.i = 0
         self.header = f"Epoch [{trainer.current_epoch + 1}]"
         self.num_batches = len(trainer.train_dataloader)
         self.space_fmt = f":{len(str(self.num_batches))}d"
 
-        self.meters = defaultdict(utils.SmoothedValue)
-        self.meters['lr'] = utils.SmoothedValue(window_size=1, fmt="{value:.4f}")
-        # self.metric_logger = utils.MetricLogger(delimiter=' ')
+        self.meters = defaultdict(SmoothedValue)
+        self.meters['lr'] = SmoothedValue(window_size=1, fmt="{value:.4f}")
 
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx) -> None:
         metrics = {k: v.item() for k, v in trainer.logged_metrics.items()}
