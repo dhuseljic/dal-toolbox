@@ -104,6 +104,7 @@ def main(args):
         predictions = trainer.predict(model, test_loader)
         logits = torch.cat([pred[0] for pred in predictions])
         targets = torch.cat([pred[1] for pred in predictions])
+        test_stats['num_labeled_samples'] = len(al_datamodule.labeled_indices)
         test_stats['accuracy'] = acc_fn(logits, targets).item()
         cycle_results['test_stats'] = test_stats
         logging.info('Cycle test stats: %s', test_stats)

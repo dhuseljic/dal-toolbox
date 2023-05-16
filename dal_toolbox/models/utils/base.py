@@ -50,8 +50,12 @@ class BaseModule(L.LightningModule, abc.ABC):
             return optimizer
         if isinstance(self.optimizer, functools.partial):
             self.optimizer = self.optimizer(self.parameters())
+
         if self.lr_scheduler is None:
             return self.optimizer
+        if isinstance(self.lr_scheduler, functools.partial):
+            self.lr_scheduler = self.lr_scheduler(self.optimizer)
+
         return {'optimizer': self.optimizer, 'lr_scheduler': self.lr_scheduler}
 
     def log_train_metrics(self, logits, targets):
