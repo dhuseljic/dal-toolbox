@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import torchmetrics
 
 from sklearn import metrics
+from .utils import log_sub_exp
 
 
 class EnsembleCrossEntropy(torchmetrics.Metric):
@@ -149,19 +150,6 @@ class BrierScoreDecomposition(nn.Module):
             'reliability': reliabilty.item(),
         }
         return out
-
-
-def log_sub_exp(x, y):
-    larger = torch.max(x, y)
-    smaller = torch.min(x, y)
-    zero = torch.zeros_like(larger)
-    result = larger + log1mexp(torch.max(larger - smaller, zero))
-    return result
-
-
-def log1mexp(x):
-    x = torch.abs(x)
-    return torch.where(x < math.log(2), torch.log(-torch.expm1(-x)), torch.log1p(-torch.exp(-x)))
 
 
 def calibration_error(confs: torch.Tensor, accs: torch.Tensor, n_samples: torch.Tensor, p: int = 2):
