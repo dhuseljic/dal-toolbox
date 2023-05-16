@@ -2,8 +2,6 @@ import time
 import datetime
 import logging
 import lightning as L
-from lightning.pytorch.callbacks import TQDMProgressBar
-from tqdm import tqdm
 from lightning.pytorch.utilities import rank_zero_only
 
 
@@ -63,45 +61,3 @@ class MetricLogger(L.Callback):
         eta = datetime.timedelta(seconds=int(time.time() - self._start_time_val))
         log_msg = f'Validation eta: {eta}  ' + '  '.join([f'{n}: {m:.4f}' for n, m in metrics.items()])
         self.logger.info(log_msg)
-
-
-class DummyCallback(L.Callback):
-    @rank_zero_only
-    def on_train_epoch_start(self, trainer, pl_module):
-        print('TEST')
-
-    @rank_zero_only
-    def on_train_batch_start(self, trainer, pl_module):
-        print('TEST')
-
-    @rank_zero_only
-    def on_before_backward(self, trainer, pl_module, loss):
-        print('TEST')
-
-    @rank_zero_only
-    def on_after_backward(self, trainer, pl_module, loss):
-        print('TEST')
-
-    @rank_zero_only
-    def on_train_batch_end(self, trainer, pl_module):
-        print('TEST')
-
-    @rank_zero_only
-    def on_train_epoch_end(self, trainer, pl_module):
-        print('TEST')
-
-    @rank_zero_only
-    def on_validation_model_eval(self):
-        print('TEST')
-
-    @rank_zero_only
-    def on_validation_epoch_start(self, trainer, pl_module):
-        print('TEST')
-
-    @rank_zero_only
-    def on_validation_epoch_end(self, trainer, pl_module):
-        print('TEST')
-
-    @rank_zero_only
-    def on_validation_model_train(self):
-        print('TEST')

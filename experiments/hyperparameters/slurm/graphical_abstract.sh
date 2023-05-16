@@ -31,6 +31,7 @@ output_dir=/mnt/work/dhuseljic/results/hyperparameters/graphical_abstract/${al_s
 python -u active_learning.py \
     model.optimizer.lr=$learning_rate \
     model.optimizer.weight_decay=$weight_decay \
+    dataset_path=/mnt/work/dhuseljic/datasets \
     random_seed=$random_seed \
     al_strategy=$al_strategy \
     output_dir=$output_dir
