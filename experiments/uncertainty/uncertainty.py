@@ -12,9 +12,9 @@ from torch.utils.data import DataLoader, Subset, RandomSampler
 
 from dal_toolbox import datasets
 from dal_toolbox import metrics
-from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp, variational_inference
-from dal_toolbox.utils import seed_everything
+from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp
 from dal_toolbox.models.utils.callbacks import MetricLogger
+from dal_toolbox.utils import seed_everything, is_running_on_slurm
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="uncertainty")
@@ -49,12 +49,15 @@ def main(args):
     # Training
     logger.info('Starting Training..')
     model = build_model(args, num_classes=ds_info['n_classes'])
+    callbacks = []
+    if is_running_on_slurm():
+        callbacks.append(MetricLogger())
     trainer = L.Trainer(
         max_epochs=args.model.n_epochs,
-        callbacks=[],
+        callbacks=callbacks,
         check_val_every_n_epoch=args.eval_interval,
         enable_checkpointing=False,
-        enable_progress_bar=True,
+        enable_progress_bar=is_running_on_slurm() is False,
         devices=args.num_devices,
     )
     trainer.fit(model, train_loader)  # , val_dataloaders=test_loader_id)
