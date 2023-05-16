@@ -1,4 +1,5 @@
 import abc
+import functools
 
 import torch
 import torch.nn as nn
@@ -47,6 +48,8 @@ class BaseModule(L.LightningModule, abc.ABC):
             optimizer = torch.optim.SGD(self.parameters(), lr=1e-1, momentum=.9, weight_decay=0.01)
             rank_zero_warn(f'Using default optimizer: {optimizer}.')
             return optimizer
+        if isinstance(self.optimizer, functools.partial):
+            self.optimizer = self.optimizer(self.parameters())
         if self.lr_scheduler is None:
             return self.optimizer
         return {'optimizer': self.optimizer, 'lr_scheduler': self.lr_scheduler}
