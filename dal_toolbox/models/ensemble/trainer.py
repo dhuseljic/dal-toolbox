@@ -96,7 +96,7 @@ class EnsembleTrainer(BasicTrainer):
         self.model.eval()
 
         ensemble_logits, targets = self.predict(dataloader)
-        log_probas = metrics.ensemble_log_probas_from_logits(ensemble_logits)
+        log_probas = metrics.ensemble_log_softmax(ensemble_logits)
 
         test_stats = {
             "accuracy": metrics.Accuracy()(log_probas, targets).item(),

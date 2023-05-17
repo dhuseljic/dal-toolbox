@@ -1,7 +1,5 @@
 import torch
 
-from torch.utils.data import DataLoader
-
 from .query import Query
 from ...metrics import utils
 from abc import ABC, abstractmethod
@@ -70,7 +68,7 @@ class BayesianLeastConfidentSampling(UncertaintySampling):
     def get_utilities(self, logits):
         if logits.ndim != 3:
             raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
-        log_probas = utils.ensemble_log_probas_from_logits(logits)
+        log_probas = utils.ensemble_log_softmax(logits)
         probas = log_probas.exp()
         scores, _ = probas.max(dim=-1)
         scores = 1 - scores
@@ -81,7 +79,7 @@ class BayesianMarginSampling(UncertaintySampling):
     def get_utilities(self, logits):
         if logits.ndim != 3:
             raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
-        log_probas = utils.ensemble_log_probas_from_logits(logits)
+        log_probas = utils.ensemble_log_softmax(logits)
         probas = log_probas.exp()
         top_probas, _ = torch.topk(probas, k=2, dim=-1)
         scores = top_probas[:, 0] - top_probas[:, 1]
@@ -117,6 +115,7 @@ class VariationRatioSampling(UncertaintySampling):
         # TODO: should be in own file, so we can use it without the class
         if logits.ndim != 3:
             raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
+        # TODO(dhuseljic): update
         n_member = logits.size(1)
 
         preds_classes = logits.argmax(dim=-1)
@@ -145,7 +144,7 @@ class BALDSampling(UncertaintySampling):
         # TODO(dhuseljic): implement bald from logits
         probas = logits.softmax(-1)
         mean_probas = torch.mean(probas, dim=1)
-        mean_entropy = utils.entropy_fn(mean_probas)
-        entropy = utils.entropy_fn(probas).mean(-1)
+        mean_entropy = utils.entropy_from_probas(mean_probas)
+        entropy = utils.entropy_from_probas(probas).mean(-1)
         score = mean_entropy - entropy
         return score

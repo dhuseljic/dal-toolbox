@@ -100,7 +100,7 @@ class EnsembleModel(BaseModule):
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         inputs = batch[0]
         targets = batch[1]
-        logits = self(inputs)
+        logits = self.mc_forward(inputs)
 
         logits = self._gather(logits)
         targets = self._gather(targets)

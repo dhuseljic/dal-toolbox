@@ -41,7 +41,7 @@ class MCDropoutTrainer(BasicTrainer):
 
         # Get logits and targets for in-domain-test-set (Number of Samples x Number of Passes x Number of Classes)
         dropout_logits, targets = self.predict(dataloader)
-        log_probas = metrics.ensemble_log_probas_from_logits(dropout_logits)
+        log_probas = metrics.ensemble_log_softmax(dropout_logits)
 
         test_stats = {
             "accuracy": metrics.Accuracy()(log_probas, targets).item(),

@@ -7,7 +7,7 @@ def clamp_probas(probas):
     return probas.clamp(min=eps, max=1 - eps)
 
 
-def entropy_fn(probas, dim=-1):
+def entropy_from_probas(probas, dim=-1):
     probas = clamp_probas(probas)
     return - torch.sum(probas * probas.log(), dim=dim)
 
@@ -22,12 +22,12 @@ def entropy_from_logits(logits):
     return entropy
 
 
-def ensemble_log_probas_from_logits(logits):
+def ensemble_log_softmax(logits):
     if logits.ndim != 3:
         raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
-    ensemble_size = logits.size(1)
+    ensemble_size = logits.size(0)
     # numerical stable version of avg ensemble probas: log sum_m^M exp log probs_m - log M = log 1/M sum_m probs_m
-    log_probas = torch.logsumexp(logits.log_softmax(-1), dim=1) - math.log(ensemble_size)
+    log_probas = torch.logsumexp(logits.log_softmax(-1), dim=0) - math.log(ensemble_size)
     return log_probas
 
 
@@ -35,9 +35,8 @@ def ensemble_entropy_from_logits(logits):
     # numerical stable version
     if logits.ndim != 3:
         raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
-    ensemble_size = logits.size(1)
     # numerical stable version of avg ensemble probas: log sum_m^M exp log probs_m - log M = log 1/M sum_m probs_m
-    log_probas = torch.logsumexp(logits.log_softmax(-1), dim=1) - math.log(ensemble_size)
+    log_probas = ensemble_log_softmax(logits)
     probas = log_probas.exp()
     entropy = - torch.sum(probas * log_probas, dim=-1)
     return entropy
