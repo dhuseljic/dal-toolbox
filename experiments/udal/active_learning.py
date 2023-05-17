@@ -7,7 +7,6 @@ import torch
 import torch.nn as nn
 import hydra
 
-from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader, RandomSampler
 from omegaconf import OmegaConf
 
@@ -28,7 +27,6 @@ def main(args):
     # Necessary for logging
     results = {}
     queried_indices = {}
-    writer = SummaryWriter(log_dir=args.output_dir)
 
     # Setup Dataset
     logging.info('Building datasets.')
@@ -90,17 +88,13 @@ def main(args):
         train_sampler = RandomSampler(al_dataset.labeled_dataset, num_samples=args.model.batch_size*iter_per_epoch)
         train_loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.model.batch_size, sampler=train_sampler)
 
-        trainer.reset_states(reset_model_parameters=args.al_cycle.cold_start)
-        history = trainer.train(args.model.n_epochs, train_loader=train_loader)
-        cycle_results['train_history'] = history['train_history']
+        # trainer.reset_states(reset_model_parameters=args.al_cycle.cold_start)
+        # history = trainer.train(args.model.n_epochs, train_loader=train_loader)
+        # cycle_results['train_history'] = history['train_history']
 
         # Evaluate resulting model
         test_stats = trainer.evaluate(val_loader, dataloaders_ood=ood_loaders)
         cycle_results['test_stats'] = test_stats
-
-        # Log
-        for key, value in test_stats.items():
-            writer.add_scalar(tag=f"test_stats/{key}", scalar_value=value, global_step=i_acq)
 
         cycle_results.update({
             "labeled_indices": al_dataset.labeled_indices,
@@ -130,48 +124,22 @@ def build_query(args, **kwargs):
         query = random.RandomSampling()
     # Aleatoric Strategies
     elif args.al_strategy.name == "least_confident":
-        query = uncertainty.LeastConfidentSampling(
-            batch_size=args.model.batch_size,
-            subset_size=args.al_strategy.subset_size,
-            device=device,
-        )
+        query = uncertainty.LeastConfidentSampling(subset_size=args.al_strategy.subset_size,)
     elif args.al_strategy.name == "margin":
-        query = uncertainty.MarginSampling(
-            batch_size=args.model.batch_size,
-            subset_size=args.al_strategy.subset_size,
-            device=device,
-        )
+        query = uncertainty.MarginSampling(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == "entropy":
-        query = uncertainty.EntropySampling(
-            batch_size=args.model.batch_size,
-            subset_size=args.al_strategy.subset_size,
-            device=device,
-        )
+        query = uncertainty.EntropySampling(subset_size=args.al_strategy.subset_size)
     # Epistemic Strategies
     elif args.al_strategy.name == "bayesian_entropy":
-        query = uncertainty.BayesianEntropySampling(
-            batch_size=args.model.batch_size,
-            subset_size=args.al_strategy.subset_size,
-            device=device,
-        )
+        query = uncertainty.BayesianEntropySampling(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == 'variation_ratio':
-        query = uncertainty.VariationRatioSampling(
-            batch_size=args.model.batch_size,
-            subset_size=args.al_strategy.subset_size,
-            device=device,
-        )
+        query = uncertainty.VariationRatioSampling(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == 'bald':
-        query = uncertainty.BALDSampling(
-            batch_size=args.model.batch_size,
-            subset_size=args.al_strategy.subset_size,
-            device=device,
-        )
+        query = uncertainty.BALDSampling(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == "coreset":
-        device = kwargs['device']
-        query = coreset.CoreSet(subset_size=args.al_strategy.subset_size, device=device)
+        query = coreset.CoreSet(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == "badge":
-        device = kwargs['device']
-        query = badge.Badge(subset_size=args.al_strategy.subset_size, device=device)
+        query = badge.Badge(subset_size=args.al_strategy.subset_size)
     else:
         raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
     return query

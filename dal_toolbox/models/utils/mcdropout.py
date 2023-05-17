@@ -19,7 +19,8 @@ class MCDropoutModule(nn.Module):
         mc_input_BK = MCDropoutModule.mc_tensor(input_B, MCDropoutModule.n_passes)
         mc_output_BK = self.mc_forward_impl(mc_input_BK)
         mc_output_B_K = MCDropoutModule.unflatten_tensor(mc_output_BK, MCDropoutModule.n_passes)
-        return mc_output_B_K
+        # Reshape from N x M x K -> M x N x K
+        return mc_output_B_K.permute(1, 0, 2) 
 
     def mc_forward_impl(self, *args, **kwargs):
         return self(*args, **kwargs)

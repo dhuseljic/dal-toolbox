@@ -1,46 +1,17 @@
 import torch
 from torch.utils.data import Subset
-from . import mnist, fashion_mnist, svhn, cifar, tiny_imagenet, imagenet
 from .activeglae import agnews, banks77, dbpedia, fnc1, mnli, qnli, sst2, trec6, wikitalk, yelp5
+
+from . import mnist
+from . import fashion_mnist
+from . import cifar
+from . import svhn
+from . import tiny_imagenet
+from . import imagenet
 
 
 def build_al_datasets(args):
-    if args.dataset.name == 'MNIST':
-        train_ds, ds_info = mnist.build_mnist('train', args.dataset_path, return_info=True)
-        query_ds = mnist.build_mnist('query', args.dataset_path)
-        test_ds_id = mnist.build_mnist('test', args.dataset_path)
-
-    elif args.dataset.name == 'FashionMNIST':
-        train_ds, ds_info = fashion_mnist.build_fashionmnist('train', args.dataset_path, return_info=True)
-        query_ds = fashion_mnist.build_fashionmnist('query', args.dataset_path)
-        test_ds_id = fashion_mnist.build_fashionmnist('test', args.dataset_path)
-
-    elif args.dataset.name == 'CIFAR10':
-        train_ds, ds_info = cifar.build_cifar10('train', args.dataset_path, return_info=True)
-        query_ds = cifar.build_cifar10('query', args.dataset_path)
-        test_ds_id = cifar.build_cifar10('test', args.dataset_path)
-
-    elif args.dataset.name == 'CIFAR100':
-        train_ds, ds_info = cifar.build_cifar100('train', args.dataset_path, return_info=True)
-        query_ds = cifar.build_cifar100('query', args.dataset_path)
-        test_ds_id = cifar.build_cifar100('test', args.dataset_path)
-
-    elif args.dataset.name == 'SVHN':
-        train_ds, ds_info = svhn.build_svhn('train', args.dataset_path, return_info=True)
-        query_ds = svhn.build_svhn('query', args.dataset_path)
-        test_ds_id = svhn.build_svhn('test', args.dataset_path)
-
-    elif args.dataset.name == 'TinyImagenet':
-        train_ds, ds_info = tiny_imagenet.build_tinyimagenet('train', args.dataset_path, return_info=True)
-        query_ds = tiny_imagenet.build_tinyimagenet('query', args.dataset_path)
-        test_ds_id = tiny_imagenet.build_tinyimagenet('test', args.dataset_path)
-
-    elif args.dataset.name == 'Imagenet':
-        train_ds, ds_info = imagenet.build_imagenet('train', args.dataset_path, return_info=True)
-        query_ds = imagenet.build_imagenet('query', args.dataset_path)
-        test_ds_id = imagenet.build_imagenet('val', args.dataset_path)
-
-    elif args.dataset.name == 'imdb':
+    if args.dataset.name == 'imdb':
         complete_ds, ds_info = imdb.build_imdb(args)
         train_ds = complete_ds['train']
         query_ds = complete_ds['train']
