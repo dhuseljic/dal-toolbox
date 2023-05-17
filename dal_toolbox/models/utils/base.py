@@ -15,7 +15,7 @@ class BaseModule(L.LightningModule, abc.ABC):
     def __init__(
             self,
             model: nn.Module,
-            loss_fn=nn.CrossEntropyLoss(),
+            loss_fn: nn.Module = nn.CrossEntropyLoss(),
             optimizer: torch.optim.Optimizer = None,
             lr_scheduler: torch.optim.lr_scheduler.LRScheduler = None,
             train_metrics: dict = None,
@@ -30,8 +30,8 @@ class BaseModule(L.LightningModule, abc.ABC):
         self.val_metrics = nn.ModuleDict(val_metrics)
 
         # TODO(dhuseljic): not working with functools
-        self.init_optimizer_state = copy.deepcopy(self.optimizer.state_dict())
         self.init_model_state = copy.deepcopy(self.model.state_dict())
+        self.init_optimizer_state = copy.deepcopy(self.optimizer.state_dict())
         self.init_scheduler_state = copy.deepcopy(self.lr_scheduler.state_dict())
 
     def forward(self, *args, **kwargs):

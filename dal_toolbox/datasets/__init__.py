@@ -2,6 +2,13 @@ import torch
 from torch.utils.data import Subset
 from .activeglae import agnews, banks77, dbpedia, fnc1, mnli, qnli, sst2, trec6, wikitalk, yelp5
 
+from . import mnist
+from . import fashion_mnist
+from . import cifar
+from . import svhn
+from . import tiny_imagenet
+from . import imagenet
+
 
 def build_al_datasets(args):
     if args.dataset.name == 'imdb':
