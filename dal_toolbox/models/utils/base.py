@@ -31,8 +31,8 @@ class BaseModule(L.LightningModule, abc.ABC):
 
         # TODO(dhuseljic): not working with functools
         self.init_model_state = copy.deepcopy(self.model.state_dict())
-        self.init_optimizer_state = copy.deepcopy(self.optimizer.state_dict())
-        self.init_scheduler_state = copy.deepcopy(self.lr_scheduler.state_dict())
+        self.init_optimizer_state = copy.deepcopy(self.optimizer.state_dict()) if optimizer else None
+        self.init_scheduler_state = copy.deepcopy(self.lr_scheduler.state_dict()) if lr_scheduler else None
 
     def forward(self, *args, **kwargs):
         return self.model.forward(*args, **kwargs)

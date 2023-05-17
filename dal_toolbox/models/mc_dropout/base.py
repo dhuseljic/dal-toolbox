@@ -1,7 +1,24 @@
+import torch
+import torch.nn as nn
 from ..utils.base import BaseModule
+
+from ..utils.mcdropout import MCDropoutModule
+from ...metrics import GibbsCrossEntropy
 
 
 class MCDropoutModel(BaseModule):
+    def __init__(
+            self,
+            model: MCDropoutModule,
+            loss_fn: nn.Module = nn.CrossEntropyLoss(),
+            optimizer: torch.optim.Optimizer = None,
+            lr_scheduler: torch.optim.lr_scheduler.LRScheduler = None,
+            train_metrics: dict = None,
+            val_metrics: dict = None,
+            val_loss_fn=GibbsCrossEntropy(),
+    ):
+        super().__init__(model, loss_fn, optimizer, lr_scheduler, train_metrics, val_metrics)
+        self.val_loss_fn = val_loss_fn
 
     def mc_forward(self, *args, **kwargs):
         return self.model.mc_forward(*args, **kwargs)
@@ -21,11 +38,11 @@ class MCDropoutModel(BaseModule):
         # TODO(dhuseljic): Validation with MC forward? might take a long time
         inputs, targets = batch
 
-        logits = self(inputs)
-        loss = self.loss_fn(logits, targets)
+        logits = self.mc_forward(inputs)
+        loss = self.val_loss_fn(logits, targets)
 
         self.log('val_loss', loss, prog_bar=True)
-        self.val_metrics(logits, targets)
+        self.log_val_metrics(logits, targets)
 
         return loss
 

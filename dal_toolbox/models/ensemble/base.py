@@ -37,6 +37,20 @@ class EnsembleModel(BaseModule):
 
         self.automatic_optimization = False
 
+    def forward(self, *args, **kwargs):
+        raise ValueError('Ensemble forward is not defined, use `mc_forward`.')
+
+    def mc_forward(self, *args, **kwargs):
+        """Returns the logits from each ensemble member.
+
+        Returns:
+            torch.Tensor: Tensor of shape (ensemble_size, num_samples, num_classes).
+        """
+        logits_list = []
+        for member in self.model:
+            logits_list.append(member(*args, **kwargs))
+        return torch.stack(logits_list)
+
     def reset_states(self, reset_model_parameters=True):
         if reset_model_parameters:
             self.load_state_dict(self.init_model_state)
@@ -53,12 +67,6 @@ class EnsembleModel(BaseModule):
             for i in range(len(self.model)):
                 all_train_metrics.update({f'{key}_member{i}': val for key, val in train_metrics.items()})
             return all_train_metrics
-
-    def forward(self, x):
-        logits_list = []
-        for member in self.model:
-            logits_list.append(member(x))
-        return torch.stack(logits_list, dim=1)
 
     def training_step(self, batch):
         inputs, targets = batch
@@ -82,13 +90,11 @@ class EnsembleModel(BaseModule):
     def validation_step(self, batch, batch_idx):
         inputs, targets = batch
 
-        logits = self(inputs)
+        logits = self.mc_forward(inputs)
         loss = self.val_loss_fn(logits, targets)
         self.log('val_loss', loss, prog_bar=True)
 
-        if self.val_metrics is not None:
-            metrics = {metric_name: metric(logits, targets) for metric_name, metric in self.val_metrics.items()}
-            self.log_dict(self.val_metrics, prog_bar=True)
+        self.log_val_metrics(logits, targets)
         return loss
 
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
@@ -122,27 +128,27 @@ class EnsembleModel(BaseModule):
             if not hasattr(member, 'get_logits'):
                 raise NotImplementedError('The `get_logits` method is not implemented.')
             logits_list.append(member.get_logits(*args, **kwargs))
-        logits = torch.stack(logits_list, dim=1)
+        logits = torch.stack(logits_list)
         return logits
 
     @torch.inference_mode()
     def get_representations(self, *args, **kwargs):
         kwargs['device'] = self.device
-        representations_list =  []
+        representations_list = []
         for member in self.model:
             if not hasattr(member, 'get_representations'):
                 raise NotImplementedError('The `get_representations` method is not implemented.')
             representations_list.append(member.get_representations(*args, **kwargs))
-        representations = torch.stack(representations_list, dim=1)
+        representations = torch.stack(representations_list)
         return representations
 
     @torch.inference_mode()
     def get_grad_representations(self, *args, **kwargs):
         kwargs['device'] = self.device
-        grad_representations_list =  []
+        grad_representations_list = []
         for member in self.model:
             if not hasattr(member, 'get_grad_representations'):
                 raise NotImplementedError('The `get_grad_representations` method is not implemented.')
             grad_representations_list.append(member.get_grad_representations(*args, **kwargs))
-        grad_representations = torch.stack(grad_representations_list, dim=1)
+        grad_representations = torch.stack(grad_representations_list)
         return grad_representations
