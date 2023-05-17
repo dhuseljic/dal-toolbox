@@ -86,7 +86,7 @@ def main(args):
 def evaluate(logits_id, targets_id, logits_ood_dict=None):
     # Model specific test loss and accuracy for in domain testset
     test_stats = {}
-    logits_id = metrics.ensemble_log_probas_from_logits(logits_id) if logits_id.ndim == 3 else logits_id
+    logits_id = metrics.ensemble_log_softmax(logits_id) if logits_id.ndim == 3 else logits_id
 
     # Test stats for in-distribution
     test_stats.update({
