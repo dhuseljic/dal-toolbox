@@ -8,6 +8,8 @@ from torch.utils.data import Subset, RandomSampler, DataLoader, Dataset
 from lightning.pytorch.utilities import rank_zero_warn
 from lightning.pytorch.utilities.exceptions import MisconfigurationException
 
+from ..utils import setup_rng
+
 
 class ActiveLearningDataModule(L.LightningDataModule):
     # TODO(dhuseljic): Implement for LightningDataModule input.
@@ -32,18 +34,9 @@ class ActiveLearningDataModule(L.LightningDataModule):
         if query_dataset is None:
             rank_zero_warn('Using train_dataset for queries. Ensure that there are no augmentations used.')
 
-        self._setup_rng(seed)
-
+        self.rng = setup_rng(seed)
         self.unlabeled_indices = list(range(len(self.train_dataset)))
         self.labeled_indices = []
-
-    def _setup_rng(self, seed):
-        # set rng which should be used for all random stuff
-        self._seed = seed
-        if seed is None:
-            self.rng = np.random.mtrand._rand
-        else:
-            self.rng = np.random.RandomState(self._seed)
 
     def train_dataloader(self):
         # TODO(dhuseljic): Add support for semi-supervised learning loaders.
@@ -53,11 +46,11 @@ class ActiveLearningDataModule(L.LightningDataModule):
         train_loader = DataLoader(labeled_dataset, batch_size=self.train_batch_size, sampler=sampler)
         return train_loader
 
-    # def val_dataloader(self):
-    #     return None
+    def val_dataloader(self):
+        return DataLoader(self.val_dataset, batch_size=self.predict_batch_size, shuffle=False)
 
-    # def test_dataloader(self):
-    #     raise NotImplementedError()
+    def test_dataloader(self):
+        return DataLoader(self.test_dataset, batch_size=self.predict_batch_size, shuffle=False)
 
     def unlabeled_dataloader(self, subset_size=None):
         """Returns a dataloader for the unlabeled pool where instances are not augmentated."""
