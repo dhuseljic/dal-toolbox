@@ -53,8 +53,8 @@ class MetricLogger(L.Callback):
     def on_train_epoch_start(self, trainer, pl_module):
         self._start_time_train = time.time()
 
-        self.i = 0
-        self.header = f"Epoch [{trainer.current_epoch + 1}]"
+        self.train_step = 0
+        self.header = f"Epoch [{trainer.current_epoch}]"
         self.num_batches = len(trainer.train_dataloader)
         self.space_fmt = f":{len(str(self.num_batches))}d"
 
@@ -69,14 +69,14 @@ class MetricLogger(L.Callback):
             batch_size = len(batch[0])
             self.meters[key].update(val, n=batch_size)
 
-        if self.i % self.log_interval == 0:
+        if self.train_step % self.log_interval == 0:
             log_msg = self.delimiter.join([
                 f'{self.header}',
                 ("[{0" + self.space_fmt + "}").format(batch_idx)+f"/{self.num_batches}]",
                 str(self),
             ])
             self.logger.info(log_msg)
-        self.i += 1
+        self.train_step += 1
 
     @rank_zero_only
     def on_train_epoch_end(self, trainer, pl_module):
@@ -86,16 +86,14 @@ class MetricLogger(L.Callback):
 
     @rank_zero_only
     def on_validation_epoch_start(self, trainer, pl_module):
-        pass
-        # self._start_time_val = time.time()
+        self.header = f"Epoch [{trainer.current_epoch}]"
+        self._start_time_val = time.time()
 
     @rank_zero_only
     def on_validation_epoch_end(self, trainer, pl_module):
-        pass
-        # metrics = {k: v.item() for k, v in trainer.logged_metrics.items()}
-        # eta = datetime.timedelta(seconds=int(time.time() - self._start_time_val))
-        # self.delimiter.join([
-        #     f'{self.header} Validation time: {eta}',
-        # ])
+        eta = datetime.timedelta(seconds=int(time.time() - self._start_time_val))
+        log_msg = self.delimiter.join([
+            f'{self.header} Total time for validation: {eta}',
+        ])
         # log_msg =  + '  '.join([f'{n}: {m:.4f}' for n, m in metrics.items()])
-        # self.logger.info(log_msg)
+        self.logger.info(log_msg)
