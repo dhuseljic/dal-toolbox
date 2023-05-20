@@ -53,8 +53,6 @@ class MetricLogger(L.Callback):
     def on_train_epoch_start(self, trainer, pl_module):
         self._start_time_train = time.time()
 
-        self.train_step = 0
-        self.header = f"Epoch [{trainer.current_epoch}]"
         self.num_batches = len(trainer.train_dataloader)
         self.space_fmt = f":{len(str(self.num_batches))}d"
 
