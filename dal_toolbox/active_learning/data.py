@@ -34,6 +34,12 @@ class ActiveLearningDataModule(L.LightningDataModule):
         if query_dataset is None:
             rank_zero_warn('Using train_dataset for queries. Ensure that there are no augmentations used.')
 
+        if self.val_dataset is not None:
+            self.val_dataloader = lambda: DataLoader(self.val_dataset, batch_size=predict_batch_size, shuffle=False)
+
+        if self.test_dataset is not None:
+            self.test_dataloader = lambda: DataLoader(self.test_dataset, batch_size=predict_batch_size, shuffle=False)
+
         self.rng = setup_rng(seed)
         self.unlabeled_indices = list(range(len(self.train_dataset)))
         self.labeled_indices = []
@@ -45,12 +51,6 @@ class ActiveLearningDataModule(L.LightningDataModule):
         sampler = RandomSampler(labeled_dataset, num_samples=(iter_per_epoch * self.train_batch_size))
         train_loader = DataLoader(labeled_dataset, batch_size=self.train_batch_size, sampler=sampler)
         return train_loader
-
-    def val_dataloader(self):
-        return DataLoader(self.val_dataset, batch_size=self.predict_batch_size, shuffle=False)
-
-    def test_dataloader(self):
-        return DataLoader(self.test_dataset, batch_size=self.predict_batch_size, shuffle=False)
 
     def unlabeled_dataloader(self, subset_size=None):
         """Returns a dataloader for the unlabeled pool where instances are not augmentated."""
