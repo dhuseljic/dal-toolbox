@@ -3,14 +3,11 @@ defaults:
   - model: 'resnet18'
 
 dataset: CIFAR10 
-dataset_path: ./data/
+dataset_path: /mnt/datasets/
 ood_datasets: [SVHN, CIFAR100]
-num_samples: null
-eval_interval: 25
-test_batch_size: 64
-random_seed: 42
+val_interval: 25
 
-device: "cuda"
+random_seed: 42
 num_devices: 1
 
 # Define output dir
