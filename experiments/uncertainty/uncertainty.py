@@ -39,16 +39,15 @@ def main(args):
     logger.info('Starting Training..')
     model = build_model(args, num_classes=data.num_classes)
     callbacks = []
-    if not is_running_on_slurm():
+    if is_running_on_slurm():
         callbacks.append(MetricLogger())
     trainer = L.Trainer(
         max_epochs=args.model.n_epochs,
         callbacks=callbacks,
         check_val_every_n_epoch=args.val_interval,
         enable_checkpointing=False,
-        enable_progress_bar=is_running_on_slurm(),
+        enable_progress_bar=is_running_on_slurm() is False,
         devices=args.num_devices,
-        limit_train_batches=1
     )
     trainer.fit(model, train_loader, val_dataloaders=val_loader)
 
