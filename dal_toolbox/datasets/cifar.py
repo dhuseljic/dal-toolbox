@@ -1,21 +1,28 @@
 import warnings
 import torchvision
-import lightning as L
 
-from torch.utils.data import DataLoader
 from torchvision import transforms, datasets
 from .corruptions import GaussianNoise
 from .base import AbstractData
 
 
 class CIFAR10(AbstractData):
-    @property
-    def mean(self):
-        return (0.4914, 0.4822, 0.4465)
+
+    def __init__(
+            self,
+            dataset_path: str,
+            mean: tuple = (0.4914, 0.4822, 0.4465),
+            std: tuple = (0.247, 0.243, 0.262),
+            val_split: float = 0.1,
+            seed: int = None
+    ) -> None:
+        self.mean = mean
+        self.std = std
+        super().__init__(dataset_path, val_split, seed)
 
     @property
-    def std(self):
-        return (0.247, 0.243, 0.262)
+    def num_classes(self):
+        return 10
 
     def download_datasets(self):
         datasets.CIFAR10(self.dataset_path, train=True, download=True)
@@ -59,9 +66,18 @@ class CIFAR10(AbstractData):
 
 
 class CIFAR10C(CIFAR10):
-    def __init__(self, dataset_path: str, severity: float, val_split: float = 0.1, seed: int = None) -> None:
+    def __init__(
+            self,
+            dataset_path: str,
+            severity: float,
+            mean: tuple = (0.4914, 0.4822, 0.4465),
+            std: tuple = (0.247, 0.243, 0.262),
+            val_split: float = 0.1,
+            seed: int = None
+    ) -> None:
         self.severity = severity
-        super().__init__(dataset_path, val_split, seed)
+        assert 0. <= self.severity <= 1.
+        super().__init__(dataset_path, mean, std, val_split, seed)
 
     @property
     def eval_transforms(self):
@@ -74,13 +90,19 @@ class CIFAR10C(CIFAR10):
 
 
 class CIFAR100(CIFAR10):
-    @property
-    def mean(self):
-        return (0.5071, 0.4865, 0.4409)
+    def __init__(
+            self,
+            dataset_path: str,
+            mean: tuple = (0.5071, 0.4865, 0.4409),
+            std: tuple = (0.2673, 0.2564, 0.2762),
+            val_split: float = 0.1,
+            seed: int = None
+    ) -> None:
+        super().__init__(dataset_path, mean, std, val_split, seed)
 
     @property
-    def std(self):
-        return (0.2673, 0.2564, 0.2762)
+    def num_classes(self):
+        return 100
 
     def download_datasets(self):
         datasets.CIFAR100(self.dataset_path, train=True, download=True)

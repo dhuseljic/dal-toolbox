@@ -6,8 +6,8 @@ from . import mnist
 from . import fashion_mnist
 from . import cifar
 from . import svhn
-from . import tiny_imagenet
 from . import imagenet
+# TODO(dhuseljic): from . import tiny_imagenet
 
 
 def build_al_datasets(args):
