@@ -32,7 +32,7 @@ def main(args):
 
     # Setup Dataset
     logging.info('Building datasets..')
-    data = datasets.cifar.CIFAR10('/mnt/datasets')
+    data = datasets.cifar.CIFAR10(args.dataset_path)
     al_datamodule = ActiveLearningDataModule(
         train_dataset=data.train_dataset,
         query_dataset=data.query_dataset,
