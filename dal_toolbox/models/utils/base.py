@@ -54,7 +54,7 @@ class BaseModule(L.LightningModule, abc.ABC):
 
     def configure_optimizers(self):
         if self.optimizer is None:
-            optimizer = torch.optim.SGD(self.parameters(), lr=1e-1, momentum=.9, weight_decay=0.01)
+            optimizer = torch.optim.SGD(self.parameters(), lr=0.1, momentum=0.9, weight_decay=0.0005)
             rank_zero_warn(f'Using default optimizer: {optimizer}.')
             return optimizer
         if isinstance(self.optimizer, functools.partial):

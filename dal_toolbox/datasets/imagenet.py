@@ -24,7 +24,12 @@ class ImageNet(AbstractData):
     def _check_path(self, path):
         if os.path.basename(path) == 'ILSVRC2012':
             return path
-        path = os.path.join(path, 'ILSVRC2012')
+        if 'ILSVRC2012' in os.listdir(path):
+            path = os.path.join(path, 'ILSVRC2012')
+            return path
+        if 'imagenet' in os.listdir(path):
+            path = os.path.join(path, 'imagenet', 'ILSVRC2012')
+            return path
         return path
 
     @property
