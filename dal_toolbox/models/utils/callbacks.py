@@ -35,13 +35,20 @@ class MetricHistory(L.Callback):
 
 
 class MetricLogger(L.Callback):
-    def __init__(self, log_interval=100, delimiter=' '):
+    def __init__(self, log_interval=100, delimiter=' ', use_print=False):
         super().__init__()
         self.log_interval = log_interval
         self.delimiter = delimiter
+        self.use_print = use_print
 
         self.logger = logging.getLogger(__name__)
         self.meters = defaultdict(SmoothedValue)
+
+    def _log(self, log_msg):
+        if self.use_print:
+            print(log_msg)
+        else:
+            self.logger.info(log_msg)
 
     def __str__(self):
         loss_str = []
@@ -53,6 +60,8 @@ class MetricLogger(L.Callback):
     def on_train_epoch_start(self, trainer, pl_module):
         self._start_time_train = time.time()
 
+        self.train_step = 0
+        self.header = f"Epoch [{trainer.current_epoch}]"
         self.num_batches = len(trainer.train_dataloader)
         self.space_fmt = f":{len(str(self.num_batches))}d"
 
@@ -73,14 +82,14 @@ class MetricLogger(L.Callback):
                 ("[{0" + self.space_fmt + "}").format(batch_idx)+f"/{self.num_batches}]",
                 str(self),
             ])
-            self.logger.info(log_msg)
+            self._log(log_msg)
         self.train_step += 1
 
     @rank_zero_only
     def on_train_epoch_end(self, trainer, pl_module):
         eta = datetime.timedelta(seconds=int(time.time() - self._start_time_train))
         log_msg = f"{self.header} Total time: {eta}"
-        self.logger.info(log_msg)
+        self._log(log_msg)
 
     @rank_zero_only
     def on_validation_epoch_start(self, trainer, pl_module):
@@ -94,4 +103,4 @@ class MetricLogger(L.Callback):
             f'{self.header} Total time for validation: {eta}',
         ])
         # log_msg =  + '  '.join([f'{n}: {m:.4f}' for n, m in metrics.items()])
-        self.logger.info(log_msg)
+        self._log(log_msg)
