@@ -46,6 +46,7 @@ class BaseModule(L.LightningModule, abc.ABC):
 
     def reset_states(self, reset_model_parameters=True):
         if reset_model_parameters:
+            self.model.cpu()  # TODO(dhuseljic): when not in cpu, batchnorm running mean is in inference mode..
             self.model.load_state_dict(self.init_model_state)
         self.optimizer.load_state_dict(self.init_optimizer_state)
         if self.lr_scheduler:
