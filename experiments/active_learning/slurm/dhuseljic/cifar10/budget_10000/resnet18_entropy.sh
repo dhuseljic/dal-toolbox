@@ -6,7 +6,7 @@
 #SBATCH --partition=main
 #SBATCH --array=1-3%3
 #SBATCH --job-name=al_baselines
-#SBATCH --output=/mnt/work/dhuseljic/logs/active_learning/%A_%a__%x.log
+#SBATCH --output=/mnt/work/dhuseljic/logs/al_baselines/%A_%a__%x.log
 date;hostname;pwd
 source activate dal-toolbox
 cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/active_learning/
