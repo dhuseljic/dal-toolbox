@@ -40,7 +40,8 @@ def train(config, args, train_ds, val_ds):
     )
     trainer.fit(model, train_loader, val_dataloaders=val_loader)
 
-    res = {name: metric.item() for name, metric in trainer.logged_metrics.items() if isinstance(metric, torch.Tensor)}
+    res = {name: metric.item() for name, metric in trainer.logged_metrics.items() 
+           if isinstance(metric, torch.Tensor) and 'val' in name}
     return res
 
 
@@ -68,11 +69,11 @@ def main(args):
     objective = tune.with_parameters(objective, args=args, train_ds=train_ds, val_ds=val_ds)
 
     search_alg = OptunaSearch(points_to_evaluate=[{'lr': 0.001, 'weight_decay': 0.05}])
-    tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=args.num_opt_samples, metric="val_acc", mode="max")
+    tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=args.num_opt_samples, metric="val_nll", mode="min")
 
     tuner = tune.Tuner(objective, param_space=search_space, tune_config=tune_config)
     results = tuner.fit()
-    print('Best Hyperparameters: {}'.format(results.get_best_result(metric='val_acc', mode='max').config))
+    print('Best Hyperparameters: {}'.format(results.get_best_result(metric='val_nll', mode='min').config))
 
 
 if __name__ == '__main__':
