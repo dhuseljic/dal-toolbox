@@ -9,6 +9,14 @@ from . import svhn
 from . import imagenet
 # TODO(dhuseljic): from . import tiny_imagenet
 
+from .mnist import build_mnist
+from .fashion_mnist import build_fashionmnist
+from .cifar import CIFAR10, CIFAR100, CIFAR10C
+from .svhn import SVHN
+from .imagenet import ImageNet
+# from .tiny_imagenet import TinyImageNet
+
+
 
 def build_al_datasets(args):
     if args.dataset.name == 'imdb':

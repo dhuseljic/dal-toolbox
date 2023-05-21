@@ -11,6 +11,7 @@ al_cycle:
   cold_start: True
 random_seed: 42
 dataset_path: ./data/
+val_interval: 25
 
 output_dir: ./output/
 hydra:
