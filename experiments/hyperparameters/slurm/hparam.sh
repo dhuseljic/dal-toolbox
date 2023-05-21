@@ -5,7 +5,7 @@
 #SBATCH --output=/mnt/work/dhuseljic/logs/hyperparameters/%A_graphical_abstract_%a.out
 #SBATCH --ntasks=1
 #SBATCH --mem=32GB
-#SBATCH --array=0-26
+#SBATCH --array=0-0
 date;hostname;pwd
 source activate dal-toolbox
 cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/hyperparameters/
@@ -24,13 +24,13 @@ weight_decay=${weight_decays[$index / 3 % 3]}
 random_seed=${random_seeds[$index / 9]}
 
 al_strategy=random
-output_dir=/mnt/work/dhuseljic/results/hyperparameters/graphical_abstract/${al_strategy}/lr${learning_rate}_wd${weight_decay}/seed${random_seed}
+queried_indices_json=/mnt/work/dhuseljic/results/hyperparameters/graphical_abstract/${al_strategy}/lr${learning_rate}_wd${weight_decay}/seed${random_seed}/queried_indices.json
+ouput_dir=/mnt/work/dhuseljic/results/hyperparameters/graphical_abstract/${al_strategy}/lr${learning_rate}_wd${weight_decay}/seed${random_seed}/optimized/
 
-# Run the deep learning script with the current hyperparameters
-python -u active_learning.py \
-    model.optimizer.lr=$learning_rate \
-    model.optimizer.weight_decay=$weight_decay \
-    dataset_path=/mnt/work/dhuseljic/datasets \
+python -u hparam.py \
+    queried_indices_json=$queried_indices_json \
     random_seed=$random_seed \
-    al_strategy=$al_strategy \
+    dataset_path=/mnt/work/dhuseljic/datasets \
+    num_cpus=4 \
+    num_gpus=0.5 \
     output_dir=$output_dir

@@ -1,4 +1,5 @@
 # Hyperparameter optimization on final datasets obtained through DAL
+import os
 import json
 
 import lightning as L
@@ -8,7 +9,6 @@ import ray
 import ray.tune as tune
 
 from ray.tune.search.optuna import OptunaSearch
-from ray.tune.integration.pytorch_lightning import TuneReportCallback
 from torch.utils.data import Subset, random_split, DataLoader
 from dal_toolbox import datasets
 from dal_toolbox import models
@@ -48,9 +48,10 @@ def train(config, args, train_ds, val_ds):
 @hydra.main(version_base=None, config_path="./configs", config_name="hparam")
 def main(args):
     seed_everything(args.random_seed)
+    os.makedirs(args.output_dir, exist_ok=True)
 
     # Load data
-    data = datasets.cifar.CIFAR10('/mnt/datasets')
+    data = datasets.cifar.CIFAR10(args.dataset_path)
     dataset = data.train_dataset
     with open(args.queried_indices_json, 'r') as f:
         queried_indices = json.load(f)
