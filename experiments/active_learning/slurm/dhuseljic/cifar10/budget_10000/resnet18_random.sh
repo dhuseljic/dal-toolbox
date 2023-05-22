@@ -19,7 +19,7 @@ n_init=1000
 acq_size=1000
 n_acq=9
 random_seed=$SLURM_ARRAY_TASK_ID
-output_dir=/mnt/work/dhuseljic/results/al_baselines/${dataset}/${model}/budget_10000/${al_strat}/seed${random_seed}/
+output_dir=/mnt/work/dhuseljic/results/al_baselines/${dataset}/${model}/${al_strat}/budget_10000/seed${random_seed}/
 
 srun python -u active_learning.py \
 	model=$model \
