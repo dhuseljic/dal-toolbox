@@ -1,8 +1,11 @@
 import torch
 
-from .query import Query
-from ...metrics import utils
 from abc import ABC, abstractmethod
+
+from .query import Query
+from ..data import ActiveLearningDataModule
+from ...models.utils.base import BaseModule
+from ...metrics import entropy_from_logits, entropy_from_probas, ensemble_log_softmax, ensemble_entropy_from_logits
 
 
 class UncertaintySampling(Query, ABC):
@@ -11,7 +14,15 @@ class UncertaintySampling(Query, ABC):
         self.subset_size = subset_size
 
     @torch.no_grad()
-    def query(self, *, model, al_datamodule, acq_size, return_utilities=False, **kwargs):
+    def query(
+        self,
+        *,
+        model: BaseModule,
+        al_datamodule: ActiveLearningDataModule,
+        acq_size: int,
+        return_utilities: bool = False,
+        **kwargs
+    ):
         unlabeled_dataloader = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
         unlabeled_indices = al_datamodule.unlabeled_indices  # TODO(dhuseljic): get indices from dataloader?
 
@@ -33,7 +44,7 @@ class EntropySampling(UncertaintySampling):
     def get_utilities(self, logits):
         if logits.ndim != 2:
             raise ValueError(f"Input logits tensor must be 2-dimensional, got shape {logits.shape}")
-        return utils.entropy_from_logits(logits)
+        return entropy_from_logits(logits)
 
 
 class LeastConfidentSampling(UncertaintySampling):
@@ -61,14 +72,14 @@ class BayesianEntropySampling(UncertaintySampling):
     def get_utilities(self, logits):
         if logits.ndim != 3:
             raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
-        return utils.ensemble_entropy_from_logits(logits)
+        return ensemble_entropy_from_logits(logits)
 
 
 class BayesianLeastConfidentSampling(UncertaintySampling):
     def get_utilities(self, logits):
         if logits.ndim != 3:
             raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
-        log_probas = utils.ensemble_log_softmax(logits)
+        log_probas = ensemble_log_softmax(logits)
         probas = log_probas.exp()
         scores, _ = probas.max(dim=-1)
         scores = 1 - scores
@@ -79,7 +90,7 @@ class BayesianMarginSampling(UncertaintySampling):
     def get_utilities(self, logits):
         if logits.ndim != 3:
             raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
-        log_probas = utils.ensemble_log_softmax(logits)
+        log_probas = ensemble_log_softmax(logits)
         probas = log_probas.exp()
         top_probas, _ = torch.topk(probas, k=2, dim=-1)
         scores = top_probas[:, 0] - top_probas[:, 1]
@@ -142,7 +153,7 @@ class BALDSampling(UncertaintySampling):
         # TODO(dhuseljic): implement bald from logits
         probas = logits.softmax(-1)
         mean_probas = torch.mean(probas, dim=0)
-        mean_entropy = utils.entropy_from_probas(mean_probas)
-        entropy = utils.entropy_from_probas(probas).mean(dim=0)
+        mean_entropy = entropy_from_probas(mean_probas)
+        entropy = entropy_from_probas(probas).mean(dim=0)
         score = mean_entropy - entropy
         return score

@@ -2,6 +2,7 @@ import os
 import time
 import json
 import logging
+import datetime
 
 import torch
 import hydra
@@ -69,10 +70,8 @@ def main(args):
                 acq_size=args.al_cycle.acq_size
             )
             al_datamodule.update_annotations(indices)
-            query_time = time.time() - t1
-            logger.info('Querying took %.2f minutes', query_time/60)
-            cycle_results['query_indices'] = indices
-            cycle_results['query_time'] = query_time
+            query_eta = datetime.timedelta(seconds=int(time.time() - t1))
+            logger.info('Querying took %s', query_eta)
             queried_indices[f'cycle{i_acq}'] = indices
 
         #  model cold start
