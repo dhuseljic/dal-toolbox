@@ -1,14 +1,15 @@
 #!/bin/bash
-#SBATCH --job-name=graphical_abstract
+#SBATCH --job-name=hparam_opt
 #SBATCH --partition=main
-#SBATCH --gres=gpu:1
-#SBATCH --output=/mnt/work/dhuseljic/logs/hyperparameters/%A_graphical_abstract_%a.out
+#SBATCH --gres=gpu:2
+#SBATCH --cpus-per-task=32
+#SBATCH --output=/mnt/stud/work/phahn/uncertainty/logs/hyperparameters/%A_%a.out
 #SBATCH --ntasks=1
 #SBATCH --mem=32GB
-#SBATCH --array=0-0
+#SBATCH --array=0-26%4
 date;hostname;pwd
-source activate dal-toolbox
-cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/hyperparameters/
+source activate uncertainty_evaluation
+cd /mnt/stud/work/phahn/uncertainty-evaluation/experiments/hyperparameters/
 
 # Define the range of hyperparameters 
 learning_rates=(0.001 0.01 0.1)
@@ -24,13 +25,13 @@ weight_decay=${weight_decays[$index / 3 % 3]}
 random_seed=${random_seeds[$index / 9]}
 
 al_strategy=random
-queried_indices_json=/mnt/work/dhuseljic/results/hyperparameters/graphical_abstract/${al_strategy}/lr${learning_rate}_wd${weight_decay}/seed${random_seed}/queried_indices.json
-ouput_dir=/mnt/work/dhuseljic/results/hyperparameters/graphical_abstract/${al_strategy}/lr${learning_rate}_wd${weight_decay}/seed${random_seed}/optimized/
+queried_indices_json=/mnt/work/deep_al/results/hyperparameters/graphical_abstract/${al_strategy}/lr${learning_rate}_wd${weight_decay}/seed${random_seed}/queried_indices.json
+ouput_dir=/mnt/work/deep_al/results/hyperparameters/graphical_abstract/${al_strategy}/lr${learning_rate}_wd${weight_decay}/seed${random_seed}/
 
 python -u hparam.py \
     queried_indices_json=$queried_indices_json \
     random_seed=$random_seed \
-    dataset_path=/mnt/work/dhuseljic/datasets \
+    dataset_path=/mnt/stud/work/phahn/uncertainty/uncertainty-evaluation/data \
     num_cpus=4 \
     num_gpus=0.5 \
     output_dir=$output_dir

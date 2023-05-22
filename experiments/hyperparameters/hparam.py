@@ -1,6 +1,7 @@
 # Hyperparameter optimization on final datasets obtained through DAL
 import os
 import json
+from omegaconf import DictConfig, OmegaConf
 
 import lightning as L
 import torch
@@ -62,7 +63,7 @@ def main(args):
     #with open(args.queried_indices_json, 'r') as f:
     #    queried_indices = json.load(f)
     #indices = [idx for key in queried_indices for idx in queried_indices[key]]
-    indices = torch.randint(0, 50000, (400,))
+    indices = range(100)
     dataset = Subset(dataset, indices=indices)
 
     num_samples = len(dataset)
@@ -84,6 +85,22 @@ def main(args):
     results = tuner.fit()
     print('Best Hyperparameters for NLL: {}'.format(results.get_best_result(metric='val_nll', mode='min').config))
     print('Best Hyperparameters for ACC: {}'.format(results.get_best_result(metric='val_acc', mode='max').config))
+
+    result_list = []
+
+    for res in results:
+        result_list.append({
+            'res':res.metrics,
+            'conf':res.config
+            })
+
+    history = {
+        'args':OmegaConf.to_yaml(args),
+        'ray-results':result_list
+    }
+
+    with open(os.path.join(args.output_dir, 'results.json'), 'w') as f:
+        json.dump(history, f)
 
 
 if __name__ == '__main__':
