@@ -33,7 +33,7 @@ def main(args):
 
     # Setup Dataset
     logger.info('Building datasets.')
-    data = build_al_datasets(args)
+    data = build_datasets(args)
     test_loader = DataLoader(data.test_dataset, batch_size=args.model.predict_batch_size)
 
     # Setup AL Module
@@ -158,7 +158,7 @@ def build_al_strategy(args):
     return query
 
 
-def build_al_datasets(args):
+def build_datasets(args):
     if args.dataset.name == 'CIFAR10':
         data = datasets.CIFAR10(args.dataset_path)
 

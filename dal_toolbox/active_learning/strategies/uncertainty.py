@@ -23,12 +23,14 @@ class UncertaintySampling(Query, ABC):
         return_utilities: bool = False,
         **kwargs
     ):
-        unlabeled_dataloader = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
-        unlabeled_indices = al_datamodule.unlabeled_indices  # TODO(dhuseljic): get indices from dataloader?
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
 
         logits = model.get_logits(unlabeled_dataloader)
         scores = self.get_utilities(logits)
         _, indices = scores.topk(acq_size)
+
+        if logits.size(0) != len(unlabeled_indices):
+            raise ValueError("The logits of the unlabeled instances does not match the length of unlabeled indices.")
 
         actual_indices = [unlabeled_indices[i] for i in indices]
         if return_utilities:

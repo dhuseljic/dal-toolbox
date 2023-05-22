@@ -55,20 +55,20 @@ class ActiveLearningDataModule(L.LightningDataModule):
     def unlabeled_dataloader(self, subset_size=None):
         """Returns a dataloader for the unlabeled pool where instances are not augmentated."""
         unlabeled_indices = self.unlabeled_indices
-        if subset_size:
+        if subset_size is not None:
             unlabeled_indices = self.rng.choice(unlabeled_indices, size=subset_size, replace=False)
             unlabeled_indices = unlabeled_indices.tolist()
         loader = DataLoader(self.query_dataset, batch_size=self.predict_batch_size, sampler=unlabeled_indices)
-        return loader
+        return loader, unlabeled_indices
 
     def labeled_dataloader(self, subset_size=None):
         """Returns a dataloader for the labeled pool where instances are not augmentated."""
         labeled_indices = self.labeled_indices
-        if subset_size:
+        if subset_size is not None:
             labeled_indices = self.rng.choice(labeled_indices, size=subset_size, replace=False)
             labeled_indices = labeled_indices.tolist()
         loader = DataLoader(self.query_dataset, batch_size=self.predict_batch_size, sampler=labeled_indices)
-        return loader
+        return loader, labeled_indices
 
     def state_dict(self):
         state_dict = {
