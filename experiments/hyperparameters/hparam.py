@@ -60,10 +60,9 @@ def main(args):
     # Load data
     data = datasets.cifar.CIFAR10(args.dataset_path, val_split=0) # val_split = 0 so that we can create a subset from all samples
     dataset = data.train_dataset
-    #with open(args.queried_indices_json, 'r') as f:
-    #    queried_indices = json.load(f)
-    #indices = [idx for key in queried_indices for idx in queried_indices[key]]
-    indices = range(100)
+    with open(args.queried_indices_json, 'r') as f:
+        queried_indices = json.load(f)
+    indices = [idx for key in queried_indices for idx in queried_indices[key]]
     dataset = Subset(dataset, indices=indices)
 
     num_samples = len(dataset)
