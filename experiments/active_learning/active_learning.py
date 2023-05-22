@@ -90,7 +90,6 @@ def main(args):
             default_root_dir=args.output_dir,
             enable_progress_bar=is_running_on_slurm() is False,
             check_val_every_n_epoch=args.val_interval,
-            fast_dev_run=True
         )
         trainer.fit(model, al_datamodule)
 
