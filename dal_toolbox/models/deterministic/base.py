@@ -27,6 +27,16 @@ class DeterministicModel(BaseModule):
 
         self.log_val_metrics(logits, targets)
         return loss
+    
+    def test_step(self, batch, batch_idx):
+        inputs, targets = batch
+
+        logits = self(inputs)
+        loss = self.loss_fn(logits, targets)
+        self.log('test_loss', loss, prog_bar=True)
+
+        self.log_test_metrics(logits, targets)
+        return loss
 
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         inputs, targets = batch
