@@ -1,75 +1,132 @@
-import torch
+import warnings
 import torchvision
-import lightning as L
-from torch.utils.data import DataLoader, Subset
 
-from torchvision import transforms
+from torchvision import transforms, datasets
 from .corruptions import GaussianNoise
+from .base import AbstractData
 
 
-class CIFAR10DataModule(L.LightningDataModule):
-    def __init__(self, dataset_path, train_batch_size=64, val_batch_size=64, test_batch_size=64, val_split=.1):
-        super().__init__()
-        self.dataset_path = dataset_path
-        self.train_batch_size = train_batch_size
-        self.val_batch_size = val_batch_size
-        self.test_batch_size = test_batch_size
-        self.val_split = val_split
+class CIFAR10(AbstractData):
 
-        self.train_transform = transforms.Compose([
+    def __init__(
+            self,
+            dataset_path: str,
+            mean: tuple = (0.4914, 0.4822, 0.4465),
+            std: tuple = (0.247, 0.243, 0.262),
+            val_split: float = 0.1,
+            seed: int = None
+    ) -> None:
+        self.mean = mean
+        self.std = std
+        super().__init__(dataset_path, val_split, seed)
+
+    @property
+    def num_classes(self):
+        return 10
+
+    def download_datasets(self):
+        datasets.CIFAR10(self.dataset_path, train=True, download=True)
+        datasets.CIFAR10(self.dataset_path, train=False, download=True)
+
+    @property
+    def full_train_dataset(self):
+        return datasets.CIFAR10(self.dataset_path, train=True, transform=self.train_transforms)
+
+    @property
+    def full_train_dataset_eval_transforms(self):
+        return datasets.CIFAR10(self.dataset_path, train=True, transform=self.eval_transforms)
+
+    @property
+    def full_train_dataset_query_transforms(self):
+        return datasets.CIFAR10(self.dataset_path, train=True, transform=self.query_transforms)
+
+    @property
+    def test_dataset(self):
+        return datasets.CIFAR10(self.dataset_path, train=False, transform=self.eval_transforms)
+
+    @property
+    def train_transforms(self):
+        transform = transforms.Compose([
             transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            transforms.Normalize(self.mean, self.std),
+            transforms.Normalize(self.mean, self.std)
         ])
-        self.eval_transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(self.mean, self.std)])
+        return transform
 
     @property
-    def mean(self):
-        return (0.4914, 0.4822, 0.4465)
+    def eval_transforms(self):
+        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(self.mean, self.std)])
+        return transform
 
     @property
-    def std(self):
-        return (0.247, 0.243, 0.262)
+    def query_transforms(self):
+        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(self.mean, self.std)])
+        return transform
 
-    def prepare_data(self) -> None:
-        torchvision.datasets.CIFAR10(self.dataset_path, train=True, download=True)
-        torchvision.datasets.CIFAR10(self.dataset_path, train=False, download=True)
 
-    def setup(self, stage: str) -> None:
-        if stage == 'fit':
-            dataset = torchvision.datasets.CIFAR10(self.dataset_path, train=True, transform=self.train_transform)
-            dataset_no_aug = torchvision.datasets.CIFAR10(self.dataset_path, train=True, transform=self.eval_transform)
+class CIFAR10C(CIFAR10):
+    def __init__(
+            self,
+            dataset_path: str,
+            severity: float,
+            mean: tuple = (0.4914, 0.4822, 0.4465),
+            std: tuple = (0.247, 0.243, 0.262),
+            val_split: float = 0.1,
+            seed: int = None
+    ) -> None:
+        self.severity = severity
+        assert 0. <= self.severity <= 1.
+        super().__init__(dataset_path, mean, std, val_split, seed)
 
-            num_samples = len(dataset)
-            num_samples_train = int(num_samples * (1 - self.val_split))
-            rnd_indices = torch.randperm(num_samples)
-            train_indices = rnd_indices[:num_samples_train]
-            val_indices = rnd_indices[num_samples_train:]
+    @property
+    def eval_transforms(self):
+        eval_transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(self.mean, self.std),
+            GaussianNoise(self.severity)
+        ])
+        return eval_transform
 
-            self.train_ds = Subset(dataset, indices=train_indices)
-            self.val_ds = Subset(dataset_no_aug, indices=val_indices)
 
-        if stage == 'test':
-            self.test_ds = torchvision.datasets.CIFAR10(self.dataset_path, train=True, transform=self.eval_transform)
+class CIFAR100(CIFAR10):
+    def __init__(
+            self,
+            dataset_path: str,
+            mean: tuple = (0.5071, 0.4865, 0.4409),
+            std: tuple = (0.2673, 0.2564, 0.2762),
+            val_split: float = 0.1,
+            seed: int = None
+    ) -> None:
+        super().__init__(dataset_path, mean, std, val_split, seed)
 
-        if stage == 'predict':
-            self.test_ds = torchvision.datasets.CIFAR10(self.dataset_path, train=True, transform=self.eval_transform)
+    @property
+    def num_classes(self):
+        return 100
 
-    def train_dataloader(self):
-        return DataLoader(self.train_ds, batch_size=self.train_batch_size)
+    def download_datasets(self):
+        datasets.CIFAR100(self.dataset_path, train=True, download=True)
+        datasets.CIFAR100(self.dataset_path, train=False, download=True)
 
-    def val_dataloader(self):
-        return DataLoader(self.val_ds, batch_size=self.val_batch_size)
+    @property
+    def full_train_dataset(self):
+        return datasets.CIFAR100(self.dataset_path, train=True, transform=self.train_transforms)
 
-    def predict_dataloader(self):
-        return DataLoader(self.test_ds, batch_size=self.val_batch_size)
+    @property
+    def full_train_dataset_eval_transforms(self):
+        return datasets.CIFAR100(self.dataset_path, train=True, transform=self.eval_transforms)
 
-    def test_dataloader(self):
-        return DataLoader(self.test_ds, batch_size=self.val_batch_size)
+    @property
+    def full_train_dataset_query_transforms(self):
+        return datasets.CIFAR100(self.dataset_path, train=True, transform=self.query_transforms)
+
+    @property
+    def test_dataset(self):
+        return datasets.CIFAR100(self.dataset_path, train=False, transform=self.eval_transforms)
 
 
 def build_cifar10(split, ds_path, mean=(0.4914, 0.4822, 0.4465), std=(0.247, 0.243, 0.262), return_info=False):
+    warnings.warn('Deprecated method build_cifar10.')
     train_transform = transforms.Compose([
         transforms.Resize(32),
         transforms.RandomCrop(32, padding=4),
@@ -94,6 +151,7 @@ def build_cifar10(split, ds_path, mean=(0.4914, 0.4822, 0.4465), std=(0.247, 0.2
 
 
 def build_cifar100(split, ds_path, mean=(0.5071, 0.4865, 0.4409), std=(0.2673, 0.2564, 0.2762), return_info=False):
+    warnings.warn('Deprecated method build_cifar100.')
     train_transform = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),
@@ -110,14 +168,4 @@ def build_cifar100(split, ds_path, mean=(0.5071, 0.4865, 0.4409), std=(0.2673, 0
     if return_info:
         ds_info = {'n_classes': 100, 'mean': mean, 'std': std}
         return ds, ds_info
-    return ds
-
-
-def build_cifar10_c(severity, ds_path, mean=(0.4914, 0.4822, 0.4465), std=(0.2023, 0.1994, 0.2010)):
-    eval_transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(mean, std),
-        GaussianNoise(severity)
-    ])
-    ds = torchvision.datasets.CIFAR10(ds_path, train=False, download=True, transform=eval_transform)
     return ds

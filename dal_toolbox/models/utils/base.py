@@ -20,6 +20,7 @@ class BaseModule(L.LightningModule, abc.ABC):
             lr_scheduler: torch.optim.lr_scheduler.LRScheduler = None,
             train_metrics: dict = None,
             val_metrics: dict = None,
+            test_metrics: dict = None,
     ):
         super().__init__()
         self.model = model
@@ -28,6 +29,7 @@ class BaseModule(L.LightningModule, abc.ABC):
         self.lr_scheduler = lr_scheduler
         self.train_metrics = nn.ModuleDict(train_metrics)
         self.val_metrics = nn.ModuleDict(val_metrics)
+        self.test_metrics = nn.ModuleDict(test_metrics)
 
         # TODO(dhuseljic): not working with functools
         self.init_model_state = copy.deepcopy(self.model.state_dict())
@@ -46,6 +48,7 @@ class BaseModule(L.LightningModule, abc.ABC):
 
     def reset_states(self, reset_model_parameters=True):
         if reset_model_parameters:
+            self.model.cpu()  # TODO(dhuseljic): when not in cpu, batchnorm running mean is in inference mode..
             self.model.load_state_dict(self.init_model_state)
         self.optimizer.load_state_dict(self.init_optimizer_state)
         if self.lr_scheduler:
@@ -54,7 +57,7 @@ class BaseModule(L.LightningModule, abc.ABC):
 
     def configure_optimizers(self):
         if self.optimizer is None:
-            optimizer = torch.optim.SGD(self.parameters(), lr=1e-1, momentum=.9, weight_decay=0.01)
+            optimizer = torch.optim.SGD(self.parameters(), lr=0.1, momentum=0.9, weight_decay=0.0005)
             rank_zero_warn(f'Using default optimizer: {optimizer}.')
             return optimizer
         if isinstance(self.optimizer, functools.partial):
@@ -76,6 +79,11 @@ class BaseModule(L.LightningModule, abc.ABC):
         if self.val_metrics is not None:
             metrics = {metric_name: metric(logits, targets) for metric_name, metric in self.val_metrics.items()}
             self.log_dict(self.val_metrics, prog_bar=True)
+
+    def log_test_metrics(self, logits, targets):
+        if self.test_metrics is not None:
+            metrics = {metric_name: metric(logits, targets) for metric_name, metric in self.test_metrics.items()}
+            self.log_dict(self.test_metrics, prog_bar=True)
 
     # TODO(dhuseljic): Discuss
     @torch.inference_mode()

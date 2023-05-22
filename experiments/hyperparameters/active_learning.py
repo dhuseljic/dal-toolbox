@@ -31,17 +31,16 @@ def main(args):
     queried_indices = {}
 
     # Setup Dataset
-    logging.info('Building datasets.')
-    train_ds, ds_info = datasets.cifar.build_cifar10('train', args.dataset_path, return_info=True)
-    query_ds = datasets.cifar.build_cifar10('query', args.dataset_path)
-    test_ds = datasets.cifar.build_cifar10('test', args.dataset_path)
-    test_loader = DataLoader(test_ds, batch_size=args.model.val_batch_size)
-
+    logging.info('Building datasets..')
+    data = datasets.cifar.CIFAR10(args.dataset_path)
     al_datamodule = ActiveLearningDataModule(
-        train_dataset=train_ds,
-        query_dataset=query_ds,
+        train_dataset=data.train_dataset,
+        query_dataset=data.query_dataset,
+        val_dataset=data.val_dataset,
         train_batch_size=args.model.train_batch_size,
+        predict_batch_size=args.model.predict_batch_size,
     )
+    test_loader = DataLoader(data.test_dataset, batch_size=args.model.predict_batch_size)
     al_datamodule.random_init(n_samples=args.al_cycle.n_init)
     queried_indices['cycle0'] = al_datamodule.labeled_indices
 
@@ -53,7 +52,25 @@ def main(args):
     else:
         raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
 
-    # Active Learning Cycles
+    # Setup Model
+    logging.info('Building model..')
+    model = resnet.ResNet18(num_classes=data.num_classes)
+    optimizer = torch.optim.SGD(
+        model.parameters(),
+        lr=args.model.optimizer.lr,
+        weight_decay=args.model.optimizer.weight_decay,
+        momentum=args.model.optimizer.momentum
+    )
+    lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.num_epochs, warmup_epochs=10)
+    model = DeterministicModel(
+        model,
+        optimizer=optimizer,
+        lr_scheduler=lr_scheduler,
+        train_metrics={'train_acc': Accuracy()},
+        val_metrics={'val_acc': Accuracy()},
+    )
+
+    # Active Learning Cycle
     for i_acq in range(0, args.al_cycle.n_acq + 1):
         logging.info('Starting AL iteration %s / %s', i_acq, args.al_cycle.n_acq)
         cycle_results = {}
@@ -76,17 +93,7 @@ def main(args):
 
         # Train with updated annotations
         logging.info('Training on labeled pool with %s samples', len(al_datamodule.labeled_indices))
-        model = resnet.ResNet18(num_classes=ds_info['n_classes'])
-        optimizer = torch.optim.SGD(
-            model.parameters(),
-            lr=args.model.optimizer.lr,
-            weight_decay=args.model.optimizer.weight_decay,
-            momentum=args.model.optimizer.momentum
-        )
-        lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.num_epochs, warmup_epochs=10)
-        model = DeterministicModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler,
-                                   train_metrics={'train_acc': Accuracy()},)
-
+        model.reset_states()
         callbacks = []
         if is_running_on_slurm():
             callbacks.append(MetricLogger())
@@ -96,6 +103,7 @@ def main(args):
             callbacks=callbacks,
             enable_progress_bar=(is_running_on_slurm() is False),
             default_root_dir=args.output_dir,
+            check_val_every_n_epoch=args.val_interval,
         )
         trainer.fit(model, al_datamodule)
 

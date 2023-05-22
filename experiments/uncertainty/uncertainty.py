@@ -8,7 +8,7 @@ import torch.nn as nn
 import lightning as L
 
 from omegaconf import OmegaConf
-from torch.utils.data import DataLoader, Subset, RandomSampler
+from torch.utils.data import DataLoader
 
 from dal_toolbox import datasets
 from dal_toolbox import metrics
@@ -25,42 +25,31 @@ def main(args):
     misc = {}
 
     # Load data
-    train_ds, test_ds_id, ds_info = build_dataset(args)
-    ood_datasets = build_ood_datasets(args, ds_info['mean'], ds_info['std'])
-    if args.num_samples:
-        logger.info('Creating random training subset with %s samples. Saving indices.', args.num_samples)
-        indices_id = torch.randperm(len(train_ds))[:args.num_samples]
-        train_ds = Subset(train_ds, indices=indices_id)
-        misc['train_indices'] = indices_id.tolist()
+    data = build_dataset(args)
+    train_loader = DataLoader(data.train_dataset, batch_size=args.model.train_batch_size, shuffle=True, drop_last=True)
+    val_loader = DataLoader(data.val_dataset, batch_size=args.model.predict_batch_size)
 
-    logger.info('Training on %s with %s samples.', args.dataset, len(train_ds))
-    logger.info('Test in-distribution dataset %s has %s samples.', args.dataset, len(test_ds_id))
-    for name, test_ds_ood in ood_datasets.items():
-        logger.info('Test out-of-distribution dataset %s has %s samples.', name, len(test_ds_ood))
-
-    # Prepare dataloaders
-    iter_per_epoch = len(train_ds) // args.model.batch_size + 1
-    train_sampler = RandomSampler(train_ds, num_samples=(iter_per_epoch * args.model.batch_size))
-    train_loader = DataLoader(train_ds, batch_size=args.model.batch_size, sampler=train_sampler)
-    test_loader_id = DataLoader(test_ds_id, batch_size=args.test_batch_size)
-    test_loaders_ood = {name: DataLoader(test_ds_ood, batch_size=args.test_batch_size)
-                        for name, test_ds_ood in ood_datasets.items()}
+    test_dataset = data.test_dataset
+    ood_datasets = build_ood_datasets(args, data.mean, data.mean)
+    test_loader_id = DataLoader(test_dataset, batch_size=args.model.predict_batch_size)
+    test_loaders_ood = {n: DataLoader(ood_ds, batch_size=args.model.predict_batch_size)
+                        for n, ood_ds in ood_datasets.items()}
 
     # Training
     logger.info('Starting Training..')
-    model = build_model(args, num_classes=ds_info['n_classes'])
+    model = build_model(args, num_classes=data.num_classes)
     callbacks = []
     if is_running_on_slurm():
         callbacks.append(MetricLogger())
     trainer = L.Trainer(
         max_epochs=args.model.n_epochs,
         callbacks=callbacks,
-        check_val_every_n_epoch=args.eval_interval,
+        check_val_every_n_epoch=args.val_interval,
         enable_checkpointing=False,
         enable_progress_bar=is_running_on_slurm() is False,
         devices=args.num_devices,
     )
-    trainer.fit(model, train_loader)  # , val_dataloaders=test_loader_id)
+    trainer.fit(model, train_loader, val_dataloaders=val_loader)
 
     # Evaluation
     predictions_id = trainer.predict(model, test_loader_id)
@@ -128,7 +117,8 @@ def build_model(args, **kwargs):
             loss_fn=nn.CrossEntropyLoss(),
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
-            train_metrics={'train_acc': metrics.Accuracy()}
+            train_metrics={'train_acc': metrics.Accuracy()},
+            val_metrics={'val_acc': metrics.Accuracy()},
         )
 
     elif args.model.name == 'resnet18_labelsmoothing':
@@ -146,7 +136,8 @@ def build_model(args, **kwargs):
             loss_fn=nn.CrossEntropyLoss(label_smoothing=args.model.label_smoothing),
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
-            train_metrics={'train_acc': metrics.Accuracy()}
+            train_metrics={'train_acc': metrics.Accuracy()},
+            val_metrics={'val_acc': metrics.Accuracy()},
         )
 
     elif args.model.name == 'resnet18_mixup':
@@ -166,6 +157,7 @@ def build_model(args, **kwargs):
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
             train_metrics={'train_acc': metrics.Accuracy()},
+            val_metrics={'val_acc': metrics.Accuracy()},
         )
 
     elif args.model.name == 'resnet18_mcdropout':
@@ -182,6 +174,7 @@ def build_model(args, **kwargs):
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
             train_metrics={'train_acc': metrics.Accuracy()},
+            val_metrics={'val_acc': metrics.Accuracy()},
         )
 
     elif args.model.name == 'resnet18_ensemble':
@@ -242,39 +235,37 @@ def build_model(args, **kwargs):
 
 def build_dataset(args):
     if args.dataset == 'CIFAR10':
-        train_ds, ds_info = datasets.cifar.build_cifar10('train', args.dataset_path, return_info=True)
-        test_ds = datasets.cifar.build_cifar10('test', args.dataset_path)
+        data = datasets.cifar.CIFAR10(args.dataset_path)
+        return data
 
     elif args.dataset == 'CIFAR100':
-        train_ds, ds_info = datasets.cifar.build_cifar100('train', args.dataset_path, return_info=True)
-        test_ds = datasets.cifar.build_cifar100('test', args.dataset_path)
+        data = datasets.cifar.CIFAR100(args.dataset_path)
 
     elif args.dataset == 'SVHN':
-        train_ds, ds_info = datasets.svhn.build_svhn('train', args.dataset_path, return_info=True)
-        test_ds = datasets.svhn.build_svhn('test', args.dataset_path)
+        data = datasets.svhn.SVHN(args.dataset_path)
 
     elif args.dataset == 'Imagenet':
-        train_ds, ds_info = datasets.imagenet.build_imagenet('train', args.dataset_path, return_info=True)
-        test_ds = datasets.imagenet.build_imagenet('val', args.dataset_path)
-    else:
-        raise NotImplementedError
+        data = datasets.imagenet.ImageNet(args.dataset_path)
 
-    return train_ds, test_ds, ds_info
+    else:
+        raise NotImplementedError()
+
+    return data
 
 
 def build_ood_datasets(args, mean, std):
     ood_datasets = {}
     if 'CIFAR10' in args.ood_datasets:
-        test_ds_ood = datasets.cifar.build_cifar10('test', args.dataset_path, mean, std)
-        ood_datasets["CIFAR10"] = test_ds_ood
+        data = datasets.cifar.CIFAR10(args.dataset_path, mean=mean, std=std)
+        ood_datasets["CIFAR10"] = data.test_dataset
 
     if 'CIFAR100' in args.ood_datasets:
-        test_ds_ood = datasets.cifar.build_cifar100('test', args.dataset_path, mean, std)
-        ood_datasets["CIFAR100"] = test_ds_ood
+        data = datasets.cifar.CIFAR100(args.dataset_path, mean=mean, std=std)
+        ood_datasets["CIFAR100"] = data.test_dataset
 
     if 'SVHN' in args.ood_datasets:
-        test_ds_ood = datasets.svhn.build_svhn('test', args.dataset_path, mean, std)
-        ood_datasets["SVHN"] = test_ds_ood
+        data = datasets.svhn.SVHN(args.dataset_path, mean=mean, std=std)
+        ood_datasets["SVHN"] = data.test_dataset
 
     return ood_datasets
 
