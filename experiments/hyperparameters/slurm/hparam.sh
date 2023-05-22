@@ -8,8 +8,13 @@
 #SBATCH --mem=32GB
 #SBATCH --array=0-26%4
 date;hostname;pwd
-source activate uncertainty_evaluation
-cd /mnt/stud/work/phahn/uncertainty-evaluation/experiments/hyperparameters/
+source /mnt/stud/home/phahn/.zshrc
+cd /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation/experiments/hyperparameters/
+
+rm /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation/.git/index.lock
+git checkout hyperparameters
+
+conda activate uncertainty_evaluation
 
 # Define the range of hyperparameters 
 learning_rates=(0.001 0.01 0.1)
@@ -25,13 +30,13 @@ weight_decay=${weight_decays[$index / 3 % 3]}
 random_seed=${random_seeds[$index / 9]}
 
 al_strategy=random
-queried_indices_json=/mnt/work/deep_al/results/hyperparameters/graphical_abstract/${al_strategy}/lr${learning_rate}_wd${weight_decay}/seed${random_seed}/queried_indices.json
-ouput_dir=/mnt/work/deep_al/results/hyperparameters/graphical_abstract/${al_strategy}/lr${learning_rate}_wd${weight_decay}/seed${random_seed}/
+queried_indices_json=   /mnt/work/deep_al/results/hyperparameters/graphical_abstract/${al_strategy}/lr${learning_rate}_wd${weight_decay}/seed${random_seed}/queried_indices.json
+ouput_dir=              /mnt/stud/work/phahn/uncertainty/output/hyperparameters/${al_strategy}/lr${learning_rate}_wd${weight_decay}/seed${random_seed}/
 
 python -u hparam.py \
     queried_indices_json=$queried_indices_json \
+    output_dir=$output_dir \
     random_seed=$random_seed \
     dataset_path=/mnt/stud/work/phahn/uncertainty/uncertainty-evaluation/data \
     num_cpus=4 \
     num_gpus=0.5 \
-    output_dir=$output_dir
