@@ -9,7 +9,7 @@
 #SBATCH --output=/mnt/work/dhuseljic/logs/al_baselines/%A_%a__%x.log
 date;hostname;pwd
 source activate dal-toolbox
-cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/active_learning/
+cd ~/projects/dal-toolbox/experiments/active_learning/
 
 model=resnet18
 dataset=CIFAR10
@@ -19,7 +19,7 @@ n_init=1000
 acq_size=1000
 n_acq=9
 random_seed=$SLURM_ARRAY_TASK_ID
-output_dir=/mnt/work/dhuseljic/results/al_baselines/${dataset}/${model}/${al_strat}/budget_10000/seed${random_seed}/
+output_dir=/mnt/work/deep_al/results/al_baselines/${dataset}/${model}/${al_strat}/budget_10000/seed${random_seed}/
 
 srun python -u active_learning.py \
 	model=$model \
