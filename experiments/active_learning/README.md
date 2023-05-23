@@ -3,6 +3,7 @@
 ## CIFAR-10
 
 ### Budget 1000
+![learning_curve_budget1000](./notebooks/learning_curves/budget1000.png)
 
 ### Budget 2500
 
