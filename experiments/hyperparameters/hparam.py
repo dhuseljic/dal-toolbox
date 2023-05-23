@@ -65,7 +65,7 @@ def main(args):
     os.makedirs(args.output_dir, exist_ok=True)
 
     # Load data
-    data = datasets.cifar.CIFAR10(args.dataset_path, val_split=0) # val_split = 0 so that we can create a subset from all samples
+    data = datasets.cifar.CIFAR10(args.dataset_path)
     dataset = data.train_dataset
     with open(args.queried_indices_json, 'r') as f:
         queried_indices = json.load(f)
