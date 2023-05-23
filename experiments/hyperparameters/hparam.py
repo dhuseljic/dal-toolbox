@@ -32,7 +32,7 @@ def train(config, args, train_ds, val_ds, test_ds):
         lr_scheduler=lr_scheduler,
         train_metrics={'train_acc': metrics.Accuracy()},
         val_metrics={'val_acc': metrics.Accuracy(), 'val_nll': metrics.CrossEntropy()},
-        test_metrics={'test_acc': metrics.Accuracy(), 'test_nll': metrics.CrossEntropy()},
+        test_metrics={},
     )
 
     trainer = L.Trainer(
@@ -45,10 +45,18 @@ def train(config, args, train_ds, val_ds, test_ds):
 
     logged_metrics = trainer.logged_metrics
 
-    test_stats = trainer.test(model, dataloaders=test_loader)[0]
+    # Evaluation
+    predictions_id = trainer.predict(model, test_loader)
+    logits_id = torch.cat([pred[0] for pred in predictions_id])
+    targets_id = torch.cat([pred[1] for pred in predictions_id])
+
+    test_stats = {
+        'test_acc': metrics.Accuracy()(logits_id, targets_id).item(), 
+        'test_nll': metrics.CrossEntropy()(logits_id, targets_id).item()
+    }
     
     res = {name: metric.item() for name, metric in logged_metrics.items() 
-           if isinstance(metric, torch.Tensor) and 'val' in name} | test_stats
+           if isinstance(metric, torch.Tensor)} | test_stats
     return res 
 
 

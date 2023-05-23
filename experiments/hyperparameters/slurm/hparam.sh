@@ -12,9 +12,6 @@ source ~/.bashrc
 source activate dal-toolbox
 cd /mnt/stud/work/phahn/uncertainty/dal-toolbox/experiments/hyperparameters/
 
-# rm /mnt/stud/work/phahn/uncertainty/dal-toolbox/.git/index.lock
-# git checkout hyperparameters
-
 # Define the range of hyperparameters 
 learning_rates=(0.001 0.01 0.1)
 weight_decays=(0.0005 0.005 0.05)
