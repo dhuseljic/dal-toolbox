@@ -31,8 +31,7 @@ def train(config, args, train_ds, val_ds, test_ds):
         optimizer=optimizer,
         lr_scheduler=lr_scheduler,
         train_metrics={'train_acc': metrics.Accuracy()},
-        val_metrics={'val_acc': metrics.Accuracy(), 'val_nll': metrics.CrossEntropy()},
-        test_metrics={},
+        val_metrics={'val_acc': metrics.Accuracy(), 'val_nll': metrics.CrossEntropy()}
     )
 
     trainer = L.Trainer(
