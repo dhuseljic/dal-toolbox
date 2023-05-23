@@ -1,0 +1,6 @@
+- queried_indices_json=/mnt/work/deep_al/results/hyperparameters/graphical_abstract/random/lr0.001_wd0.0005/seed1/queried_indices.json
+- output_dir=
+- random_seed=1
+- dataset_path=/mnt/stud/work/phahn/uncertainty/dal-toolbox/data
+- num_cpus=4
+- num_gpus=0.5
