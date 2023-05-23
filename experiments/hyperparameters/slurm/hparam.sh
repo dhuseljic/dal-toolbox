@@ -30,8 +30,8 @@ weight_decay=${weight_decays[$index / 3 % 3]}
 random_seed=${random_seeds[$index / 9]}
 
 al_strategy=random
-queried_indices_json=   /mnt/work/deep_al/results/hyperparameters/graphical_abstract/${al_strategy}/lr${learning_rate}_wd${weight_decay}/seed${random_seed}/queried_indices.json
-ouput_dir=              /mnt/stud/work/phahn/uncertainty/output/hyperparameters/${al_strategy}/lr${learning_rate}_wd${weight_decay}/seed${random_seed}/
+queried_indices_json=/mnt/work/deep_al/results/hyperparameters/graphical_abstract/${al_strategy}/lr${learning_rate}_wd${weight_decay}/seed${random_seed}/queried_indices.json
+ouput_dir=/mnt/stud/work/phahn/uncertainty/output/hyperparameters/${al_strategy}/lr${learning_rate}_wd${weight_decay}/seed${random_seed}/
 
 python -u hparam.py \
     queried_indices_json=$queried_indices_json \
