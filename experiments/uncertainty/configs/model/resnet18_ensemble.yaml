@@ -4,5 +4,5 @@ batch_size: 64
 n_member: 10
 optimizer:
   lr: 0.1
-  weight_decay: 2e-4
+  weight_decay: 0.0005
   momentum: 0.9

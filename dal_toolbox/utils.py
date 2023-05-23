@@ -7,9 +7,11 @@ import datetime
 import random
 
 import torch
+import lightning as L
 import torch.distributed as dist
 
 import numpy as np
+import pylab as plt
 
 from typing import List, Optional, Tuple
 from collections import defaultdict, deque, OrderedDict
@@ -18,6 +20,7 @@ from torchvision.utils import make_grid
 
 
 def seed_everything(seed: int):
+    L.seed_everything(seed, workers=True)
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
     np.random.seed(seed)
@@ -27,7 +30,7 @@ def seed_everything(seed: int):
     torch.backends.cudnn.benchmark = False
 
 
-def write_scalar_dict(writer, prefix, dict, global_step=None):
+def write_scalar_dict(writer, dict, prefix, global_step=None):
     for key, val in dict.items():
         writer.add_scalar(f'{prefix}/{key}', val, global_step=global_step)
 
@@ -123,6 +126,7 @@ class SmoothedValue:
 
 class MetricLogger:
     def __init__(self, delimiter="\t"):
+        # self.logger = logging.getLogger()
         self.meters = defaultdict(SmoothedValue)
         self.delimiter = delimiter
 
@@ -235,8 +239,9 @@ def mkdir(path):
 
 def setup_for_distributed(is_master):
     """
-    This function disables printing when not in master process
+    This function disables printing and logging when not in master process
     """
+    import logging
     import builtins as __builtin__
 
     builtin_print = __builtin__.print
@@ -247,6 +252,15 @@ def setup_for_distributed(is_master):
             builtin_print(*args, **kwargs)
 
     __builtin__.print = print
+
+    logging_info = logging.info
+
+    def info(*args, **kwargs):
+        force = kwargs.pop("force", False)
+        if is_master or force:
+            logging_info(*args, **kwargs)
+
+    logging.info = info
 
 
 def is_dist_avail_and_initialized():
@@ -273,6 +287,10 @@ def is_main_process():
     return get_rank() == 0
 
 
+def is_running_on_slurm():
+    return 'SLURM_JOB_ID' in os.environ
+
+
 def save_on_master(*args, **kwargs):
     if is_main_process():
         torch.save(*args, **kwargs)
@@ -280,29 +298,32 @@ def save_on_master(*args, **kwargs):
 
 def init_distributed_mode(args):
     if "RANK" in os.environ and "WORLD_SIZE" in os.environ:
-        args.rank = int(os.environ["RANK"])
-        args.world_size = int(os.environ["WORLD_SIZE"])
-        args.gpu = int(os.environ["LOCAL_RANK"])
-    elif "SLURM_PROCID" in os.environ:
-        args.rank = int(os.environ["SLURM_PROCID"])
-        args.gpu = args.rank % torch.cuda.device_count()
-    elif hasattr(args, "rank"):
-        pass
+        rank = int(os.environ["RANK"])
+        world_size = int(os.environ["WORLD_SIZE"])
+        gpu = int(os.environ["LOCAL_RANK"])
+    # elif "SLURM_PROCID" in os.environ:
+    #     rank = int(os.environ["SLURM_PROCID"])
+    #     gpu = rank % torch.cuda.device_count()
+    # elif hasattr(args, "rank"):
+    #     pass
     else:
         print("Not using distributed mode")
-        args.distributed = False
-        return
+        distributed = False
+        return False
 
-    args.distributed = True
+    distributed = True
 
-    torch.cuda.set_device(args.gpu)
-    args.dist_backend = "nccl"
-    print(f"| distributed init (rank {args.rank}): {args.dist_url}", flush=True)
-    torch.distributed.init_process_group(
-        backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank
-    )
+    torch.cuda.set_device(gpu)
+    dist_backend = "nccl"
+    dist_url = None
+    print(f"| distributed init (rank {rank}): {dist_url}", flush=True)
+    # torch.distributed.init_process_group(
+    #     backend=dist_backend, init_method=dist_url, world_size=world_size, rank=rank
+    # )
+    torch.distributed.init_process_group(backend='nccl')
     torch.distributed.barrier()
-    setup_for_distributed(args.rank == 0)
+    setup_for_distributed(rank == 0)
+    return True
 
 
 def average_checkpoints(inputs):
@@ -491,3 +512,41 @@ def set_weight_decay(
         if len(params[key]) > 0:
             param_groups.append({"params": params[key], "weight_decay": params_weight_decay[key]})
     return param_groups
+
+
+def plot_tcp(results: dict, ax=None):
+    """Assumes the results of dal_toolbox.metrics.TopLabelCalibrationPlot."""
+    if ax is None:
+        ax = plt.gca()
+
+    plt.plot([0, 1], [0, 1], linewidth=3, linestyle=':', color='k')
+    plt.plot(results['confs'], results['accs'], '-o', linewidth=2)
+    plt.twinx()
+    plt.grid()
+    bar_x = [conf for conf in results['confs'] if not np.isnan(conf)]
+    bar_y = [n for n in results['n_samples'] if n != 0]
+    plt.bar(bar_x, bar_y, width=.05, alpha=.3)
+
+
+def plot_mcp(results, classes='all', ax=None, plot_bars=False):
+    """Assumes the results of dal_toolbox.metrics.MarginalCalibrationPlot"""
+    if ax is None:
+        ax = plt.gca()
+
+    plt.plot([0, 1], [0, 1], linewidth=3, linestyle=':', color='k')
+    if plot_bars:
+        ax_bar = plt.twinx()
+        plt.grid()
+
+    if classes != 'all':
+        if isinstance(classes, int):
+            classes = [classes]
+        results = [results[i_cls] for i_cls in classes]
+    for results_cls in results:
+        plt.sca(ax)
+        plt.plot(results_cls['confs'], results_cls['accs'], '-o', linewidth=2)
+        if plot_bars:
+            plt.sca(ax_bar)
+            bar_x = [conf for conf in results_cls['confs'] if not np.isnan(conf)]
+            bar_y = [n for n in results_cls['n_samples'] if n != 0]
+            plt.bar(bar_x, bar_y, width=.05, alpha=.3)

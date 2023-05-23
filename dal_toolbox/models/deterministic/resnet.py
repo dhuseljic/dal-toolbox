@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from ..utils.mixup import mixup
+
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -29,8 +31,8 @@ class BasicBlock(nn.Module):
 
 
 class ResNet18(nn.Module):
-    def __init__(self, num_classes=10):
-        super(ResNet18, self).__init__()
+    def __init__(self, num_classes):
+        super().__init__()
         self.in_planes = 64
         self.block = BasicBlock
         self.num_blocks = [2, 2, 2, 2]
@@ -69,36 +71,44 @@ class ResNet18(nn.Module):
         return out
 
     @torch.inference_mode()
-    def get_probas(self, dataloader, device):
+    def get_logits(self, dataloader, device):
         self.to(device)
         self.eval()
         all_logits = []
-        for samples, _ in dataloader:
-            logits = self(samples.to(device))
+        for batch in dataloader:
+            inputs = batch[0]
+            logits = self(inputs.to(device))
             all_logits.append(logits)
         logits = torch.cat(all_logits)
+        return logits
+
+    @torch.inference_mode()
+    def get_probas(self, dataloader, device):
+        logits = self.get_logits(dataloader=dataloader, device=device)
         probas = logits.softmax(-1)
         return probas
 
     @torch.inference_mode()
-    def get_representation(self, dataloader, device):
+    def get_representations(self, dataloader, device):
         self.to(device)
         self.eval()
         all_features = []
-        for samples, _ in dataloader:
-            _, features = self(samples.to(device), return_features=True)
+        for batch in dataloader:
+            inputs = batch[0]
+            _, features = self(inputs.to(device), return_features=True)
             all_features.append(features.cpu())
         features = torch.cat(all_features)
         return features
 
     @torch.inference_mode()
-    def get_grad_embedding(self, dataloader, device):
+    def get_grad_representations(self, dataloader, device):
         self.eval()
         self.to(device)
         feature_dim = 512
 
         embedding = []
-        for inputs, _ in dataloader:
+        for batch in dataloader:
+            inputs = batch[0]
             embedding_batch = torch.empty([len(inputs), feature_dim * self.num_classes])
             logits, features = self(inputs.to(device), return_features=True)
             logits = logits.cpu()

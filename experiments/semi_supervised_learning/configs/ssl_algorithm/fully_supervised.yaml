@@ -1,0 +1,4 @@
+name: fully_supervised
+u_ratio: 1
+lambda_u: 0
+p_cutoff: 0.95

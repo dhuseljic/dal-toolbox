@@ -1,38 +1,64 @@
+import copy
+
 import torch
 import torch.nn as nn
 
+from torch.func import stack_module_state, functional_call
+
 
 class Ensemble(nn.Module):
-    def __init__(self, models):
+    def __init__(self, members: list):
         super().__init__()
-        self.models = nn.ModuleList(models)
+        # self.members = nn.ModuleList(models)
+        self.members = nn.ModuleList(members)
 
-    def __iter__(self):
-        for m in self.models:
-            yield m
+        self.num_members = len(members)
+        # self.vmap_setup = False
+        # self.vmap_randomness = 'different'
 
-    def __len__(self):
-        return len(self.models)
+    # def _setup_vmap(self):
+    #     if self.vmap_setup is False:
+    #         self.params, self.buffers = stack_module_state(self.members)
+    #         base_model = copy.deepcopy(self.members[0])
+    #         base_model = base_model.to('meta')
+    #         self._f = lambda params, buffers, x: functional_call(base_model, (params, buffers), (x,))
+    #         self._forward_ensemble = torch.vmap(self._f, in_dims=(0, 0, None), randomness=self.vmap_randomness)
+    #         self.vmap_setup = True
 
     def forward(self, x):
-        raise ValueError('Forward method should only be used on ensemble members.')
+        raise ValueError('Use forward sample to obtain ensemble predictions.')
+
+    # def forward_sample(self, x):
+    #     self._setup_vmap()
+    #     logits = self._forward_ensemble(self.params, self.buffers, x)
+    #     # logits = self._forward_ensemble(*stack_module_state(self.members), x)
+    #     return logits.permute(1, 0, 2)
 
     def forward_sample(self, x):
         logits = []
-        for m in self.models:
+        for m in self.members:
             logits.append(m(x))
-        return torch.stack(logits)
+        logits = torch.stack(logits, dim=1)
+        return logits
+
+    def __iter__(self):
+        # self.vmap_setup = False
+        for m in self.members:
+            yield m
+
+    def __len__(self):
+        return len(self.members)
 
     @torch.inference_mode()
     def get_probas(self, dataloader, device):
         self.to(device)
         self.eval()
-        mc_logits_list = []
+        all_logits = []
         for samples, _ in dataloader:
-            mc_logits = self.forward_sample(samples.to(device))
-            mc_logits_list.append(mc_logits.cpu())
-        mc_logits = torch.cat(mc_logits_list, dim=1)
-        probas = mc_logits.softmax(-1).mean(0)
+            logits = self.forward_sample(samples.to(device))
+            all_logits.append(logits.cpu())
+        logits = torch.cat(all_logits, dim=0)
+        probas = logits.softmax(-1)
         return probas
 
 
@@ -70,3 +96,6 @@ class EnsembleOptimizer:
     def __iter__(self):
         for optim in self.optimizers:
             yield optim
+
+    def __len__(self):
+        return len(self.optimizers)

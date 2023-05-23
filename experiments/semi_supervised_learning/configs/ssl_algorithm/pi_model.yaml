@@ -1,0 +1,4 @@
+name: pi_model
+u_ratio: 1
+lambda_u: 1
+unsup_warmup: 0.4

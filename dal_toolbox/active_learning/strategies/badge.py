@@ -12,29 +12,17 @@ class Badge(Query):
         self.batch_size = batch_size
         self.device = device
 
-    def query(self, model, dataset, unlabeled_indices, acq_size, **kwargs):
-        if not hasattr(model, 'get_grad_embedding'):
-            raise ValueError('The method `get_grad_embedding` is mandatory to use badge sampling.')
+    def query(self, *, model, al_datamodule, acq_size, **kwargs):
+        unlabeled_dataloader = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
+        unlabeled_indices = al_datamodule.unlabeled_indices  # TODO(dhuseljic): get indices from dataloader?
 
-        if self.subset_size:
-            unlabeled_indices = self.rng.sample(unlabeled_indices, k=self.subset_size)
-        
-        if "collator" in list(kwargs.keys()):
-            unlabeled_dataloader = DataLoader(
-                dataset, 
-                batch_size=self.batch_size*2, 
-                collate_fn=kwargs['collator'],
-                sampler=unlabeled_indices)
-        else:
-            unlabeled_dataloader = DataLoader(dataset, batch_size=self.batch_size, sampler=unlabeled_indices)
-        del kwargs
+        grad_embedding = model.get_grad_representations(unlabeled_dataloader, device=self.device)
+        chosen = kmeans_plusplus(grad_embedding.numpy(), acq_size, rng=self.rng)
 
-        grad_embedding = model.get_grad_embedding(unlabeled_dataloader, device=self.device)
-        chosen = kmeans_plusplus(grad_embedding.numpy(), acq_size, np_rng=self.np_rng)
         return [unlabeled_indices[idx] for idx in chosen]
 
 
-def kmeans_plusplus(X, n_clusters, np_rng):
+def kmeans_plusplus(X, n_clusters, rng):
     # Start with highest grad norm since it is the "most uncertain"
     grad_norm = np.linalg.norm(X, ord=2, axis=1)
     idx = np.argmax(grad_norm)
@@ -55,7 +43,7 @@ def kmeans_plusplus(X, n_clusters, np_rng):
         p = min_dist_squared / np.sum(min_dist_squared)
         if np.any(p[indices] != 0):
             print('Already sampled centers have probability', p)
-        idx = np_rng.choice(range(len(X)), p=p.squeeze())
+        idx = rng.choice(range(len(X)), p=p.squeeze())
         indices.append(idx)
         centers.append(X[idx])
     return indices

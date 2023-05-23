@@ -1,6 +1,8 @@
 import torch
 from sklearn.metrics import roc_auc_score, average_precision_score
 
+import torchmetrics
+
 
 def ood_aupr(score_id: torch.Tensor, score_ood: torch.Tensor):
     """Computes the AUROC and assumes that a higher score is OOD.
@@ -32,31 +34,44 @@ def ood_auroc(score_id: torch.Tensor, score_ood: torch.Tensor):
     return roc_auc_score(y_true, y_score)
 
 
-def dempster_shafer_uncertainty(logits):
-    """Defines the Dempster-Shafer Uncertainty for output logits.
-    Under the Dempster-Shafer (DS) formulation of a multi-class model, the
-    predictive uncertainty can be assessed as K/(K + sum(exp(logits))).
-    This uncertainty metric directly measure the magnitude of the model logits,
-    and is more properiate for a model that directly trains the magnitude of
-    logits and uses this magnitude to quantify uncertainty (e.g., [1]).
-    See Equation (1) of [1] for full detail.
+class OODAUROC(torchmetrics.Metric):
+    def __init__(self):
+        super().__init__()
+        self.add_state('scores_id', default=[], dist_reduce_fx='cat')
+        self.add_state('scores_ood', default=[], dist_reduce_fx='cat')
 
-    Args:
-      logits (torch.Tensor): logits of model prediction (batch_size, num_classes).
+    def update(self, scores_id: torch.Tensor, scores_ood: torch.Tensor):
+        self.scores_id.append(scores_id)
+        self.scores_ood.append(scores_ood)
 
-    Returns:
-      torch.Tensor: DS uncertainty estimate
-    """
-    num_classes = logits.shape[-1]
-    belief_mass = torch.sum(torch.exp(logits), dim=-1)
-    return num_classes / (belief_mass + num_classes)
+    def compute(self):
+        scores_id = torch.cat(self.scores_id)
+        scores_ood = torch.cat(self.scores_ood)
 
+        preds = torch.cat((scores_id, scores_ood))
+        targets = torch.cat((torch.zeros(len(scores_id)), torch.ones(len(scores_ood))))
+        targets = targets.long()
 
-def clamp_probas(probas):
-    eps = torch.finfo(probas.dtype).eps
-    return probas.clamp(min=eps, max=1 - eps)
+        auroc = torchmetrics.functional.auroc(preds, targets, task='binary')
+        return auroc
 
 
-def entropy_fn(probas):
-    probas = clamp_probas(probas)
-    return - torch.sum(probas * probas.log(), -1)
+class OODAUPR(torchmetrics.Metric):
+    def __init__(self):
+        super().__init__()
+        self.add_state('scores_id', default=[], dist_reduce_fx='cat')
+        self.add_state('scores_ood', default=[], dist_reduce_fx='cat')
+
+    def update(self, scores_id: torch.Tensor, scores_ood: torch.Tensor):
+        self.scores_id.append(scores_id)
+        self.scores_ood.append(scores_ood)
+
+    def compute(self):
+        scores_id = torch.cat(self.scores_id)
+        scores_ood = torch.cat(self.scores_ood)
+
+        preds = torch.cat((scores_id, scores_ood))
+        targets = torch.cat((torch.zeros(len(scores_id)), torch.ones(len(scores_ood))))
+
+        aupr = torchmetrics.functional.average_precision(preds, targets.long(), task='binary')
+        return aupr

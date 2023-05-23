@@ -7,3 +7,10 @@ output/
 results/
 outputs/
 wandb/
+lightning_logs/
+
+*.pdf
+*.png
+*.jpg
+*.pth
+.dev

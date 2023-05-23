@@ -8,6 +8,8 @@
 #SBATCH --output=/mnt/stud/work/phahn/uncertainty/logs/%x_%j.log
 source /mnt/stud/home/phahn/.zshrc
 
+rsync -az /mnt/datasets/imagenet/ILSVRC2012/downloads /scratch/phahn/
+
 conda activate uncertainty_evaluation
 
 cd /mnt/stud/work/phahn/uncertainty/uncertainty-evaluation/
@@ -17,7 +19,7 @@ echo "Saving results to $OUTPUT_DIR"
 
 srun python -u experiments/pretraining/main.py \
     dataset=Imagenet \
-    dataset_path=/mnt/datasets/imagenet/ILSVRC2012/ \
+    dataset_path=/scratch/phahn/downloads/ \
     model=wideresnet2810 \
     output_dir=$OUTPUT_DIR \
     random_seed=${SLURM_JOB_ID}

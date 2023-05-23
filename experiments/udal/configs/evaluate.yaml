@@ -7,6 +7,7 @@ queried_indices_json: ./output/tmp/queried_indices.json
 cold_start: True
 
 dataset_path: ./data/
+ood_datasets: null
 device: cuda
 
 random_seed: 1
@@ -14,7 +15,7 @@ val_batch_size: 128
 print_freq_eval: 100
 print_freq_train: 100
 
-output_dir: ./output/eval_model/
+output_dir: ./output/al_evaluation/
 hydra:
   run:
     dir: ${output_dir}

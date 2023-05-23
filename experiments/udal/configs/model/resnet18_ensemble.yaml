@@ -1,6 +1,6 @@
 name: resnet18_ensemble
 n_epochs: 200
-batch_size: 64
+batch_size: 128
 n_member: 4
 optimizer:
   lr: 0.1
