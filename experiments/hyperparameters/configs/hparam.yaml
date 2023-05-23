@@ -1,0 +1,22 @@
+
+queried_indices_json: "/mnt/work/dhuseljic/results/hyperparameters/graphical_abstract/random/lr0.001_wd0.05/seed1/queried_indices.json"
+dataset_path: /mnt/work/dhuseljic/datasets
+num_epochs: 200
+train_batch_size: 32
+predict_batch_size: 256
+val_split: 0.1
+random_seed: 42
+
+num_opt_samples: 100
+num_cpus: 4
+num_gpus: 1
+
+output_dir: ./output/
+hydra:
+  run:
+    dir: ${output_dir}
+  job_logging:
+    handlers:
+      file:
+        mode: w
+

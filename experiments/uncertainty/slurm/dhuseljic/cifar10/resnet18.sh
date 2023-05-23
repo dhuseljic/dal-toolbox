@@ -27,5 +27,4 @@ srun python -u uncertainty.py \
 	"ood_datasets=$ood_datasets" \
 	output_dir=$output_dir \
 	random_seed=$random_seed \
-	num_devices=1 \
-	eval_interval=50
+	num_devices=1

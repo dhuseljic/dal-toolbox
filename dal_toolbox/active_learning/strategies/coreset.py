@@ -28,12 +28,11 @@ class CoreSet(Query):
         return idxs
 
     def query(self, *, model, al_datamodule, acq_size, **kwargs):
-        unlabeled_indices = al_datamodule.unlabeled_indices
-        unlabeled_dataloader = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
-        labeled_dataloader = al_datamodule.labeled_dataloader()
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
+        labeled_dataloader, _ = al_datamodule.labeled_dataloader()
 
-        features_unlabeled = model.get_representation(unlabeled_dataloader, self.device)
-        features_labeled = model.get_representation(labeled_dataloader, self.device)
+        features_unlabeled = model.get_representations(unlabeled_dataloader, self.device)
+        features_labeled = model.get_representations(labeled_dataloader, self.device)
 
         chosen = self.kcenter_greedy(features_unlabeled, features_labeled, acq_size)
         return [unlabeled_indices[idx] for idx in chosen]

@@ -8,6 +8,8 @@ from torch.utils.data import Subset, RandomSampler, DataLoader, Dataset
 from lightning.pytorch.utilities import rank_zero_warn
 from lightning.pytorch.utilities.exceptions import MisconfigurationException
 
+from ..utils import setup_rng
+
 
 class ActiveLearningDataModule(L.LightningDataModule):
     # TODO(dhuseljic): Implement for LightningDataModule input.
@@ -32,18 +34,15 @@ class ActiveLearningDataModule(L.LightningDataModule):
         if query_dataset is None:
             rank_zero_warn('Using train_dataset for queries. Ensure that there are no augmentations used.')
 
-        self._setup_rng(seed)
+        if self.val_dataset is not None:
+            self.val_dataloader = lambda: DataLoader(self.val_dataset, batch_size=predict_batch_size, shuffle=False)
 
+        if self.test_dataset is not None:
+            self.test_dataloader = lambda: DataLoader(self.test_dataset, batch_size=predict_batch_size, shuffle=False)
+
+        self.rng = setup_rng(seed)
         self.unlabeled_indices = list(range(len(self.train_dataset)))
         self.labeled_indices = []
-
-    def _setup_rng(self, seed):
-        # set rng which should be used for all random stuff
-        self._seed = seed
-        if seed is None:
-            self.rng = np.random.mtrand._rand
-        else:
-            self.rng = np.random.RandomState(self._seed)
 
     def train_dataloader(self):
         # TODO(dhuseljic): Add support for semi-supervised learning loaders.
@@ -53,29 +52,23 @@ class ActiveLearningDataModule(L.LightningDataModule):
         train_loader = DataLoader(labeled_dataset, batch_size=self.train_batch_size, sampler=sampler)
         return train_loader
 
-    # def val_dataloader(self):
-    #     return None
-
-    # def test_dataloader(self):
-    #     raise NotImplementedError()
-
     def unlabeled_dataloader(self, subset_size=None):
         """Returns a dataloader for the unlabeled pool where instances are not augmentated."""
         unlabeled_indices = self.unlabeled_indices
-        if subset_size:
+        if subset_size is not None:
             unlabeled_indices = self.rng.choice(unlabeled_indices, size=subset_size, replace=False)
             unlabeled_indices = unlabeled_indices.tolist()
         loader = DataLoader(self.query_dataset, batch_size=self.predict_batch_size, sampler=unlabeled_indices)
-        return loader
+        return loader, unlabeled_indices
 
     def labeled_dataloader(self, subset_size=None):
         """Returns a dataloader for the labeled pool where instances are not augmentated."""
         labeled_indices = self.labeled_indices
-        if subset_size:
+        if subset_size is not None:
             labeled_indices = self.rng.choice(labeled_indices, size=subset_size, replace=False)
             labeled_indices = labeled_indices.tolist()
         loader = DataLoader(self.query_dataset, batch_size=self.predict_batch_size, sampler=labeled_indices)
-        return loader
+        return loader, labeled_indices
 
     def state_dict(self):
         state_dict = {
