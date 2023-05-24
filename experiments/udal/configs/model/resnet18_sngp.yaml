@@ -1,5 +1,6 @@
 name : resnet18_sngp
-batch_size: 128
+train_batch_size: 128
+predict_batch_size: 256
 n_epochs: 250
 spectral_norm:
   use_spectral_norm: True
