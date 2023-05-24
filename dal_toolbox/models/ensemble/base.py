@@ -32,8 +32,10 @@ class EnsembleModel(BaseModule):
 
         # Save initial stats
         self.init_model_state = copy.deepcopy(self.state_dict())
-        self.init_optimizer_state_list = [copy.deepcopy(opt.state_dict()) for opt in self.optimizer_list]
-        self.init_scheduler_state_list = [copy.deepcopy(lrs.state_dict()) for lrs in self.lr_scheduler_list]
+        if optimizer_list is not None:
+            self.init_optimizer_state_list = [copy.deepcopy(opt.state_dict()) for opt in self.optimizer_list]
+        if lr_scheduler_list is not None:
+            self.init_scheduler_state_list = [copy.deepcopy(lrs.state_dict()) for lrs in self.lr_scheduler_list]
 
         self.automatic_optimization = False
 

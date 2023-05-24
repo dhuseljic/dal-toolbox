@@ -5,5 +5,5 @@ predict_batch_size: 256
 label_smoothing: 0.05
 optimizer:
   lr: 0.01
-  weight_decay: 0.05
+  weight_decay: 0.005
   momentum: 0.9

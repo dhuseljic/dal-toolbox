@@ -29,9 +29,6 @@ class UncertaintySampling(Query, ABC):
         scores = self.get_utilities(logits)
         _, indices = scores.topk(acq_size)
 
-        if logits.size(0) != len(unlabeled_indices):
-            raise ValueError("The logits of the unlabeled instances does not match the length of unlabeled indices.")
-
         actual_indices = [unlabeled_indices[i] for i in indices]
         if return_utilities:
             return actual_indices, scores

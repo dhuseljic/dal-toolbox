@@ -8,12 +8,12 @@ import torch.nn as nn
 import lightning as L
 import hydra
 
-from torch.utils.data import DataLoader, RandomSampler
+from torch.utils.data import DataLoader
 from omegaconf import OmegaConf
 
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp
 from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
-from dal_toolbox.active_learning.data import ALDataset
+from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.utils import seed_everything
 from dal_toolbox import metrics
 from dal_toolbox import datasets
@@ -33,25 +33,32 @@ def main(args):
     # Setup Dataset
     logging.info('Building datasets.')
     train_ds, query_ds, val_ds, ds_info = build_datasets(args)
-    val_loader = DataLoader(val_ds, batch_size=args.val_batch_size)
-    al_dataset = ALDataset(train_ds, query_ds, random_state=args.random_seed)
+    val_loader = DataLoader(val_ds, batch_size=args.model.predict_batch_size)
+    if args.ood_datasets:
+        logging.info('Building ood datasets.')
+        ood_datasets = build_ood_datasets(args)
+        ood_loaders = {name: DataLoader(ds, batch_size=args.model.predict_batch_size)
+                       for name, ds in ood_datasets.items()}
+    else:
+        ood_loaders = None
+
+    al_datamodule = ActiveLearningDataModule(
+        train_dataset=train_ds,
+        query_dataset=query_ds,
+        train_batch_size=args.model.train_batch_size,
+        predict_batch_size=args.model.predict_batch_size,
+    )
+
     if args.al_cycle.init_pool_file is not None:
         logging.info('Using initial labeled pool from %s.', args.al_cycle.init_pool_file)
         with open(args.al_cycle.init_pool_file, 'r', encoding='utf-8') as f:
             initial_indices = json.load(f)
         assert len(initial_indices) == args.al_cycle.n_init, 'Number of samples in initial pool file does not match.'
-        al_dataset.update_annotations(initial_indices)
+        al_datamodule.update_annotations(initial_indices)
     else:
         logging.info('Creating random initial labeled pool with %s samples.', args.al_cycle.n_init)
-        al_dataset.random_init(n_samples=args.al_cycle.n_init)
-    queried_indices['cycle0'] = al_dataset.labeled_indices
-
-    if args.ood_datasets:
-        logging.info('Building ood datasets.')
-        ood_datasets = build_ood_datasets(args)
-        ood_loaders = {name: DataLoader(ds, batch_size=args.val_batch_size) for name, ds in ood_datasets.items()}
-    else:
-        ood_loaders = None
+        al_datamodule.random_init(n_samples=args.al_cycle.n_init)
+    queried_indices['cycle0'] = al_datamodule.labeled_indices
 
     # Setup Model
     logging.info('Building model: %s', args.model.name)
@@ -59,7 +66,7 @@ def main(args):
 
     # Setup Query
     logging.info('Building query strategy: %s', args.al_strategy.name)
-    al_strategy = build_query(args, device=args.device)
+    al_strategy = build_query(args)
 
     # Active Learning Cycles
     for i_acq in range(0, args.al_cycle.n_acq + 1):
@@ -68,56 +75,46 @@ def main(args):
 
         # Analyse unlabeled set and query most promising data
         if i_acq != 0:
-            t1 = time.time()
             logging.info('Querying %s samples with strategy `%s`', args.al_cycle.acq_size, args.al_strategy.name)
             indices = al_strategy.query(
-                model=trainer.model,
-                dataset=al_dataset.query_dataset,
-                unlabeled_indices=al_dataset.unlabeled_indices,
-                labeled_indices=al_dataset.labeled_indices,
+                model=model,
+                al_datamodule=al_datamodule,
                 acq_size=args.al_cycle.acq_size
             )
-            al_dataset.update_annotations(indices)
-            query_time = time.time() - t1
-            logging.info('Querying took %.2f minutes', query_time/60)
-            cycle_results['query_indices'] = indices
-            cycle_results['query_time'] = query_time
+            al_datamodule.update_annotations(indices)
             queried_indices[f'cycle{i_acq}'] = indices
 
-        # Train with updated annotations
-        logging.info('Training on labeled pool with %s samples', len(al_dataset.labeled_dataset))
-        iter_per_epoch = len(al_dataset.labeled_dataset) // args.model.batch_size + 1
-        train_sampler = RandomSampler(al_dataset.labeled_dataset, num_samples=args.model.batch_size*iter_per_epoch)
-        train_loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.model.batch_size, sampler=train_sampler)
-
+        # Reset parameters
         model.reset_states()
+
+        # Train
         trainer = L.Trainer(
             max_epochs=args.model.n_epochs,
             default_root_dir=args.output_dir,
             enable_checkpointing=False,
             enable_progress_bar=True,
+            fast_dev_run=True
         )
-        trainer.fit(model, train_loader)
+        trainer.fit(model, al_datamodule)
 
         # Evaluate resulting model
         predictions = trainer.predict(model, val_loader)
         logits = torch.cat([preds[0] for preds in predictions])
         targets = torch.cat([preds[1] for preds in predictions])
         test_stats = evaluate(logits, targets)
-
         for name, loader in ood_loaders.items():
             predictions_ood = trainer.predict(model, loader)
             logits_ood = torch.cat([preds[0] for preds in predictions_ood])
             ood_stats = evaluate_ood(logits, logits_ood)
-            # ood_stats = {key}
-            
+            ood_stats = {f'{key}_{name}': val for key, val in ood_stats.items()}
+            test_stats.update(ood_stats)
 
         cycle_results['test_stats'] = test_stats
         cycle_results.update({
-            "labeled_indices": al_dataset.labeled_indices,
-            "n_labeled_samples": len(al_dataset.labeled_dataset),
-            "unlabeled_indices": al_dataset.unlabeled_indices,
-            "n_unlabeled_samples": len(al_dataset.unlabeled_dataset),
+            "labeled_indices": al_datamodule.labeled_indices,
+            "n_labeled_samples": len(al_datamodule.labeled_indices),
+            "unlabeled_indices": al_datamodule.unlabeled_indices,
+            "n_unlabeled_samples": len(al_datamodule.unlabeled_indices),
         })
         cycle_results.keys()
         results[f'cycle{i_acq}'] = cycle_results
@@ -137,6 +134,8 @@ def main(args):
 
 def evaluate(logits, targets):
     test_stats = {}
+    if logits.ndim == 3:
+        logits = metrics.ensemble_log_softmax(logits)
     test_stats["accuracy"] = metrics.Accuracy()(logits, targets).item()
     test_stats["nll"] = torch.nn.CrossEntropyLoss()(logits, targets).item()
     test_stats["brier"] = metrics.BrierScore()(logits, targets).item()
@@ -148,11 +147,15 @@ def evaluate(logits, targets):
 def evaluate_ood(logits_id, logits_ood):
     test_stats = {}
 
-    entropy_id = metrics.entropy_from_logits(logits_id)
-    entropy_ood = metrics.entropy_from_logits(logits_ood)
+    if logits_id.ndim == 2:
+        entropy_id = metrics.entropy_from_logits(logits_id)
+        entropy_ood = metrics.entropy_from_logits(logits_ood)
+    else:
+        entropy_id = metrics.ensemble_entropy_from_logits(logits_id)
+        entropy_ood = metrics.ensemble_entropy_from_logits(logits_ood)
 
-    test_stats[f"aupr"] = metrics.OODAUPR()(entropy_id, entropy_ood).item()
-    test_stats[f"auroc"] = metrics.OODAUROC()(entropy_id, entropy_ood).item()
+    test_stats["aupr"] = metrics.OODAUPR()(entropy_id, entropy_ood).item()
+    test_stats["auroc"] = metrics.OODAUROC()(entropy_id, entropy_ood).item()
     return test_stats
 
 
@@ -182,10 +185,10 @@ def build_query(args, **kwargs):
 
 def build_model(args, **kwargs):
     # TODO
-    n_classes = kwargs['n_classes']
+    num_classes = kwargs['n_classes']
 
     if args.model.name == 'resnet18_deterministic':
-        model = deterministic.resnet.ResNet18(n_classes)
+        model = deterministic.resnet.ResNet18(num_classes)
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.SGD(
             model.parameters(),
@@ -201,7 +204,7 @@ def build_model(args, **kwargs):
         return model
 
     elif args.model.name == 'resnet18_labelsmoothing':
-        model = deterministic.resnet.ResNet18(n_classes)
+        model = deterministic.resnet.ResNet18(num_classes)
         criterion = nn.CrossEntropyLoss(label_smoothing=args.model.label_smoothing)
         optimizer = torch.optim.SGD(
             model.parameters(),
@@ -211,17 +214,12 @@ def build_model(args, **kwargs):
             nesterov=True,
         )
         lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
-        trainer = deterministic.trainer.DeterministicTrainer(
-            model=model,
-            criterion=criterion,
-            optimizer=optimizer,
-            lr_scheduler=lr_scheduler,
-            device=args.device,
-            output_dir=args.output_dir
+        model = deterministic.DeterministicModel(
+            model, criterion, optimizer, lr_scheduler, {'train_acc': metrics.Accuracy()}
         )
 
     elif args.model.name == 'resnet18_mixup':
-        model = deterministic.resnet.ResNet18(n_classes)
+        model = deterministic.resnet.ResNet18(num_classes)
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.SGD(
             model.parameters(),
@@ -231,19 +229,13 @@ def build_model(args, **kwargs):
             nesterov=True,
         )
         lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
-        trainer = deterministic.trainer.DeterministicMixupTrainer(
-            model=model,
-            criterion=criterion,
-            mixup_alpha=args.model.mixup_alpha,
-            n_classes=n_classes,
-            optimizer=optimizer,
-            lr_scheduler=lr_scheduler,
-            device=args.device,
-            output_dir=args.output_dir
+        model = deterministic.DeterministicMixupModel(
+            model, num_classes, args.model.mixup_alpha, criterion, optimizer, lr_scheduler, {
+                'train_acc': metrics.Accuracy()}
         )
 
     elif args.model.name == 'resnet18_mcdropout':
-        model = mc_dropout.resnet.DropoutResNet18(n_classes, args.model.n_passes, args.model.dropout_rate)
+        model = mc_dropout.resnet.DropoutResNet18(num_classes, args.model.n_passes, args.model.dropout_rate)
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.SGD(
             model.parameters(),
@@ -253,19 +245,14 @@ def build_model(args, **kwargs):
             nesterov=True
         )
         lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
-        trainer = mc_dropout.trainer.MCDropoutTrainer(
-            model=model,
-            optimizer=optimizer,
-            criterion=criterion,
-            lr_scheduler=lr_scheduler,
-            device=args.device,
-            output_dir=args.output_dir,
+        model = mc_dropout.MCDropoutModel(
+            model, criterion, optimizer, lr_scheduler, train_metrics={'train_acc': metrics.Accuracy()},
         )
 
     elif args.model.name == 'resnet18_ensemble':
-        members, lr_schedulers, optimizers = [], [], []
+        members, lr_scheduler_list, optimizer_list = [], [], []
         for _ in range(args.model.n_member):
-            mem = deterministic.resnet.ResNet18(n_classes)
+            mem = deterministic.resnet.ResNet18(num_classes)
             opt = torch.optim.SGD(
                 mem.parameters(),
                 lr=args.model.optimizer.lr,
@@ -275,24 +262,16 @@ def build_model(args, **kwargs):
             )
             lrs = CosineAnnealingLRLinearWarmup(opt, num_epochs=args.model.n_epochs, warmup_epochs=10)
             members.append(mem)
-            optimizers.append(opt)
-            lr_schedulers.append(lrs)
-        model = ensemble.voting_ensemble.Ensemble(members)
+            optimizer_list.append(opt)
+            lr_scheduler_list.append(lrs)
         criterion = nn.CrossEntropyLoss()
-        optimizer = ensemble.voting_ensemble.EnsembleOptimizer(optimizers)
-        lr_scheduler = ensemble.voting_ensemble.EnsembleLRScheduler(lr_schedulers)
-        trainer = ensemble.trainer.EnsembleTrainer(
-            model=model,
-            criterion=criterion,
-            optimizer=optimizer,
-            lr_scheduler=lr_scheduler,
-            device=args.device,
-            output_dir=args.output_dir,
+        model = ensemble.EnsembleModel(
+            members, criterion, optimizer_list, lr_scheduler_list, train_metrics={'train_acc': metrics.Accuracy()},
         )
 
     elif args.model.name == 'resnet18_sngp':
         model = sngp.resnet.resnet18_sngp(
-            num_classes=n_classes,
+            num_classes=num_classes,
             input_shape=(3, 32, 32),
             spectral_norm=args.model.spectral_norm.use_spectral_norm,
             norm_bound=args.model.spectral_norm.norm_bound,
@@ -327,7 +306,7 @@ def build_model(args, **kwargs):
     else:
         raise NotImplementedError()
 
-    return trainer
+    return model
 
 
 def build_datasets(args):
