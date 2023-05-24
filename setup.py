@@ -1,19 +1,15 @@
-import os
-import sys
-
 from setuptools import find_packages
 from setuptools import setup
 
-# To enable importing version.py directly, we add its path to sys.path.
-version_path = os.path.join(os.path.dirname(__file__), 'dal_toolbox')
-sys.path.append(version_path)
-from version import __version__  # pylint: disable=g-import-not-at-top
+from dal_toolbox import __version__
+
 
 def requirements():
     with open("requirements.txt", "r") as file:
         lines = file.readlines()
         lines = [line.rstrip() for line in lines]
     return lines
+
 
 setup(
     name='dal_toolbox',
@@ -35,4 +31,5 @@ setup(
         'Topic :: Scientific/Engineering :: Artificial Intelligence',
     ],
     keywords='deep active learning machine learning probabilistic modeling',
+    python_requires=">=3.9",
 )
