@@ -5,6 +5,7 @@ import logging
 
 import torch
 import torch.nn as nn
+import lightning as L
 import hydra
 
 from torch.utils.data import DataLoader, RandomSampler
@@ -14,6 +15,7 @@ from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp
 from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
 from dal_toolbox.active_learning.data import ALDataset
 from dal_toolbox.utils import seed_everything
+from dal_toolbox import metrics
 from dal_toolbox import datasets
 from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge
 
@@ -53,7 +55,7 @@ def main(args):
 
     # Setup Model
     logging.info('Building model: %s', args.model.name)
-    trainer = build_model(args, n_classes=ds_info['n_classes'])
+    model = build_model(args, n_classes=ds_info['n_classes'])
 
     # Setup Query
     logging.info('Building query strategy: %s', args.al_strategy.name)
@@ -88,14 +90,29 @@ def main(args):
         train_sampler = RandomSampler(al_dataset.labeled_dataset, num_samples=args.model.batch_size*iter_per_epoch)
         train_loader = DataLoader(al_dataset.labeled_dataset, batch_size=args.model.batch_size, sampler=train_sampler)
 
-        # trainer.reset_states(reset_model_parameters=args.al_cycle.cold_start)
-        # history = trainer.train(args.model.n_epochs, train_loader=train_loader)
-        # cycle_results['train_history'] = history['train_history']
+        model.reset_states()
+        trainer = L.Trainer(
+            max_epochs=args.model.n_epochs,
+            default_root_dir=args.output_dir,
+            enable_checkpointing=False,
+            enable_progress_bar=True,
+        )
+        trainer.fit(model, train_loader)
 
         # Evaluate resulting model
-        test_stats = trainer.evaluate(val_loader, dataloaders_ood=ood_loaders)
-        cycle_results['test_stats'] = test_stats
+        predictions = trainer.predict(model, val_loader)
+        logits = torch.cat([preds[0] for preds in predictions])
+        targets = torch.cat([preds[1] for preds in predictions])
+        test_stats = evaluate(logits, targets)
 
+        for name, loader in ood_loaders.items():
+            predictions_ood = trainer.predict(model, loader)
+            logits_ood = torch.cat([preds[0] for preds in predictions_ood])
+            ood_stats = evaluate_ood(logits, logits_ood)
+            # ood_stats = {key}
+            
+
+        cycle_results['test_stats'] = test_stats
         cycle_results.update({
             "labeled_indices": al_dataset.labeled_indices,
             "n_labeled_samples": len(al_dataset.labeled_dataset),
@@ -118,18 +135,36 @@ def main(args):
         json.dump(queried_indices, f, sort_keys=False)
 
 
+def evaluate(logits, targets):
+    test_stats = {}
+    test_stats["accuracy"] = metrics.Accuracy()(logits, targets).item()
+    test_stats["nll"] = torch.nn.CrossEntropyLoss()(logits, targets).item()
+    test_stats["brier"] = metrics.BrierScore()(logits, targets).item()
+    test_stats["tce"] = metrics.ExpectedCalibrationError()(logits, targets).item()
+    test_stats["ace"] = metrics.AdaptiveCalibrationError()(logits, targets).item()
+    return test_stats
+
+
+def evaluate_ood(logits_id, logits_ood):
+    test_stats = {}
+
+    entropy_id = metrics.entropy_from_logits(logits_id)
+    entropy_ood = metrics.entropy_from_logits(logits_ood)
+
+    test_stats[f"aupr"] = metrics.OODAUPR()(entropy_id, entropy_ood).item()
+    test_stats[f"auroc"] = metrics.OODAUROC()(entropy_id, entropy_ood).item()
+    return test_stats
+
+
 def build_query(args, **kwargs):
-    device = kwargs.get('device', 'cuda')
     if args.al_strategy.name == "random":
         query = random.RandomSampling()
-    # Aleatoric Strategies
     elif args.al_strategy.name == "least_confident":
         query = uncertainty.LeastConfidentSampling(subset_size=args.al_strategy.subset_size,)
     elif args.al_strategy.name == "margin":
         query = uncertainty.MarginSampling(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == "entropy":
         query = uncertainty.EntropySampling(subset_size=args.al_strategy.subset_size)
-    # Epistemic Strategies
     elif args.al_strategy.name == "bayesian_entropy":
         query = uncertainty.BayesianEntropySampling(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == 'variation_ratio':
@@ -146,6 +181,7 @@ def build_query(args, **kwargs):
 
 
 def build_model(args, **kwargs):
+    # TODO
     n_classes = kwargs['n_classes']
 
     if args.model.name == 'resnet18_deterministic':
@@ -159,14 +195,10 @@ def build_model(args, **kwargs):
             nesterov=True,
         )
         lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
-        trainer = deterministic.trainer.DeterministicTrainer(
-            model=model,
-            criterion=criterion,
-            optimizer=optimizer,
-            lr_scheduler=lr_scheduler,
-            device=args.device,
-            output_dir=args.output_dir
+        model = deterministic.DeterministicModel(
+            model, criterion, optimizer, lr_scheduler, {'train_acc': metrics.Accuracy()}
         )
+        return model
 
     elif args.model.name == 'resnet18_labelsmoothing':
         model = deterministic.resnet.ResNet18(n_classes)
@@ -299,6 +331,7 @@ def build_model(args, **kwargs):
 
 
 def build_datasets(args):
+    # TODO
 
     if args.dataset.name == 'CIFAR10':
         train_ds, ds_info = datasets.cifar.build_cifar10('train', args.dataset_path, return_info=True)
@@ -322,6 +355,7 @@ def build_datasets(args):
 
 
 def build_ood_datasets(args):
+    # TODO
 
     ood_datasets = {}
     for ds_name in args.ood_datasets:
