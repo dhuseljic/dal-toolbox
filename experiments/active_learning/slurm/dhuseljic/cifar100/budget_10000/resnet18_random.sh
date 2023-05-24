@@ -12,7 +12,7 @@ source activate dal-toolbox
 cd ~/projects/dal-toolbox/experiments/active_learning/
 
 model=resnet18
-dataset=CIFAR10
+dataset=CIFAR100
 
 al_strat=random
 n_init=1000

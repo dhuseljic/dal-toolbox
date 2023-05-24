@@ -12,12 +12,13 @@ source activate dal-toolbox
 cd ~/projects/dal-toolbox/experiments/active_learning/
 
 model=resnet18
-dataset=CIFAR10
+dataset=CIFAR100
 
 al_strat=random
-n_init=1000
-acq_size=1000
+n_init=500
+acq_size=500
 n_acq=9
+budget=$((n_init + n_acq * acq_size))
 random_seed=$SLURM_ARRAY_TASK_ID
 output_dir=/mnt/work/deep_al/results/al_baselines/${dataset}/${model}/${al_strat}/budget_${budget}/seed${random_seed}/
 
