@@ -6,16 +6,14 @@ from .query import Query
 
 
 class Badge(Query):
-    def __init__(self, subset_size=None, batch_size=128, device='cuda'):
+    def __init__(self, subset_size=None):
         super().__init__()
         self.subset_size = subset_size
-        self.batch_size = batch_size
-        self.device = device
 
     def query(self, *, model, al_datamodule, acq_size, **kwargs):
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
 
-        grad_embedding = model.get_grad_representations(unlabeled_dataloader, device=self.device)
+        grad_embedding = model.get_grad_representations(unlabeled_dataloader)
         chosen = kmeans_plusplus(grad_embedding.numpy(), acq_size, rng=self.rng)
 
         return [unlabeled_indices[idx] for idx in chosen]
