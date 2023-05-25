@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH --job-name=graphical_abstract
+#SBATCH --job-name=HP-experiment
 #SBATCH --partition=main
 #SBATCH --gres=gpu:1
-#SBATCH --output=/mnt/work/dhuseljic/logs/hyperparameters/%A_HP-exp_%a.out
+#SBATCH --output=/mnt/work/dhuseljic/logs/hyperparameters/%A_%x_%a.out
 #SBATCH --ntasks=1
 #SBATCH --mem=32GB
 #SBATCH --array=0-26
