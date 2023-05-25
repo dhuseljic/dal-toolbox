@@ -104,7 +104,7 @@ class VariationRatioSampling(UncertaintySampling):
         return self._variation_ratio(logits)
 
     def _variation_ratio(self, logits: torch.Tensor) -> torch.Tensor:
-        # TODO: should be in own file, so we can use it without the class
+        # TODO(dhuseljic): should be in own file, so we can use it without the class
         """
         Computes the variation ratio for each sample in a Bayesian model. The variation ratio is
             the proportion of predicted class labels that are not the modal class prediction. 
@@ -125,18 +125,18 @@ class VariationRatioSampling(UncertaintySampling):
         """
         if logits.ndim != 3:
             raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
-        num_members = logits.size(0)
+        ensemble_size = logits.size(1)
 
         # Compute predicted classes and modal prediction for each sample
-        preds_classes = logits.argmax(dim=-1)
-        modal_preds, _ = torch.mode(preds_classes, dim=0)
+        pred_classes = logits.argmax(dim=-1)
+        modal_preds, _ = torch.mode(pred_classes, dim=1)
 
         # Compute a binary mask indicating predictions that not match the modal one
-        diff_mask = (preds_classes != modal_preds)
+        diff_mask = (pred_classes != modal_preds[:, None])
 
         # Compute the variation ratio
-        num_diff = torch.sum(diff_mask, dim=0)
-        var_ratio = num_diff.float() / num_members
+        num_diff = torch.sum(diff_mask, dim=1)
+        var_ratio = num_diff.float() / ensemble_size
 
         return var_ratio
 
@@ -150,9 +150,14 @@ class BALDSampling(UncertaintySampling):
 
     def bald_score(self, logits):
         # TODO(dhuseljic): implement bald from logits
-        probas = logits.softmax(-1)
-        mean_probas = torch.mean(probas, dim=0)
-        mean_entropy = entropy_from_probas(mean_probas)
-        entropy = entropy_from_probas(probas).mean(dim=0)
-        score = mean_entropy - entropy
+        # probas = logits.softmax(-1)
+        # ensemble_probas = torch.mean(probas, dim=1)
+        # ensemble_entropy = entropy_from_probas(ensemble_probas)
+        # mean_entropy = entropy_from_probas(probas).mean(dim=1)
+        # score = ensemble_entropy - mean_entropy
+
+        ensemble_entropy = ensemble_entropy_from_logits(logits)
+        mean_entropy = entropy_from_probas(logits.softmax(-1)).mean(dim=1)
+        score = ensemble_entropy - mean_entropy
+        
         return score

@@ -54,7 +54,7 @@ class DropoutResNet18(MCDropoutModule):
             samples = batch[0]
             mc_logits = self.mc_forward(samples.to(device))
             mc_logits_list.append(mc_logits.cpu())
-        mc_logits = torch.cat(mc_logits_list, dim=1)
+        mc_logits = torch.cat(mc_logits_list)
         return mc_logits
 
 
