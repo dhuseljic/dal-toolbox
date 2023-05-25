@@ -1,5 +1,4 @@
 import os
-import time
 import json
 import logging
 
@@ -93,7 +92,7 @@ def main(args):
             default_root_dir=args.output_dir,
             enable_checkpointing=False,
             enable_progress_bar=True,
-            fast_dev_run=True
+            fast_dev_run=3,
         )
         trainer.fit(model, al_datamodule)
 
@@ -108,6 +107,7 @@ def main(args):
             ood_stats = evaluate_ood(logits, logits_ood)
             ood_stats = {f'{key}_{name}': val for key, val in ood_stats.items()}
             test_stats.update(ood_stats)
+        logging.info("[Acq %s] Test statistics: %s", i_acq, test_stats)
 
         cycle_results['test_stats'] = test_stats
         cycle_results.update({
@@ -184,7 +184,6 @@ def build_query(args, **kwargs):
 
 
 def build_model(args, **kwargs):
-    # TODO
     num_classes = kwargs['n_classes']
 
     if args.model.name == 'resnet18_deterministic':
@@ -294,13 +293,8 @@ def build_model(args, **kwargs):
             nesterov=True
         )
         lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
-        trainer = sngp.trainer.SNGPTrainer(
-            model=model,
-            criterion=criterion,
-            optimizer=optimizer,
-            lr_scheduler=lr_scheduler,
-            device=args.device,
-            output_dir=args.output_dir,
+        model = sngp.SNGPModel(
+            model, criterion, optimizer, lr_scheduler, train_metrics={'train_acc': metrics.Accuracy()},
         )
 
     else:
@@ -334,8 +328,6 @@ def build_datasets(args):
 
 
 def build_ood_datasets(args):
-    # TODO
-
     ood_datasets = {}
     for ds_name in args.ood_datasets:
         if ds_name == 'CIFAR10':
