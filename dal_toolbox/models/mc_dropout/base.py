@@ -3,7 +3,7 @@ import torch.nn as nn
 from ..utils.base import BaseModule
 
 from ..utils.mcdropout import MCDropoutModule
-from ...metrics import GibbsCrossEntropy
+from ...metrics import GibbsCrossEntropy, ensemble_log_softmax
 
 
 class MCDropoutModel(BaseModule):
@@ -35,13 +35,14 @@ class MCDropoutModel(BaseModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        # TODO(dhuseljic): Validation with MC forward? might take a long time
         inputs, targets = batch
 
-        logits = self.mc_forward(inputs)
-        loss = self.val_loss_fn(logits, targets)
+        mc_logits = self.mc_forward(inputs)
 
+        loss = self.val_loss_fn(mc_logits, targets)
         self.log('val_loss', loss, prog_bar=True)
+
+        logits = ensemble_log_softmax(mc_logits)
         self.log_val_metrics(logits, targets)
 
         return loss

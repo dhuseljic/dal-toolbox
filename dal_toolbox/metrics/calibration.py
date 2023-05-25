@@ -11,6 +11,7 @@ from .utils import log_sub_exp
 
 class CrossEntropy(torchmetrics.Metric):
     """Standard cross entropy."""
+
     def __init__(self):
         super().__init__()
         self.cross_entropy = torch.nn.CrossEntropyLoss(reduction='none')
@@ -50,10 +51,10 @@ class EnsembleCrossEntropy(torchmetrics.Metric):
     def update(self, logits: torch.Tensor, targets: torch.Tensor):
         if logits.ndim != 3:
             raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
-        ensemble_size, num_samples, _ = logits.shape
+        num_samples, ensemble_size, _ = logits.shape
 
-        # Reshape logits from M x N x C -> N x C x M
-        _logits = logits.permute(1, 2, 0)
+        # Reshape logits from N x M x C -> N x C x M
+        _logits = logits.permute(0, 2, 1)
         # Expand labels from N -> N x M
         _targets = targets.view(-1, 1).expand(num_samples, ensemble_size)
         ce = self.cross_entropy(_logits, _targets)
@@ -87,10 +88,10 @@ class GibbsCrossEntropy(torchmetrics.Metric):
     def update(self, logits: torch.Tensor, targets: torch.Tensor):
         if logits.ndim != 3:
             raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
-        ensemble_size, num_samples, _ = logits.shape
+        num_samples, ensemble_size, _ = logits.shape
 
-        # Reshape logits from M x N x C -> N x C x M
-        _logits = logits.permute(1, 2, 0)
+        # Reshape logits from N x M x C -> N x C x M
+        _logits = logits.permute(0, 2, 1)
         # Expand labels from N -> N x M
         _targets = targets.view(-1, 1).expand(num_samples, ensemble_size)
         ce = self.cross_entropy(_logits, _targets)
