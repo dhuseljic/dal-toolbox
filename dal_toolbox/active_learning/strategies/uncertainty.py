@@ -159,5 +159,5 @@ class BALDSampling(UncertaintySampling):
         ensemble_entropy = ensemble_entropy_from_logits(logits)
         mean_entropy = entropy_from_probas(logits.softmax(-1)).mean(dim=1)
         score = ensemble_entropy - mean_entropy
-        
+
         return score

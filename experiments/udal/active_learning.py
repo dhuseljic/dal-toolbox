@@ -92,7 +92,6 @@ def main(args):
             default_root_dir=args.output_dir,
             enable_checkpointing=False,
             enable_progress_bar=True,
-            fast_dev_run=3,
         )
         trainer.fit(model, al_datamodule)
 
