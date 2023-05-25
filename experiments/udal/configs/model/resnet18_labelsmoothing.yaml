@@ -1,8 +1,9 @@
 name: resnet18_labelsmoothing
 n_epochs: 200
-batch_size: 128
+train_batch_size: 128
+predict_batch_size: 256
 label_smoothing: 0.05
 optimizer:
   lr: 0.01
-  weight_decay: 0.05
+  weight_decay: 0.005
   momentum: 0.9

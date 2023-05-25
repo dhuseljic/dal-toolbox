@@ -14,7 +14,7 @@ from dal_toolbox import datasets
 from dal_toolbox.models.deterministic import DeterministicModel, resnet
 from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
 from dal_toolbox.active_learning.data import ActiveLearningDataModule
-from dal_toolbox.active_learning.strategies import random, badge
+from dal_toolbox.active_learning.strategies import RandomSampling, EntropySampling, Badge, CoreSet
 from dal_toolbox.utils import seed_everything, is_running_on_slurm
 from dal_toolbox.metrics import Accuracy
 from dal_toolbox.models.utils.callbacks import MetricLogger
@@ -32,7 +32,12 @@ def main(args):
 
     # Setup Dataset
     logging.info('Building datasets..')
-    data = datasets.cifar.CIFAR10(args.dataset_path)
+    if args.dataset == 'CIFAR10':
+        data = datasets.CIFAR10(args.dataset_path)
+    elif args.dataset == 'CIFAR100':
+        data = datasets.CIFAR100(args.dataset_path)
+    else:
+        raise NotImplementedError(f'Experiment not implemented for {args.dataset}')
     al_datamodule = ActiveLearningDataModule(
         train_dataset=data.train_dataset,
         query_dataset=data.query_dataset,
@@ -46,9 +51,13 @@ def main(args):
 
     logging.info('Building query strategy: %s', args.al_strategy.name)
     if args.al_strategy.name == "random":
-        al_strategy = random.RandomSampling()
+        al_strategy = RandomSampling()
+    elif args.al_strategy.name == "entropy":
+        al_strategy = EntropySampling(subset_size=args.al_strategy.subset_size)
+    elif args.al_strategy.name == "coreset":
+        al_strategy = CoreSet(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == "badge":
-        al_strategy = badge.Badge(subset_size=args.al_strategy.subset_size, device=args.device)
+        al_strategy = Badge(subset_size=args.al_strategy.subset_size)
     else:
         raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
 

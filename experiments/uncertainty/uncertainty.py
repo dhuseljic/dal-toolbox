@@ -52,16 +52,19 @@ def main(args):
     trainer.fit(model, train_loader, val_dataloaders=val_loader)
 
     # Evaluation
-    predictions_id = trainer.predict(model, test_loader_id)
-    logits_id = torch.cat([pred[0] for pred in predictions_id])
-    targets_id = torch.cat([pred[1] for pred in predictions_id])
+    test_predictions = trainer.predict(model, test_loader_id)
+    logits = torch.cat([pred[0] for pred in test_predictions])
+    targets = torch.cat([pred[1] for pred in test_predictions])
 
-    predictions_ood = trainer.predict(model, test_loaders_ood)
-    logits_ood_dict = {}
-    for ds_name, predictions in zip(test_loaders_ood, predictions_ood):
-        logits_ood_dict[ds_name] = torch.cat([pred[0] for pred in predictions])
+    test_stats = evaluate(logits, targets)
 
-    test_stats = evaluate(logits_id, targets_id, logits_ood_dict)
+    for name, ood_loader in test_loaders_ood.items():
+        ood_predictions = trainer.predict(model, ood_loader)
+        ood_logits = torch.cat([pred[0] for pred in ood_predictions])
+        ood_results = evaluate_ood(id_logits=logits, ood_logits=ood_logits)
+        ood_results = {f"{key}_{name}": val for key, val in ood_results.items()}
+        test_stats.update(ood_results)
+
     logging.info('Test Stats: %s', test_stats)
 
     # Saving results
@@ -72,31 +75,35 @@ def main(args):
         json.dump(results, f)
 
 
-def evaluate(logits_id, targets_id, logits_ood_dict=None):
-    # Model specific test loss and accuracy for in domain testset
+def evaluate(logits, targets):
     test_stats = {}
-    logits_id = metrics.ensemble_log_softmax(logits_id) if logits_id.ndim == 3 else logits_id
+
+    # Model specific test loss and accuracy for in domain testset
+    logits = metrics.ensemble_log_softmax(logits) if logits.ndim == 3 else logits
 
     # Test stats for in-distribution
     test_stats.update({
-        "accuracy": metrics.Accuracy()(logits_id, targets_id).item(),
-        "nll": torch.nn.CrossEntropyLoss()(logits_id, targets_id).item(),
-        "brier": metrics.BrierScore()(logits_id, targets_id).item(),
-        "tce": metrics.ExpectedCalibrationError()(logits_id, targets_id).item(),
-        "ace": metrics.AdaptiveCalibrationError()(logits_id, targets_id).item(),
+        "accuracy": metrics.Accuracy()(logits, targets).item(),
+        "nll": torch.nn.CrossEntropyLoss()(logits, targets).item(),
+        "brier": metrics.BrierScore()(logits, targets).item(),
+        "tce": metrics.ExpectedCalibrationError()(logits, targets).item(),
+        "ace": metrics.AdaptiveCalibrationError()(logits, targets).item(),
     })
+    return test_stats
 
-    # Test stats for out-of-distribution
-    entropy_id = metrics.entropy_from_logits(logits_id)
-    for ds_name, logits_ood in logits_ood_dict.items():
-        if logits_ood.ndim == 2:
-            entropy_ood = metrics.entropy_from_logits(logits_ood)
-        else:
-            entropy_ood = metrics.ensemble_entropy_from_logits(logits_ood)
-        test_stats.update({
-            f"aupr_{ds_name}": metrics.OODAUPR()(entropy_id, entropy_ood).item(),
-            f"auroc_{ds_name}": metrics.OODAUROC()(entropy_id, entropy_ood).item()
-        })
+
+def evaluate_ood(id_logits, ood_logits):
+    test_stats = {}
+    if ood_logits.ndim == 2:
+        id_entropy = metrics.entropy_from_logits(id_logits)
+        ood_entropy = metrics.entropy_from_logits(ood_logits)
+    else:
+        id_entropy = metrics.ensemble_entropy_from_logits(id_logits)
+        ood_entropy = metrics.ensemble_entropy_from_logits(ood_logits)
+    test_stats.update({
+        f"aupr": metrics.OODAUPR()(id_entropy, ood_entropy).item(),
+        f"auroc": metrics.OODAUROC()(id_entropy, ood_entropy).item()
+    })
     return test_stats
 
 

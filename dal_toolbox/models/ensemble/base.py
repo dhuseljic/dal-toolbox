@@ -5,7 +5,7 @@ import torch.nn as nn
 
 from lightning.pytorch.utilities.rank_zero import rank_zero_warn
 from ..utils.base import BaseModule
-from ...metrics import GibbsCrossEntropy
+from ...metrics import GibbsCrossEntropy, ensemble_log_softmax
 
 
 class EnsembleModel(BaseModule):
@@ -32,8 +32,10 @@ class EnsembleModel(BaseModule):
 
         # Save initial stats
         self.init_model_state = copy.deepcopy(self.state_dict())
-        self.init_optimizer_state_list = [copy.deepcopy(opt.state_dict()) for opt in self.optimizer_list]
-        self.init_scheduler_state_list = [copy.deepcopy(lrs.state_dict()) for lrs in self.lr_scheduler_list]
+        if optimizer_list is not None:
+            self.init_optimizer_state_list = [copy.deepcopy(opt.state_dict()) for opt in self.optimizer_list]
+        if lr_scheduler_list is not None:
+            self.init_scheduler_state_list = [copy.deepcopy(lrs.state_dict()) for lrs in self.lr_scheduler_list]
 
         self.automatic_optimization = False
 
@@ -49,7 +51,7 @@ class EnsembleModel(BaseModule):
         logits_list = []
         for member in self.model:
             logits_list.append(member(*args, **kwargs))
-        return torch.stack(logits_list)
+        return torch.stack(logits_list, dim=1)
 
     def reset_states(self, reset_model_parameters=True):
         if reset_model_parameters:
@@ -90,11 +92,13 @@ class EnsembleModel(BaseModule):
     def validation_step(self, batch, batch_idx):
         inputs, targets = batch
 
-        logits = self.mc_forward(inputs)
-        loss = self.val_loss_fn(logits, targets)
+        mc_logits = self.mc_forward(inputs)
+        loss = self.val_loss_fn(mc_logits, targets)
         self.log('val_loss', loss, prog_bar=True)
 
+        logits = ensemble_log_softmax(mc_logits)
         self.log_val_metrics(logits, targets)
+
         return loss
 
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
@@ -128,7 +132,7 @@ class EnsembleModel(BaseModule):
             if not hasattr(member, 'get_logits'):
                 raise NotImplementedError('The `get_logits` method is not implemented.')
             logits_list.append(member.get_logits(*args, **kwargs))
-        logits = torch.stack(logits_list)
+        logits = torch.stack(logits_list, dim=1)
         return logits
 
     @torch.inference_mode()
@@ -139,7 +143,7 @@ class EnsembleModel(BaseModule):
             if not hasattr(member, 'get_representations'):
                 raise NotImplementedError('The `get_representations` method is not implemented.')
             representations_list.append(member.get_representations(*args, **kwargs))
-        representations = torch.stack(representations_list)
+        representations = torch.stack(representations_list, dim=1)
         return representations
 
     @torch.inference_mode()
@@ -150,5 +154,5 @@ class EnsembleModel(BaseModule):
             if not hasattr(member, 'get_grad_representations'):
                 raise NotImplementedError('The `get_grad_representations` method is not implemented.')
             grad_representations_list.append(member.get_grad_representations(*args, **kwargs))
-        grad_representations = torch.stack(grad_representations_list)
+        grad_representations = torch.stack(grad_representations_list, dim=1)
         return grad_representations
