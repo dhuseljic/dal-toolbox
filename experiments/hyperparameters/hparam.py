@@ -69,7 +69,13 @@ def main(args):
     dataset = data.train_dataset
     with open(args.queried_indices_json, 'r') as f:
         queried_indices = json.load(f)
-    indices = [idx for key in queried_indices for idx in queried_indices[key]]
+    if args.budget == 4000:
+        indices = [idx for key in queried_indices for idx in queried_indices[key]]
+    elif args.budget == 2000:
+        indices = [idx for key in queried_indices if key in ['cycle'+str(i) for i in range(20)] for idx in queried_indices[key]]
+    else:
+        NotImplementedError('Check your budget arg!')
+    assert len(indices) == args.budget, 'Something went wrong with the queried indices'
     dataset = Subset(dataset, indices=indices)
 
     num_samples = len(dataset)
