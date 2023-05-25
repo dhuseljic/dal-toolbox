@@ -24,7 +24,7 @@ weight_decay=${weight_decays[$index / 3 % 3]}
 random_seed=${random_seeds[$index / 9]}
 
 dataset=CIFAR10
-al_strategy=badge
+al_strategy=random
 output_dir=/mnt/work/deep_al/results/hyperparameters/experiments/${dataset}/${al_strategy}/lr${learning_rate}_wd${weight_decay}/seed${random_seed}
 
 # Run the deep learning script with the current hyperparameters
