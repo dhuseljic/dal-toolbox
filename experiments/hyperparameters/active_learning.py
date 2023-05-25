@@ -32,7 +32,12 @@ def main(args):
 
     # Setup Dataset
     logging.info('Building datasets..')
-    data = datasets.cifar.CIFAR10(args.dataset_path)
+    if args.dataset == 'CIFAR10':
+        data = datasets.CIFAR10(args.dataset_path)
+    elif args.dataset == 'CIFAR100':
+        data = datasets.CIFAR100(args.dataset_path)
+    else:
+        raise NotImplementedError(f'Experiment not implemented for {args.dataset}')
     al_datamodule = ActiveLearningDataModule(
         train_dataset=data.train_dataset,
         query_dataset=data.query_dataset,
