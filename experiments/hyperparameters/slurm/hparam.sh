@@ -3,7 +3,7 @@
 #SBATCH --partition=main
 #SBATCH --gres=gpu:2
 #SBATCH --cpus-per-task=32
-#SBATCH --output=/mnt/stud/work/phahn/uncertainty/logs/hyperparameters/%A_%a.out
+#SBATCH --output=/mnt/stud/work/phahn/uncertainty/logs/hyperparameters4/%A_%a.out
 #SBATCH --ntasks=1
 #SBATCH --mem=256GB
 #SBATCH --array=0-23%4
@@ -27,10 +27,10 @@ weight_decay=${weight_decays[$index % 4]}
 budget=${budgets[$index / 4 % 2]}
 random_seed=${random_seeds[$index / 8]}
 
-al_strategy=random
+al_strategy=coreset
 dataset=CIFAR10
 queried_indices_json=/mnt/work/deep_al/results/hyperparameters/experiments/${dataset}/${al_strategy}/lr${learning_rate}_wd${weight_decay}/seed${random_seed}/queried_indices.json
-output_dir=/mnt/stud/work/phahn/uncertainty/output/hyperparameters/${dataset}/${al_strategy}/lr${learning_rate}_wd${weight_decay}/budget${budget}/seed${random_seed}/
+output_dir=/mnt/stud/work/phahn/uncertainty/output/hyperparameters4/${dataset}/${al_strategy}/budget${budget}/lr${learning_rate}_wd${weight_decay}/seed${random_seed}/
 
 python -u hparam.py \
     queried_indices_json=$queried_indices_json \

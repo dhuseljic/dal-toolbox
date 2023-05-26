@@ -49,8 +49,7 @@ def train(config, args, al_dataset, test_ds):
         enable_checkpointing=False,
         max_epochs=args.num_epochs,
         callbacks=[MetricLogger(use_print=True)],
-        enable_progress_bar=False,
-        fast_dev_run=3
+        enable_progress_bar=False
     )
     trainer.fit(model, train_loader, val_dataloaders=val_loader)
 
