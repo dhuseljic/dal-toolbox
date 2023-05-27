@@ -40,11 +40,12 @@ def train(config, args, al_dataset):
         max_epochs=args.num_epochs,
         callbacks=[MetricLogger(use_print=True)],
         enable_progress_bar=False,
+        fast_dev_run=True
     )
     trainer.fit(model, train_loader, val_dataloaders=val_loader)
     logged_metrics = trainer.logged_metrics
     val_stats = {name: metric.item() for name, metric in logged_metrics.items() if isinstance(metric, torch.Tensor)}
-
+    val_stats = {key: val for key, val in val_stats.items() if 'val' in key}
     return val_stats
 
 
