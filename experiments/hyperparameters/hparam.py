@@ -40,7 +40,6 @@ def train(config, args, al_dataset):
         max_epochs=args.num_epochs,
         callbacks=[MetricLogger(use_print=True)],
         enable_progress_bar=False,
-        fast_dev_run=10,
     )
     trainer.fit(model, train_loader, val_dataloaders=val_loader)
     logged_metrics = trainer.logged_metrics
