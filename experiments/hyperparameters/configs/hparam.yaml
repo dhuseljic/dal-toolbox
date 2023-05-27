@@ -1,5 +1,6 @@
 
 queried_indices_json: "/mnt/work/deep_al/results/hyperparameters/experiments/CIFAR10/random/lr0.001_wd0.05/seed1/queried_indices.json"
+dataset: CIFAR10
 dataset_path: /mnt/work/deep_al/datasets
 num_epochs: 200
 train_batch_size: 32

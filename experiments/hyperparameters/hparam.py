@@ -19,7 +19,7 @@ from dal_toolbox.utils import seed_everything
 from dal_toolbox.models.utils.callbacks import MetricLogger
 
 
-def train(config, args, al_dataset):
+def train(config, args, al_dataset, num_classes):
     seed_everything(args.random_seed+config['__trial_index__']+100)
 
     # Train test split
@@ -32,7 +32,7 @@ def train(config, args, al_dataset):
     val_loader = DataLoader(val_ds, batch_size=args.predict_batch_size, shuffle=False)
 
     # Create model
-    model = build_model(args, lr=config['lr'], weight_decay=config['weight_decay'])
+    model = build_model(args, lr=config['lr'], weight_decay=config['weight_decay'], num_classes=num_classes)
 
     # Train model
     trainer = L.Trainer(
@@ -42,14 +42,12 @@ def train(config, args, al_dataset):
         enable_progress_bar=False,
     )
     trainer.fit(model, train_loader, val_dataloaders=val_loader)
-    logged_metrics = trainer.logged_metrics
-    val_stats = {name: metric.item() for name, metric in logged_metrics.items() if isinstance(metric, torch.Tensor)}
-    val_stats = {key: val for key, val in val_stats.items() if 'val' in key}
+    val_stats = trainer.validate(model, val_loader)[0]
     return val_stats
 
 
-def build_model(args, lr, weight_decay):
-    model = models.deterministic.resnet.ResNet18(10)
+def build_model(args, lr, weight_decay, num_classes):
+    model = models.deterministic.resnet.ResNet18(num_classes)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=.9)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.num_epochs)
     model = models.deterministic.DeterministicModel(
@@ -68,8 +66,13 @@ def main(args):
     os.makedirs(args.output_dir, exist_ok=True)
 
     # Load data
-    data = datasets.cifar.CIFAR10(args.dataset_path)
-    dataset = data.train_dataset
+    if args.dataset == 'CIFAR10':
+        data = datasets.cifar.CIFAR10(args.dataset_path)
+    elif args.dataset == 'CIFAR100':
+        data = datasets.cifar.CIFAR100(args.dataset_path)
+    else:
+        raise NotImplementedError
+
     with open(args.queried_indices_json, 'r') as f:
         queried_indices = json.load(f)
     if args.budget == 2000:
@@ -80,14 +83,15 @@ def main(args):
     else:
         raise NotImplementedError('Check the budget argument.')
     assert len(indices) == args.budget, 'Something went wrong with the queried indices'
-    al_dataset = Subset(dataset, indices=indices)
+
+    al_dataset = Subset(data.train_dataset, indices=indices)
 
     # Start hyperparameter search
     ray.init()
     search_space = {"lr": tune.uniform(1e-4, .5), "weight_decay": tune.uniform(0, .1)}
 
     objective = tune.with_resources(train, resources={'cpu': args.num_cpus, 'gpu': args.num_gpus})
-    objective = tune.with_parameters(objective, args=args, al_dataset=al_dataset)
+    objective = tune.with_parameters(objective, args=args, al_dataset=al_dataset, num_classes=data.num_classes)
     search_alg = OptunaSearch(points_to_evaluate=[{'lr': args.lr, 'weight_decay': args.weight_decay}])
     search_alg = Repeater(search_alg, repeat=args.num_reps)
     tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=args.num_opt_samples *
@@ -102,7 +106,7 @@ def main(args):
     best_config = results.get_best_result(metric='val_acc', mode='max').config
     print(f'Training final model using the best possible parameters {best_config}')
     train_loader_all = DataLoader(al_dataset, batch_size=args.train_batch_size, shuffle=True, drop_last=True)
-    model = build_model(args, lr=best_config['lr'], weight_decay=best_config['weight_decay'])
+    model = build_model(args, lr=best_config['lr'], weight_decay=best_config['weight_decay'], num_classes=data.num_classes)
     trainer = L.Trainer(
         enable_checkpointing=False,
         max_epochs=args.num_epochs,
