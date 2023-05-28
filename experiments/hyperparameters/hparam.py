@@ -64,6 +64,7 @@ def build_model(args, lr, weight_decay, num_classes):
 def main(args):
     seed_everything(args.random_seed)
     os.makedirs(args.output_dir, exist_ok=True)
+    print(OmegaConf.to_yaml(args))
 
     # Load data
     if args.dataset == 'CIFAR10':
