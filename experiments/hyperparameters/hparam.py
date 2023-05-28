@@ -113,6 +113,7 @@ def main(args):
         max_epochs=args.num_epochs,
         callbacks=[MetricLogger(use_print=True)],
         enable_progress_bar=False,
+        devices=1,
     )
     trainer.fit(model, train_loader_all)
 
