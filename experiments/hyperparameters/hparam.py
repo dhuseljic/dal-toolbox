@@ -17,6 +17,7 @@ from dal_toolbox import models
 from dal_toolbox import metrics
 from dal_toolbox.utils import seed_everything
 from dal_toolbox.models.utils.callbacks import MetricLogger
+from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
 
 
 def train(config, args, al_dataset, num_classes):
@@ -49,7 +50,7 @@ def train(config, args, al_dataset, num_classes):
 def build_model(args, lr, weight_decay, num_classes):
     model = models.deterministic.resnet.ResNet18(num_classes)
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=weight_decay, momentum=.9)
-    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.num_epochs)
+    lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.num_epochs, warmup_epochs=10)
     model = models.deterministic.DeterministicModel(
         model,
         optimizer=optimizer,
@@ -89,7 +90,7 @@ def main(args):
 
     # Start hyperparameter search
     ray.init()
-    search_space = {"lr": tune.uniform(1e-4, .1), "weight_decay": tune.uniform(0, .05)}
+    search_space = {"lr": tune.loguniform(1e-5, .1), "weight_decay": tune.loguniform(1e-5, .1)}
 
     objective = tune.with_resources(train, resources={'cpu': args.num_cpus, 'gpu': args.num_gpus})
     objective = tune.with_parameters(objective, args=args, al_dataset=al_dataset, num_classes=data.num_classes)
