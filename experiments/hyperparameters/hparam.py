@@ -89,7 +89,7 @@ def main(args):
 
     # Start hyperparameter search
     ray.init()
-    search_space = {"lr": tune.uniform(1e-4, .5), "weight_decay": tune.uniform(0, .1)}
+    search_space = {"lr": tune.uniform(1e-4, .1), "weight_decay": tune.uniform(0, .05)}
 
     objective = tune.with_resources(train, resources={'cpu': args.num_cpus, 'gpu': args.num_gpus})
     objective = tune.with_parameters(objective, args=args, al_dataset=al_dataset, num_classes=data.num_classes)
