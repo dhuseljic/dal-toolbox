@@ -21,7 +21,7 @@ from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
 
 
 def train(config, args, al_dataset, num_classes):
-    seed_everything(args.random_seed)
+    seed_everything(100 + args.random_seed + config['__trial_index__'])
 
     # Train test split
     num_samples = len(al_dataset)
