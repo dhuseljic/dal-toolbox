@@ -21,7 +21,7 @@ from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
 
 
 def train(config, args, al_dataset, num_classes):
-    seed_everything(args.random_seed+config['__trial_index__']+100)
+    seed_everything(args.random_seed)
 
     # Train test split
     num_samples = len(al_dataset)
@@ -41,6 +41,7 @@ def train(config, args, al_dataset, num_classes):
         max_epochs=args.num_epochs,
         callbacks=[MetricLogger(use_print=True)],
         enable_progress_bar=False,
+        fast_dev_run=True
     )
     trainer.fit(model, train_loader, val_dataloaders=val_loader)
     val_stats = trainer.validate(model, val_loader)[0]
@@ -63,9 +64,9 @@ def build_model(args, lr, weight_decay, num_classes):
 
 @hydra.main(version_base=None, config_path="./configs", config_name="hparam")
 def main(args):
+    print(OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
     os.makedirs(args.output_dir, exist_ok=True)
-    print(OmegaConf.to_yaml(args))
 
     # Load data
     if args.dataset == 'CIFAR10':
@@ -91,7 +92,6 @@ def main(args):
     # Start hyperparameter search
     ray.init()
     search_space = {"lr": tune.loguniform(1e-5, .1), "weight_decay": tune.loguniform(1e-5, .1)}
-
     objective = tune.with_resources(train, resources={'cpu': args.num_cpus, 'gpu': args.num_gpus})
     objective = tune.with_parameters(objective, args=args, al_dataset=al_dataset, num_classes=data.num_classes)
     search_alg = OptunaSearch(points_to_evaluate=[{'lr': args.lr, 'weight_decay': args.weight_decay}])
@@ -108,7 +108,8 @@ def main(args):
     best_config = results.get_best_result(metric='val_acc', mode='max').config
     print(f'Training final model using the best possible parameters {best_config}')
     train_loader_all = DataLoader(al_dataset, batch_size=args.train_batch_size, shuffle=True, drop_last=True)
-    model = build_model(args, lr=best_config['lr'], weight_decay=best_config['weight_decay'], num_classes=data.num_classes)
+    model = build_model(args, lr=best_config['lr'],
+                        weight_decay=best_config['weight_decay'], num_classes=data.num_classes)
     trainer = L.Trainer(
         enable_checkpointing=False,
         max_epochs=args.num_epochs,
@@ -130,7 +131,7 @@ def main(args):
 
     result_list = []
     for res in results:
-        result_list.append({ 'res': res.metrics, 'conf': res.config })
+        result_list.append({'res': res.metrics, 'conf': res.config})
 
     print('Saving results.')
     history = {

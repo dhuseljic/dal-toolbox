@@ -1,12 +1,12 @@
 
-queried_indices_json: "/mnt/work/deep_al/results/hyperparameters/experiments/CIFAR10/random/lr0.001_wd0.05/seed1/queried_indices.json"
+queried_indices_json: "/mnt/work/deep_al/results/hyperparameters/experiments/CIFAR10/entropy/lr0.001_wd0.05/seed1/queried_indices.json"
 dataset: CIFAR10
 dataset_path: /mnt/work/deep_al/datasets
 num_epochs: 200
 train_batch_size: 32
 predict_batch_size: 256
 val_split: 0.1
-random_seed: 42
+random_seed: 1
 budget: 4000
 
 # BO params
