@@ -13,13 +13,15 @@ import lightning as L
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from dal_toolbox import datasets
-from dal_toolbox.models.deterministic import DeterministicModel, resnet
+from dal_toolbox.models import deterministic
 from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
 from dal_toolbox.active_learning.data import ActiveLearningDataModule
 from dal_toolbox.active_learning.strategies import random, badge
 from dal_toolbox.utils import seed_everything, is_running_on_slurm
-from dal_toolbox.metrics import Accuracy
+from dal_toolbox import metrics
 from dal_toolbox.models.utils.callbacks import MetricLogger
+
+from dal_toolbox.datasets import activeglae
 
 @hydra.main(version_base=None, config_path="./configs", config_name="al_nlp")
 def main(args):
@@ -40,6 +42,29 @@ def main(args):
         train_batch_size=args.model.batch_size,
         predict_batch_size=args.model.batch_size*4
     )
+
+    if args.al_cycle.init_pool_file is not None: 
+        logging.info('Using initial labeled pool from %s.', args.al_cycle.init_pool_file)
+        with open(args.al_cycle.init_pool_file, 'r', encoding='utf-8') as f:
+            initial_indices = json.load(f)
+        assert len(initial_indices) == args.al_cycle.n_init, 'Number of samples in initial pool file does not match'
+        al_datamodule.update_annotations(initial_indices)
+    else:
+        logging.info('Creating random initial labeled pool with %s samples.', args.al_cycle.n_init)
+        al_datamodule.random_init(n_samples=args.al_cycle.n_init)
+
+    queried_indices['cycle0'] = al_datamodule.labeled_indices
+
+    #Setup Model
+    logging.info('Building model..')
+
+    model = models.deterministic.Bert
+
+
+
+
+
+        
 
 
 def initialize_wandb(args):
@@ -136,47 +161,100 @@ main()
 if __name__ == "__main__":
     main()
 
-
-
 def build_dataset(args):
     if args.dataset.name == 'agnews':
-        data = datasets.AGNews(args.model.name_hf, args.dataset.name_hf)
-
+        data = activeglae.AGNews(
+            model_name=args.model.name_hf,
+            dataset_path=args.dataset.path,
+            val_split=args.dataset.split
+        )
+    
     elif args.dataset.name == 'banks77':
-        pass
+        data = activeglae.Banks77(
+            model_name=args.model.name_hf,
+            dataset_path=args.dataset.path,
+            val_split=args.dataset.split
+        )
 
     elif args.dataset.name == 'dbpedia':
-        pass
+        data = activeglae.DBPedia(
+            model_name=args.model.name_hf,
+            dataset_path=args.dataset.path,
+            val_split=args.dataset.split
+        )
 
     elif args.dataset.name == 'fnc1':
-        pass
-
-    elif args.dataset.name == 'imdb':
-        pass
+        data = activeglae.FNC1(
+            model_name=args.model.name_hf,
+            dataset_path=args.dataset.path,
+            val_split=args.dataset.split
+        )
 
     elif args.dataset.name == 'mnli':
-        pass
+        data = activeglae.MNLI(
+            model_name=args.model.name_hf,
+            dataset_path=args.dataset.path,
+            val_split=args.dataset.split
+        )
 
     elif args.dataset.name == 'qnli':
-        pass
+        data = activeglae.QNLI(
+            model_name=args.model.name_hf,
+            dataset_path=args.dataset.path,
+            val_split=args.dataset.split
+        )
 
     elif args.dataset.name == 'sst2':
-        pass
+        data = activeglae.SST2(
+            model_name=args.model.name_hf,
+            dataset_path=args.dataset.path,
+            val_split=args.dataset.split
+        )
 
     elif args.dataset.name == 'trec6':
-        pass
+        data = activeglae.TREC6(
+            model_name=args.model.name_hf,
+            dataset_path=args.dataset.path,
+            val_split=args.dataset.split
+        )
 
     elif args.dataset.name == 'wikitalk':
-        pass
+        data = activeglae.Wikitalk(
+            model_name=args.model.name_hf,
+            dataset_path=args.dataset.path,
+            val_split=args.dataset.split
+        )
 
     elif args.dataset.name == 'yelp5':
-        pass
+        data = activeglae.Yelp5(
+            model_name=args.model.name_hf,
+            dataset_path=args.dataset.path,
+            val_split=args.dataset.split
+        )
 
     else
         raise NotImplementedError('Dataset not available')
     
     return data 
 
+def build_model(args, **kwargs):
+    num_classes = kwargs['n_classes']
+
+    if args.model.name == 'bert':
+        model = deterministic.bert.BertSequenceClassifier(
+            checkpoint=args.model.name_hf,
+            num_classes=num_classes
+        )
+        model = deterministic.DeterministicAGLAEModel(
+            model=None,
+            loss_fn=None, 
+            optimizer=None,
+            lr_scheduler=None,
+            train_metrics={'train_acc': metrics.Accuracy()},
+            val_metrics=None
+        )
+        
+    elif args.model.name ==
 #%%
 
     # if args.al_cycle.init_pool_file is not None:

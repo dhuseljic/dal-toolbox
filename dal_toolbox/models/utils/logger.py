@@ -1,7 +1,7 @@
 import logging
 from lightning.pytorch.loggers.logger import Logger
 from lightning.pytorch.utilities import rank_zero_only
-
+#TODO: Depcrepateded
 
 class BasicLogger(Logger):
     """A simple logger that can run on slurm without using TQDM."""

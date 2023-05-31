@@ -5,7 +5,36 @@ import torch.nn.functional as F
 from ..utils.base import BaseModule
 from ..utils.mixup import mixup
 
+class DeterministicAGLAEModel(BaseModule):
 
+    def training_tep(self, batch):
+        inputs, targets = batch
+
+        logits = self(inputs['input_ids'], inputs['attention_mask'])
+        loss = self.loss_fn(logits, targets)
+        self.log('train_loss', loss, prog_bar=True)
+
+        self.log_train_metrics(logits, targets)
+        return loss
+    
+    def validation_step(self, batch, batch_idx):
+        inputs, targets = batch
+
+        logits = self(inputs['input_ids'], inputs['attention_mask'])
+        loss = self.loss_fn(logits, targets)
+        self.log('val_loss', loss, prog_bar=True)
+        self.log_val_metrics(logits, targets)
+        return loss
+    
+    def predict_step(self, batch, batch_idx, dataloader_idx=0):
+        inputs, targets = batch
+
+        logits = self(inputs['input_ids'], inputs['attention_mask'])
+        logits = self._gather(logits)
+        targets = self._gather(targets)
+        return logits, targets
+    
+    
 class DeterministicModel(BaseModule):
 
     def training_step(self, batch):
