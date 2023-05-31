@@ -20,20 +20,17 @@ from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
 
 
-def train(config, args, al_dataset, val_dataset, num_classes):
+def train(config, args, al_dataset, num_classes):
     seed_everything(100 + args.random_seed + config['__trial_index__'])
 
-    # # Train test split
-    # num_samples = len(al_dataset)
-    # num_samples_val = int(args.val_split * len(al_dataset))
-    # train_ds, val_ds = random_split(al_dataset, lengths=[num_samples - num_samples_val, num_samples_val])
-
-    # train_ds = Subset(al_dataset, indices=train_indices)
-    # val_ds = Subset(al_dataset, indices=val_indices)
+    # Train test split
+    num_samples = len(al_dataset)
+    num_samples_val = int(args.val_split * len(al_dataset))
+    train_ds, val_ds = random_split(al_dataset, lengths=[num_samples - num_samples_val, num_samples_val])
 
     # Create dataloaders
-    train_loader = DataLoader(al_dataset, batch_size=args.train_batch_size, shuffle=True, drop_last=True)
-    val_loader = DataLoader(val_dataset, batch_size=args.predict_batch_size, shuffle=False)
+    train_loader = DataLoader(train_ds, batch_size=args.train_batch_size, shuffle=True, drop_last=True)
+    val_loader = DataLoader(val_ds, batch_size=args.predict_batch_size, shuffle=False)
 
     # Create model
     model = build_model(args, lr=config['lr'], weight_decay=config['weight_decay'], num_classes=num_classes)
@@ -97,8 +94,7 @@ def main(args):
     ray.init()
     search_space = {"lr": tune.loguniform(1e-5, .1), "weight_decay": tune.loguniform(1e-5, .1)}
     objective = tune.with_resources(train, resources={'cpu': args.num_cpus, 'gpu': args.num_gpus})
-    objective = tune.with_parameters(objective, args=args, al_dataset=al_dataset,
-                                     val_dataset=data.val_dataset, num_classes=data.num_classes)
+    objective = tune.with_parameters(objective, args=args, al_dataset=al_dataset, num_classes=data.num_classes)
     search_alg = OptunaSearch(points_to_evaluate=[{'lr': args.lr, 'weight_decay': args.weight_decay}])
     search_alg = Repeater(search_alg, repeat=args.num_reps)
     tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=args.num_opt_samples *
