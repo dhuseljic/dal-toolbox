@@ -9,9 +9,9 @@ import ray
 import ray.tune as tune
 
 from omegaconf import OmegaConf
-from ray.tune.search import Repeater
 from ray.tune.search.optuna import OptunaSearch
-from torch.utils.data import Subset, random_split, DataLoader
+from torch.utils.data import Subset, DataLoader
+from sklearn.model_selection import KFold
 from dal_toolbox import datasets
 from dal_toolbox import models
 from dal_toolbox import metrics
@@ -21,32 +21,40 @@ from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
 
 
 def train(config, args, al_dataset, num_classes):
-    seed_everything(100 + args.random_seed + config['__trial_index__'])
+    seed_everything(100 + args.random_seed)
 
-    # Train test split
-    num_samples = len(al_dataset)
-    num_samples_val = int(args.val_split * len(al_dataset))
-    train_ds, val_ds = random_split(al_dataset, lengths=[num_samples - num_samples_val, num_samples_val])
+    # # Train test split
+    # num_samples = len(al_dataset)
+    # num_samples_val = int(args.val_split * len(al_dataset))
+    # train_ds, val_ds = random_split(al_dataset, lengths=[num_samples - num_samples_val, num_samples_val])
 
-    # Create dataloaders
-    train_loader = DataLoader(train_ds, batch_size=args.train_batch_size, shuffle=True, drop_last=True)
-    val_loader = DataLoader(val_ds, batch_size=args.predict_batch_size, shuffle=False)
+    all_val_stats = []
+    indices = range(len(al_dataset))
+    kf = KFold(n_splits=args.num_folds)
+    for train_indices, val_indices in kf.split(indices):
+        train_ds = Subset(al_dataset, indices=train_indices)
+        val_ds = Subset(al_dataset, indices=val_indices)
 
-    # Create model
-    model = build_model(args, lr=config['lr'], weight_decay=config['weight_decay'], num_classes=num_classes)
+        # Create dataloaders
+        train_loader = DataLoader(train_ds, batch_size=args.train_batch_size, shuffle=True, drop_last=True)
+        val_loader = DataLoader(val_ds, batch_size=args.predict_batch_size, shuffle=False)
 
-    # Train model
-    trainer = L.Trainer(
-        enable_checkpointing=False,
-        max_epochs=args.num_epochs,
-        callbacks=[MetricLogger(use_print=True)],
-        enable_progress_bar=False,
-        default_root_dir=args.output_dir,
-    )
-    trainer.fit(model, train_loader, val_dataloaders=val_loader)
-    val_stats = trainer.validate(model, val_loader)[0]
+        # Create model
+        model = build_model(args, lr=config['lr'], weight_decay=config['weight_decay'], num_classes=num_classes)
 
-    return val_stats
+        # Train model
+        trainer = L.Trainer(
+            enable_checkpointing=False,
+            max_epochs=args.num_epochs,
+            callbacks=[MetricLogger(use_print=True)],
+            enable_progress_bar=False,
+            default_root_dir=args.output_dir,
+        )
+        trainer.fit(model, train_loader, val_dataloaders=val_loader)
+        val_stats = trainer.validate(model, val_loader)[0]
+        all_val_stats.append(val_stats)
+    avg_val_stats = {key: sum(d[key] for d in all_val_stats) / len(all_val_stats) for key in all_val_stats[0]}
+    return avg_val_stats
 
 
 def build_model(args, lr, weight_decay, num_classes):
@@ -96,9 +104,7 @@ def main(args):
     objective = tune.with_resources(train, resources={'cpu': args.num_cpus, 'gpu': args.num_gpus})
     objective = tune.with_parameters(objective, args=args, al_dataset=al_dataset, num_classes=data.num_classes)
     search_alg = OptunaSearch(points_to_evaluate=[{'lr': args.lr, 'weight_decay': args.weight_decay}])
-    search_alg = Repeater(search_alg, repeat=args.num_reps)
-    tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=args.num_opt_samples *
-                                  args.num_reps, metric="val_acc", mode="max")
+    tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=args.num_opt_samples, metric="val_acc", mode="max")
 
     tuner = tune.Tuner(objective, param_space=search_space, tune_config=tune_config)
     results = tuner.fit()

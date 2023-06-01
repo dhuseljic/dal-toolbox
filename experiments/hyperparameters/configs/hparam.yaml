@@ -11,7 +11,7 @@ budget: 4000
 
 # BO params
 num_opt_samples: 50
-num_reps: 3
+num_folds: 3
 num_cpus: 4
 num_gpus: 1
 
