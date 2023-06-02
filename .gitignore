@@ -8,9 +8,12 @@ results/
 outputs/
 wandb/
 lightning_logs/
+venv/
+build/
 
 *.pdf
 *.png
 *.jpg
 *.pth
+*.ipynb_checkpoints
 .dev
