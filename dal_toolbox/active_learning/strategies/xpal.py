@@ -1,11 +1,13 @@
+# https://github.com/dakot/probal/blob/master/src/query_strategies/expected_probabilistic_active_learning.py
+
 import numpy as np
 
-from src.base.query_strategy import QueryStrategy
+from .query import Query
 
 from sklearn.utils import check_array
 
 
-class XPAL(QueryStrategy):
+class XPAL(Query):
     """XPAL
     The expected probabilistic active learning (xPAL) strategy.
     Parameters
@@ -46,8 +48,11 @@ class XPAL(QueryStrategy):
         Random state for annotator selection.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, subset_size=None, **kwargs):
         super().__init__(data_set=kwargs.pop('data_set', None), **kwargs)
+
+        # TODO Would it not make sense to include this in the main Query class, since this is the same for all queries
+        self.subset_size = subset_size
 
         self.n_classes_ = kwargs.pop('n_classes', None)
         if not isinstance(self.n_classes_, int) or self.n_classes_ < 2:
