@@ -16,8 +16,8 @@ model=resnet18
 dataset=CIFAR10
 
 al_strat=coreset
-n_init=100
-acq_size=100
+n_init=250
+acq_size=250
 n_acq=9
 budget=$((n_init + n_acq * acq_size))
 random_seed=$SLURM_ARRAY_TASK_ID

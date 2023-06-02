@@ -15,7 +15,7 @@ cd ~/dal-toolbox/experiments/active_learning/
 model=resnet18
 dataset=CIFAR10
 
-al_strat=coreset
+al_strat=entropy
 n_init=100
 acq_size=100
 n_acq=9

@@ -13,9 +13,9 @@ source /mnt/stud/home/ynagel/dal-toolbox/venv/bin/activate
 cd ~/dal-toolbox/experiments/active_learning/
 
 model=resnet18
-dataset=CIFAR10
+dataset=SVHN
 
-al_strat=coreset
+al_strat=badge
 n_init=100
 acq_size=100
 n_acq=9

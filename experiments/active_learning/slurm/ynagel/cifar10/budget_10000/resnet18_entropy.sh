@@ -15,9 +15,9 @@ cd ~/dal-toolbox/experiments/active_learning/
 model=resnet18
 dataset=CIFAR10
 
-al_strat=coreset
-n_init=100
-acq_size=100
+al_strat=entropy
+n_init=1000
+acq_size=1000
 n_acq=9
 budget=$((n_init + n_acq * acq_size))
 random_seed=$SLURM_ARRAY_TASK_ID

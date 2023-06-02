@@ -13,7 +13,7 @@ source /mnt/stud/home/ynagel/dal-toolbox/venv/bin/activate
 cd ~/dal-toolbox/experiments/active_learning/
 
 model=resnet18
-dataset=CIFAR10
+dataset=CIFAR100
 
 al_strat=coreset
 n_init=100
