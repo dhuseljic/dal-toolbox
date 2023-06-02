@@ -29,9 +29,11 @@ def train(config, args, al_dataset, num_classes):
     # train_ds, val_ds = random_split(al_dataset, lengths=[num_samples - num_samples_val, num_samples_val])
 
     all_val_stats = []
-    indices = range(len(al_dataset))
+    indices = torch.randperm(len(al_dataset))
     kf = KFold(n_splits=args.num_folds)
     for train_indices, val_indices in kf.split(indices):
+        train_indices = indices[train_indices]
+        val_indices = indices[val_indices]
         train_ds = Subset(al_dataset, indices=train_indices)
         val_ds = Subset(al_dataset, indices=val_indices)
 
@@ -49,6 +51,7 @@ def train(config, args, al_dataset, num_classes):
             callbacks=[MetricLogger(use_print=True)],
             enable_progress_bar=False,
             default_root_dir=args.output_dir,
+            fast_dev_run=args.fast_dev_run,
         )
         trainer.fit(model, train_loader, val_dataloaders=val_loader)
         val_stats = trainer.validate(model, val_loader)[0]

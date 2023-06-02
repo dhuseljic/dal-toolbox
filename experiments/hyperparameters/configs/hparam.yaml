@@ -19,6 +19,7 @@ num_gpus: 1
 lr: null
 weight_decay: null
 
+fast_dev_run: False
 output_dir: ./output/
 hydra:
   run:
