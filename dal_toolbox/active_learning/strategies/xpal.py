@@ -48,27 +48,22 @@ class XPAL(Query):
         Random state for annotator selection.
     """
 
-    def __init__(self, subset_size=None, **kwargs):
-        super().__init__(data_set=kwargs.pop('data_set', None), **kwargs)
+    def __init__(self, n_classes, alpha_c=1, alpha_x=1, subset_size=None, random_seed=None):
+        super().__init__(random_seed)  # TODO Random seed is not set for all strategies?
 
         # TODO Would it not make sense to include this in the main Query class, since this is the same for all queries
         self.subset_size = subset_size
 
-        self.n_classes_ = kwargs.pop('n_classes', None)
+        self.n_classes_ = n_classes  # TODO Can possibly be inferred from data later
         if not isinstance(self.n_classes_, int) or self.n_classes_ < 2:
             raise TypeError(
                 "n_classes must be an integer and at least 2"
             )
 
-        self.S_ = check_array(kwargs.pop('S', np.eye(len(self.data_set_))))
-        if np.size(self.S_, axis=0) != np.size(self.S_, axis=1) or np.size(self.S_, axis=0) != len(self.data_set_):
-            raise ValueError(
-                "S must be a squared matrix where the number of rows is equal to the number of samples"
-            )
+        self.S_ = None  # TODO Calculate later in query method
 
-        self.alpha_c_ = kwargs.pop('alpha_c', 1)
-        self.alpha_x_ = kwargs.pop('alpha_x', 1)
-        print(self.alpha_c_)
+        self.alpha_c_ = alpha_c
+        self.alpha_x_ = alpha_x
 
     def compute_scores(self, unlabeled_indices):
         """Compute score for each unlabeled sample. Score is to be maximized.
