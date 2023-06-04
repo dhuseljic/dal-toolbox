@@ -42,6 +42,7 @@ python -u hparam.py \
     dataset_path=$dataset_path \
     num_cpus=4 \
     num_gpus=0.25 \
+    num_folds=10 \
     budget=${budget} \
     lr=${learning_rate} \
     weight_decay=${weight_decay}
