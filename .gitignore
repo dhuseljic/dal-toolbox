@@ -17,3 +17,5 @@ build/
 *.pth
 *.ipynb_checkpoints
 .dev
+
+!experiments/active_learning/notebooks/learning_curves/**
