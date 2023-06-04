@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=hparam_opt
 #SBATCH --partition=main
-#SBATCH --gres=gpu:2
+#SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=32
 #SBATCH --ntasks=1
 #SBATCH --mem=128GB
@@ -28,7 +28,7 @@ weight_decay=${weight_decays[$index % 4]}
 budget=${budgets[$index / 4 % 2]}
 random_seed=${random_seeds[$index / 8]}
 
-al_strategy=entropy
+al_strategy=random
 dataset=CIFAR10
 dataset_path=/mnt/work/deep_al/datasets
 queried_indices_json=/mnt/work/deep_al/results/hyperparameters/experiments/${dataset}/${al_strategy}/lr${learning_rate}_wd${weight_decay}/seed${random_seed}/queried_indices.json
