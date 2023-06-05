@@ -13,7 +13,7 @@ class DeterministicModel(BaseModule):
 
         logits = self(inputs)
         loss = self.loss_fn(logits, targets)
-        self.log('train_loss', loss, prog_bar=True)
+        self.log('train_loss', loss, prog_bar=True, batch_size=len(targets))
 
         self.log_train_metrics(logits, targets)
         return loss
@@ -23,7 +23,7 @@ class DeterministicModel(BaseModule):
 
         logits = self(inputs)
         loss = self.loss_fn(logits, targets)
-        self.log('val_loss', loss, prog_bar=True)
+        self.log('val_loss', loss, prog_bar=True, batch_size=len(targets))
 
         self.log_val_metrics(logits, targets)
         return loss
