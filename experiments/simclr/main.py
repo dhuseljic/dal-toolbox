@@ -12,6 +12,7 @@ import torch
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 
 from dal_toolbox.models.deterministic import resnet
+from dal_toolbox.models.deterministic.simclr import InfoNCELoss
 
 
 @hydra.main(version_base=None, config_path="./config", config_name="config")
@@ -48,10 +49,10 @@ def main(args):
     # Create a Model Module
     model = simclr.SimCLR(
         model=model,
+        loss_fn=InfoNCELoss(args.model.temperature),
         optimizer=optimizer,
         lr_scheduler=lr_scheduler,
         hidden_dim=args.model.hidden_dim,
-        temperature=args.model.temperature,
     )
 
     # Create a Trainer Module
@@ -60,7 +61,8 @@ def main(args):
         accelerator="auto",
         max_epochs=args.model.n_epochs,
         callbacks=[
-            ModelCheckpoint(save_weights_only=False, mode="max", monitor="val/loss", save_top_k=3   ),
+            # TODO Re-enable when logging works
+            # ModelCheckpoint(save_weights_only=False, mode="max", monitor="val/loss", save_top_k=3),
             LearningRateMonitor("epoch"),
         ],
     )
