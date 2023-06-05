@@ -26,24 +26,10 @@ class InfoNCELoss(nn.Module):
         pos_mask = self_mask.roll(shifts=cos_sim.shape[0] // 2, dims=0)
         # InfoNCE loss
         cos_sim = cos_sim / self.temperature
-        nll = -cos_sim[pos_mask] + torch.logsumexp(cos_sim, dim=-1)
-        nll = nll.mean()
+        infoNCE = -cos_sim[pos_mask] + torch.logsumexp(cos_sim, dim=-1)
+        infoNCE = infoNCE.mean()
 
-        # TODO Figure out where logging goes
-        # Logging loss
-        # self.log(mode + "/loss", nll, sync_dist=True)
-        # Get ranking position of positive example
-        # comb_sim = torch.cat(
-        #     [cos_sim[pos_mask][:, None], cos_sim.masked_fill(pos_mask, -9e15)],  # First position positive example
-        #    dim=-1,
-        # )
-        # sim_argsort = comb_sim.argsort(dim=-1, descending=True).argmin(dim=-1)
-        # Logging ranking metrics
-        # self.log(mode + "/acc_top1", (sim_argsort == 0).float().mean(), sync_dist=True)
-        # self.log(mode + "/acc_top5", (sim_argsort < 5).float().mean(), sync_dist=True)
-        # self.log(mode + "/acc_mean_pos", 1 + sim_argsort.float().mean(), sync_dist=True)
-
-        return nll
+        return infoNCE
 
 
 class SimCLR(DeterministicModel):

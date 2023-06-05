@@ -1,17 +1,16 @@
-import hydra
 import os
 
-from omegaconf import OmegaConf
-from dal_toolbox.models.deterministic import simclr 
-import torchvision
-from torchvision import transforms
+import hydra
 import lightning as L
-from torch.utils.data import DataLoader
 import torch
-
+import torchvision
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
+from omegaconf import OmegaConf
+from torch.utils.data import DataLoader
+from torchvision import transforms
 
 from dal_toolbox.models.deterministic import resnet
+from dal_toolbox.models.deterministic import simclr
 from dal_toolbox.models.deterministic.simclr import InfoNCELoss
 
 
@@ -33,17 +32,17 @@ def main(args):
         random_seed=args.random_seed
     )
 
-    model = resnet.ResNet18(4*args.model.hidden_dim) # num_classes is the output size of the last linear layer
+    model = resnet.ResNet18(4 * args.model.hidden_dim)  # num_classes is the output size of the last linear layer
     optimizer = torch.optim.AdamW(
-        params = model.parameters(),
-        lr = args.model.optimizer.lr,
-        weight_decay = args.model.optimizer.weight_decay
+        params=model.parameters(),
+        lr=args.model.optimizer.lr,
+        weight_decay=args.model.optimizer.weight_decay
     )
 
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer = optimizer,
-        T_max = args.model.n_epochs,
-        eta_min = args.model.optimizer.lr / 50
+        optimizer=optimizer,
+        T_max=args.model.n_epochs,
+        eta_min=args.model.optimizer.lr / 50
     )
 
     # Create a Model Module
@@ -61,8 +60,7 @@ def main(args):
         accelerator="auto",
         max_epochs=args.model.n_epochs,
         callbacks=[
-            # TODO Re-enable when logging works
-            # ModelCheckpoint(save_weights_only=False, mode="max", monitor="val/loss", save_top_k=3),
+            ModelCheckpoint(save_weights_only=False, mode="max", monitor="val_loss", save_top_k=3),
             LearningRateMonitor("epoch"),
         ],
     )
@@ -82,13 +80,13 @@ class ContrastiveTransformations:
 
 class CIFAR10DataModule(L.LightningDataModule):
     def __init__(self,
-                ds_path: str = "./data", 
-                train_batch_size: int = 256, 
-                val_batch_size: int = 128, 
-                n_workers: int = 1,  
-                n_epochs: int = None, 
-                random_seed: int = 42
-            ):
+                 ds_path: str = "./data",
+                 train_batch_size: int = 256,
+                 val_batch_size: int = 128,
+                 n_workers: int = 1,
+                 n_epochs: int = None,
+                 random_seed: int = 42
+                 ):
         super().__init__()
         self.save_hyperparameters()
 
@@ -97,16 +95,19 @@ class CIFAR10DataModule(L.LightningDataModule):
         self.val_ds = self.build_cifar10('test_contrast', self.hparams.ds_path)
 
     def train_dataloader(self):
-        return DataLoader(self.train_ds, batch_size=self.hparams.train_batch_size, shuffle=True, num_workers=self.hparams.n_workers)
+        return DataLoader(self.train_ds, batch_size=self.hparams.train_batch_size, shuffle=True,
+                          num_workers=self.hparams.n_workers)
 
     def val_dataloader(self):
         return DataLoader(self.val_ds, batch_size=self.hparams.val_batch_size, num_workers=self.hparams.n_workers)
-    
-    def build_cifar10(self, split, ds_path, mean=(0.4914, 0.4822, 0.4465), std=(0.247, 0.243, 0.262), return_info=False):
+
+    def build_cifar10(self, split, ds_path, mean=(0.4914, 0.4822, 0.4465), std=(0.247, 0.243, 0.262),
+                      return_info=False):
         contrast_transforms = transforms.Compose([
             transforms.RandomHorizontalFlip(),
             transforms.RandomResizedCrop(size=32),
-            transforms.RandomApply([transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.1)], p=0.8),
+            transforms.RandomApply([transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.1)],
+                                   p=0.8),
             transforms.RandomGrayscale(p=0.2),
             transforms.GaussianBlur(kernel_size=9),
             transforms.ToTensor(),
@@ -114,9 +115,11 @@ class CIFAR10DataModule(L.LightningDataModule):
         ])
 
         if split == 'train_contrast':
-            ds = torchvision.datasets.CIFAR10(ds_path, train=True, download=True, transform=ContrastiveTransformations(contrast_transforms, n_views=2))
+            ds = torchvision.datasets.CIFAR10(ds_path, train=True, download=True,
+                                              transform=ContrastiveTransformations(contrast_transforms, n_views=2))
         elif split == 'test_contrast':
-            ds = torchvision.datasets.CIFAR10(ds_path, train=False, download=True, transform=ContrastiveTransformations(contrast_transforms, n_views=2))
+            ds = torchvision.datasets.CIFAR10(ds_path, train=False, download=True,
+                                              transform=ContrastiveTransformations(contrast_transforms, n_views=2))
 
         if return_info:
             ds_info = {'n_classes': 10, 'mean': mean, 'std': std}
