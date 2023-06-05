@@ -1,0 +1,8 @@
+name: qnli
+name_hf: qnli
+n_classes: 2
+train_subset: 10000
+test_subset: 0
+
+#eval: 5.5k
+#train: 100k

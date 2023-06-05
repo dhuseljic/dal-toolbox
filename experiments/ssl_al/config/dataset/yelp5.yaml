@@ -1,0 +1,8 @@
+name: yelp5
+name_hf: yelp_review_full
+n_classes: 5
+
+train_subset: 10000
+test_subset: 0
+#650k training
+#50k testing

@@ -1,0 +1,7 @@
+name: sst2
+name_hf: sst2
+n_classes: 2
+train_subset: 10000
+test_subset: 0
+
+# test subset: 872

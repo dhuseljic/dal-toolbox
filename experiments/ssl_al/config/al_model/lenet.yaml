@@ -1,0 +1,7 @@
+name: lenet_deterministic
+n_epochs: 200
+batch_size: 64
+optimizer:
+  lr: 0.1
+  weight_decay: 1e-6
+  momentum: 0.9

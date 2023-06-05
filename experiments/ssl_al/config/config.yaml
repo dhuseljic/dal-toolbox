@@ -1,0 +1,30 @@
+defaults:
+  - _self_
+  - ssl_model: simclr
+  - al_model: resnet18
+  - dataset: CIFAR10
+  - al_strategy: random
+
+al_cycle:
+  n_init: 100
+  acq_size: 100
+  n_acq: 9
+  cold_start: True
+
+dataset_path: ./data/
+random_seed: 42
+ssl_val_interval: 5
+al_val_interval: 25
+n_cpus: 4
+
+
+# Define output dir
+output_dir: "./output/"
+cp_path: "./output"
+hydra:
+  run:
+    dir: ${output_dir}
+  job_logging:
+    handlers:
+      file:
+        mode: w

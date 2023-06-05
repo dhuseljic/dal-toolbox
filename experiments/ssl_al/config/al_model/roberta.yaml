@@ -1,0 +1,10 @@
+name: roberta
+name_hf: roberta-base
+n_epochs: 5
+batch_size: 20
+optimizer:
+  name: AdamW
+  lr: 5e-5
+  lr_scheduler: linear_warmup
+  warmup_ratio: 0.05
+  weight_decay: 0.01
