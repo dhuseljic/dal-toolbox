@@ -119,6 +119,7 @@ def main(args):
             LearningRateMonitor("epoch"),
         ],
         check_val_every_n_epoch=args.ssl_val_interval,
+        enable_progress_bar=is_running_on_slurm() is False,
     )
 
     logger.info("Training SSL")
@@ -208,7 +209,8 @@ def main(args):
             default_root_dir=args.output_dir,
             enable_progress_bar=is_running_on_slurm() is False,
             check_val_every_n_epoch=args.al_val_interval,
-            enable_model_summary=False,
+            enable_model_summary=i_acq == 0,
+            num_sanity_val_steps=0 if i_acq > 0 else 2,
         )
         trainer.fit(model, al_datamodule)
 
