@@ -32,21 +32,33 @@ def build_ssl(name, args):
         raise NotImplementedError(f"{name} is not implemented!")
 
 
-def build_simclr(args) -> (nn.Module, nn.Module):
-    if args.ssl_model.encoder == 'resnet18_deterministic':
+def build_encoder(name, return_output_dim=False):
+    if name == 'resnet18_deterministic':
         encoder = deterministic.resnet.ResNet18(num_classes=1)  # Linear layer will be replaced
         encoder.linear = nn.Identity()  # Replace layer after max pool
 
         encoder_output_dim = 512
     else:
-        raise NotImplementedError(f"{args.ssl_model.encoder} is not implemented!")
+        raise NotImplementedError(f"{name} is not implemented!")
 
-    if args.ssl_model.projector == 'mlp':
-        projector = nn.Sequential(nn.Linear(encoder_output_dim, 4 * args.ssl_model.projector_dim),
+    if return_output_dim:
+        return encoder, encoder_output_dim
+    return encoder
+
+
+def build_projector(name, input_dim, output_dim):
+    if name == 'mlp':
+        projector = nn.Sequential(nn.Linear(input_dim, output_dim),
                                   nn.ReLU(),
-                                  nn.Linear(4 * args.ssl_model.projector_dim, args.ssl_model.projector_dim))
+                                  nn.Linear(output_dim, output_dim))
     else:
-        raise NotImplementedError(f"{args.ssl_model.projector} is not implemented!")
+        raise NotImplementedError(f"{name} is not implemented!")
+    return projector
+
+
+def build_simclr(args) -> (nn.Module, nn.Module):
+    encoder, encoder_output_dim = build_encoder(args.ssl_model.encoder, True)
+    projector = build_projector(args.ssl_model.projector, encoder_output_dim, args.ssl_model.projector_dim)
 
     optimizer = torch.optim.AdamW(
         params=list(encoder.parameters()) + list(projector.parameters()),
@@ -103,7 +115,7 @@ def main(args):
         accelerator="auto",
         max_epochs=args.ssl_model.n_epochs,
         callbacks=[
-            ModelCheckpoint(save_weights_only=False, mode="max", monitor="val_loss", save_top_k=1),
+            ModelCheckpoint(save_weights_only=False, mode="min", monitor="val_loss", every_n_epochs=1),
             LearningRateMonitor("epoch"),
         ],
         check_val_every_n_epoch=args.ssl_val_interval,
@@ -134,19 +146,21 @@ def main(args):
     al_datamodule.random_init(n_samples=args.al_cycle.n_init)
     queried_indices['cycle0'] = al_datamodule.labeled_indices
 
-    # TODO Loading the best model
-    # model = simclr.SimCLR.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
-    model = simclr.SimCLR.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
+    logger.info("Preparing AL model.")
+    # Load best performing SSL model
+    encoder, output_dim = build_encoder(args.ssl_model.encoder, True)
+    projector = build_projector(args.ssl_model.projector, output_dim, args.ssl_model.projector_dim)
+    model = simclr.SimCLR.load_from_checkpoint(trainer.checkpoint_callback.best_model_path,
+                                               encoder=encoder, projector=projector)
 
     # Splitting off projection head
-    output_dim = model.encoder_output_dim
     num_classes = data.num_classes
     encoder = model.encoder
     encoder.num_classes = data.num_classes
 
     # Freeze encoder
     for name, p in encoder.named_parameters():
-            p.requires_grad = False
+        p.requires_grad = False
 
     head = nn.Linear(output_dim, num_classes)
     model = nn.Sequential(encoder, head)
