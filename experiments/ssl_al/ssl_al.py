@@ -25,6 +25,53 @@ from dal_toolbox.utils import is_running_on_slurm
 from experiments.active_learning.active_learning import build_al_strategy
 
 
+def build_ssl(name, args):
+    if name == 'simclr':
+        return build_simclr(args)
+    else:
+        raise NotImplementedError(f"{name} is not implemented!")
+
+
+def build_simclr(args) -> (nn.Module, nn.Module):
+    if args.ssl_model.encoder == 'resnet18_deterministic':
+        encoder = deterministic.resnet.ResNet18(num_classes=1)  # Linear layer will be replaced
+        encoder.linear = nn.Identity()  # Replace layer after max pool
+
+        encoder_output_dim = 512
+    else:
+        raise NotImplementedError(f"{args.ssl_model.encoder} is not implemented!")
+
+    if args.ssl_model.projector == 'mlp':
+        projector = nn.Sequential(nn.Linear(encoder_output_dim, 4 * args.ssl_model.projector_dim),
+                                  nn.ReLU(),
+                                  nn.Linear(4 * args.ssl_model.projector_dim, args.ssl_model.projector_dim))
+    else:
+        raise NotImplementedError(f"{args.ssl_model.projector} is not implemented!")
+
+    optimizer = torch.optim.AdamW(
+        params=list(encoder.parameters()) + list(projector.parameters()),
+        lr=args.ssl_model.optimizer.lr,
+        weight_decay=args.ssl_model.optimizer.weight_decay
+    )
+
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer=optimizer,
+        T_max=args.ssl_model.n_epochs,
+        eta_min=args.ssl_model.optimizer.lr / 50
+    )
+
+    model = simclr.SimCLR(
+        encoder=encoder,
+        projector=projector,
+        loss_fn=InfoNCELoss(args.ssl_model.temperature),
+        optimizer=optimizer,
+        lr_scheduler=lr_scheduler,
+    )
+    model.encoder_output_dim = encoder_output_dim
+
+    return model
+
+
 @hydra.main(version_base=None, config_path="../ssl_al/config", config_name="config")
 def main(args):
     logger = logging.getLogger(__name__)
@@ -48,28 +95,7 @@ def main(args):
         random_seed=args.random_seed
     )
 
-    # TODO Make flexible
-    model = deterministic.resnet.ResNet18(num_classes=4 * args.ssl_model.hidden_dim) # num_classes is the output size of the last linear layer
-    optimizer = torch.optim.AdamW(
-        params=model.parameters(),
-        lr=args.ssl_model.optimizer.lr,
-        weight_decay=args.ssl_model.optimizer.weight_decay
-    )
-
-    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer=optimizer,
-        T_max=args.ssl_model.n_epochs,
-        eta_min=args.ssl_model.optimizer.lr / 50
-    )
-
-    # Create a Model Module
-    model = simclr.SimCLR(
-        model=model,
-        loss_fn=InfoNCELoss(args.ssl_model.temperature),
-        optimizer=optimizer,
-        lr_scheduler=lr_scheduler,
-        hidden_dim=args.ssl_model.hidden_dim,
-    )
+    model = build_ssl(args.ssl_model.name, args)
 
     # Create a Trainer Module
     trainer = L.Trainer(
@@ -110,15 +136,20 @@ def main(args):
 
     # TODO Loading the best model
     # model = simclr.SimCLR.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
+    model = simclr.SimCLR.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
 
     # Splitting off projection head
-    model = model.model
-    for name, p in model.named_parameters():
-        if not "linear" in name:
-            p.requires_grad = False # TODO Make adjustable
+    output_dim = model.encoder_output_dim
+    num_classes = data.num_classes
+    encoder = model.encoder
+    encoder.num_classes = data.num_classes
 
-    model.linear = nn.Linear(512 * model.block.expansion, data.num_classes)
-    model.num_classes = data.num_classes
+    # Freeze encoder
+    for name, p in encoder.named_parameters():
+            p.requires_grad = False
+
+    head = nn.Linear(output_dim, num_classes)
+    model = nn.Sequential(encoder, head)
 
     optimizer = torch.optim.SGD(model.parameters(), **args.al_model.optimizer)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.al_model.num_epochs)

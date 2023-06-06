@@ -35,23 +35,21 @@ class InfoNCELoss(nn.Module):
 class SimCLR(DeterministicModel):
     def __init__(
             self,
-            model,
+            encoder,
+            projector,
             loss_fn: nn.Module = InfoNCELoss(),
             optimizer: torch.optim.Optimizer = None,
             lr_scheduler: torch.optim.lr_scheduler.LRScheduler = None,
-            hidden_dim: int = 128,
             train_metrics: dict = None,
             val_metrics: dict = None,
     ):
+        model = nn.Sequential(encoder, projector)
+
         super().__init__(model=model, loss_fn=loss_fn, optimizer=optimizer, lr_scheduler=lr_scheduler,
                          train_metrics=train_metrics, val_metrics=val_metrics)
 
-        # The MLP for g(.) consists of Linear->ReLU->Linear
-        self.model.linear = nn.Sequential(
-            self.model.linear,  # Linear(ResNet output, 4*hidden_dim)
-            nn.ReLU(inplace=True),
-            nn.Linear(4 * hidden_dim, hidden_dim),
-        )
+        self.encoder = encoder
+        self.projector = projector
 
     def training_step(self, batch):
         batch[0] = torch.cat(batch[0], dim=0)
