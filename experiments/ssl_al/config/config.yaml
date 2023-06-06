@@ -15,7 +15,7 @@ dataset_path: ./data/
 random_seed: 42
 ssl_val_interval: 5
 al_val_interval: 25
-n_cpus: 4
+n_cpus: 16
 
 
 # Define output dir

@@ -1,10 +1,10 @@
 name: simclr
 hidden_dim: 128
-temperature: 0.5
-n_epochs: 100
+temperature: 0.07
+n_epochs: 500
 
-train_batch_size: 1024
+train_batch_size: 256
 val_batch_size: 1024
 optimizer:
-  lr: 0.3
+  lr: 5e-4
   weight_decay: 1e-4

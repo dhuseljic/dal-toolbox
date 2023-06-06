@@ -52,7 +52,7 @@ def main(args):
     model = deterministic.resnet.ResNet18(num_classes=4 * args.ssl_model.hidden_dim) # num_classes is the output size of the last linear layer
     optimizer = torch.optim.AdamW(
         params=model.parameters(),
-        lr=args.ssl_model.optimizer.lr * args.ssl_model.train_batch_size/256,
+        lr=args.ssl_model.optimizer.lr,
         weight_decay=args.ssl_model.optimizer.weight_decay
     )
 
