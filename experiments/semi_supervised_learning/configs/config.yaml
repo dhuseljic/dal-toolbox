@@ -1,5 +1,5 @@
 defaults:
-  - model: wideresnet282
+  - model: resnet18
   - ssl_algorithm: pseudo_labels
 
 dataset: CIFAR10

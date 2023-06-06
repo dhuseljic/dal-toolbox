@@ -206,7 +206,7 @@ class DeterministicPseudoLabelTrainer(DeterministicTrainer):
             # Calculate Loss
             loss_l = self.criterion(logits_l, y_l)
             loss_u = torch.mean(self.ce_loss(logits_u, pseudo_label) * mask)
-            loss = loss_l + self.unsup_warmup * self.lambda_u * loss_u
+            loss = loss_l + self.unsup_warmup * self.lambda_u * loss_u # BUG: not using unsup warmup factor
 
             # Backpropagation and Lr-Scheduler-Step
             self.optimizer.zero_grad()
