@@ -56,7 +56,7 @@ class ContrastiveAccuracy(torchmetrics.Metric):
         else:
             self.num_correct += (sim_argsort == 0).float().sum()
 
-        self.num_samples += len(logits) // 2  # Account for 2 views
+        self.num_samples += len(logits)
 
     def compute(self):
         return self.num_correct / self.num_samples
