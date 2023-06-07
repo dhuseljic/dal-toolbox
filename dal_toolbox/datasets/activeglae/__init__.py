@@ -3,6 +3,7 @@ from .banks77 import Banks77
 from .dbpedia import DBPedia
 from .fnc1 import FNC1
 from .mnli import MNLI
+from .qnli import QNLI
 from .sst2 import SST2
 from .trec6 import TREC6
 from .wikitalk import Wikitalk

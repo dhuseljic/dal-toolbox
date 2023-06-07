@@ -26,6 +26,7 @@ class AbstractGLAE():
             self.query_dataset = self.split['train']
         else:
             self.train_dataset = ds['train']
+            self.val_dataset = None
             self.query_dataset = ds['train']
 
         self.test_dataset = self.get_test_dataset(ds)

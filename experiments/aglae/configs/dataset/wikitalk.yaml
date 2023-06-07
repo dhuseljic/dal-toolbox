@@ -3,6 +3,7 @@ name_hf: jigsaw_toxicity_pred
 n_classes: 2
 train_subset: 10000
 test_subset: 0
+path: ~/hf_datasets
 
 
 #https://www.kaggle.com/c/jigsaw-toxic-comment-classification-challenge/data

@@ -3,5 +3,6 @@ name_hf: sst2
 n_classes: 2
 train_subset: 10000
 test_subset: 0
+path: ~/hf_datasets
 
 # test subset: 872

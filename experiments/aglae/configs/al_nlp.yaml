@@ -1,6 +1,6 @@
 defaults:
   - model: bert
-  - al_strategy: uncertainty
+  - al_strategy: entropy
   - dataset: banks77
   - _self_
 
@@ -16,18 +16,20 @@ wandb:
   entity: dal-nlp
   group: default
   reinit: True
-  mode: online
+  mode: disabled
 
-dataset_path: $HOME/.cache/huggingface/datasets
+dataset_path: ~/data_glae/
+
 device: cuda
 
+val_split: 0
 random_seed: 0
 val_batch_size: 128
 print_freq_eval: 25
 print_freq_train: 25
 check_freq_model: 15
 
-output_dir: ./output/
+output_dir: ~/output_glae/
 hydra:
   job:
     chdir: True

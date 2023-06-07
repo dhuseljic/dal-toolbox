@@ -3,5 +3,7 @@ name_hf: ag_news
 n_classes: 4
 train_subset: 10000
 test_subset: 0
+path: ~/hf_datasets
+
 # train: 120k
 # test: 7600

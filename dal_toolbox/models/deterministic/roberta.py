@@ -25,14 +25,18 @@ class RoBertaSequenceClassifier(nn.Module):
             output = logits
         return output
 
-    @torch.no_grad()
-    def forward_logits(self, dataloader, device):
+    @torch.inference_mode()
+    def get_logits(self, dataloader, device):
         self.to(device)
+        self.eval()
         all_logits = []
-        for samples, _ in dataloader:
-            logits = self(samples.to(device))
+        for batch in tqdm(dataloader):
+            input_ids = batch['input_ids'].to(device)
+            attention_mask = batch['attention_mask'].to(device)
+            logits = self(input_ids, attention_mask)
             all_logits.append(logits)
         return torch.cat(all_logits)
+
 
     @torch.inference_mode()
     def get_probas(self, dataloader, device):
