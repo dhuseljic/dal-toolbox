@@ -78,6 +78,10 @@ def build_simclr(args) -> (nn.Module, nn.Module):
         loss_fn=InfoNCELoss(args.ssl_model.temperature),
         optimizer=optimizer,
         lr_scheduler=lr_scheduler,
+        train_metrics={'train_acc_top1': metrics.ContrastiveAccuracy(),
+                       'train_acc_top5': metrics.ContrastiveAccuracy(topk=5)},
+        val_metrics={'val_acc_top1': metrics.ContrastiveAccuracy(),
+                     'val_acc_top5': metrics.ContrastiveAccuracy(topk=5)}
     )
     model.encoder_output_dim = encoder_output_dim
 
@@ -115,7 +119,7 @@ def main(args):
         accelerator="auto",
         max_epochs=args.ssl_model.n_epochs,
         callbacks=[
-            ModelCheckpoint(save_weights_only=False, mode="min", monitor="val_loss", every_n_epochs=1),
+            ModelCheckpoint(save_weights_only=False, mode="max", monitor="val_acc_top5", every_n_epochs=1),
             LearningRateMonitor("epoch"),
         ],
         check_val_every_n_epoch=args.ssl_val_interval,

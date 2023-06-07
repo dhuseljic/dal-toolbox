@@ -1,11 +1,11 @@
-import torch
 import numpy as np
-
-from sklearn.metrics import precision_score
+import torch
+import torch.nn.functional as F
+import torchmetrics
 from sklearn.metrics import auc
 from sklearn.metrics import balanced_accuracy_score
 from sklearn.metrics import f1_score
-import torchmetrics
+from sklearn.metrics import precision_score
 
 
 class Accuracy(torchmetrics.Metric):
@@ -35,6 +35,33 @@ class Accuracy(torchmetrics.Metric):
         return targets.argmax(-1)
 
 
+class ContrastiveAccuracy(torchmetrics.Metric):
+    def __init__(self, topk=1):
+        super().__init__()
+        self.topk = topk
+        self.add_state('num_correct', torch.tensor(0.), dist_reduce_fx='sum')
+        self.add_state('num_samples', torch.tensor(0.), dist_reduce_fx='sum')
+
+    def update(self, logits: torch.Tensor, targets: torch.Tensor):
+        cos_sim = F.cosine_similarity(logits[:, None, :], logits[None, :, :], dim=-1)
+        self_mask = torch.eye(cos_sim.shape[0], dtype=torch.bool, device=cos_sim.device)
+        cos_sim.masked_fill_(self_mask, -9e15)
+        pos_mask = self_mask.roll(shifts=cos_sim.shape[0] // 2, dims=0)
+
+        comb_sim = torch.cat([cos_sim[pos_mask][:, None], cos_sim.masked_fill(pos_mask, -9e15)], dim=-1)
+        sim_argsort = comb_sim.argsort(dim=-1, descending=True).argmin(dim=-1)
+
+        if self.topk > 1:
+            self.num_correct += (sim_argsort < self.topk).float().sum()
+        else:
+            self.num_correct += (sim_argsort == 0).float().sum()
+
+        self.num_samples += len(logits) // 2  # Account for 2 views
+
+    def compute(self):
+        return self.num_correct / self.num_samples
+
+
 @torch.inference_mode()
 def accuracy(output, target, topk=(1,)):
     """Computes the accuracy over the k top predictions for the specified values of k"""
@@ -52,6 +79,7 @@ def accuracy(output, target, topk=(1,)):
         correct_k = correct[:k].flatten().sum(dtype=torch.float32)
         res.append(correct_k * (100.0 / batch_size))
     return res
+
 
 # !TODO: Sklearn and torchmetrics scores do not align
 
