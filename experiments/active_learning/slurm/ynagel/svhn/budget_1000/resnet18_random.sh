@@ -25,8 +25,10 @@ output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines/${dataset}/${m
 
 srun python -u active_learning.py \
 	model=$model \
-	model.optimizer.lr=1e-3 \
-	model.optimizer.weight_decay=5e-2 \
+	model.optimizer.lr=1e-2 \
+	model.optimizer.weight_decay=5e-3 \
+	model.train_batch_size=32 \
+	model.num_epochs=250 \
 	dataset=$dataset \
 	dataset_path=/mnt/stud/home/ynagel/data \
 	al_strategy=$al_strat \
