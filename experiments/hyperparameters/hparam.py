@@ -109,7 +109,7 @@ def main(args):
     search_space = {"lr": tune.loguniform(1e-5, .1), "weight_decay": tune.loguniform(1e-5, .1)}
     objective = tune.with_resources(train, resources={'cpu': args.num_cpus, 'gpu': args.num_gpus})
     objective = tune.with_parameters(objective, args=args, al_dataset=al_dataset, num_classes=data.num_classes)
-    search_alg = OptunaSearch(points_to_evaluate=[{'lr': args.lr, 'weight_decay': args.weight_decay}])
+    search_alg = OptunaSearch(points_to_evaluate=[{'lr': args.lr, 'weight_decay': args.weight_decay}], seed=args.random_seed)
     tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=args.num_opt_samples, metric="val_acc", mode="max")
 
     tuner = tune.Tuner(objective, param_space=search_space, tune_config=tune_config)
