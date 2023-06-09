@@ -15,7 +15,7 @@ from dal_toolbox import metrics
 from dal_toolbox.models import deterministic
 from dal_toolbox import datasets
 from dal_toolbox.active_learning import ActiveLearningDataModule
-from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge
+from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, typiclust
 from dal_toolbox.utils import seed_everything, is_running_on_slurm
 from dal_toolbox.models.utils.callbacks import MetricLogger
 
@@ -153,6 +153,8 @@ def build_al_strategy(args):
         query = coreset.CoreSet(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == "badge":
         query = badge.Badge(subset_size=args.al_strategy.subset_size)
+    elif args.al_strategy.name == "typiclust":
+        query = typiclust.TypiClust(subset_size=args.al_strategy.subset_size)
     else:
         raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
     return query
