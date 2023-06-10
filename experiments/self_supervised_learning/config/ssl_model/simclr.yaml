@@ -1,7 +1,7 @@
 name: simclr
 encoder: resnet18_deterministic
 projector: mlp
-projector_dim: 128
+projector_dim: 64
 temperature: 0.07
 n_epochs: 500
 

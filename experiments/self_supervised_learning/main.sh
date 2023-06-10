@@ -11,12 +11,10 @@ date;hostname;pwd
 source /mnt/stud/home/ynagel/dal-toolbox/venv/bin/activate
 cd ~/dal-toolbox/experiments/self_supervised_learning/
 
-model=resnet18
-dataset=CIFAR10
 
 random_seed=$SLURM_ARRAY_TASK_ID
 output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/self_supervised_learning/
 
-srun python -u ssl.py \
+srun python -u main.py \
 	dataset_path=/mnt/stud/home/ynagel/data \
 	output_dir=$output_dir

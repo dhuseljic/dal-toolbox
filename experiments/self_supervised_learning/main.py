@@ -1,9 +1,6 @@
-import datetime
-import json
 import logging
 import os
 import sys
-import time
 
 import hydra
 import lightning as L
@@ -14,15 +11,11 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from dal_toolbox import datasets, metrics
-from dal_toolbox.active_learning import ActiveLearningDataModule
-from dal_toolbox.datasets.base import AbstractData
 from dal_toolbox.models import deterministic
 from dal_toolbox.models.deterministic import simclr
 from dal_toolbox.models.deterministic.simclr import InfoNCELoss
 from dal_toolbox.models.utils.base import BaseModule
-from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import is_running_on_slurm
-from experiments.active_learning.active_learning import build_al_strategy
 
 
 def build_ssl(name, args):
@@ -37,7 +30,7 @@ def build_encoder(name, return_output_dim=False):
         encoder = deterministic.resnet.ResNet18(num_classes=1)  # Linear layer will be replaced
         encoder.linear = nn.Identity()  # Replace layer after max pool
 
-        encoder_output_dim = 512
+        encoder_output_dim = 512  # TODO Load dynamically maybe?
     else:
         raise NotImplementedError(f"{name} is not implemented!")
 
@@ -88,8 +81,10 @@ def build_simclr(args) -> (nn.Module, nn.Module):
     return model
 
 
+# TODO The structure should be solved differently
 class LinearEvaluationAccuracy():
-    def __init__(self, model: BaseModule, data: AbstractData, output_dim: int, args):
+    def __init__(self, model: BaseModule, output_dim: int, args):
+        data = build_dataset(args)
 
         # Splitting off projection head
         num_classes = data.num_classes
@@ -103,8 +98,8 @@ class LinearEvaluationAccuracy():
         head = nn.Linear(output_dim, num_classes)
         model = nn.Sequential(encoder, head)
 
-        optimizer = torch.optim.SGD(head.parameters(), **args.model.optimizer)
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
+        optimizer = torch.optim.SGD(head.parameters(), **args.le_model.optimizer)
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.le_model.num_epochs)
         self.model = deterministic.DeterministicModel(
             model,
             optimizer=optimizer,
@@ -113,21 +108,21 @@ class LinearEvaluationAccuracy():
             val_metrics={'val_acc': metrics.Accuracy()},
         )
         self.train_dataloader = DataLoader(data.train_dataset,
-                                      batch_size=args.ssl_model.train_batch_size,
-                                      num_workers=args.n_cpus,
-                                      shuffle=True)
+                                           batch_size=args.le_model.train_batch_size,
+                                           num_workers=args.n_cpus,
+                                           shuffle=True)
 
         self.val_dataloader = DataLoader(data.val_dataset,
-                                    batch_size=args.ssl_model.val_batch_size,
-                                    num_workers=args.n_cpus,
-                                    shuffle=False)
+                                         batch_size=args.le_model.val_batch_size,
+                                         num_workers=args.n_cpus,
+                                         shuffle=False)
         self.trainer = L.Trainer(
-            max_epochs=90,
+            max_epochs=args.le_model.num_epochs,
             enable_checkpointing=False,
             default_root_dir=args.output_dir,
-            enable_progress_bar=False,
-            check_val_every_n_epoch=5,
-            enable_model_summary=False,
+            enable_progress_bar=True,
+            check_val_every_n_epoch=args.le_val_interval,
+            enable_model_summary=True,
         )
 
     def compute(self):
@@ -176,10 +171,10 @@ def main(args):
     logger.info("Starting linear evaluation.")
     # Load best performing SSL model
     encoder, output_dim = build_encoder(args.ssl_model.encoder, True)
-    projector = build_projector(args.ssl_model.projector, output_dim, args.ssl_model.projector_dim)
+    projector = build_projector(args.ssl_model.projector, output_dim, args.ssl_model.projector_dim)  # will be replaced
     model = simclr.SimCLR.load_from_checkpoint(trainer.checkpoint_callback.best_model_path,
                                                encoder=encoder, projector=projector)
-    lr = LinearEvaluationAccuracy(model, build_dataset(args), 512, args)
+    lr = LinearEvaluationAccuracy(model, output_dim, args)
     lr.compute()
 
 
