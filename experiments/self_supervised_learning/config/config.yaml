@@ -4,12 +4,12 @@ defaults:
   - dataset: CIFAR10
 
 le_model:
-  num_epochs: 100
-  train_batch_size: 128
-  val_batch_size: 256
+  num_epochs: 90
+  train_batch_size: 4096
+  val_batch_size: 512
   optimizer:
-    lr: 0.01
-    weight_decay: 0.005
+    base_lr: 0.1
+    weight_decay: 0.0
     momentum: 0.9
 
 dataset_path: ./data/

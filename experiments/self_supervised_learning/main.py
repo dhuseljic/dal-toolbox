@@ -1,4 +1,5 @@
 import logging
+import math
 import os
 import sys
 
@@ -7,6 +8,7 @@ import lightning as L
 import torch
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from omegaconf import OmegaConf
+from pytorch_optimizer import LARS
 from torch import nn
 from torch.utils.data import DataLoader
 
@@ -15,6 +17,7 @@ from dal_toolbox.models import deterministic
 from dal_toolbox.models.deterministic import simclr
 from dal_toolbox.models.deterministic.simclr import InfoNCELoss
 from dal_toolbox.models.utils.base import BaseModule
+from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
 from dal_toolbox.utils import is_running_on_slurm
 
 
@@ -53,16 +56,16 @@ def build_simclr(args) -> (nn.Module, nn.Module):
     encoder, encoder_output_dim = build_encoder(args.ssl_model.encoder, True)
     projector = build_projector(args.ssl_model.projector, encoder_output_dim, args.ssl_model.projector_dim)
 
-    optimizer = torch.optim.AdamW(
+    optimizer = LARS(
         params=list(encoder.parameters()) + list(projector.parameters()),
-        lr=args.ssl_model.optimizer.lr,
-        weight_decay=args.ssl_model.optimizer.weight_decay
+        lr=args.ssl_model.optimizer.base_lr * math.sqrt(args.ssl_model.train_batch_size),
+        weight_decay=args.ssl_model.optimizer.weight_decay,
     )
 
-    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    lr_scheduler = CosineAnnealingLRLinearWarmup(
         optimizer=optimizer,
-        T_max=args.ssl_model.n_epochs,
-        eta_min=args.ssl_model.optimizer.lr / 50
+        num_epochs=args.ssl_model.n_epochs,
+        warmup_epochs=10
     )
 
     model = simclr.SimCLR(
@@ -99,7 +102,10 @@ class LinearEvaluationAccuracy():
         head = nn.Linear(output_dim, num_classes)
         model = nn.Sequential(encoder, head)
 
-        optimizer = torch.optim.SGD(head.parameters(), **args.le_model.optimizer)
+        optimizer = torch.optim.SGD(head.parameters(),
+                                    lr=args.ssl_model.optimizer.base_lr * args.le_model.train_batch_size / 256,
+                                    weight_decay=args.le_model.weight_decay,
+                                    momentum=args.le_model.momentum)
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.le_model.num_epochs)
         self.model = deterministic.DeterministicModel(
             model,

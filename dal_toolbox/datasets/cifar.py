@@ -119,6 +119,7 @@ class CIFAR10Contrastive(CIFAR10):
             transforms.RandomHorizontalFlip(p=0.5),
             transforms.RandomApply([color_jitter], p=0.8),
             transforms.RandomGrayscale(p=0.2),
+            # GaussianBlur not used in original paper, however, other papers assign it importance
             transforms.RandomApply([transforms.GaussianBlur(kernel_size=3)], p=0.5),
             transforms.ToTensor(),
             # transforms.Normalize(self.mean, self.std),  # TODO Discuss if this should be used
