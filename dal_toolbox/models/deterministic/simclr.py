@@ -37,6 +37,7 @@ class SimCLR(DeterministicModel):
             self,
             encoder,
             projector,
+            log_on_epoch_end=True,
             loss_fn: nn.Module = InfoNCELoss(),
             optimizer: torch.optim.Optimizer = None,
             lr_scheduler: torch.optim.lr_scheduler.LRScheduler = None,
@@ -50,6 +51,7 @@ class SimCLR(DeterministicModel):
 
         self.encoder = encoder
         self.projector = projector
+        self.log_on_epoch_end = log_on_epoch_end
 
     def training_step(self, batch):
         batch[0] = torch.cat(batch[0], dim=0)
@@ -60,7 +62,9 @@ class SimCLR(DeterministicModel):
         super().validation_step(batch, batch_idx)
 
     def on_train_epoch_end(self) -> None:
-        logging.info("Current Performance-Metric-Values:")
-        for metr, val in self.trainer.logged_metrics.items():
-            logging.info(metr + " : " + str(round(val.item(), 5)))
+        if self.log_on_epoch_end:
+            log_str = "Current Performance-Metric-Values: "
+            for metr, val in self.trainer.logged_metrics.items():
+                log_str += (metr + " : " + str(round(val.item(), 5)) + ", ")
+            logging.info(log_str)
         return super().on_train_epoch_end()

@@ -68,6 +68,7 @@ def build_simclr(args) -> (nn.Module, nn.Module):
     model = simclr.SimCLR(
         encoder=encoder,
         projector=projector,
+        log_on_epoch_end=is_running_on_slurm(),
         loss_fn=InfoNCELoss(args.ssl_model.temperature),
         optimizer=optimizer,
         lr_scheduler=lr_scheduler,
@@ -179,7 +180,6 @@ def main(args):
     )
 
     logger.info("Training SSL")
-    # Train and automatically save top 5 models based on validation accuracy
     trainer.fit(model, train_dataloader, val_dataloader)
 
     logger.info("Starting linear evaluation.")
