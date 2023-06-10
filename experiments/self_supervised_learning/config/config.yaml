@@ -20,7 +20,6 @@ n_cpus: 16
 
 # Define output dir
 output_dir: "./output/"
-cp_path: "./output"
 hydra:
   run:
     dir: ${output_dir}

@@ -116,17 +116,31 @@ class LinearEvaluationAccuracy():
                                          batch_size=args.le_model.val_batch_size,
                                          num_workers=args.n_cpus,
                                          shuffle=False)
+
+        self.test_dataloader = DataLoader(data.test_dataset,
+                                          batch_size=args.le_model.val_batch_size,
+                                          num_workers=args.n_cpus,
+                                          shuffle=False)
+
         self.trainer = L.Trainer(
+            default_root_dir=os.path.join(args.output_dir, "SimCLR_Linear_Evaluation"),
+            accelerator="auto",
             max_epochs=args.le_model.num_epochs,
-            enable_checkpointing=False,
-            default_root_dir=args.output_dir,
-            enable_progress_bar=True,
+            callbacks=[
+                ModelCheckpoint(save_weights_only=False, mode="max", monitor="val_acc", every_n_epochs=1),
+                LearningRateMonitor("epoch"),
+            ],
             check_val_every_n_epoch=args.le_val_interval,
-            enable_model_summary=True,
+            enable_progress_bar=is_running_on_slurm() is False,
         )
 
     def compute(self):
         self.trainer.fit(self.model, self.train_dataloader, self.val_dataloader)
+        predictions = self.trainer.predict(self.model, self.test_dataloader, ckpt_path='best')
+
+        logits = torch.cat([pred[0] for pred in predictions])
+        targets = torch.cat([pred[1] for pred in predictions])
+        return metrics.Accuracy()(logits, targets).item()
 
 
 @hydra.main(version_base=None, config_path="../self_supervised_learning/config", config_name="config")
@@ -153,7 +167,7 @@ def main(args):
 
     # Create a Trainer Module
     trainer = L.Trainer(
-        default_root_dir=os.path.join(args.cp_path, "SimCLR"),
+        default_root_dir=os.path.join(args.output_dir, "SimCLR"),
         accelerator="auto",
         max_epochs=args.ssl_model.n_epochs,
         callbacks=[
@@ -175,7 +189,8 @@ def main(args):
     model = simclr.SimCLR.load_from_checkpoint(trainer.checkpoint_callback.best_model_path,
                                                encoder=encoder, projector=projector)
     lr = LinearEvaluationAccuracy(model, output_dim, args)
-    lr.compute()
+    acc = lr.compute()
+    logger.info(f"Final linear evaluation accuracy: {acc}")
 
 
 def build_dataset(args):
