@@ -105,20 +105,23 @@ class CIFAR10Contrastive(CIFAR10):
                  std: tuple = CIFAR10Transforms.std.value,
                  val_split: float = 0.1,
                  seed: int = None,
+                 color_distortion_strength=1.0
                  ):
+        self.s = color_distortion_strength
         super().__init__(dataset_path, mean, std, val_split, seed)
 
     @property
     def train_transforms(self):
+        color_jitter = transforms.ColorJitter(0.8 * self.s, 0.8 * self.s, 0.8 * self.s, 0.2 * self.s)
+
         transform = transforms.Compose([
-            transforms.RandomHorizontalFlip(),
             transforms.RandomResizedCrop(size=32),
-            transforms.RandomApply([transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.1)],
-                                   p=0.8),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomApply([color_jitter], p=0.8),
             transforms.RandomGrayscale(p=0.2),
-            transforms.GaussianBlur(kernel_size=9),
+            transforms.RandomApply([transforms.GaussianBlur(kernel_size=3)], p=0.5),
             transforms.ToTensor(),
-            transforms.Normalize(self.mean, self.std),
+            # transforms.Normalize(self.mean, self.std),  # TODO Discuss if this should be used
         ])
         return ContrastiveTransformations(transform, n_views=2)
 
