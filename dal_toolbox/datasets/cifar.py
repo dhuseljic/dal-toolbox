@@ -1,9 +1,17 @@
 import warnings
-import torchvision
+from enum import Enum
 
+import torchvision
 from torchvision import transforms, datasets
-from .corruptions import GaussianNoise
+
 from .base import AbstractData
+from .corruptions import GaussianNoise
+from .utils import ContrastiveTransformations
+
+
+class CIFAR10Transforms(Enum):
+    mean = (0.4914, 0.4822, 0.4465)
+    std = (0.247, 0.243, 0.262)
 
 
 class CIFAR10(AbstractData):
@@ -11,8 +19,8 @@ class CIFAR10(AbstractData):
     def __init__(
             self,
             dataset_path: str,
-            mean: tuple = (0.4914, 0.4822, 0.4465),
-            std: tuple = (0.247, 0.243, 0.262),
+            mean: tuple = CIFAR10Transforms.mean.value,
+            std: tuple = CIFAR10Transforms.std.value,
             val_split: float = 0.1,
             seed: int = None
     ) -> None:
@@ -70,8 +78,8 @@ class CIFAR10C(CIFAR10):
             self,
             dataset_path: str,
             severity: float,
-            mean: tuple = (0.4914, 0.4822, 0.4465),
-            std: tuple = (0.247, 0.243, 0.262),
+            mean: tuple = CIFAR10Transforms.mean.value,
+            std: tuple = CIFAR10Transforms.std.value,
             val_split: float = 0.1,
             seed: int = None
     ) -> None:
@@ -87,6 +95,36 @@ class CIFAR10C(CIFAR10):
             GaussianNoise(self.severity)
         ])
         return eval_transform
+
+
+class CIFAR10Contrastive(CIFAR10):
+
+    def __init__(self,
+                 dataset_path: str,
+                 mean: tuple = CIFAR10Transforms.mean.value,
+                 std: tuple = CIFAR10Transforms.std.value,
+                 val_split: float = 0.1,
+                 seed: int = None,
+                 ):
+        super().__init__(dataset_path, mean, std, val_split, seed)
+
+    @property
+    def train_transforms(self):
+        transform = transforms.Compose([
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomResizedCrop(size=32),
+            transforms.RandomApply([transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.1)],
+                                   p=0.8),
+            transforms.RandomGrayscale(p=0.2),
+            transforms.GaussianBlur(kernel_size=9),
+            transforms.ToTensor(),
+            transforms.Normalize(self.mean, self.std),
+        ])
+        return ContrastiveTransformations(transform, n_views=2)
+
+    @property
+    def eval_transforms(self):
+        return self.train_transforms  # TODO This depends on the error we want to calculate on the validation/test set
 
 
 class CIFAR100(CIFAR10):

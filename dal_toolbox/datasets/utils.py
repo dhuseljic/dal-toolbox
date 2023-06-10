@@ -1,5 +1,15 @@
 import numpy as np
 
+
+class ContrastiveTransformations:
+    def __init__(self, base_transforms, n_views=2):
+        self.base_transforms = base_transforms
+        self.n_views = n_views
+
+    def __call__(self, x):
+        return [self.base_transforms(x) for i in range(self.n_views)]
+
+
 def sample_balanced_subset(targets, num_classes, num_samples):
     '''
     samples for labeled data

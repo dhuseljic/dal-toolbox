@@ -2,22 +2,20 @@ import datetime
 import json
 import logging
 import os
+import sys
 import time
 
 import hydra
 import lightning as L
 import torch
-import torchvision
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from omegaconf import OmegaConf
 from torch import nn
 from torch.utils.data import DataLoader
-from torchvision import transforms
 
 from dal_toolbox import datasets, metrics
 from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.models import deterministic
-from dal_toolbox.models.deterministic import resnet
 from dal_toolbox.models.deterministic import simclr
 from dal_toolbox.models.deterministic.simclr import InfoNCELoss
 from dal_toolbox.models.utils.callbacks import MetricLogger
@@ -101,15 +99,16 @@ def main(args):
     L.seed_everything(args.random_seed)
 
     # Create a Data Module
-    # TODO This currently leaks test data information to the ssl model
-    dm = CIFAR10DataModule(
-        ds_path=args.dataset_path,
-        train_batch_size=args.ssl_model.train_batch_size,
-        val_batch_size=args.ssl_model.val_batch_size,
-        n_workers=args.n_cpus,
-        n_epochs=args.ssl_model.n_epochs,  # TODO What for?
-        random_seed=args.random_seed
-    )
+    data = build_contrastive_dataset(args)
+    train_dataloader = DataLoader(data.train_dataset,
+                                  batch_size=args.ssl_model.train_batch_size,
+                                  num_workers=args.n_cpus,
+                                  shuffle=True)
+
+    val_dataloader = DataLoader(data.val_dataset,
+                                batch_size=args.ssl_model.val_batch_size,
+                                num_workers=args.n_cpus,
+                                shuffle=False)
 
     model = build_ssl(args.ssl_model.name, args)
 
@@ -128,7 +127,7 @@ def main(args):
 
     logger.info("Training SSL")
     # Train and automatically save top 5 models based on validation accuracy
-    trainer.fit(model, datamodule=dm)
+    trainer.fit(model, train_dataloader, val_dataloader)
 
     # Setup Query
     logger.info('Building query strategy: %s', args.al_strategy.name)
@@ -136,7 +135,7 @@ def main(args):
 
     # Setup Dataset (Now without contrastive transforms)
     logger.info('Building datasets.')
-    data = build_datasets(args)
+    data = build_dataset(args)
     test_loader = DataLoader(data.test_dataset, batch_size=args.al_model.predict_batch_size)
 
     # Setup AL Module
@@ -254,76 +253,26 @@ def main(args):
         json.dump(queried_indices, f, sort_keys=False)
 
 
-def build_datasets(args):
+def build_dataset(args):
     if args.dataset.name == 'CIFAR10':
         data = datasets.CIFAR10(args.dataset_path)
-
     elif args.dataset.name == 'CIFAR100':
         data = datasets.CIFAR100(args.dataset_path)
-
     elif args.dataset.name == 'SVHN':
         data = datasets.SVHN(args.dataset_path)
+    else:
+        sys.exit(f"Dataset {args.dataset.name} not implemented.")
 
     return data
 
 
-class ContrastiveTransformations:
-    def __init__(self, base_transforms, n_views=2):
-        self.base_transforms = base_transforms
-        self.n_views = n_views
+def build_contrastive_dataset(args):
+    if args.dataset.name == 'CIFAR10':
+        data = datasets.CIFAR10Contrastive(args.dataset_path)
+    else:
+        sys.exit(f"Dataset {args.dataset.name} not implemented.")
 
-    def __call__(self, x):
-        return [self.base_transforms(x) for i in range(self.n_views)]
-
-
-# TODO Incorporate this somehow into the normal datasets module
-class CIFAR10DataModule(L.LightningDataModule):
-    def __init__(self,
-                 ds_path: str = "./data",
-                 train_batch_size: int = 256,
-                 val_batch_size: int = 128,
-                 n_workers: int = 1,
-                 n_epochs: int = None,
-                 random_seed: int = 42
-                 ):
-        super().__init__()
-        self.save_hyperparameters()
-
-    def setup(self, stage: str):
-        self.train_ds = self.build_cifar10('train_contrast', self.hparams.ds_path)
-        self.val_ds = self.build_cifar10('test_contrast', self.hparams.ds_path)
-
-    def train_dataloader(self):
-        return DataLoader(self.train_ds, batch_size=self.hparams.train_batch_size, shuffle=True,
-                          num_workers=self.hparams.n_workers)
-
-    def val_dataloader(self):
-        return DataLoader(self.val_ds, batch_size=self.hparams.val_batch_size, num_workers=self.hparams.n_workers)
-
-    def build_cifar10(self, split, ds_path, mean=(0.4914, 0.4822, 0.4465), std=(0.247, 0.243, 0.262),
-                      return_info=False):
-        contrast_transforms = transforms.Compose([
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomResizedCrop(size=32),
-            transforms.RandomApply([transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5, hue=0.1)],
-                                   p=0.8),
-            transforms.RandomGrayscale(p=0.2),
-            transforms.GaussianBlur(kernel_size=9),
-            transforms.ToTensor(),
-            transforms.Normalize(mean, std),
-        ])
-
-        if split == 'train_contrast':
-            ds = torchvision.datasets.CIFAR10(ds_path, train=True, download=True,
-                                              transform=ContrastiveTransformations(contrast_transforms, n_views=2))
-        elif split == 'test_contrast':
-            ds = torchvision.datasets.CIFAR10(ds_path, train=False, download=True,
-                                              transform=ContrastiveTransformations(contrast_transforms, n_views=2))
-
-        if return_info:
-            ds_info = {'n_classes': 10, 'mean': mean, 'std': std}
-            return ds, ds_info
-        return ds
+    return data
 
 
 if __name__ == '__main__':

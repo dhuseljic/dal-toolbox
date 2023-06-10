@@ -11,7 +11,7 @@ from . import imagenet
 
 from .mnist import build_mnist
 from .fashion_mnist import build_fashionmnist
-from .cifar import CIFAR10, CIFAR100, CIFAR10C
+from .cifar import CIFAR10, CIFAR100, CIFAR10C, CIFAR10Contrastive
 from .svhn import SVHN
 from .imagenet import ImageNet
 # from .tiny_imagenet import TinyImageNet
