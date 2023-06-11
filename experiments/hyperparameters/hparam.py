@@ -6,7 +6,7 @@ import lightning as L
 import torch
 import hydra
 import ray
-import ray.tune as tune
+from ray import tune, air
 
 from omegaconf import OmegaConf
 from ray.tune.search.optuna import OptunaSearch
@@ -111,8 +111,8 @@ def main(args):
     objective = tune.with_parameters(objective, args=args, al_dataset=al_dataset, num_classes=data.num_classes)
     search_alg = OptunaSearch(points_to_evaluate=[{'lr': args.lr, 'weight_decay': args.weight_decay}])
     tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=args.num_opt_samples, metric="val_acc", mode="max")
-
-    tuner = tune.Tuner(objective, param_space=search_space, tune_config=tune_config)
+    tuner = tune.Tuner(objective, param_space=search_space, tune_config=tune_config,
+                       run_config=air.RunConfig(storage_path=args.output_dir))
     results = tuner.fit()
     print('Best Hyperparameters for NLL: {}'.format(results.get_best_result(metric='val_nll', mode='min').config))
     print('Best Hyperparameters for ACC: {}'.format(results.get_best_result(metric='val_acc', mode='max').config))
