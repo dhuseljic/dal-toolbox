@@ -104,8 +104,8 @@ class LinearEvaluationAccuracy():
 
         optimizer = torch.optim.SGD(head.parameters(),
                                     lr=args.ssl_model.optimizer.base_lr * args.le_model.train_batch_size / 256,
-                                    weight_decay=args.le_model.weight_decay,
-                                    momentum=args.le_model.momentum)
+                                    weight_decay=args.le_model.optimizer.weight_decay,
+                                    momentum=args.le_model.optimizer.momentum)
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.le_model.num_epochs)
         self.model = deterministic.DeterministicModel(
             model,

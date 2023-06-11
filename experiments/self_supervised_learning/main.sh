@@ -8,7 +8,7 @@
 #SBATCH --job-name=self_supervised_learning
 #SBATCH --output=/mnt/stud/home/ynagel/logs/self_supervised_learning/%A_%a__%x.log
 date;hostname;pwd
-source /mnt/stud/home/ynagel/dal-toolbox/venv/bin/activate
+source /mnt/stud/home/ynagel/dal-toolbox/dal-venv/bin/activate
 cd ~/dal-toolbox/experiments/self_supervised_learning/
 
 
