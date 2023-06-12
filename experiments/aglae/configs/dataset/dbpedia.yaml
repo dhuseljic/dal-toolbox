@@ -1,7 +1,7 @@
 name: dbpedia
 name_hf: dbpedia_14
 n_classes: 14
-train_subset: 10000
+train_subset: 10_000
 test_subset: 0
 path: ~/hf_datasets
 

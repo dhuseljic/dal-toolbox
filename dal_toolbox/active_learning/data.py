@@ -125,6 +125,7 @@ class ActiveLearningDataModule(L.LightningDataModule):
 
 class QueryDataset(Subset):
     """A helper class which returns also the index along with the instances and targets."""
+    #problem with dictionary output of dataset
 
     def __init__(self, dataset):
         super().__init__(dataset=dataset, indices=range(len(dataset)))
@@ -132,8 +133,18 @@ class QueryDataset(Subset):
 
     def __getitem__(self, index):
         # TODO(dhuseljic): discuss with marek, index instead of target? maybe dictionary? leave it like that?
-        instance, target = super().__getitem__(index)
-        return instance, target, index
+        data = super().__getitem__(index)
+        if isinstance(data, dict):
+            instance = {
+                'input_ids': data['input_ids'], 
+                'attention_mask': data['attention_mask'], 
+                'label': data['label'],
+                'index': index
+            }
+            return instance
+        else:
+            instance, target = super().__getitem__(index)
+            return instance, target, index
 
 
 class ALDataset:

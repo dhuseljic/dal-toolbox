@@ -82,7 +82,21 @@ def main(args):
                 acq_size=args.al_cycle.acq_size
             )
             al_datamodule.update_annotations(indices)
-            break
+            queried_indices[f'cycle{i_acq}'] = sorted(indices)
+        
+        # Reset Parameters
+        model.reset_states()
+
+        # Training
+        trainer = L.Trainer(
+            max_epochs=args.model.n_epochs,
+            default_root_dir=args.output_dir,
+            enable_checkpointing=False,
+            enable_progress_bar=True
+        )
+
+        trainer.fit(model, al_datamodule)
+        
 
 if __name__ == '__main__':
     main()

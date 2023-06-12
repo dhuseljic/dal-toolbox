@@ -59,7 +59,7 @@ class AbstractGLAE():
         ds = ds.map(
             self.process_fn, batched=True, batch_size=self.pre_batch_size, num_proc=self.pre_num_proc)
         ds = ds.remove_columns(
-            list(set(ds['train'].column_names)-set(['label', 'input_ids', 'attention_mask']))
+            list(set(ds['train'].column_names)-set(['input_ids', 'attention_mask', 'label']))
         )         
         ds = ds.with_format("torch")
         return ds

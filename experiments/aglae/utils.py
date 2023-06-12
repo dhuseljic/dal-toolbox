@@ -220,7 +220,7 @@ def build_query(args, **kwargs):
         query = random.RandomSampling()
 
     elif args.al_strategy.name == "least_confident":
-        query = uncertainty.LeastConfidentSampling(subset_size=args.dataset.train_subset,)
+        query = uncertainty.LeastConfidentSampling(subset_size=args.dataset.train_subset)
 
     elif args.al_strategy.name == "margin":
         query = uncertainty.MarginSampling(subset_size=args.dataset.train_subset)

@@ -1,8 +1,8 @@
 name: qnli
 name_hf: qnli
 n_classes: 2
-train_subset: 10000
-test_subset: 0
+train_subset: 10_000
+test_subset: null
 path: ~/hf_datasets
 
 #eval: 5.5k
