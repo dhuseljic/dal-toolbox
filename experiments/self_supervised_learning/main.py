@@ -6,11 +6,12 @@ import sys
 import hydra
 import lightning as L
 import torch
+from lightning import Callback
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from omegaconf import OmegaConf
 from pytorch_optimizer import LARS
 from torch import nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 
 from dal_toolbox import datasets, metrics
 from dal_toolbox.models import deterministic
@@ -85,24 +86,77 @@ def build_simclr(args) -> (nn.Module, nn.Module):
     return model
 
 
+class FeatureDataset(Dataset):
+    def __init__(self, model, dataset, device):
+        dataloader = DataLoader(dataset, batch_size=512, num_workers=4)
+        features = model.get_representations(dataloader, device)  # TODO This can be speed up by using a single loop
+        self.features = features.detach()
+        self.labels = [label for _, label in dataset]
+
+    def __len__(self):
+        return len(self.features)
+
+    def __getitem__(self, idx):
+        return self.features[idx], self.labels[idx]
+
+
+class LinearEvaluationCallback(Callback):
+    def __init__(self, args):
+        self.args = args
+        self.logger = logging.getLogger(__name__)
+
+    def on_train_epoch_end(self, trainer, pl_module):
+        if trainer.current_epoch % 1 == 0:  # TODO Make argument
+            lr = LinearEvaluationAccuracy(pl_module, 512, self.args)  # TODO Load somehow different
+
+            self.logger.info(f"Epoch {trainer.current_epoch} - "
+                             f"Linear evaluation accuracy: {lr.compute()} , {lr.compute('val')}")
+
+
 # TODO The structure should be solved differently
 class LinearEvaluationAccuracy():
-    def __init__(self, model: BaseModule, output_dim: int, args):
+    def __init__(self, model: BaseModule, output_dim: int, args, checkpoint=False):
         data = build_dataset(args)
+
+        import time
+        start = time.time()
+        # From my testing this is slightly faster than passing the normal dataset through the frozen backbone in each
+        # epoch, however only when training for more than ~15 epochs
+        trainset = FeatureDataset(model.encoder, data.train_dataset, "cuda")  # TODO load device from somewhere
+        valset = FeatureDataset(model.encoder, data.val_dataset, "cuda")  # TODO load device from somewhere
+        testset = FeatureDataset(model.encoder, data.test_dataset, "cuda")  # TODO load device from somewhere
+
+        self.train_dataloader = DataLoader(trainset,
+                                           batch_size=args.le_model.train_batch_size,
+                                           num_workers=args.n_cpus,
+                                           shuffle=True)
+
+        self.val_dataloader = DataLoader(valset,
+                                         batch_size=args.le_model.val_batch_size,
+                                         num_workers=args.n_cpus,
+                                         shuffle=False)
+
+        self.test_dataloader = DataLoader(testset,
+                                          batch_size=args.le_model.val_batch_size,
+                                          num_workers=args.n_cpus,
+                                          shuffle=False)
+
+        print(f"Took {time.time() - start} seconds loading datasets.")
 
         # Splitting off projection head
         num_classes = data.num_classes
-        encoder = model.encoder
-        encoder.num_classes = data.num_classes
+        # encoder = model.encoder
+        # encoder.num_classes = data.num_classes
 
         # Freeze encoder
-        for name, p in encoder.named_parameters():
-            p.requires_grad = False
+        # for name, p in encoder.named_parameters():
+        #     p.requires_grad = False
+        #
+        # head = nn.Linear(output_dim, num_classes)
+        # model = nn.Sequential(encoder, head)
+        model = nn.Linear(output_dim, num_classes)
 
-        head = nn.Linear(output_dim, num_classes)
-        model = nn.Sequential(encoder, head)
-
-        optimizer = torch.optim.SGD(head.parameters(),
+        optimizer = torch.optim.SGD(model.parameters(),
                                     lr=args.ssl_model.optimizer.base_lr * args.le_model.train_batch_size / 256,
                                     weight_decay=args.le_model.optimizer.weight_decay,
                                     momentum=args.le_model.optimizer.momentum)
@@ -114,40 +168,41 @@ class LinearEvaluationAccuracy():
             train_metrics={'train_acc': metrics.Accuracy()},
             val_metrics={'val_acc': metrics.Accuracy()},
         )
-        self.train_dataloader = DataLoader(data.train_dataset,
-                                           batch_size=args.le_model.train_batch_size,
-                                           num_workers=args.n_cpus,
-                                           shuffle=True)
 
-        self.val_dataloader = DataLoader(data.val_dataset,
-                                         batch_size=args.le_model.val_batch_size,
-                                         num_workers=args.n_cpus,
-                                         shuffle=False)
-
-        self.test_dataloader = DataLoader(data.test_dataset,
-                                          batch_size=args.le_model.val_batch_size,
-                                          num_workers=args.n_cpus,
-                                          shuffle=False)
+        if checkpoint:
+            callbacks = [ModelCheckpoint(save_weights_only=False, mode="max", monitor="val_acc", every_n_epochs=1)]
+        else:
+            callbacks = []
 
         self.trainer = L.Trainer(
             default_root_dir=os.path.join(args.output_dir, "SimCLR_Linear_Evaluation"),
             accelerator="auto",
             max_epochs=args.le_model.num_epochs,
-            callbacks=[
-                ModelCheckpoint(save_weights_only=False, mode="max", monitor="val_acc", every_n_epochs=1),
-                LearningRateMonitor("epoch"),
-            ],
+            enable_checkpointing=checkpoint,
+            callbacks=callbacks,
             check_val_every_n_epoch=args.le_val_interval,
             enable_progress_bar=is_running_on_slurm() is False,
+            num_sanity_val_steps=0
         )
 
-    def compute(self):
         self.trainer.fit(self.model, self.train_dataloader, self.val_dataloader)
-        predictions = self.trainer.predict(self.model, self.test_dataloader, ckpt_path='best')
+        self.checkpoint = checkpoint
 
-        logits = torch.cat([pred[0] for pred in predictions])
-        targets = torch.cat([pred[1] for pred in predictions])
-        return metrics.Accuracy()(logits, targets).item()
+    def compute(self, dataset='train'):
+        if dataset == 'train':
+            return self.trainer.logged_metrics["train_acc"]
+        elif dataset == 'val':
+            return self.trainer.logged_metrics["val_acc"]
+        elif dataset == 'test':
+            predictions = self.trainer.predict(self.model, self.test_dataloader, ckpt_path='best' if self.checkpoint else None)
+
+            logits = torch.cat([pred[0] for pred in predictions])
+            targets = torch.cat([pred[1] for pred in predictions])
+            return metrics.Accuracy()(logits, targets).item()
+        else:
+            sys.exit(f"Data split {dataset} does not exist.")
+
+
 
 
 @hydra.main(version_base=None, config_path="../self_supervised_learning/config", config_name="config")
@@ -180,6 +235,7 @@ def main(args):
         callbacks=[
             ModelCheckpoint(save_weights_only=False, mode="max", monitor="val_acc_top5", every_n_epochs=1),
             LearningRateMonitor("epoch"),
+            LinearEvaluationCallback(args),
         ],
         check_val_every_n_epoch=args.ssl_val_interval,
         enable_progress_bar=is_running_on_slurm() is False,
@@ -192,11 +248,12 @@ def main(args):
     # Load best performing SSL model
     encoder, output_dim = build_encoder(args.ssl_model.encoder, True)
     projector = build_projector(args.ssl_model.projector, output_dim, args.ssl_model.projector_dim)  # will be replaced
+    logger.info(f"Restoring best model checkpoint - {trainer.checkpoint_callback.best_model_path}")
     model = simclr.SimCLR.load_from_checkpoint(trainer.checkpoint_callback.best_model_path,
                                                encoder=encoder, projector=projector)
-    lr = LinearEvaluationAccuracy(model, output_dim, args)
-    acc = lr.compute()
-    logger.info(f"Final linear evaluation accuracy: {acc}")
+    lr = LinearEvaluationAccuracy(model, output_dim, args, checkpoint=True)
+    acc = lr.compute('test')
+    logger.info(f"Final linear evaluation test accuracy: {acc}")
 
 
 def build_dataset(args):
