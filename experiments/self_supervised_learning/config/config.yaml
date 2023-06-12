@@ -11,6 +11,9 @@ le_model:
     base_lr: 0.1
     weight_decay: 0.0
     momentum: 0.9
+  callback:
+    enabled: True
+    interval: 50
 
 dataset_path: ./data/
 random_seed: 42

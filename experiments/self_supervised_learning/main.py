@@ -101,16 +101,20 @@ class FeatureDataset(Dataset):
 
 
 class LinearEvaluationCallback(Callback):
-    def __init__(self, args):
+    def __init__(self, output_dim, args):
         self.args = args
+        self.output_dim = output_dim
+        self.interval = args.le_model.callback.interval
         self.logger = logging.getLogger(__name__)
 
     def on_train_epoch_end(self, trainer, pl_module):
-        if trainer.current_epoch % 1 == 0:  # TODO Make argument
-            lr = LinearEvaluationAccuracy(pl_module, 512, self.args)  # TODO Load somehow different
+        if trainer.current_epoch % self.interval == 0:
+            self.logger.info("Starting linear evaluation callback.")
+            lr = LinearEvaluationAccuracy(pl_module, self.output_dim, self.args)
 
             self.logger.info(f"Epoch {trainer.current_epoch} - "
-                             f"Linear evaluation accuracy: {lr.compute()} , {lr.compute('val')}")
+                             f"Linear evaluation accuracy: "
+                             f"Train : {lr.compute():4f} , Validation: {lr.compute('val'):4f}")
 
 
 # TODO The structure should be solved differently
@@ -118,8 +122,6 @@ class LinearEvaluationAccuracy():
     def __init__(self, model: BaseModule, output_dim: int, args, checkpoint=False):
         data = build_dataset(args)
 
-        import time
-        start = time.time()
         # From my testing this is slightly faster than passing the normal dataset through the frozen backbone in each
         # epoch, however only when training for more than ~15 epochs
         self.trainset = FeatureDataset(model.encoder, data.train_dataset, "cuda")  # TODO load device from somewhere
@@ -141,19 +143,9 @@ class LinearEvaluationAccuracy():
                                           num_workers=args.n_cpus,
                                           shuffle=False)
 
-        print(f"Took {time.time() - start} seconds loading datasets.")
-
-        # Splitting off projection head
         num_classes = data.num_classes
         self.encoder = model.encoder
-        # encoder.num_classes = data.num_classes
 
-        # Freeze encoder
-        # for name, p in encoder.named_parameters():
-        #     p.requires_grad = False
-        #
-        # head = nn.Linear(output_dim, num_classes)
-        # model = nn.Sequential(encoder, head)
         model = nn.Linear(output_dim, num_classes)
 
         optimizer = torch.optim.SGD(model.parameters(),
@@ -175,7 +167,7 @@ class LinearEvaluationAccuracy():
             callbacks = []
 
         self.trainer = L.Trainer(
-            default_root_dir=os.path.join(args.output_dir, "SimCLR_Linear_Evaluation"),
+            default_root_dir=os.path.join(args.output_dir, "SimCLR_Linear_Evaluation_Callback"),
             accelerator="auto",
             max_epochs=args.le_model.num_epochs,
             enable_checkpointing=checkpoint,
@@ -209,7 +201,7 @@ class LinearEvaluationAccuracy():
         torch.save({'trainset': self.trainset,
                     'valset': self.valset,
                     'testset': self.testset,
-                    'model': self.encoder.state_dict}, path)
+                    'model': self.encoder.state_dict()}, path)
 
 
 @hydra.main(version_base=None, config_path="../self_supervised_learning/config", config_name="config")
@@ -217,7 +209,7 @@ def main(args):
     logger = logging.getLogger(__name__)
     logger.info('Using config: \n%s', OmegaConf.to_yaml(args))
 
-    # To be reproducable
+    # To be reproducible
     L.seed_everything(args.random_seed)
 
     # Create a Data Module
@@ -234,16 +226,20 @@ def main(args):
 
     model = build_ssl(args.ssl_model.name, args)
 
+    callbacks = [
+        ModelCheckpoint(save_weights_only=False, mode="max", monitor="val_acc_top5", every_n_epochs=1),
+        LearningRateMonitor("epoch"),
+    ]
+
+    if args.le_model.callback.enabled:
+        callbacks.append(LinearEvaluationCallback(model.encoder_output_dim, args))
+
     # Create a Trainer Module
     trainer = L.Trainer(
         default_root_dir=os.path.join(args.output_dir, "SimCLR"),
         accelerator="auto",
         max_epochs=args.ssl_model.n_epochs,
-        callbacks=[
-            ModelCheckpoint(save_weights_only=False, mode="max", monitor="val_acc_top5", every_n_epochs=1),
-            LearningRateMonitor("epoch"),
-            LinearEvaluationCallback(args),
-        ],
+        callbacks=callbacks,
         check_val_every_n_epoch=args.ssl_val_interval,
         enable_progress_bar=is_running_on_slurm() is False,
     )
@@ -259,8 +255,9 @@ def main(args):
     model = simclr.SimCLR.load_from_checkpoint(trainer.checkpoint_callback.best_model_path,
                                                encoder=encoder, projector=projector)
     lr = LinearEvaluationAccuracy(model, output_dim, args, checkpoint=True)
+    # TODO This has the side effect of loading the best validation model, which  is currently not clear
     acc = lr.compute('test')
-    lr.save_features(trainer.log_dir)
+    lr.save_features_and_model_state_dict(path=trainer.log_dir)
     logger.info(f"Final linear evaluation test accuracy: {acc}")
 
 
