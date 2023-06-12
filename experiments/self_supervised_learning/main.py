@@ -122,21 +122,21 @@ class LinearEvaluationAccuracy():
         start = time.time()
         # From my testing this is slightly faster than passing the normal dataset through the frozen backbone in each
         # epoch, however only when training for more than ~15 epochs
-        trainset = FeatureDataset(model.encoder, data.train_dataset, "cuda")  # TODO load device from somewhere
-        valset = FeatureDataset(model.encoder, data.val_dataset, "cuda")  # TODO load device from somewhere
-        testset = FeatureDataset(model.encoder, data.test_dataset, "cuda")  # TODO load device from somewhere
+        self.trainset = FeatureDataset(model.encoder, data.train_dataset, "cuda")  # TODO load device from somewhere
+        self.valset = FeatureDataset(model.encoder, data.val_dataset, "cuda")  # TODO load device from somewhere
+        self.testset = FeatureDataset(model.encoder, data.test_dataset, "cuda")  # TODO load device from somewhere
 
-        self.train_dataloader = DataLoader(trainset,
+        self.train_dataloader = DataLoader(self.trainset,
                                            batch_size=args.le_model.train_batch_size,
                                            num_workers=args.n_cpus,
                                            shuffle=True)
 
-        self.val_dataloader = DataLoader(valset,
+        self.val_dataloader = DataLoader(self.valset,
                                          batch_size=args.le_model.val_batch_size,
                                          num_workers=args.n_cpus,
                                          shuffle=False)
 
-        self.test_dataloader = DataLoader(testset,
+        self.test_dataloader = DataLoader(self.testset,
                                           batch_size=args.le_model.val_batch_size,
                                           num_workers=args.n_cpus,
                                           shuffle=False)
@@ -145,7 +145,7 @@ class LinearEvaluationAccuracy():
 
         # Splitting off projection head
         num_classes = data.num_classes
-        # encoder = model.encoder
+        self.encoder = model.encoder
         # encoder.num_classes = data.num_classes
 
         # Freeze encoder
@@ -194,7 +194,8 @@ class LinearEvaluationAccuracy():
         elif dataset == 'val':
             return self.trainer.logged_metrics["val_acc"]
         elif dataset == 'test':
-            predictions = self.trainer.predict(self.model, self.test_dataloader, ckpt_path='best' if self.checkpoint else None)
+            predictions = self.trainer.predict(self.model, self.test_dataloader,
+                                               ckpt_path='best' if self.checkpoint else None)
 
             logits = torch.cat([pred[0] for pred in predictions])
             targets = torch.cat([pred[1] for pred in predictions])
@@ -202,7 +203,13 @@ class LinearEvaluationAccuracy():
         else:
             sys.exit(f"Data split {dataset} does not exist.")
 
-
+    def save_features_and_model_state_dict(self, name="model_features_dict", path=""):
+        # TODO Is this really the best method?
+        path = os.path.join(path + os.path.sep + f"{name}.pth")
+        torch.save({'trainset': self.trainset,
+                    'valset': self.valset,
+                    'testset': self.testset,
+                    'model': self.encoder.state_dict}, path)
 
 
 @hydra.main(version_base=None, config_path="../self_supervised_learning/config", config_name="config")
@@ -253,6 +260,7 @@ def main(args):
                                                encoder=encoder, projector=projector)
     lr = LinearEvaluationAccuracy(model, output_dim, args, checkpoint=True)
     acc = lr.compute('test')
+    lr.save_features(trainer.log_dir)
     logger.info(f"Final linear evaluation test accuracy: {acc}")
 
 
