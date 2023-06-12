@@ -104,7 +104,7 @@ def main(args):
     # Start hyperparameter search
     num_cpus = int(os.environ.get('SLURM_CPUS_PER_TASK', args.num_cpus))
     num_gpus = torch.cuda.device_count()
-    ray.init(num_cpus=num_cpus, num_gpus=num_gpus, ignore_reinit_error=True)
+    ray.init(address='local', num_cpus=num_cpus, num_gpus=num_gpus, ignore_reinit_error=True)
 
     search_space = {"lr": tune.loguniform(1e-5, .1), "weight_decay": tune.loguniform(1e-5, .1)}
     objective = tune.with_resources(train, resources={'cpu': args.num_cpus, 'gpu': args.num_gpus})
