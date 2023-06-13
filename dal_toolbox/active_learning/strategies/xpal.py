@@ -1,6 +1,9 @@
 # https://github.com/dakot/probal/blob/master/src/query_strategies/expected_probabilistic_active_learning.py
 
 import numpy as np
+import torch
+from sklearn.metrics import pairwise_kernels
+from torch.utils.data import DataLoader
 
 from .query import Query
 
@@ -65,7 +68,7 @@ class XPAL(Query):
         self.alpha_c_ = alpha_c
         self.alpha_x_ = alpha_x
 
-    def compute_scores(self, unlabeled_indices):
+    def query(self, *, model, al_datamodule, acq_size, **kwargs):
         """Compute score for each unlabeled sample. Score is to be maximized.
         Parameters
         ----------
@@ -76,8 +79,25 @@ class XPAL(Query):
             Score of each unlabeled sample.
         """
         # compute frequency estimates for evaluation set (K_x) and candidate set (K_c)
-        labeled_indices = self.data_set_.get_labeled_indices()
-        y_labeled = np.array(self.data_set_.y_[labeled_indices].reshape(-1), dtype=int)
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
+
+        labeled_loader, labeled_indices = al_datamodule.labeled_dataloader()
+        y_labeled = []
+
+        for _, labels, _ in labeled_loader:
+            y_labeled.append(labels)
+        y_labeled = torch.cat(y_labeled).tolist()
+
+        unlabeled_features = model.get_representations(unlabeled_dataloader)   # TODO Are indices still corrct then?
+        labeled_features = model.get_representations(labeled_loader)
+
+        unlabeled_indices = np.arange(0, len(unlabeled_features))
+        labeled_indices = np.arange(len(unlabeled_features), len(unlabeled_features) + len(labeled_features))
+
+        features = torch.cat([unlabeled_features, labeled_features])
+
+        self.S_ = pairwise_kernels(X=features, Y=features, metric="cosine")
+
         Z = np.eye(self.n_classes_)[y_labeled]
         K_x = self.S_[:, labeled_indices] @ Z
         K_c = K_x[unlabeled_indices]
@@ -151,7 +171,7 @@ def xpal_gain(K_c, K_x=None, S=None, alpha_x=1, alpha_c=1):
     # compute required labels per class to flip decision
     with np.errstate(divide='ignore', invalid='ignore'):
         D_x = np.nanmin(np.divide(R_x - np.min(R_x, axis=1, keepdims=True), R[:, y_hat].T), axis=1)
-        D_x = np.tile(D_x, (len(S), 1))
+        D_x = np.tile(D_x, (len(S), 1))  # TODO This takes up a lot of space with large datasets
 
     # indicates where a decision flip can be reached
     I = D_x - S < 0
