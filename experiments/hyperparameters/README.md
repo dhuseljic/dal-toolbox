@@ -1,5 +1,4 @@
 # Study on Hyperparameters in Deep Active Learning
-
 This is the official implementation for the paper *Role of Hyperparameters in Deep Active Learning*.
 
 ## Setup
@@ -16,7 +15,8 @@ Make sure you are in the root directory of this repository to correctly install 
 ## Reproducibility
 All experiments conducted in the paper are located under the `./slurm` directory.
 
-## Additional Results
+## Results
+Here, we report results for the CIFAR-10 and CIFAR-100 datasets.
 
 ### CIFAR-10
 
