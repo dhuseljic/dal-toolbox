@@ -105,7 +105,11 @@ class XPAL(Query):
         # calculate loss reduction for each unlabeled sample
         gains = xpal_gain(K_c=K_c, K_x=K_x, S=self.S_[unlabeled_indices], alpha_c=self.alpha_c_, alpha_x=self.alpha_x_)
 
-        return gains
+        _, indices = torch.topk(torch.Tensor(gains), acq_size)
+
+        actual_indices = [int(unlabeled_indices[i]) for i in indices]
+
+        return actual_indices
 
 
 def xpal_gain(K_c, K_x=None, S=None, alpha_x=1, alpha_c=1):
@@ -184,6 +188,7 @@ def xpal_gain(K_c, K_x=None, S=None, alpha_x=1, alpha_c=1):
     # stores gain per candidate sample
     gains = np.zeros(n_candidate_samples)
 
+    # TODO This has to be adapted for DNNs
     # compute gain for each candidate sample
     flip_indices = np.argwhere(np.sum(I, axis=1) > 0)[:, 0]
     for ik_c in flip_indices:

@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader
 from omegaconf import OmegaConf
 
 from dal_toolbox import metrics
+from dal_toolbox.active_learning.strategies.xpal import XPAL
 from dal_toolbox.models import deterministic
 from dal_toolbox import datasets
 from dal_toolbox.active_learning import ActiveLearningDataModule
@@ -54,7 +55,7 @@ def main(args):
 
     # Setup Query
     logger.info('Building query strategy: %s', args.al_strategy.name)
-    al_strategy = build_al_strategy(args)
+    al_strategy = build_al_strategy(args, data.num_classes)
 
     # Active Learning Cycles
     for i_acq in range(0, args.al_cycle.n_acq + 1):
@@ -144,7 +145,7 @@ def build_model(args, num_classes):
     return model
 
 
-def build_al_strategy(args):
+def build_al_strategy(args, num_classes=10):
     if args.al_strategy.name == "random":
         query = random.RandomSampling()
     elif args.al_strategy.name == "entropy":
@@ -153,6 +154,8 @@ def build_al_strategy(args):
         query = coreset.CoreSet(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == "badge":
         query = badge.Badge(subset_size=args.al_strategy.subset_size)
+    elif args.al_strategy.name == "xpal":
+        query = XPAL(num_classes, subset_size=args.al_strategy.subset_size)
     else:
         raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
     return query
