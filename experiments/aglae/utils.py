@@ -151,6 +151,7 @@ def build_model(args, **kwargs):
             loss_fn=nn.CrossEntropyLoss(), 
             optimizer=optimizer,
             lr_scheduler=scheduler,
+            scheduler_interval='step',
             train_metrics={'train_acc': metrics.Accuracy()},
             val_metrics=None
         )
@@ -178,6 +179,7 @@ def build_model(args, **kwargs):
             loss_fn=nn.CrossEntropyLoss(), 
             optimizer=optimizer,
             lr_scheduler=scheduler,
+            scheduler_interval='step',
             train_metrics={'train_acc': metrics.Accuracy()},
             val_metrics=None
         )

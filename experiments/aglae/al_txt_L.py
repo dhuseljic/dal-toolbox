@@ -19,6 +19,7 @@ from dal_toolbox.utils import seed_everything, is_running_on_slurm
 from dal_toolbox import metrics
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from utils import build_dataset, build_model, build_query, initialize_wandb
+from lightning.pytorch.callbacks import LearningRateMonitor
 
 @hydra.main(version_base=None, config_path="./configs", config_name="al_nlp")
 def main(args):
@@ -93,10 +94,11 @@ def main(args):
         # Reset Parameters
         model.reset_states()
 
+        # Overwrite scheduler with information about labeled instances
         model.lr_scheduler = transformers.get_linear_schedule_with_warmup(
              optimizer=model.optimizer,
-             num_warmup_steps=math.ceil(args.model.n_epochs * len(al_datamodule.labeled_indices) * args.model.optimizer.warmup_ratio),
-             num_training_steps=args.model.n_epochs * len(al_datamodule.labeled_indices)
+             num_warmup_steps=math.ceil(args.model.n_epochs * len(al_datamodule.train_dataloader()) * args.model.optimizer.warmup_ratio),
+             num_training_steps=args.model.n_epochs * len(al_datamodule.train_dataloader())
         )
 
         # Training
@@ -104,7 +106,8 @@ def main(args):
             max_epochs=args.model.n_epochs,
             default_root_dir=args.output_dir,
             enable_checkpointing=False,
-            enable_progress_bar=True
+            enable_progress_bar=True,
+            callbacks=[LearningRateMonitor(logging_interval='step')]
         )
 
         trainer.fit(model, al_datamodule)
