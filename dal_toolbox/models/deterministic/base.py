@@ -7,33 +7,25 @@ from ..utils.mixup import mixup
 
 class DeterministicAGLAEModel(BaseModule):
 
-    def training_tep(self, batch):
-        inputs, targets = batch
-
-        logits = self(inputs['input_ids'], inputs['attention_mask'])
-        loss = self.loss_fn(logits, targets)
+    def training_step(self, batch):
+        logits = self(batch['input_ids'], batch['attention_mask'])
+        loss = self.loss_fn(logits, batch['labels'])
         self.log('train_loss', loss, prog_bar=True)
-
-        self.log_train_metrics(logits, targets)
+        self.log_train_metrics(logits, batch['labels'])
         return loss
-    
+
     def validation_step(self, batch, batch_idx):
-        inputs, targets = batch
-
-        logits = self(inputs['input_ids'], inputs['attention_mask'])
-        loss = self.loss_fn(logits, targets)
+        logits = self(batch['input_ids'], batch['attention_mask'])
+        loss = self.loss_fn(logits, batch['labels'])
         self.log('val_loss', loss, prog_bar=True)
-        self.log_val_metrics(logits, targets)
+        self.log_val_metrics(logits, batch['labels'])
         return loss
-    
-    def predict_step(self, batch, batch_idx, dataloader_idx=0):
-        inputs, targets = batch
 
-        logits = self(inputs['input_ids'], inputs['attention_mask'])
-        logits = self._gather(logits)
-        targets = self._gather(targets)
-        return logits, targets
-    
+    def predict_step(self, batch, batch_idx, dataloader_idx=0):
+        logits = self(batch['input_ids'], batch['attention_mask'])
+        logits = self._gather(batch['labels'])
+        targets = self._gather(batch['labels'])
+        return logits, targets 
     
 class DeterministicModel(BaseModule):
 

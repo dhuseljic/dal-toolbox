@@ -75,6 +75,7 @@ def main(args):
         cycle_results = {}
 
         if i_acq != 0: 
+            ts = time.time()
             logging.info('Querying %s samples with strategy %s', args.al_cycle.acq_size, args.al_strategy.name)
             indices = al_strategy.query(
                 model=model, 
@@ -82,10 +83,21 @@ def main(args):
                 acq_size=args.al_cycle.acq_size
             )
             al_datamodule.update_annotations(indices)
+            
+            query_time = time.time() - ts
+            logging.info('Query Time: %f minutes', query_time/60)
+            cycle_results['query_indices'] = indices
+            cycle_results['query_time'] = query_time
             queried_indices[f'cycle{i_acq}'] = sorted(indices)
         
         # Reset Parameters
         model.reset_states()
+
+        model.lr_scheduler = transformers.get_linear_schedule_with_warmup(
+             optimizer=model.optimizer,
+             num_warmup_steps=math.ceil(args.model.n_epochs * len(al_datamodule.labeled_indices) * args.model.optimizer.warmup_ratio),
+             num_training_steps=args.model.n_epochs * len(al_datamodule.labeled_indices)
+        )
 
         # Training
         trainer = L.Trainer(
@@ -96,6 +108,7 @@ def main(args):
         )
 
         trainer.fit(model, al_datamodule)
+        print("cool")
         
 
 if __name__ == '__main__':
