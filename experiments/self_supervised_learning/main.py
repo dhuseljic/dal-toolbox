@@ -89,9 +89,9 @@ def build_simclr(args) -> (nn.Module, nn.Module):
 class FeatureDataset(Dataset):
     def __init__(self, model, dataset, device):
         dataloader = DataLoader(dataset, batch_size=512, num_workers=4)
-        features = model.get_representations(dataloader, device)  # TODO This can be speed up by using a single loop
+        features, labels = model.get_representations(dataloader, device, return_labels=True)
         self.features = features.detach()
-        self.labels = [label for _, label in dataset]
+        self.labels = labels
 
     def __len__(self):
         return len(self.features)
@@ -120,7 +120,7 @@ class LinearEvaluationCallback(Callback):
 # TODO The structure should be solved differently
 class LinearEvaluationAccuracy():
     def __init__(self, model: BaseModule, output_dim: int, args, checkpoint=False):
-        data = build_dataset(args)
+        data = build_plain_dataset(args)
 
         # From my testing this is slightly faster than passing the normal dataset through the frozen backbone in each
         # epoch, however only when training for more than ~15 epochs
@@ -255,19 +255,15 @@ def main(args):
     model = simclr.SimCLR.load_from_checkpoint(trainer.checkpoint_callback.best_model_path,
                                                encoder=encoder, projector=projector)
     lr = LinearEvaluationAccuracy(model, output_dim, args, checkpoint=True)
-    # TODO This has the side effect of loading the best validation model, which  is currently not clear
+    # TODO This has the side effect of loading the best validation model (I think), which  is currently not clear
     acc = lr.compute('test')
     lr.save_features_and_model_state_dict(path=trainer.log_dir)
     logger.info(f"Final linear evaluation test accuracy: {acc}")
 
 
-def build_dataset(args):
+def build_plain_dataset(args):
     if args.dataset.name == 'CIFAR10':
-        data = datasets.CIFAR10(args.dataset_path)
-    elif args.dataset.name == 'CIFAR100':
-        data = datasets.CIFAR100(args.dataset_path)
-    elif args.dataset.name == 'SVHN':
-        data = datasets.SVHN(args.dataset_path)
+        data = datasets.CIFAR10Plain(args.dataset_path)
     else:
         sys.exit(f"Dataset {args.dataset.name} not implemented.")
 

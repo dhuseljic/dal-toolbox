@@ -96,6 +96,23 @@ class CIFAR10C(CIFAR10):
         ])
         return eval_transform
 
+# TODO Is there a better way?
+class CIFAR10Plain(CIFAR10):
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None):
+        super().__init__(dataset_path, val_split=val_split, seed=seed)
+
+    @property
+    def train_transforms(self):
+        return transforms.Compose([transforms.ToTensor(), ])
+
+    @property
+    def query_transforms(self):
+        return transforms.Compose([transforms.ToTensor(), ])
+
+    @property
+    def eval_transforms(self):
+        return transforms.Compose([transforms.ToTensor(), ])
+
 
 class CIFAR10Contrastive(CIFAR10):
 
