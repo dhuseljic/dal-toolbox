@@ -5,6 +5,7 @@ import sys
 
 import hydra
 import lightning as L
+import torch.cuda
 from lightning import Callback
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
 from omegaconf import OmegaConf
@@ -32,7 +33,7 @@ def build_encoder(name, return_output_dim=False):
         encoder = deterministic.resnet.ResNet18(num_classes=1)  # Linear layer will be replaced
         encoder.linear = nn.Identity()  # Replace layer after max pool
 
-        encoder_output_dim = 512  # TODO Load dynamically maybe?
+        encoder_output_dim = 512  # TODO (ynagel) Load dynamically maybe?
     else:
         raise NotImplementedError(f"{name} is not implemented!")
 
@@ -85,19 +86,19 @@ def build_simclr(args) -> (nn.Module, nn.Module):
 
 
 class LinearEvaluationCallback(Callback):
-    def __init__(self, output_dim, args):
+    def __init__(self, device, args, logger=None):
         self.args = args
-        self.output_dim = output_dim
+        self.device = device
         self.interval = args.le_model.callback.interval
-        # TODO (ynagel) Get through arguments
-        self.logger = logging.getLogger(__name__)
+        self.logger = logger
 
     def on_train_epoch_end(self, trainer, pl_module):
         if trainer.current_epoch % self.interval == 0:
-            self.logger.info("Starting linear evaluation callback.")
+            if self.logger is not None:
+                self.logger.info("Starting linear evaluation callback.")
             lr = LinearEvaluationAccuracy(model=pl_module,
                                           data=build_plain_dataset(self.args),
-                                          output_dim=self.output_dim,
+                                          device=self.device,
                                           train_batch_size=self.args.le_model.train_batch_size,
                                           val_batch_size=self.args.le_model.val_batch_size,
                                           n_cpus=self.args.n_cpus,
@@ -106,19 +107,25 @@ class LinearEvaluationCallback(Callback):
                                           momentum=self.args.le_model.optimizer.momentum,
                                           epochs=self.args.le_model.num_epochs,
                                           val_interval=self.args.le_val_interval,
-                                          output_dir=self.args.output_dir,
+                                          output_dir=os.path.join(
+                                              self.args.output_dir, "SimCLR_Linear_Evaluation_Callback"),
                                           progressbar=is_running_on_slurm() is False,
                                           )
-
-            self.logger.info(f"Epoch {trainer.current_epoch} - "
-                             f"Linear evaluation accuracy: "
-                             f"Train : {lr.compute():4f} , Validation: {lr.compute('val'):4f}")
+            if self.logger is not None:
+                self.logger.info(f"Epoch {trainer.current_epoch} - "
+                                 f"Linear evaluation accuracy: "
+                                 f"Train : {lr.compute_accuracy():4f} , Validation: {lr.compute_accuracy('val'):4f}")
 
 
 @hydra.main(version_base=None, config_path="../self_supervised_learning/config", config_name="config")
 def main(args):
     logger = logging.getLogger(__name__)
     logger.info('Using config: \n%s', OmegaConf.to_yaml(args))
+
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
 
     # To be reproducible
     L.seed_everything(args.random_seed)
@@ -143,7 +150,7 @@ def main(args):
     ]
 
     if args.le_model.callback.enabled:
-        callbacks.append(LinearEvaluationCallback(model.encoder_output_dim, args))
+        callbacks.append(LinearEvaluationCallback(model.encoder_output_dim, args, logger))
 
     # Create a Trainer Module
     trainer = L.Trainer(
@@ -167,7 +174,7 @@ def main(args):
                                                encoder=encoder, projector=projector)
     lr = LinearEvaluationAccuracy(model=model,
                                   data=build_plain_dataset(args),
-                                  output_dim=output_dim,
+                                  device=device,
                                   train_batch_size=args.le_model.train_batch_size,
                                   val_batch_size=args.le_model.val_batch_size,
                                   n_cpus=args.n_cpus,
@@ -176,11 +183,10 @@ def main(args):
                                   momentum=args.le_model.optimizer.momentum,
                                   epochs=args.le_model.num_epochs,
                                   val_interval=args.le_val_interval,
-                                  output_dir=args.output_dir,
+                                  output_dir=os.path.join(args.output_dir, "SimCLR_Linear_Evaluation_Callback"),
                                   progressbar=is_running_on_slurm() is False,
                                   )
-    # TODO (ynagel) This has the side effect of loading the best validation model (I think), which  is currently not clear
-    acc = lr.compute('test')
+    acc = lr.compute_accuracy('test')
     lr.save_features_and_model_state_dict(path=trainer.log_dir)
     logger.info(f"Final linear evaluation test accuracy: {acc}")
 

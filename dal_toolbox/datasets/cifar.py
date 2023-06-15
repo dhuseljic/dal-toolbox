@@ -157,7 +157,7 @@ class CIFAR10Contrastive(CIFAR10):
 
     @property
     def eval_transforms(self):
-        return self.train_transforms  # TODO This depends on the error we want to calculate on the validation/test set
+        return self.train_transforms
 
 
 class CIFAR100(CIFAR10):

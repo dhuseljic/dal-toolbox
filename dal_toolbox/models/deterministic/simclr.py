@@ -21,6 +21,7 @@ class InfoNCELoss(nn.Module):
     """
     The InfoNCE contrastive loss.
     """
+
     def __init__(self, temperature: float = 1.0) -> None:
         """
         Initializes ``InfoNCELoss``.
@@ -69,7 +70,7 @@ class LinearEvaluationAccuracy:
     def __init__(self,
                  model: BaseModule,
                  data: AbstractData,
-                 output_dim: int,
+                 device: torch.device,
                  train_batch_size: int = 4096,
                  val_batch_size: int = 512,
                  n_cpus: int = 1,
@@ -83,12 +84,12 @@ class LinearEvaluationAccuracy:
                  checkpoint: bool = False,
                  progressbar: bool = False) -> None:
         """
-        Initializes ``LinearEvaluationAccuracy``.
+        Initializes ``LinearEvaluationAccuracy``. This incorporates training the model.
 
         Args:
             model: The model from which the features are to be extracted from.
             data: The dataset used to extract the features from ``model``.
-            output_dim: # TODO (ynagel) Can this not be inferred from the features itself?
+            device: The ``torch.device`` on which the feature representations are calculated.
             train_batch_size: The batch size used for training.
             val_batch_size: The batch size used for training.
             n_cpus: Number of cpu processes used for the dataloaders.
@@ -104,12 +105,15 @@ class LinearEvaluationAccuracy:
             checkpoint: Whether model checkpoints should be saved during training.
             progressbar: Whether the pytorch lightning trainer should display a progress bar.
         """
+        self.checkpoint = checkpoint
+        self.encoder = model.encoder
+
         # From my testing this is slightly faster than passing the normal dataset through the frozen backbone in each
         # epoch, however only when training for more than ~15 epochs. Also, the dataset has to be "plain", meaning no
         # transforms take place
-        self.trainset = FeatureDataset(model.encoder, data.train_dataset, "cuda")  # TODO load device from somewhere
-        self.valset = FeatureDataset(model.encoder, data.val_dataset, "cuda")  # TODO load device from somewhere
-        self.testset = FeatureDataset(model.encoder, data.test_dataset, "cuda")  # TODO load device from somewhere
+        self.trainset = FeatureDataset(self.encoder, data.train_dataset, device)
+        self.valset = FeatureDataset(self.encoder, data.val_dataset, device)
+        self.testset = FeatureDataset(self.encoder, data.test_dataset, device)
 
         self.train_dataloader = DataLoader(self.trainset,
                                            batch_size=train_batch_size,
@@ -126,9 +130,12 @@ class LinearEvaluationAccuracy:
                                           num_workers=n_cpus,
                                           shuffle=False)
 
-        num_classes = data.num_classes  # TODO (ynagel) AbstractData does not mandate this field
-        self.encoder = model.encoder
+        if hasattr(data, "num_classes"):
+            num_classes = data.num_classes
+        else:  # Manually calculate number of classes
+            num_classes = len(torch.unique([label for _, label in self.trainset]))
 
+        output_dim = self.trainset.features.shape[1]
         model = nn.Linear(output_dim, num_classes)
 
         if use_linear_lr_scaling:
@@ -155,8 +162,7 @@ class LinearEvaluationAccuracy:
             callbacks = []
 
         self.trainer = L.Trainer(
-            # TODO (ynagel) One should be able to rename this folder
-            default_root_dir=os.path.join(output_dir, "SimCLR_Linear_Evaluation_Callback"),
+            default_root_dir=output_dir,
             accelerator="auto",
             max_epochs=epochs,
             enable_checkpointing=checkpoint,
@@ -166,15 +172,21 @@ class LinearEvaluationAccuracy:
             num_sanity_val_steps=0
         )
 
-        # TODO (ynagel) Should this be done in the init method?
         self.trainer.fit(self.model, self.train_dataloader, self.val_dataloader)
-        self.checkpoint = checkpoint
 
-    def compute(self, dataset='train'):
+    def compute_accuracy(self, dataset: str = 'train') -> float:
+        """
+        Returns either train, validation or test accuracy, depending on ``dataset``.
+
+        The train and validation accuracy are taken from the last epoch, the test accuracy is newly computed. When
+        checkpointing is enabled, the test accuracy is computed on the best model saved based on the validation accuracy.
+        Args:
+            dataset: Which dataset to compute accuracy on. Can be either ``train``, ``val`` or ``test``.
+        """
         if dataset == 'train':
-            return self.trainer.logged_metrics["train_acc"]
+            return self.trainer.logged_metrics["train_acc"].float()
         elif dataset == 'val':
-            return self.trainer.logged_metrics["val_acc"]
+            return self.trainer.logged_metrics["val_acc"].float()
         elif dataset == 'test':
             predictions = self.trainer.predict(self.model, self.test_dataloader,
                                                ckpt_path='best' if self.checkpoint else None)
@@ -185,7 +197,13 @@ class LinearEvaluationAccuracy:
         else:
             raise NotImplementedError(f"Data split {dataset} is not implemented for compute().")
 
-    def save_features_and_model_state_dict(self, name="model_features_dict", path=""):
+    def save_features_and_model_state_dict(self, name: str = "model_features_dict", path: str = "") -> None:
+        """
+        Saves the encoder features as well as the feature datasets used during training/testing.
+        Args:
+            name: The name of file to save the information to.
+            path: The path of where to save the file.
+        """
         path = os.path.join(path + os.path.sep + f"{name}.pth")
         torch.save({'trainset': self.trainset,
                     'valset': self.valset,
