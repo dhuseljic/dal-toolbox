@@ -52,6 +52,7 @@ def train(config, args, al_dataset, num_classes):
             enable_progress_bar=False,
             default_root_dir=args.output_dir,
             fast_dev_run=args.fast_dev_run,
+            logger=False,
         )
         trainer.fit(model, train_loader, val_dataloaders=val_loader)
         val_stats = trainer.validate(model, val_loader)[0]
@@ -91,8 +92,7 @@ def main(args):
     with open(args.queried_indices_json, 'r') as f:
         queried_indices = json.load(f)
     if args.budget == 2000:
-        indices = [idx for key in queried_indices if key in [
-            f'cycle{i}' for i in range(20)] for idx in queried_indices[key]]
+        indices = [idx for key in queried_indices if key in [f'cycle{i}' for i in range(20)] for idx in queried_indices[key]]
     elif args.budget == 4000:
         indices = [idx for key in queried_indices for idx in queried_indices[key]]
     else:
@@ -109,7 +109,7 @@ def main(args):
     search_space = {"lr": tune.loguniform(1e-5, .1), "weight_decay": tune.loguniform(1e-5, .1)}
     objective = tune.with_resources(train, resources={'cpu': args.num_cpus, 'gpu': args.num_gpus})
     objective = tune.with_parameters(objective, args=args, al_dataset=al_dataset, num_classes=data.num_classes)
-    search_alg = OptunaSearch(points_to_evaluate=[{'lr': args.lr, 'weight_decay': args.weight_decay}])
+    search_alg = OptunaSearch(points_to_evaluate=[{'lr': args.lr, 'weight_decay': args.weight_decay}], seed=args.random_seed)
     tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=args.num_opt_samples, metric="val_acc", mode="max")
     tuner = tune.Tuner(objective, param_space=search_space, tune_config=tune_config,
                        run_config=air.RunConfig(storage_path=args.output_dir))
