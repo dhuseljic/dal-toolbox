@@ -12,11 +12,11 @@ al_cycle:
   init_pool_file: null
 
 wandb:
-  project: active-glae
+  project: test
   entity: dal-nlp
   group: default
   reinit: True
-  mode: disabled
+  mode: online 
 
 dataset_path: ~/data_glae/
 

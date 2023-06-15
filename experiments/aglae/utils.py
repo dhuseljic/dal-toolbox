@@ -50,8 +50,7 @@ def initialize_wandb(args):
         entity=args.wandb.entity,
         group=args.wandb.group,
         reinit=args.wandb.reinit,
-        #mode=args.wandb.mode,
-        mode = 'disabled',
+        mode = args.wandb.mode,
         name=args.model.name+'_'+args.al_strategy.name+'_'+args.dataset.name+'#'+str(args.random_seed),
         config = OmegaConf.to_container(
             args, 
