@@ -60,9 +60,10 @@ class TypiClust(Query):
     MAX_NUM_CLUSTERS = 500
     K_NN = 20
 
-    def __init__(self, subset_size=None, random_seed=None):
+    def __init__(self, subset_size=None, random_seed=None, precomputed=True):
         super().__init__(random_seed=random_seed)
         self.subset_size = subset_size
+        self.precomputed = precomputed
 
     @torch.no_grad()
     def query(self,
@@ -75,8 +76,15 @@ class TypiClust(Query):
         labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
 
         num_clusters = min(len(labeled_indices) + acq_size, self.MAX_NUM_CLUSTERS)
-        unlabeled_features = model.get_representations(unlabeled_dataloader)
-        labeled_features = model.get_representations(labeled_dataloader)
+
+        # TODO Find out why the dataloader also returns the indices
+        if self.precomputed:
+            unlabeled_features = torch.cat([features for features, _, _ in unlabeled_dataloader])
+            labeled_features = torch.cat([features for features, _, _ in labeled_dataloader])
+        else:
+            unlabeled_features = model.get_representations(unlabeled_dataloader)
+            labeled_features = model.get_representations(labeled_dataloader)
+
         features = torch.cat((labeled_features, unlabeled_features))
         clusters = kmeans(features, num_clusters=num_clusters)
 

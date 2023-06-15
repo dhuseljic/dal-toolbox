@@ -8,7 +8,8 @@ import torch
 import hydra
 
 import lightning as L
-from torch.utils.data import DataLoader
+from torch import nn
+from torch.utils.data import DataLoader, Dataset
 from omegaconf import OmegaConf
 
 from dal_toolbox import metrics
@@ -18,6 +19,20 @@ from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, typiclust
 from dal_toolbox.utils import seed_everything, is_running_on_slurm
 from dal_toolbox.models.utils.callbacks import MetricLogger
+
+
+class FeatureDataset(Dataset):
+    def __init__(self, model, dataset, device):
+        dataloader = DataLoader(dataset, batch_size=512, num_workers=4)
+        features, labels = model.get_representations(dataloader, device, return_labels=True)
+        self.features = features.detach()
+        self.labels = labels
+
+    def __len__(self):
+        return len(self.features)
+
+    def __getitem__(self, idx):
+        return self.features[idx], self.labels[idx]
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
@@ -33,15 +48,35 @@ def main(args):
 
     # Setup Dataset
     logger.info('Building datasets.')
-    data = build_datasets(args)
-    test_loader = DataLoader(data.test_dataset, batch_size=args.model.predict_batch_size)
+    load_self_supervised_features = True  # TODO Argument
+    if load_self_supervised_features:
+        features = torch.load("model_features_dict.pth")
+
+        trainset = features['trainset']
+        queryset = trainset
+        valset = features['valset']
+        testset = features['testset']
+
+        num_classes = len(torch.unique(trainset.labels))
+        feature_size = trainset.features.shape[1]
+    else:
+        data = build_datasets(args)
+        trainset = data.train_dataset
+        queryset = data.query_dataset
+        valset = data.val_dataset
+        testset = data.test_dataset
+
+        num_classes = data.num_classes
+
+    # TODO: For some reason the test dataloader of al_datamodule does not work
+    test_dataloader = DataLoader(testset, batch_size=args.model.predict_batch_size, shuffle=False)
 
     # Setup AL Module
     logger.info('Creating AL Datamodule with %s initial samples.', args.al_cycle.n_init)
     al_datamodule = ActiveLearningDataModule(
-        train_dataset=data.train_dataset,
-        query_dataset=data.query_dataset,
-        val_dataset=data.val_dataset,
+        train_dataset=trainset,
+        query_dataset=queryset,
+        val_dataset=valset,
         train_batch_size=args.model.train_batch_size,
         predict_batch_size=args.model.predict_batch_size,
     )
@@ -50,7 +85,20 @@ def main(args):
 
     # Setup Model
     logger.info('Building model: %s', args.model.name)
-    model = build_model(args, num_classes=data.num_classes)
+
+    if load_self_supervised_features:
+        model = nn.Linear(feature_size, num_classes) # TODO Duplicated code
+        optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
+        model = deterministic.DeterministicModel(
+            model,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            train_metrics={'train_acc': metrics.Accuracy()},
+            val_metrics={'val_acc': metrics.Accuracy()},
+        )
+    else:
+        model = build_model(args, num_classes=num_classes)
 
     # Setup Query
     logger.info('Building query strategy: %s', args.al_strategy.name)
@@ -94,7 +142,7 @@ def main(args):
 
         # Evaluate resulting model
         logger.info('Evaluation..')
-        predictions = trainer.predict(model, test_loader)
+        predictions = trainer.predict(model, test_dataloader)
         logits = torch.cat([pred[0] for pred in predictions])
         targets = torch.cat([pred[1] for pred in predictions])
         test_stats = {
