@@ -38,12 +38,13 @@ The following datasets are implemented:
 
 The following active learning strategies are implemented:
 
-| Strategy                 | Argument  |
-|--------------------------|-----------|
-| Random sampling          | `random`  |
-| Entropy sampling         | `entropy` |
-| Core-Set [[4](#sources)] | `coreset` |
-| BADGE [[5](#sources)]    | `badge`   |
+| Strategy                  | Argument    |
+|---------------------------|-------------|
+| Random sampling           | `random`    |
+| Entropy sampling          | `entropy`   |
+| Core-Set [[4](#sources)]  | `coreset`   |
+| BADGE [[5](#sources)]     | `badge`     |
+| TypiCLust [[6](#sources)] | `typiclust` |
 
 
 ## Comparison with state-of-the-art
@@ -75,4 +76,6 @@ All slurm scripts used to run these experiments can be found [here](slurm/ynagel
 - [3] Netzer, Yuval, Tao Wang, Adam Coates, Alessandro Bissacco, Bo Wu, and Andrew Y. Ng. “Reading Digits in Natural Images with Unsupervised Feature Learning,.” In Deep Learning Unsupervised Feature Learn. Workshop @ Adv. Neural. Inf. Process. Syst. Granada, Spain, 2011.
 - [4] Sener, Ozan, and Silvio Savarese. “Active Learning for Convolutional Neural Networks: A Core-Set Approach.” In International Conference on Learning Representations, 2018. https://openreview.net/forum?id=H1aIuk-RW.
 - [5] Ash, Jordan T., Chicheng Zhang, Akshay Krishnamurthy, John Langford, and Alekh Agarwal. “Deep Batch Active Learning by Diverse, Uncertain Gradient Lower Bounds.” In International Conference on Learning Representations, 2020. https://openreview.net/forum?id=ryghZJBKPS.
+- [6] Hacohen, Guy, Avihu Dekel, and Daphna Weinshall. “Active Learning on a Budget: Opposite Strategies Suit High and Low Budgets.” In International Conference on Machine Learning, 8175–95. PMLR, 2022. http://arxiv.org/abs/2202.02794.
+
 
