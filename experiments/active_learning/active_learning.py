@@ -59,7 +59,7 @@ def main(args):
         num_classes = len(torch.unique(trainset.labels))
         feature_size = trainset.features.shape[1]
     else:
-        data = build_datasets(args)
+        data = build_dataset(args)
         trainset = data.train_dataset
         queryset = data.query_dataset
         valset = data.val_dataset
@@ -200,21 +200,21 @@ def build_al_strategy(args):
     elif args.al_strategy.name == "badge":
         query = badge.Badge(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == "typiclust":
-        query = typiclust.TypiClust(subset_size=args.al_strategy.subset_size)
+        query = typiclust.TypiClust(subset_size=args.al_strategy.subset_size, precomputed=args.precomputed_features)
     else:
-        raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
+        raise NotImplementedError(f"Active learning strategy {args.al_strategy.name} is not implemented!")
     return query
 
 
-def build_datasets(args):
+def build_dataset(args):
     if args.dataset.name == 'CIFAR10':
         data = datasets.CIFAR10(args.dataset_path)
-
     elif args.dataset.name == 'CIFAR100':
         data = datasets.CIFAR100(args.dataset_path)
-
     elif args.dataset.name == 'SVHN':
         data = datasets.SVHN(args.dataset_path)
+    else:
+        raise NotImplementedError(f"Dataset {args.al_strategy.name} is not implemented!")
 
     return data
 
