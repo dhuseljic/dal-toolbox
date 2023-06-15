@@ -98,7 +98,10 @@ class CIFAR10C(CIFAR10):
 
 
 class CIFAR10Plain(CIFAR10):
-    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None):
+    """
+    Version of CIFAR10 which hast only ``transforms.ToTensor()`` as transform.
+    """
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
         super().__init__(dataset_path, val_split=val_split, seed=seed)
 
     @property
@@ -115,15 +118,24 @@ class CIFAR10Plain(CIFAR10):
 
 
 class CIFAR10Contrastive(CIFAR10):
+    """
+    Contrastive version of CIFAR10.
 
+    This means that the transforms are repeated twice for each image, resulting in two views for each input image.
+    """
     def __init__(self,
                  dataset_path: str,
                  mean: tuple = CIFAR10Transforms.mean.value,
                  std: tuple = CIFAR10Transforms.std.value,
                  val_split: float = 0.1,
                  seed: int = None,
-                 color_distortion_strength=1.0
-                 ):
+                 color_distortion_strength: float = 1.0
+                 ) -> None:
+        """
+
+        Args:
+            color_distortion_strength: Strength of color jittering transform.
+        """
         self.s = color_distortion_strength
         super().__init__(dataset_path, mean, std, val_split, seed)
 
@@ -145,7 +157,7 @@ class CIFAR10Contrastive(CIFAR10):
 
     @property
     def eval_transforms(self):
-        return self.train_transforms
+        return self.train_transforms  # TODO This depends on the error we want to calculate on the validation/test set
 
 
 class CIFAR100(CIFAR10):

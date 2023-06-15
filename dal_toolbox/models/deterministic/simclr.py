@@ -1,12 +1,12 @@
 import logging
 import os
 
+import lightning as L
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from lightning.pytorch.callbacks import ModelCheckpoint
 from torch.utils.data import DataLoader
-import lightning as L
 
 from .base import DeterministicModel
 from .. import deterministic
@@ -16,15 +16,31 @@ from ...datasets.base import AbstractData
 from ...datasets.utils import FeatureDataset
 
 
-# TODO This should probably be somewhere else
+# TODO (ynagel) This should probably be moved to a "losses.py" file of some sorts
 class InfoNCELoss(nn.Module):
-    def __init__(self, temperature=1.0):
+    """
+    The InfoNCE contrastive loss.
+    """
+    def __init__(self, temperature: float = 1.0) -> None:
+        """
+        Initializes ``InfoNCELoss``.
+
+        Args:
+            temperature: The temperature.
+        """
         super().__init__()
 
         assert temperature > 0.0, "The temperature must be a positive float!"
         self.temperature = temperature
 
     def forward(self, batch, targets):
+        """
+        Returns: The InfoNCE loss of the batch.
+
+        Args:
+            batch: The contrastive batch.
+            targets: For compatibility and are ignored.
+        """
         # Calculate cosine similarity
         cos_sim = F.cosine_similarity(batch[:, None, :], batch[None, :, :], dim=-1)
         # Mask out cosine similarity to itself
@@ -178,17 +194,41 @@ class LinearEvaluationAccuracy:
 
 
 class SimCLR(DeterministicModel):
+    """
+    Implements `A Simple Framework for Contrastive Learning of Visual Representations` by Chen et al. in a pytorch
+    lightning module.
+
+    Attributes:
+        encoder: The encoder part of SimCLR.
+        projector: The projector part of SimCLR
+    """
+
     def __init__(
             self,
-            encoder,
-            projector,
-            log_on_epoch_end=True,
+            encoder: nn.Module,
+            projector: nn.Module,
+            log_on_epoch_end: bool = True,
             loss_fn: nn.Module = InfoNCELoss(),
             optimizer: torch.optim.Optimizer = None,
             lr_scheduler: torch.optim.lr_scheduler.LRScheduler = None,
             train_metrics: dict = None,
             val_metrics: dict = None,
-    ):
+    ) -> None:
+        """
+        Initializes ``SimCLR``.
+
+        The ``encoder`` and ``projector`` have to be compatible (i.e. the output dimension of the encoder has to be the
+        same as the input dimension of the projector), as they are simply wrapped in a ``nn.Sequential`` module.
+        Args:
+            encoder: The encoder module.
+            projector: The projector module.
+            log_on_epoch_end: Whether metrics accumulated during an epoch should be logged at the end of the epoch.
+            loss_fn: The loss function. Has to ba a contrastive loss.
+            optimizer: The optimizer to train the model with.
+            lr_scheduler: The learning rate scheduler to train the model with.
+            train_metrics: Training metrics to be calculated during training.
+            val_metrics: Validation metrics to be calculated during validation.
+        """
         model = nn.Sequential(encoder, projector)
 
         super().__init__(model=model, loss_fn=loss_fn, optimizer=optimizer, lr_scheduler=lr_scheduler,

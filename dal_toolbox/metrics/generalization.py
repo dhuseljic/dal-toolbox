@@ -36,6 +36,13 @@ class Accuracy(torchmetrics.Metric):
 
 
 class ContrastiveAccuracy(torchmetrics.Metric):
+    """
+    A ``torchmetrics.Metric`` for calculating the contrastive accuracy.
+
+    The contrastive accuracy describes how accurately a constructive model can distinguish the positive pairs from the
+    negative pairs inside a batch.
+    """
+
     def __init__(self, topk=1):
         super().__init__()
         self.topk = topk

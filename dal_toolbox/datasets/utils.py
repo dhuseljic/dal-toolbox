@@ -1,5 +1,8 @@
 import numpy as np
+import torch
 from torch.utils.data import Dataset, DataLoader
+
+from dal_toolbox.models.utils.base import BaseModule
 
 
 class ContrastiveTransformations:
@@ -12,16 +15,29 @@ class ContrastiveTransformations:
 
 
 class FeatureDataset(Dataset):
-    def __init__(self, model, dataset, device):
+    """
+    Dataset for feature representations of a model.
+
+    This dataset class takes a ``model`` and a ``dataset`` and saves the features to use for later. Some tasks (e.g. the
+    linear evaluation accuracy) need datasets that entail the feature representations of a model.
+    """
+    def __init__(self, model: BaseModule, dataset: Dataset, device: torch.device) -> None:
+        """
+        Initializes ``FeatureDataset``.
+        Args:
+            model: The model the features are extracted from.
+            dataset: The dataset from which the features are extracted.
+            device: The ``torch.device``, with which the features are extracted
+        """
         dataloader = DataLoader(dataset, batch_size=512, num_workers=4)
         features, labels = model.get_representations(dataloader, device, return_labels=True)
         self.features = features.detach()
         self.labels = labels
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.features)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> (torch.Tensor, torch.Tensor):
         return self.features[idx], self.labels[idx]
 
 
