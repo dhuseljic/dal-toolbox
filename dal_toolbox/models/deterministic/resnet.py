@@ -95,7 +95,8 @@ class ResNet18(nn.Module):
         all_features = []
         all_labels = []
         for batch in dataloader:
-            inputs, labels = batch
+            inputs = batch[0]
+            labels = batch[1]
             _, features = self(inputs.to(device), return_features=True)
             all_features.append(features.cpu())
             all_labels.append(labels)
