@@ -1,24 +1,24 @@
-import os
-import time
+import datetime
 import json
 import logging
-import datetime
+import os
+import sys
+import time
 
-import torch
 import hydra
-
 import lightning as L
+import torch
+from omegaconf import OmegaConf
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
-from omegaconf import OmegaConf
 
-from dal_toolbox import metrics
-from dal_toolbox.models import deterministic
 from dal_toolbox import datasets
+from dal_toolbox import metrics
 from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, typiclust
-from dal_toolbox.utils import seed_everything, is_running_on_slurm
+from dal_toolbox.models import deterministic
 from dal_toolbox.models.utils.callbacks import MetricLogger
+from dal_toolbox.utils import seed_everything, is_running_on_slurm
 
 
 class FeatureDataset(Dataset):
@@ -48,9 +48,8 @@ def main(args):
 
     # Setup Dataset
     logger.info('Building datasets.')
-    load_self_supervised_features = True  # TODO Argument
-    if load_self_supervised_features:
-        features = torch.load("model_features_dict.pth")
+    if args.precomputed_features:
+        features = torch.load(args.precomputed_features_dir)
 
         trainset = features['trainset']
         queryset = trainset
@@ -67,6 +66,7 @@ def main(args):
         testset = data.test_dataset
 
         num_classes = data.num_classes
+        feature_size = None
 
     # TODO: For some reason the test dataloader of al_datamodule does not work
     test_dataloader = DataLoader(testset, batch_size=args.model.predict_batch_size, shuffle=False)
@@ -86,19 +86,7 @@ def main(args):
     # Setup Model
     logger.info('Building model: %s', args.model.name)
 
-    if load_self_supervised_features:
-        model = nn.Linear(feature_size, num_classes) # TODO Duplicated code
-        optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
-        model = deterministic.DeterministicModel(
-            model,
-            optimizer=optimizer,
-            lr_scheduler=lr_scheduler,
-            train_metrics={'train_acc': metrics.Accuracy()},
-            val_metrics={'val_acc': metrics.Accuracy()},
-        )
-    else:
-        model = build_model(args, num_classes=num_classes)
+    model = build_model(args, num_classes=num_classes, feature_size=feature_size)
 
     # Setup Query
     logger.info('Building query strategy: %s', args.al_strategy.name)
@@ -176,18 +164,28 @@ def main(args):
         json.dump(queried_indices, f, sort_keys=False)
 
 
-def build_model(args, num_classes):
-    if args.model.name == 'resnet18_deterministic':
-        model = deterministic.resnet.ResNet18(num_classes=num_classes)
-        optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
-        model = deterministic.DeterministicModel(
-            model,
-            optimizer=optimizer,
-            lr_scheduler=lr_scheduler,
-            train_metrics={'train_acc': metrics.Accuracy()},
-            val_metrics={'val_acc': metrics.Accuracy()},
-        )
+def build_model(args, num_classes, feature_size=None):
+    model = None
+    if args.precomputed_features:
+        if args.model.name == "linear":
+            model = nn.Linear(feature_size, num_classes)
+            optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
+            lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
+    else:
+        if args.model.name == 'resnet18_deterministic':
+            model = deterministic.resnet.ResNet18(num_classes=num_classes)
+            optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
+            lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
+
+    if model is None:
+        sys.exit(f"Model {args.model.name} is not implemented, "
+                 f"or not compatible with precomputed features == {args.precomputed_features}")
+
+    model = deterministic.DeterministicModel(
+        model, optimizer=optimizer, lr_scheduler=lr_scheduler,
+        train_metrics={'train_acc': metrics.Accuracy()},
+        val_metrics={'val_acc': metrics.Accuracy()},
+    )
 
     return model
 
