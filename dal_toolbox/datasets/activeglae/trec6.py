@@ -1,12 +1,31 @@
-from . import tokenize_ds
+from transformers import AutoTokenizer
+from .base import AbstractGLAE
+from datasets import load_dataset
 
-def build_trec6(args):
-    ds, tokenizer = tokenize_ds(args)
-    ds = ds.map(lambda batch: tokenizer(batch['text'], truncation=True))
-    ds = ds.rename_column('coarse_label', 'label')
-    ds = ds.remove_columns(
-            list(set(ds['train'].column_names)-set(['label', 'input_ids', 'attention_mask']))
-    )
-    ds_info = {'n_classes': 6, 'tokenizer': tokenizer}
-    return ds, ds_info
+
+class TREC6(AbstractGLAE):
+    def __init__(self, model_name, dataset_path, val_split=0.1, seed=None, pre_batch_size=1000, pre_num_proc=4):
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+        super().__init__('trec', dataset_path, val_split, seed, pre_batch_size, pre_num_proc)
     
+    def load_dataset(self, ds_name, cache_dir):
+        ds = load_dataset(ds_name, cache_dir=cache_dir)
+        return ds
+      
+    @property
+    def num_classes(self):
+        return 6
+
+    def process_fn(self, batch):
+        batch = self.tokenizer(batch['text'], truncation=True)
+        return batch
+
+    def rename_column(self, ds):
+        ds = ds.rename_column('coarse_label', 'label')
+        return ds
+
+
+
+
+
+

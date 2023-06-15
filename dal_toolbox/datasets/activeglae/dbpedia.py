@@ -1,11 +1,15 @@
-from . import tokenize_ds
+from transformers import AutoTokenizer
+from .base import AbstractGLAE
 
-def build_dbpedia(args):
-    ds, tokenizer = tokenize_ds(args)
-    ds = ds.map(lambda batch: tokenizer(batch['content'], truncation=True))
-    ds = ds.remove_columns(
-            list(set(ds['train'].column_names)-set(['label', 'input_ids', 'attention_mask']))
-    )
-    ds_info = {'n_classes': 14, 'tokenizer': tokenizer}
-    return ds, ds_info
-    
+class DBPedia(AbstractGLAE):
+    def __init__(self, model_name, dataset_path, val_split=0.1, seed=None, pre_batch_size=1000, pre_num_proc=4):
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
+        super().__init__('dbpedia_14', dataset_path, val_split, seed, pre_batch_size, pre_num_proc)
+
+    @property
+    def num_classes(self):
+        return 14
+
+    def process_fn(self, batch):
+        batch = self.tokenizer(batch['content'], truncation=True)
+        return batch

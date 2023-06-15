@@ -20,12 +20,14 @@ class BaseModule(L.LightningModule, abc.ABC):
             lr_scheduler: torch.optim.lr_scheduler.LRScheduler = None,
             train_metrics: dict = None,
             val_metrics: dict = None,
+            scheduler_interval = 'epoch'
     ):
         super().__init__()
         self.model = model
         self.loss_fn = loss_fn
         self.optimizer = optimizer
         self.lr_scheduler = lr_scheduler
+        self.scheduler_interval = scheduler_interval
         self.train_metrics = nn.ModuleDict(train_metrics)
         self.val_metrics = nn.ModuleDict(val_metrics)
 
@@ -66,7 +68,13 @@ class BaseModule(L.LightningModule, abc.ABC):
         if isinstance(self.lr_scheduler, functools.partial):
             self.lr_scheduler = self.lr_scheduler(self.optimizer)
 
-        return {'optimizer': self.optimizer, 'lr_scheduler': self.lr_scheduler}
+        return {
+            'optimizer': self.optimizer, 
+            'lr_scheduler': {
+                'scheduler': self.lr_scheduler,
+                'interval': self.scheduler_interval
+            }
+        }
 
     def log_train_metrics(self, logits, targets):
         if self.train_metrics is not None:
