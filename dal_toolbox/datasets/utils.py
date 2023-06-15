@@ -1,4 +1,5 @@
 import numpy as np
+from torch.utils.data import Dataset, DataLoader
 
 
 class ContrastiveTransformations:
@@ -8,6 +9,20 @@ class ContrastiveTransformations:
 
     def __call__(self, x):
         return [self.base_transforms(x) for i in range(self.n_views)]
+
+
+class FeatureDataset(Dataset):
+    def __init__(self, model, dataset, device):
+        dataloader = DataLoader(dataset, batch_size=512, num_workers=4)
+        features, labels = model.get_representations(dataloader, device, return_labels=True)
+        self.features = features.detach()
+        self.labels = labels
+
+    def __len__(self):
+        return len(self.features)
+
+    def __getitem__(self, idx):
+        return self.features[idx], self.labels[idx]
 
 
 def sample_balanced_subset(targets, num_classes, num_samples):

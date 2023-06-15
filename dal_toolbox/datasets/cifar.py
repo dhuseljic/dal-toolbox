@@ -96,7 +96,7 @@ class CIFAR10C(CIFAR10):
         ])
         return eval_transform
 
-# TODO Is there a better way?
+
 class CIFAR10Plain(CIFAR10):
     def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None):
         super().__init__(dataset_path, val_split=val_split, seed=seed)
@@ -139,13 +139,13 @@ class CIFAR10Contrastive(CIFAR10):
             # GaussianBlur not used in original paper, however, other papers assign it importance
             transforms.RandomApply([transforms.GaussianBlur(kernel_size=3)], p=0.5),
             transforms.ToTensor(),
-            # transforms.Normalize(self.mean, self.std),  # TODO Discuss if this should be used
+            # transforms.Normalize(self.mean, self.std),  # TODO (dhuseljic) Discuss if this should be used
         ])
         return ContrastiveTransformations(transform, n_views=2)
 
     @property
     def eval_transforms(self):
-        return self.train_transforms  # TODO This depends on the error we want to calculate on the validation/test set
+        return self.train_transforms
 
 
 class CIFAR100(CIFAR10):

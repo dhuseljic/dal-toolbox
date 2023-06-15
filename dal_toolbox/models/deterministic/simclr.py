@@ -1,11 +1,19 @@
-from .base import DeterministicModel
-from . import resnet
+import logging
+import os
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from lightning.pytorch.callbacks import ModelCheckpoint
+from torch.utils.data import DataLoader
+import lightning as L
 
-import logging
+from .base import DeterministicModel
+from .. import deterministic
+from ..utils.base import BaseModule
+from ... import metrics
+from ...datasets.base import AbstractData
+from ...datasets.utils import FeatureDataset
 
 
 # TODO This should probably be somewhere else
@@ -30,6 +38,143 @@ class InfoNCELoss(nn.Module):
         infoNCE = infoNCE.mean()
 
         return infoNCE
+
+
+class LinearEvaluationAccuracy:
+    """
+    Wrapper to calculate the linear evaluation accuracy.
+
+    The linear evaluation accuracy is the accuracy of a linear classifier trained on the features of another network
+    (e.g. a self-supervision model). This wrapper extracts the encoder of the network ``model`` and the features from
+    the dataset ``data`` passed to ``__init__(model, data)``. The linear classifier consists of a single
+    ``nn.Linear(feature_dimension, num_classes)`` layer, which is trained with the SGD optimizer.
+    """
+
+    def __init__(self,
+                 model: BaseModule,
+                 data: AbstractData,
+                 output_dim: int,
+                 train_batch_size: int = 4096,
+                 val_batch_size: int = 512,
+                 n_cpus: int = 1,
+                 base_lr: float = 0.1,
+                 use_linear_lr_scaling: bool = True,
+                 weight_decay: float = 0.0,
+                 momentum: float = 0.9,
+                 epochs: int = 90,
+                 val_interval: int = 25,
+                 output_dir: str = "",
+                 checkpoint: bool = False,
+                 progressbar: bool = False) -> None:
+        """
+        Initializes ``LinearEvaluationAccuracy``.
+
+        Args:
+            model: The model from which the features are to be extracted from.
+            data: The dataset used to extract the features from ``model``.
+            output_dim: # TODO (ynagel) Can this not be inferred from the features itself?
+            train_batch_size: The batch size used for training.
+            val_batch_size: The batch size used for training.
+            n_cpus: Number of cpu processes used for the dataloaders.
+            base_lr: The base learning rate used for the linear classifier.
+            use_linear_lr_scaling: Whether base_lr should be linearly scaled based on the batch size. This is referred
+                to as `linear learning rate scaling` and the learning rate is calculated in the following way:
+                ``base_lr * train_batch_size / 256``
+            weight_decay: The weight decay of the SGD optimizer
+            momentum: The momentum of the SGD optimizer.
+            epochs: The number of epochs the model is trained for.
+            val_interval: In which interval the trainer checks performance on the validation dataset.
+            output_dir: The directory in which logs and checkpoints are saved.
+            checkpoint: Whether model checkpoints should be saved during training.
+            progressbar: Whether the pytorch lightning trainer should display a progress bar.
+        """
+        # From my testing this is slightly faster than passing the normal dataset through the frozen backbone in each
+        # epoch, however only when training for more than ~15 epochs. Also, the dataset has to be "plain", meaning no
+        # transforms take place
+        self.trainset = FeatureDataset(model.encoder, data.train_dataset, "cuda")  # TODO load device from somewhere
+        self.valset = FeatureDataset(model.encoder, data.val_dataset, "cuda")  # TODO load device from somewhere
+        self.testset = FeatureDataset(model.encoder, data.test_dataset, "cuda")  # TODO load device from somewhere
+
+        self.train_dataloader = DataLoader(self.trainset,
+                                           batch_size=train_batch_size,
+                                           num_workers=n_cpus,
+                                           shuffle=True)
+
+        self.val_dataloader = DataLoader(self.valset,
+                                         batch_size=val_batch_size,
+                                         num_workers=n_cpus,
+                                         shuffle=False)
+
+        self.test_dataloader = DataLoader(self.testset,
+                                          batch_size=val_batch_size,
+                                          num_workers=n_cpus,
+                                          shuffle=False)
+
+        num_classes = data.num_classes  # TODO (ynagel) AbstractData does not mandate this field
+        self.encoder = model.encoder
+
+        model = nn.Linear(output_dim, num_classes)
+
+        if use_linear_lr_scaling:
+            lr = base_lr * train_batch_size / 256
+        else:
+            lr = base_lr
+
+        optimizer = torch.optim.SGD(model.parameters(),
+                                    lr=lr,
+                                    weight_decay=weight_decay,
+                                    momentum=momentum)
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+        self.model = deterministic.DeterministicModel(
+            model,
+            optimizer=optimizer,
+            lr_scheduler=lr_scheduler,
+            train_metrics={'train_acc': metrics.Accuracy()},
+            val_metrics={'val_acc': metrics.Accuracy()},
+        )
+
+        if checkpoint:
+            callbacks = [ModelCheckpoint(save_weights_only=False, mode="max", monitor="val_acc", every_n_epochs=1)]
+        else:
+            callbacks = []
+
+        self.trainer = L.Trainer(
+            # TODO (ynagel) One should be able to rename this folder
+            default_root_dir=os.path.join(output_dir, "SimCLR_Linear_Evaluation_Callback"),
+            accelerator="auto",
+            max_epochs=epochs,
+            enable_checkpointing=checkpoint,
+            callbacks=callbacks,
+            check_val_every_n_epoch=val_interval,
+            enable_progress_bar=progressbar,
+            num_sanity_val_steps=0
+        )
+
+        # TODO (ynagel) Should this be done in the init method?
+        self.trainer.fit(self.model, self.train_dataloader, self.val_dataloader)
+        self.checkpoint = checkpoint
+
+    def compute(self, dataset='train'):
+        if dataset == 'train':
+            return self.trainer.logged_metrics["train_acc"]
+        elif dataset == 'val':
+            return self.trainer.logged_metrics["val_acc"]
+        elif dataset == 'test':
+            predictions = self.trainer.predict(self.model, self.test_dataloader,
+                                               ckpt_path='best' if self.checkpoint else None)
+
+            logits = torch.cat([pred[0] for pred in predictions])
+            targets = torch.cat([pred[1] for pred in predictions])
+            return metrics.Accuracy()(logits, targets).item()
+        else:
+            raise NotImplementedError(f"Data split {dataset} is not implemented for compute().")
+
+    def save_features_and_model_state_dict(self, name="model_features_dict", path=""):
+        path = os.path.join(path + os.path.sep + f"{name}.pth")
+        torch.save({'trainset': self.trainset,
+                    'valset': self.valset,
+                    'testset': self.testset,
+                    'model': self.encoder.state_dict()}, path)
 
 
 class SimCLR(DeterministicModel):
