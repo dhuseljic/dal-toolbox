@@ -11,7 +11,7 @@ from dal_toolbox.datasets import activeglae
 from dal_toolbox.models import deterministic
 from dal_toolbox import metrics
 
-def final_results(results):    
+def strategy_results(results):    
     acc = [cycles['test_stats']['test_acc'] for cycles in results.values()]
     f1_macro = [cycles['test_stats']['test_f1_macro'] for cycles in results.values()]
     f1_micro = [cycles['test_stats']['test_f1_micro'] for cycles in results.values()]
@@ -28,8 +28,20 @@ def final_results(results):
         'final_auc_f1_micro': auc_f1_micro,
         'final_auc_acc_blc': auc_acc_blc 
     }
+    wandb.log(auc_results)
+    results.update(auc_results)
+    
 
-    return auc_results
+    final_results = {
+        'final_acc': acc[-1],
+        'final_f1_macro': f1_macro[-1],
+        'final_f1_micro': f1_micro[-1],
+        'final_acc_blc': f1_micro[-1]
+    }
+    wandb.log(final_results)
+    results.update(final_results)
+
+    return results
 
 
 def initialize_wandb(args):

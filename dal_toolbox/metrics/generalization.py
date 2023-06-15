@@ -67,14 +67,14 @@ def f1_macro(output, target, mode):
     elif mode == 'micro':
         f1 = f1_score(target, pred, average='micro')
 
-    return f1*100
+    return f1
 
 def balanced_acc(output, target):
     _, pred = output.topk(1, 1, True, True)
     pred = pred.t().squeeze(0)
     pred = pred.cpu().detach().numpy()
     target = target.cpu().detach().numpy()
-    return balanced_accuracy_score(target, pred)*100
+    return balanced_accuracy_score(target, pred)
 
 
 def avg_precision(output, targets):
@@ -88,4 +88,4 @@ def area_under_curve(metric):
     auc_x = np.arange(len(metric))
     auc_y = np.array(metric)
     span_x = (auc_x[-1] - auc_x[0])  # taken from: revisiting uncertainty dalnlp
-    return (auc(auc_x, auc_y) / span_x).round(3)
+    return (auc(auc_x, auc_y) / span_x).round(4)

@@ -4,6 +4,7 @@ import torch.nn.functional as F
 
 from ..utils.base import BaseModule
 from ..utils.mixup import mixup
+from dal_toolbox import metrics
 
 class DeterministicAGLAEModel(BaseModule):
 
@@ -23,9 +24,13 @@ class DeterministicAGLAEModel(BaseModule):
 
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         logits = self(batch['input_ids'], batch['attention_mask'])
-        logits = self._gather(batch['labels'])
+        logits = self._gather(logits)
         targets = self._gather(batch['labels'])
+        #cc_fn = metrics.Accuracy().to('cuda')
+        #self.log('test_accuracy', acc_fn(logits, targets), prog_bar=True)
         return logits, targets 
+    
+
     
 class DeterministicModel(BaseModule):
 

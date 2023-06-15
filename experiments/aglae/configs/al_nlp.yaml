@@ -1,11 +1,11 @@
 defaults:
   - model: bert
   - al_strategy: entropy
-  - dataset: banks77
+  - dataset: qnli
   - _self_
 
 al_cycle:
-  n_init: 5000
+  n_init: 100
   acq_size: 100
   n_acq: 2
   cold_start: True
@@ -29,7 +29,7 @@ print_freq_eval: 25
 print_freq_train: 25
 check_freq_model: 15
 
-output_dir: ~/output_glae/
+output_dir: ./output_glae/
 hydra:
   job:
     chdir: True
