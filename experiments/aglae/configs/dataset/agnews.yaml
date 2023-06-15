@@ -1,0 +1,9 @@
+name: agnews
+name_hf: ag_news
+n_classes: 4
+train_subset: 3_000
+test_subset: null
+path: ~/hf_datasets
+
+# train: 120k
+# test: 7600

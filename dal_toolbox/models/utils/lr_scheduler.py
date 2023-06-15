@@ -18,3 +18,5 @@ class CosineAnnealingLRLinearWarmup(SequentialLR):
             milestones=[warmup_epochs],
             last_epoch=last_epoch,
         )
+
+#TODO: Scheduler von Berti
