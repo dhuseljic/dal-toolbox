@@ -1,7 +1,7 @@
 defaults:
-  - model: distilbert
-  - al_strategy: uncertainty
-  - dataset: agnews
+  - model: bert
+  - al_strategy: cal
+  - dataset: trec6
   - _self_
 
 al_cycle:
@@ -9,10 +9,11 @@ al_cycle:
   acq_size: 20
   n_acq: 5
   cold_start: True
+  init_pool_file: null
 
 wandb:
-  project: glae
-  entity: lura
+  project: active-glae
+  entity: dal-nlp
   group: default
   reinit: True
   mode: disabled
