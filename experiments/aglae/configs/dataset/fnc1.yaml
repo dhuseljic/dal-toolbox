@@ -1,0 +1,12 @@
+name: fnc1
+name_hf: nid989/FNC-1
+n_classes: 4
+train_subset: 10_000
+test_subset: null
+path: ~/hf_datasets
+
+# 49k samples
+# 40k train
+# 5k test
+# 5k val
+#!TODO: check huggingface not all rows? 40k vs 70k

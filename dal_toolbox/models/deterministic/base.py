@@ -4,8 +4,34 @@ import torch.nn.functional as F
 
 from ..utils.base import BaseModule
 from ..utils.mixup import mixup
+from dal_toolbox import metrics
 
+class DeterministicAGLAEModel(BaseModule):
 
+    def training_step(self, batch):
+        logits = self(batch['input_ids'], batch['attention_mask'])
+        loss = self.loss_fn(logits, batch['labels'])
+        self.log('train_loss', loss, prog_bar=True)
+        self.log_train_metrics(logits, batch['labels'])
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        logits = self(batch['input_ids'], batch['attention_mask'])
+        loss = self.loss_fn(logits, batch['labels'])
+        self.log('val_loss', loss, prog_bar=True)
+        self.log_val_metrics(logits, batch['labels'])
+        return loss
+
+    def predict_step(self, batch, batch_idx, dataloader_idx=0):
+        logits = self(batch['input_ids'], batch['attention_mask'])
+        logits = self._gather(logits)
+        targets = self._gather(batch['labels'])
+        #cc_fn = metrics.Accuracy().to('cuda')
+        #self.log('test_accuracy', acc_fn(logits, targets), prog_bar=True)
+        return logits, targets 
+    
+
+    
 class DeterministicModel(BaseModule):
 
     def training_step(self, batch):
