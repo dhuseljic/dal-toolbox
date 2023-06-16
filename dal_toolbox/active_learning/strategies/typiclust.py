@@ -77,10 +77,9 @@ class TypiClust(Query):
 
         num_clusters = min(len(labeled_indices) + acq_size, self.MAX_NUM_CLUSTERS)
 
-        # TODO Find out why the dataloader also returns the indices
         if self.precomputed:
-            unlabeled_features = torch.cat([features for features, _, _ in unlabeled_dataloader])
-            labeled_features = torch.cat([features for features, _, _ in labeled_dataloader])
+            unlabeled_features = torch.cat([batch[0] for batch in unlabeled_dataloader])
+            labeled_features = torch.cat([batch[0] for batch in labeled_dataloader])
         else:
             unlabeled_features = model.get_representations(unlabeled_dataloader)
             labeled_features = model.get_representations(labeled_dataloader)

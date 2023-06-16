@@ -44,7 +44,7 @@ The following active learning strategies are implemented:
 | Entropy sampling          | `entropy`   |
 | Core-Set [[4](#sources)]  | `coreset`   |
 | BADGE [[5](#sources)]     | `badge`     |
-| TypiCLust [[6](#sources)] | `typiclust` |
+| TypiClust [[6](#sources)] | `typiclust` |
 
 
 ## Comparison with state-of-the-art

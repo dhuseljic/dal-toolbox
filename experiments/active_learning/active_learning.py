@@ -68,15 +68,13 @@ def main(args):
         num_classes = data.num_classes
         feature_size = None
 
-    # TODO: For some reason the test dataloader of al_datamodule does not work
-    test_dataloader = DataLoader(testset, batch_size=args.model.predict_batch_size, shuffle=False)
-
     # Setup AL Module
     logger.info('Creating AL Datamodule with %s initial samples.', args.al_cycle.n_init)
     al_datamodule = ActiveLearningDataModule(
         train_dataset=trainset,
         query_dataset=queryset,
         val_dataset=valset,
+        test_dataset=testset,
         train_batch_size=args.model.train_batch_size,
         predict_batch_size=args.model.predict_batch_size,
     )
@@ -130,7 +128,7 @@ def main(args):
 
         # Evaluate resulting model
         logger.info('Evaluation..')
-        predictions = trainer.predict(model, test_dataloader)
+        predictions = trainer.predict(model, al_datamodule.test_dataloader())
         logits = torch.cat([pred[0] for pred in predictions])
         targets = torch.cat([pred[1] for pred in predictions])
         test_stats = {
