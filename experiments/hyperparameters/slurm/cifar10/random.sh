@@ -25,10 +25,10 @@ random_seed=${random_seeds[$index / 9]}
 
 dataset=CIFAR10
 al_strategy=random
-output_dir=/mnt/work/deep_al/results/hyperparameters/experiments/${dataset}/${al_strategy}/lr${learning_rate}_wd${weight_decay}/seed${random_seed}
+output_dir=/mnt/work/dhuseljic/results/hyperparameters/experiments/${dataset}/${al_strategy}/lr${learning_rate}_wd${weight_decay}/seed${random_seed}
 
 # Run the deep learning script with the current hyperparameters
-echo python -u active_learning.py \
+srun python -u active_learning.py \
     model.optimizer.lr=$learning_rate \
     model.optimizer.weight_decay=$weight_decay \
     dataset=$dataset \
