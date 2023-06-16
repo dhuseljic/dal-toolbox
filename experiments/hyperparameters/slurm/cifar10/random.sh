@@ -5,7 +5,7 @@
 #SBATCH --output=/mnt/work/dhuseljic/logs/hyperparameters/%A_%x_%a.out
 #SBATCH --ntasks=1
 #SBATCH --mem=32GB
-#SBATCH --array=0-26
+#SBATCH --array=0-44
 date;hostname;pwd
 source activate dal-toolbox
 cd ~/projects/dal-toolbox/experiments/hyperparameters/
@@ -13,7 +13,7 @@ cd ~/projects/dal-toolbox/experiments/hyperparameters/
 # Define the range of hyperparameters 
 learning_rates=(0.001 0.01 0.1)
 weight_decays=(0.0005 0.005 0.05)
-random_seeds=(1 2 3)
+random_seeds=(1 2 3 4 5)
 
 # Get the current task index from the job array
 index=$SLURM_ARRAY_TASK_ID
@@ -28,7 +28,7 @@ al_strategy=random
 output_dir=/mnt/work/deep_al/results/hyperparameters/experiments/${dataset}/${al_strategy}/lr${learning_rate}_wd${weight_decay}/seed${random_seed}
 
 # Run the deep learning script with the current hyperparameters
-python -u active_learning.py \
+echo python -u active_learning.py \
     model.optimizer.lr=$learning_rate \
     model.optimizer.weight_decay=$weight_decay \
     dataset=$dataset \

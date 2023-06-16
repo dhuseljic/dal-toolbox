@@ -113,6 +113,7 @@ def main(args):
             enable_progress_bar=(is_running_on_slurm() is False),
             default_root_dir=args.output_dir,
             check_val_every_n_epoch=args.val_interval,
+            logger=False,
         )
         trainer.fit(model, al_datamodule)
 
