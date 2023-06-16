@@ -79,10 +79,16 @@ class TypiClust(Query):
 
         if self.precomputed:
             unlabeled_features = torch.cat([batch[0] for batch in unlabeled_dataloader])
-            labeled_features = torch.cat([batch[0] for batch in labeled_dataloader])
+            if len(labeled_indices) > 0:
+                labeled_features = torch.cat([batch[0] for batch in labeled_dataloader])
+            else:
+                labeled_features = torch.Tensor([])
         else:
             unlabeled_features = model.get_representations(unlabeled_dataloader)
-            labeled_features = model.get_representations(labeled_dataloader)
+            if len(labeled_indices) > 0:
+                labeled_features = model.get_representations(labeled_dataloader)
+            else:
+                labeled_features = torch.Tensor([])
 
         features = torch.cat((labeled_features, unlabeled_features))
         clusters = kmeans(features, num_clusters=num_clusters)

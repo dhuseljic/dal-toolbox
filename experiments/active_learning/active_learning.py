@@ -55,8 +55,18 @@ def main(args):
         num_classes = data.num_classes
         feature_size = None
 
+    # Setup Query
+    logger.info('Building query strategy: %s', args.al_strategy.name)
+    al_strategy = build_al_strategy(args.al_strategy.name, args)
+
+    # Setup Model
+    logger.info('Building model: %s', args.model.name)
+
+    model = build_model(args, num_classes=num_classes, feature_size=feature_size)
+
     # Setup AL Module
-    logger.info('Creating AL Datamodule with %s initial samples.', args.al_cycle.n_init)
+    logger.info(f'Creating AL Datamodule with {args.al_cycle.n_init} initial samples, '
+                f'chosen with strategy {args.al_cycle.init_strategy}.')
     al_datamodule = ActiveLearningDataModule(
         train_dataset=trainset,
         query_dataset=queryset,
@@ -65,17 +75,17 @@ def main(args):
         train_batch_size=args.model.train_batch_size,
         predict_batch_size=args.model.predict_batch_size,
     )
-    al_datamodule.random_init(n_samples=args.al_cycle.n_init)
+    if args.al_cycle.init_strategy == "random":
+        al_datamodule.random_init(n_samples=args.al_cycle.n_init)
+    else:
+        init_al_strategy = build_al_strategy(args.al_cycle.init_strategy, args)
+        indices = init_al_strategy.query(
+            model=model,
+            al_datamodule=al_datamodule,
+            acq_size=args.al_cycle.acq_size
+        )
+        al_datamodule.update_annotations(indices)
     queried_indices['cycle0'] = al_datamodule.labeled_indices
-
-    # Setup Model
-    logger.info('Building model: %s', args.model.name)
-
-    model = build_model(args, num_classes=num_classes, feature_size=feature_size)
-
-    # Setup Query
-    logger.info('Building query strategy: %s', args.al_strategy.name)
-    al_strategy = build_al_strategy(args)
 
     # Active Learning Cycles
     for i_acq in range(0, args.al_cycle.n_acq + 1):
@@ -175,19 +185,19 @@ def build_model(args, num_classes, feature_size=None):
     return model
 
 
-def build_al_strategy(args):
-    if args.al_strategy.name == "random":
+def build_al_strategy(name, args):
+    if name == "random":
         query = random.RandomSampling()
-    elif args.al_strategy.name == "entropy":
+    elif name == "entropy":
         query = uncertainty.EntropySampling(subset_size=args.al_strategy.subset_size)
-    elif args.al_strategy.name == "coreset":
+    elif name == "coreset":
         query = coreset.CoreSet(subset_size=args.al_strategy.subset_size)
-    elif args.al_strategy.name == "badge":
+    elif name == "badge":
         query = badge.Badge(subset_size=args.al_strategy.subset_size)
-    elif args.al_strategy.name == "typiclust":
+    elif name == "typiclust":
         query = typiclust.TypiClust(subset_size=args.al_strategy.subset_size, precomputed=args.precomputed_features)
     else:
-        raise NotImplementedError(f"Active learning strategy {args.al_strategy.name} is not implemented!")
+        raise NotImplementedError(f"Active learning strategy {name} is not implemented!")
     return query
 
 
