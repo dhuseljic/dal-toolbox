@@ -1,20 +1,36 @@
 # Active Learning Baselines
 
+## Installation
+
+First install all dependencies of `dal-toolbox`, which are located [here](../../requirements.txt).
+Then install the requirements specified in [requirements.txt](requirements.txt)
+
 ## Training baselines
 
 To train a model simply run: `python active_learning.py`
 
-This will use the hyperparameters specified in [configs/active_learning.yaml](configs/active_learning.yaml).
-You can change these parameters either by adjusting the config file, or passing different parameters to run: `python active_learning.py model=YOUR_MODEL`
+This will use the standard hyperparameters specified in [configs/active_learning.yaml](configs/active_learning.yaml).
+You can change these parameters either by adjusting the config file, or passing different parameters to run, e.g. `python active_learning.py model=YOUR_MODEL`.
 
 ### Hyperparameters
 
-| Argument      | Standard Parameter       | Description                                                                             |
-|---------------|--------------------------|-----------------------------------------------------------------------------------------|
-| `model`       | `resnet18_deterministic` | The model to train. Overview found [here](#models)                                      |
-| `dataset`     | `CIFAR10`                | The dataset to use. Overview found [here](#datasets)                                    |
-| `al_strategy` | `random`                 | The active learning strategy to use. Overview found [here](#active-learning-strategies) |
+| Argument                 | Standard Parameter       | Description                                                                             |
+|--------------------------|--------------------------|-----------------------------------------------------------------------------------------|
+| `model`                  | `resnet18_deterministic` | The model to train. Overview found [here](#models)                                      |
+| `dataset`                | `CIFAR10`                | The dataset to use. Overview found [here](#datasets)                                    |
+| `al_strategy`            | `random`                 | The active learning strategy to use. Overview found [here](#active-learning-strategies) |
+| `random_seed`            | `42`                     | The random seed for reproducibility.                                                    |
+| `val_interval`           | `25`                     | Every `val_interval` epochs the validation step is done.                                |
+| `dataset_path`           | `./data/`                | The directory were the datasets are stored/downloaded.                                  |
+| `output_dir`             | `./output/`              | The directory where the results/logs/checkpoints are saved to.                          |
+| `al_cycle.n_init`        | `100`                    | How many samples are in the initial labeled set.                                        |
+| `al_cycle.acq_size`      | `100`                    | How many samples are queried in each AL cycle.                                          |
+| `al_cycle.n_acq`         | `9`                      | How many AL cycles to train.                                                            |
+| `al_cycle.cold_start`    | `True`                   | Whether to reset the model in each AL cycle.                                            |
+| `al_cycle.init_strategy` | `random`                 | How the samples in the initial labeled set are determined. Can be any AL strategy.      |
 
+It is also possible to use precomputed features (e.g. from a self-supervised task) for training.
+See [Using precomputed features](#using-precomputed-features) for more details.
 
 #### Models
 
@@ -24,7 +40,24 @@ The following models are implemented:
 |--------------------------|--------------------------|
 | ResNet18 [[1](#sources)] | `resnet18_deterministic` |
 
-### Datasets
+Furthermore, the following hyperparameters can be adjusted for each model:
+
+| Argument                       | Description                                                       |
+|--------------------------------|-------------------------------------------------------------------|
+| `model.name`                   | The name of the model.                                            |
+| `model.num_epochs`             | How many epochs the model should be trained for in each AL cycle. |
+| `model.train_batch_size`       | The batch size for training.                                      |
+| `model.predict_batch_size`     | The batch size for validation/testing.                            |
+| `model.optimizer.lr`           | The learning rate for training.                                   |
+| `model.optimizer.weight_decay` | The weight decay for training.                                    |
+| `model.optimizer.momentum`     | The momentum for training.                                        |
+
+The standard parameters depend on each specific model and can be found in their respective config file.
+(For example, the config for the ResNet18 con be found in [configs/model/resnet18.yaml](configs/model/resnet18.yaml).)
+In addition, there are some hyperparameters, that 
+
+
+#### Datasets
 
 The following datasets are implemented:
 
@@ -34,7 +67,7 @@ The following datasets are implemented:
 | CIFAR100 [[2](#sources)] | `CIFAR100` |
 | SVHN  [[3](#sources)]    | `SVHN`     |
 
-### Active learning strategies
+#### Active learning strategies
 
 The following active learning strategies are implemented:
 
@@ -46,6 +79,22 @@ The following active learning strategies are implemented:
 | BADGE [[5](#sources)]     | `badge`     |
 | TypiClust [[6](#sources)] | `typiclust` |
 
+Furthermore, the following hyperparameters can be adjusted for each active learning strategy:
+
+| Argument                  | Standard Parameter | Description                                                                                                                                       |
+|---------------------------|--------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
+| `al_strategy.subset_size` | `10000`            | How many unlabeled samples the strategy considers in each AL cycle. These samples are chosen randomly from the whole unlabeled set in each cycle. |
+
+#### Using precomputed features
+
+Instead of using a normal dataset one can use precomputed features to train on.
+(The `dataset` parameter will then be ignored.)
+This setting can be enabled with by setting the parameter `precomputed_features` to `True`.
+Here the directory where the saved features are has to be specified with `precomputed_features_dir`.
+This has to be a dictionary with three fields: `trainset`, `valset` and `testset`.
+Each field has to be of class `FeatureDataset` located [here](../../dal_toolbox/datasets/utils.py).
+
+The `model` parameter has to be set to `linear`, which will result in a linear layer, which will be trained on the precomputed features.
 
 ## Comparison with state-of-the-art
 
@@ -63,11 +112,10 @@ All slurm scripts used to run these experiments can be found [here](slurm/ynagel
 
 ## TO-DO's
 
-- Installation details in main README currently do not suffice to run the baseline experiments.
-- Complete list of hyperparameters to run script.
 - SVHN Budget 1000 uses more optimized hyperparameters than the other budgets, leading to performance discrepancies.
 - Implement/test more strategies and models
-- Complete overview images are small and have to be clicked on see in detail
+- Comparison with state-of-the-art
+- TypiClust dependency
 
 ## Sources
 
