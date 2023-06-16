@@ -10,29 +10,16 @@ import lightning as L
 import torch
 from omegaconf import OmegaConf
 from torch import nn
-from torch.utils.data import DataLoader, Dataset
 
 from dal_toolbox import datasets
 from dal_toolbox import metrics
 from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, typiclust
+# noinspection PyUnresolvedReferences
+from dal_toolbox.datasets.utils import FeatureDataset
 from dal_toolbox.models import deterministic
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything, is_running_on_slurm
-
-
-class FeatureDataset(Dataset):
-    def __init__(self, model, dataset, device):
-        dataloader = DataLoader(dataset, batch_size=512, num_workers=4)
-        features, labels = model.get_representations(dataloader, device, return_labels=True)
-        self.features = features.detach()
-        self.labels = labels
-
-    def __len__(self):
-        return len(self.features)
-
-    def __getitem__(self, idx):
-        return self.features[idx], self.labels[idx]
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
