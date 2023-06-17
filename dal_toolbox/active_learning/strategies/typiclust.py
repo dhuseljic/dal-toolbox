@@ -2,7 +2,6 @@ import os
 
 import numpy as np
 import pandas as pd
-import faiss
 import torch
 from sklearn.cluster import MiniBatchKMeans, KMeans
 
@@ -10,21 +9,31 @@ from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.active_learning.strategies import Query
 from dal_toolbox.models.utils.base import BaseModule
 
+try:
+    import faiss
+except ImportError:
+    faiss = None
+
 
 def get_nn(features, num_neighbors):
     # calculates nearest neighbors on GPU
     d = features.shape[1]
     # features = features.astype(np.float32)
     features = features.numpy().astype(np.float32)
-    cpu_index = faiss.IndexFlatL2(d)
 
-    if os.name == 'nt':  # we are on windows
-        cpu_index.add(features)  # add vectors to the index
-        distances, indices = cpu_index.search(features, num_neighbors + 1)
+    if faiss is not None:
+        cpu_index = faiss.IndexFlatL2(d)
+
+        if os.name == 'nt':  # faiss_gpu is not implemented on windows
+            cpu_index.add(features)  # add vectors to the index
+            distances, indices = cpu_index.search(features, num_neighbors + 1)
+        else:
+            gpu_index = faiss.index_cpu_to_all_gpus(cpu_index)
+            gpu_index.add(features)  # add vectors to the index
+            distances, indices = gpu_index.search(features, num_neighbors + 1)
     else:
-        gpu_index = faiss.index_cpu_to_all_gpus(cpu_index)
-        gpu_index.add(features)  # add vectors to the index
-        distances, indices = gpu_index.search(features, num_neighbors + 1)
+        raise NotImplementedError("TypiClust is currently not implemented without faiss. "
+                                  "(https://github.com/facebookresearch/faiss)")
 
     # 0 index is the same sample, dropping it
     return distances[:, 1:], indices[:, 1:]
