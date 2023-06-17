@@ -23,14 +23,15 @@ def get_nn(features, num_neighbors):
 
     if faiss is not None:
         cpu_index = faiss.IndexFlatL2(d)
-
-        if os.name == 'nt':  # faiss_gpu is not implemented on windows
-            cpu_index.add(features)  # add vectors to the index
-            distances, indices = cpu_index.search(features, num_neighbors + 1)
-        else:
-            gpu_index = faiss.index_cpu_to_all_gpus(cpu_index)
-            gpu_index.add(features)  # add vectors to the index
-            distances, indices = gpu_index.search(features, num_neighbors + 1)
+        cpu_index.add(features)  # add vectors to the index
+        distances, indices = cpu_index.search(features, num_neighbors + 1)
+        # if os.name == 'nt':  # faiss_gpu is not implemented on windows
+        #     cpu_index.add(features)  # add vectors to the index
+        #     distances, indices = cpu_index.search(features, num_neighbors + 1)
+        # else:
+        #     gpu_index = faiss.index_cpu_to_all_gpus(cpu_index)
+        #     gpu_index.add(features)  # add vectors to the index
+        #     distances, indices = gpu_index.search(features, num_neighbors + 1)
     else:
         raise NotImplementedError("TypiClust is currently not implemented without faiss. "
                                   "(https://github.com/facebookresearch/faiss)")
