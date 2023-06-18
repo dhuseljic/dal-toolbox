@@ -163,7 +163,7 @@ def build_model(args, num_classes, feature_size=None):
     model = None
     if args.precomputed_features:
         if args.model.name == "linear":
-            model = nn.Linear(feature_size, num_classes)
+            model = deterministic.linear.LinearModel(feature_size, num_classes)
             optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
     else:
