@@ -195,7 +195,7 @@ def build_al_strategy(name, args):
     elif name == "badge":
         query = badge.Badge(subset_size=args.al_strategy.subset_size)
     elif name == "typiclust":
-        query = typiclust.TypiClust(subset_size=args.al_strategy.subset_size, precomputed=args.precomputed_features)
+        query = typiclust.TypiClust(subset_size=args.al_strategy.subset_size)
     else:
         raise NotImplementedError(f"Active learning strategy {name} is not implemented!")
     return query

@@ -70,10 +70,9 @@ class TypiClust(Query):
     MAX_NUM_CLUSTERS = 500
     K_NN = 20
 
-    def __init__(self, subset_size=None, random_seed=None, precomputed=True):
+    def __init__(self, subset_size=None, random_seed=None):
         super().__init__(random_seed=random_seed)
         self.subset_size = subset_size
-        self.precomputed = precomputed
 
     @torch.no_grad()
     def query(self,
@@ -87,18 +86,11 @@ class TypiClust(Query):
 
         num_clusters = min(len(labeled_indices) + acq_size, self.MAX_NUM_CLUSTERS)
 
-        if self.precomputed:
-            unlabeled_features = torch.cat([batch[0] for batch in unlabeled_dataloader])
-            if len(labeled_indices) > 0:
-                labeled_features = torch.cat([batch[0] for batch in labeled_dataloader])
-            else:
-                labeled_features = torch.Tensor([])
+        unlabeled_features = model.get_representations(unlabeled_dataloader)
+        if len(labeled_indices) > 0:
+            labeled_features = model.get_representations(labeled_dataloader)
         else:
-            unlabeled_features = model.get_representations(unlabeled_dataloader)
-            if len(labeled_indices) > 0:
-                labeled_features = model.get_representations(labeled_dataloader)
-            else:
-                labeled_features = torch.Tensor([])
+            labeled_features = torch.Tensor([])
 
         features = torch.cat((labeled_features, unlabeled_features))
         clusters = kmeans(features, num_clusters=num_clusters)
