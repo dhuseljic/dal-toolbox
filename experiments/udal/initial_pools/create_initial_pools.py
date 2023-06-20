@@ -5,25 +5,25 @@ import random
 
 from dal_toolbox import datasets
 
-
-n_reps = 10
-size = 100
-dataset_name = 'CIFAR100'
-output_dir = '.'
+num_reps = 10
+size = 128
+dataset_name = 'SVHN'
+dataset_path = '/datasets'
+output_dir = os.path.dirname(__file__)
 
 
 if dataset_name == 'CIFAR10':
-    ds = datasets.cifar.build_cifar10('query', '/tmp')
+    data = datasets.CIFAR10(dataset_path)
 elif dataset_name == 'CIFAR100':
-    ds = datasets.cifar.build_cifar100('query', '/tmp')
+    data = datasets.CIFAR100(dataset_path)
 elif dataset_name == 'SVHN':
-    ds = datasets.svhn.build_svhn('query', '/tmp')
+    data = datasets.SVHN(dataset_path)
 else:
-    NotImplementedError()
+    raise NotImplementedError
 
-for i_rep in range(n_reps):
+for i_rep in range(num_reps):
     rng = random.Random(i_rep)
-    unlabeled_indices = range(len(ds))
+    unlabeled_indices = range(len(data.train_dataset))
     indices = rng.sample(unlabeled_indices, k=size)
 
     path = os.path.join(output_dir, dataset_name)
