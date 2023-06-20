@@ -5,12 +5,11 @@ import random
 
 from dal_toolbox import datasets
 
-num_reps = 10
+num_reps = 11
 size = 128
-dataset_name = 'SVHN'
+dataset_name = 'CIFAR10'
 dataset_path = '/datasets'
 output_dir = os.path.dirname(__file__)
-
 
 if dataset_name == 'CIFAR10':
     data = datasets.CIFAR10(dataset_path)
