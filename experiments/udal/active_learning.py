@@ -95,7 +95,8 @@ def main(args):
             logger=False,
             check_val_every_n_epoch=args.val_every,
             enable_progress_bar=(not is_running_on_slurm()),
-            callbacks=[MetricLogger()] if is_running_on_slurm() else []
+            callbacks=[MetricLogger()] if is_running_on_slurm() else [],
+            fast_dev_run=args.fast_dev_run
         )
         trainer.fit(model, al_datamodule)
 

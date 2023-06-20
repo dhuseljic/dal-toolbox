@@ -15,6 +15,7 @@ dataset_path: ./data/
 ood_datasets: null
 random_seed: 1
 val_every: 25
+fast_dev_run: False
 
 output_dir: ./output/
 hydra:
