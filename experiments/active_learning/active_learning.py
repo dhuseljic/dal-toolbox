@@ -1,24 +1,25 @@
-import os
-import time
+import datetime
 import json
 import logging
-import datetime
+import os
+import sys
+import time
 
-import torch
 import hydra
-
 import lightning as L
-from torch.utils.data import DataLoader
+import torch
 from omegaconf import OmegaConf
+from torch import nn
 
-from dal_toolbox import metrics
-from dal_toolbox.active_learning.strategies.xpal import XPAL
-from dal_toolbox.models import deterministic
 from dal_toolbox import datasets
+from dal_toolbox import metrics
 from dal_toolbox.active_learning import ActiveLearningDataModule
-from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge
-from dal_toolbox.utils import seed_everything, is_running_on_slurm
+from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, typiclust, XPAL
+# noinspection PyUnresolvedReferences
+from dal_toolbox.datasets.utils import FeatureDataset
+from dal_toolbox.models import deterministic
 from dal_toolbox.models.utils.callbacks import MetricLogger
+from dal_toolbox.utils import seed_everything, is_running_on_slurm
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
@@ -34,28 +35,57 @@ def main(args):
 
     # Setup Dataset
     logger.info('Building datasets.')
-    data = build_datasets(args)
-    test_loader = DataLoader(data.test_dataset, batch_size=args.model.predict_batch_size)
+    if args.precomputed_features:
+        features = torch.load(args.precomputed_features_dir)
 
-    # Setup AL Module
-    logger.info('Creating AL Datamodule with %s initial samples.', args.al_cycle.n_init)
-    al_datamodule = ActiveLearningDataModule(
-        train_dataset=data.train_dataset,
-        query_dataset=data.query_dataset,
-        val_dataset=data.val_dataset,
-        train_batch_size=args.model.train_batch_size,
-        predict_batch_size=args.model.predict_batch_size,
-    )
-    al_datamodule.random_init(n_samples=args.al_cycle.n_init)
-    queried_indices['cycle0'] = al_datamodule.labeled_indices
+        trainset = features['trainset']
+        queryset = trainset
+        valset = features['valset']
+        testset = features['testset']
 
-    # Setup Model
-    logger.info('Building model: %s', args.model.name)
-    model = build_model(args, num_classes=data.num_classes)
+        num_classes = len(torch.unique(trainset.labels))
+        feature_size = trainset.features.shape[1]
+    else:
+        data = build_dataset(args)
+        trainset = data.train_dataset
+        queryset = data.query_dataset
+        valset = data.val_dataset
+        testset = data.test_dataset
+
+        num_classes = data.num_classes
+        feature_size = None
 
     # Setup Query
     logger.info('Building query strategy: %s', args.al_strategy.name)
-    al_strategy = build_al_strategy(args, data.num_classes)
+    al_strategy = build_al_strategy(args.al_strategy.name, args)
+
+    # Setup Model
+    logger.info('Building model: %s', args.model.name)
+
+    model = build_model(args, num_classes=num_classes, feature_size=feature_size)
+
+    # Setup AL Module
+    logger.info(f'Creating AL Datamodule with {args.al_cycle.n_init} initial samples, '
+                f'chosen with strategy {args.al_cycle.init_strategy}.')
+    al_datamodule = ActiveLearningDataModule(
+        train_dataset=trainset,
+        query_dataset=queryset,
+        val_dataset=valset,
+        test_dataset=testset,
+        train_batch_size=args.model.train_batch_size,
+        predict_batch_size=args.model.predict_batch_size,
+    )
+    if args.al_cycle.init_strategy == "random":
+        al_datamodule.random_init(n_samples=args.al_cycle.n_init)
+    else:
+        init_al_strategy = build_al_strategy(args.al_cycle.init_strategy, args)
+        indices = init_al_strategy.query(
+            model=model,
+            al_datamodule=al_datamodule,
+            acq_size=args.al_cycle.acq_size
+        )
+        al_datamodule.update_annotations(indices)
+    queried_indices['cycle0'] = al_datamodule.labeled_indices
 
     # Active Learning Cycles
     for i_acq in range(0, args.al_cycle.n_acq + 1):
@@ -95,7 +125,7 @@ def main(args):
 
         # Evaluate resulting model
         logger.info('Evaluation..')
-        predictions = trainer.predict(model, test_loader)
+        predictions = trainer.predict(model, al_datamodule.test_dataloader())
         logits = torch.cat([pred[0] for pred in predictions])
         targets = torch.cat([pred[1] for pred in predictions])
         test_stats = {
@@ -129,47 +159,59 @@ def main(args):
         json.dump(queried_indices, f, sort_keys=False)
 
 
-def build_model(args, num_classes):
-    if args.model.name == 'resnet18_deterministic':
-        model = deterministic.resnet.ResNet18(num_classes=num_classes)
-        optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
-        model = deterministic.DeterministicModel(
-            model,
-            optimizer=optimizer,
-            lr_scheduler=lr_scheduler,
-            train_metrics={'train_acc': metrics.Accuracy()},
-            val_metrics={'val_acc': metrics.Accuracy()},
-        )
+def build_model(args, num_classes, feature_size=None):
+    model = None
+    if args.precomputed_features:
+        if args.model.name == "linear":
+            model = deterministic.linear.LinearModel(feature_size, num_classes)
+            optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
+            lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
+    else:
+        if args.model.name == 'resnet18_deterministic':
+            model = deterministic.resnet.ResNet18(num_classes=num_classes)
+            optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
+            lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
+
+    if model is None:
+        sys.exit(f"Model {args.model.name} is not implemented, "
+                 f"or not compatible with precomputed features == {args.precomputed_features}")
+
+    model = deterministic.DeterministicModel(
+        model, optimizer=optimizer, lr_scheduler=lr_scheduler,
+        train_metrics={'train_acc': metrics.Accuracy()},
+        val_metrics={'val_acc': metrics.Accuracy()},
+    )
 
     return model
 
 
-def build_al_strategy(args, num_classes=10):
-    if args.al_strategy.name == "random":
+def build_al_strategy(name, args):
+    if name == "random":
         query = random.RandomSampling()
-    elif args.al_strategy.name == "entropy":
+    elif name == "entropy":
         query = uncertainty.EntropySampling(subset_size=args.al_strategy.subset_size)
-    elif args.al_strategy.name == "coreset":
+    elif name == "coreset":
         query = coreset.CoreSet(subset_size=args.al_strategy.subset_size)
-    elif args.al_strategy.name == "badge":
+    elif name == "badge":
         query = badge.Badge(subset_size=args.al_strategy.subset_size)
+    elif name == "typiclust":
+        query = typiclust.TypiClust(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == "xpal":
         query = XPAL(num_classes, subset_size=args.al_strategy.subset_size)
     else:
-        raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
+        raise NotImplementedError(f"Active learning strategy {name} is not implemented!")
     return query
 
 
-def build_datasets(args):
+def build_dataset(args):
     if args.dataset.name == 'CIFAR10':
         data = datasets.CIFAR10(args.dataset_path)
-
     elif args.dataset.name == 'CIFAR100':
         data = datasets.CIFAR100(args.dataset_path)
-
     elif args.dataset.name == 'SVHN':
         data = datasets.SVHN(args.dataset_path)
+    else:
+        raise NotImplementedError(f"Dataset {args.al_strategy.name} is not implemented!")
 
     return data
 

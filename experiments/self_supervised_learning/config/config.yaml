@@ -1,0 +1,32 @@
+defaults:
+  - _self_
+  - ssl_model: simclr
+  - dataset: CIFAR10
+
+le_model:
+  num_epochs: 90
+  train_batch_size: 4096
+  val_batch_size: 512
+  optimizer:
+    base_lr: 0.1
+    weight_decay: 0.0
+    momentum: 0.9
+  callback:
+    enabled: True
+    interval: 50
+
+dataset_path: ./data/
+random_seed: 42
+ssl_val_interval: 5
+le_val_interval: 25
+n_cpus: 16
+
+# Define output dir
+output_dir: "./output/"
+hydra:
+  run:
+    dir: ${output_dir}
+  job_logging:
+    handlers:
+      file:
+        mode: w

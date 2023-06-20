@@ -1,9 +1,17 @@
 import warnings
-import torchvision
+from enum import Enum
 
+import torchvision
 from torchvision import transforms, datasets
-from .corruptions import GaussianNoise
+
 from .base import AbstractData
+from .corruptions import GaussianNoise
+from .utils import ContrastiveTransformations
+
+
+class CIFAR10Transforms(Enum):
+    mean = (0.4914, 0.4822, 0.4465)
+    std = (0.247, 0.243, 0.262)
 
 
 class CIFAR10(AbstractData):
@@ -11,8 +19,8 @@ class CIFAR10(AbstractData):
     def __init__(
             self,
             dataset_path: str,
-            mean: tuple = (0.4914, 0.4822, 0.4465),
-            std: tuple = (0.247, 0.243, 0.262),
+            mean: tuple = CIFAR10Transforms.mean.value,
+            std: tuple = CIFAR10Transforms.std.value,
             val_split: float = 0.1,
             seed: int = None
     ) -> None:
@@ -70,8 +78,8 @@ class CIFAR10C(CIFAR10):
             self,
             dataset_path: str,
             severity: float,
-            mean: tuple = (0.4914, 0.4822, 0.4465),
-            std: tuple = (0.247, 0.243, 0.262),
+            mean: tuple = CIFAR10Transforms.mean.value,
+            std: tuple = CIFAR10Transforms.std.value,
             val_split: float = 0.1,
             seed: int = None
     ) -> None:
@@ -87,6 +95,69 @@ class CIFAR10C(CIFAR10):
             GaussianNoise(self.severity)
         ])
         return eval_transform
+
+
+class CIFAR10Plain(CIFAR10):
+    """
+    Version of CIFAR10 which hast only ``transforms.ToTensor()`` as transform.
+    """
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
+        super().__init__(dataset_path, val_split=val_split, seed=seed)
+
+    @property
+    def train_transforms(self):
+        return transforms.Compose([transforms.ToTensor(), ])
+
+    @property
+    def query_transforms(self):
+        return transforms.Compose([transforms.ToTensor(), ])
+
+    @property
+    def eval_transforms(self):
+        return transforms.Compose([transforms.ToTensor(), ])
+
+
+class CIFAR10Contrastive(CIFAR10):
+    """
+    Contrastive version of CIFAR10.
+
+    This means that the transforms are repeated twice for each image, resulting in two views for each input image.
+    """
+    def __init__(self,
+                 dataset_path: str,
+                 mean: tuple = CIFAR10Transforms.mean.value,
+                 std: tuple = CIFAR10Transforms.std.value,
+                 val_split: float = 0.1,
+                 seed: int = None,
+                 color_distortion_strength: float = 1.0
+                 ) -> None:
+        """
+
+        Args:
+            color_distortion_strength: Strength of color jittering transform.
+        """
+        self.s = color_distortion_strength
+        super().__init__(dataset_path, mean, std, val_split, seed)
+
+    @property
+    def train_transforms(self):
+        color_jitter = transforms.ColorJitter(0.8 * self.s, 0.8 * self.s, 0.8 * self.s, 0.2 * self.s)
+
+        transform = transforms.Compose([
+            transforms.RandomResizedCrop(size=32),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomApply([color_jitter], p=0.8),
+            transforms.RandomGrayscale(p=0.2),
+            # GaussianBlur not used in original paper, however, other papers assign it importance
+            transforms.RandomApply([transforms.GaussianBlur(kernel_size=3)], p=0.5),
+            transforms.ToTensor(),
+            # transforms.Normalize(self.mean, self.std),  # TODO (dhuseljic) Discuss if this should be used
+        ])
+        return ContrastiveTransformations(transform, n_views=2)
+
+    @property
+    def eval_transforms(self):
+        return self.train_transforms
 
 
 class CIFAR100(CIFAR10):

@@ -1,0 +1,9 @@
+name: yelp5
+name_hf: yelp_review_full
+n_classes: 5
+train_subset: 10_000
+test_subset: null
+path: ~/hf_datasets/manual_ds
+
+#650k training
+#50k testing

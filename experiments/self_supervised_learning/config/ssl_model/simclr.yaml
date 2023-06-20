@@ -1,0 +1,12 @@
+name: simclr
+encoder: resnet18_deterministic
+projector: mlp
+projector_dim: 64
+temperature: 0.1
+n_epochs: 100
+
+train_batch_size: 1024
+val_batch_size: 512
+optimizer:
+  base_lr: 0.075
+  weight_decay: 1e-6

@@ -40,7 +40,7 @@ class SVHN(AbstractData):
 
     @property
     def test_dataset(self):
-        return datasets.CIFAR10(self.dataset_path, train=False, transform=self.eval_transforms)
+        return datasets.SVHN(self.dataset_path, split='test', transform=self.eval_transforms)
 
     @property
     def train_transforms(self):

@@ -22,6 +22,7 @@ class ActiveLearningDataModule(L.LightningDataModule):
             train_batch_size: int = 64,
             predict_batch_size: int = 256,
             seed: int = None,
+            collator = None
     ):
         super().__init__()
         self.train_dataset = train_dataset
@@ -30,6 +31,7 @@ class ActiveLearningDataModule(L.LightningDataModule):
         self.query_dataset = QueryDataset(query_dataset) if query_dataset else QueryDataset(dataset=train_dataset)
         self.train_batch_size = train_batch_size
         self.predict_batch_size = predict_batch_size
+        self.collator = collator
 
         if query_dataset is None:
             rank_zero_warn('Using train_dataset for queries. Ensure that there are no augmentations used.')
@@ -49,7 +51,7 @@ class ActiveLearningDataModule(L.LightningDataModule):
         labeled_dataset = Subset(self.train_dataset, indices=self.labeled_indices)
         iter_per_epoch = len(labeled_dataset) // self.train_batch_size + 1
         sampler = RandomSampler(labeled_dataset, num_samples=(iter_per_epoch * self.train_batch_size))
-        train_loader = DataLoader(labeled_dataset, batch_size=self.train_batch_size, sampler=sampler)
+        train_loader = DataLoader(labeled_dataset, batch_size=self.train_batch_size, sampler=sampler, collate_fn=self.collator)
         return train_loader
 
     def unlabeled_dataloader(self, subset_size=None):
@@ -58,7 +60,7 @@ class ActiveLearningDataModule(L.LightningDataModule):
         if subset_size is not None:
             unlabeled_indices = self.rng.choice(unlabeled_indices, size=subset_size, replace=False)
             unlabeled_indices = unlabeled_indices.tolist()
-        loader = DataLoader(self.query_dataset, batch_size=self.predict_batch_size, sampler=unlabeled_indices)
+        loader = DataLoader(self.query_dataset, batch_size=self.predict_batch_size, sampler=unlabeled_indices, collate_fn=self.collator)
         return loader, unlabeled_indices
 
     def labeled_dataloader(self, subset_size=None):
@@ -67,7 +69,7 @@ class ActiveLearningDataModule(L.LightningDataModule):
         if subset_size is not None:
             labeled_indices = self.rng.choice(labeled_indices, size=subset_size, replace=False)
             labeled_indices = labeled_indices.tolist()
-        loader = DataLoader(self.query_dataset, batch_size=self.predict_batch_size, sampler=labeled_indices)
+        loader = DataLoader(self.query_dataset, batch_size=self.predict_batch_size, sampler=labeled_indices, collate_fn=self.collator)
         return loader, labeled_indices
 
     def state_dict(self):
@@ -123,6 +125,7 @@ class ActiveLearningDataModule(L.LightningDataModule):
 
 class QueryDataset(Subset):
     """A helper class which returns also the index along with the instances and targets."""
+    #problem with dictionary output of dataset
 
     def __init__(self, dataset):
         super().__init__(dataset=dataset, indices=range(len(dataset)))
@@ -130,8 +133,18 @@ class QueryDataset(Subset):
 
     def __getitem__(self, index):
         # TODO(dhuseljic): discuss with marek, index instead of target? maybe dictionary? leave it like that?
-        instance, target = super().__getitem__(index)
-        return instance, target, index
+        data = super().__getitem__(index)
+        if isinstance(data, dict):
+            instance = {
+                'input_ids': data['input_ids'], 
+                'attention_mask': data['attention_mask'], 
+                'label': data['label'],
+                'index': index
+            }
+            return instance
+        else:
+            instance, target = super().__getitem__(index)
+            return instance, target, index
 
 
 class ALDataset:
@@ -172,7 +185,7 @@ class ALDataset:
 
             Args:
                 buy_idx (list): List of indices which identify samples of the unlabeled pool that should be
-                                transfered to the labeld pool.
+                                transfered to the labeled pool.
         """
         self.labeled_indices = list_union(self.labeled_indices, buy_idx)
         self.unlabeled_indices = list_diff(self.unlabeled_indices, buy_idx)

@@ -1,0 +1,8 @@
+name: sst2
+name_hf: sst2
+n_classes: 2
+train_subset: 10_000
+test_subset: null
+path: ~/hf_datasets
+
+# test subset: 872

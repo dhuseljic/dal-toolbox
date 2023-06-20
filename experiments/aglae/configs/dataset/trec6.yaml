@@ -1,0 +1,10 @@
+name: trec6
+name_hf: trec
+n_classes: 6
+train_subset: null
+test_subset: null
+path: ~/hf_datasets
+
+# train: 5.5k
+# test: 500
+

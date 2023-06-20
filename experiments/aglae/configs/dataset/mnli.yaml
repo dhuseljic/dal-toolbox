@@ -1,0 +1,12 @@
+name: mnli
+name_hf: multi_nli
+n_classes: 3
+train_subset: 10_000
+test_subset: null
+path: ~/hf_datasets
+
+#433k sentence pairs (premise / hypothesis)
+#392k train
+#9815 (validation/test/matched)
+#classes: entailment/neutral/contradiction
+# instances without labels: -1 (datasets.Dataset.filter)

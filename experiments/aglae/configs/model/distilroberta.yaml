@@ -1,0 +1,14 @@
+name: distilroberta-base
+type: BERT
+n_epochs: 5
+batch_size: 32
+optimizer:
+  name: AdamW
+  lr: 5e-5
+  lr_scheduler: linear_warmup
+  warmup_steps: 200
+  weight_decay: 0.01
+structure:
+  hidden_size: 768
+  dropout: 0.2
+  mode: non-static
