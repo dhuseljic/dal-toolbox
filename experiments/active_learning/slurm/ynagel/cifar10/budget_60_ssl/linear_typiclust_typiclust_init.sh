@@ -21,7 +21,7 @@ acq_size=10
 n_acq=5
 budget=$((n_init + n_acq * acq_size))
 random_seed=$SLURM_ARRAY_TASK_ID
-output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines_ssl/${dataset}/${model}/${al_strat}/budget_${budget}/seed${random_seed}/
+output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines_ssl/${dataset}/${model}/${al_strat}/budget_${budget}_typiclust_init/seed${random_seed}/
 
 srun python -u active_learning.py \
 	model=$model \
