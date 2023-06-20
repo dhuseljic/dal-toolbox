@@ -1,40 +1,22 @@
-import os
-
 import numpy as np
 import pandas as pd
 import torch
 from sklearn.cluster import MiniBatchKMeans, KMeans
+from sklearn.neighbors import NearestNeighbors
 
 from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.active_learning.strategies import Query
 from dal_toolbox.models.utils.base import BaseModule
 
-try:
-    import faiss
-except ImportError:
-    faiss = None
-
 
 def get_nn(features, num_neighbors):
-    # calculates nearest neighbors on GPU
-    d = features.shape[1]
-    # features = features.astype(np.float32)
     features = features.numpy().astype(np.float32)
 
-    if faiss is not None:
-        cpu_index = faiss.IndexFlatL2(d)
-        cpu_index.add(features)  # add vectors to the index
-        distances, indices = cpu_index.search(features, num_neighbors + 1)
-        # if os.name == 'nt':  # faiss_gpu is not implemented on windows
-        #     cpu_index.add(features)  # add vectors to the index
-        #     distances, indices = cpu_index.search(features, num_neighbors + 1)
-        # else:
-        #     gpu_index = faiss.index_cpu_to_all_gpus(cpu_index)
-        #     gpu_index.add(features)  # add vectors to the index
-        #     distances, indices = gpu_index.search(features, num_neighbors + 1)
-    else:
-        raise NotImplementedError("TypiClust is currently not implemented without faiss. "
-                                  "(https://github.com/facebookresearch/faiss)")
+    # TODO (ynagel) The results of sklearn are not identical with faiss.
+    #  Maybe find a way to get faiss working consistently and leave it as an option.
+    #  However, the difference is small so it might be okay to leave it as is.
+    nn_calculator = NearestNeighbors(n_neighbors=num_neighbors + 1, metric='sqeuclidean', n_jobs=-1).fit(features)
+    distances, indices = nn_calculator.kneighbors(features)
 
     # 0 index is the same sample, dropping it
     return distances[:, 1:], indices[:, 1:]
