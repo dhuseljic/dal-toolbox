@@ -51,22 +51,14 @@ class XPAL(Query):
         Random state for annotator selection.
     """
 
-    def __init__(self, n_classes, alpha_c=1, alpha_x=1, subset_size=None, random_seed=None):
-        super().__init__(random_seed)  # TODO Random seed is not set for all strategies?
+    def __init__(self, num_classes, S, alpha_c=1, alpha_x=1, subset_size=None, random_seed=None):
+        super().__init__(random_seed)
 
-        # TODO Would it not make sense to include this in the main Query class, since this is the same for all queries
-        self.subset_size = subset_size
-
-        self.n_classes_ = n_classes  # TODO Can possibly be inferred from data later
-        if not isinstance(self.n_classes_, int) or self.n_classes_ < 2:
-            raise TypeError(
-                "n_classes must be an integer and at least 2"
-            )
-
-        self.S_ = None  # TODO Calculate later in query method
-
+        self.num_classes = num_classes
+        self.S = S
         self.alpha_c_ = alpha_c
         self.alpha_x_ = alpha_x
+        self.subset_size = subset_size
 
     def query(self, *, model, al_datamodule, acq_size, **kwargs):
         """Compute score for each unlabeled sample. Score is to be maximized.
@@ -80,30 +72,36 @@ class XPAL(Query):
         """
         # compute frequency estimates for evaluation set (K_x) and candidate set (K_c)
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
-
         labeled_loader, labeled_indices = al_datamodule.labeled_dataloader()
+
+        existing_indices = unlabeled_indices + labeled_indices
+        indices = [e for e in range(self.S.shape[0]) if e not in existing_indices]
+
+        # TODO (ynagel) Can this even be implemented this way?
+        S_ = np.delete(self.S, indices, 0)
+        S_ = np.delete(S_, indices, 1)
+
         y_labeled = []
 
         for _, labels, _ in labeled_loader:
             y_labeled.append(labels)
         y_labeled = torch.cat(y_labeled).tolist()
 
-        unlabeled_features = model.get_representations(unlabeled_dataloader)   # TODO Are indices still corrct then?
-        labeled_features = model.get_representations(labeled_loader)
+        # unlabeled_features = model.get_representations(unlabeled_dataloader)
+        # labeled_features = model.get_representations(labeled_loader)
 
-        unlabeled_indices = np.arange(0, len(unlabeled_features))
-        labeled_indices = np.arange(len(unlabeled_features), len(unlabeled_features) + len(labeled_features))
+        # Mapping to new indices in S_
+        unlabeled_indices_mapped = np.arange(0, len(unlabeled_indices))
+        labeled_indices_mapped = np.arange(len(unlabeled_indices), len(unlabeled_indices) + len(labeled_indices))
 
-        features = torch.cat([unlabeled_features, labeled_features])
+        # features = torch.cat([unlabeled_features, labeled_features])
 
-        self.S_ = pairwise_kernels(X=features, Y=features, metric="cosine")
-
-        Z = np.eye(self.n_classes_)[y_labeled]
-        K_x = self.S_[:, labeled_indices] @ Z
-        K_c = K_x[unlabeled_indices]
+        Z = np.eye(self.num_classes)[y_labeled]
+        K_x = S_[:, labeled_indices_mapped] @ Z
+        K_c = K_x[unlabeled_indices_mapped]
 
         # calculate loss reduction for each unlabeled sample
-        gains = xpal_gain(K_c=K_c, K_x=K_x, S=self.S_[unlabeled_indices], alpha_c=self.alpha_c_, alpha_x=self.alpha_x_)
+        gains = xpal_gain(K_c=K_c, K_x=K_x, S=S_[unlabeled_indices_mapped], alpha_c=self.alpha_c_, alpha_x=self.alpha_x_)
 
         _, indices = torch.topk(torch.Tensor(gains), acq_size)
 

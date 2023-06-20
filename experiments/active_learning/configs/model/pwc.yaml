@@ -1,0 +1,3 @@
+name: parzen_window
+train_batch_size: 1
+predict_batch_size: 1

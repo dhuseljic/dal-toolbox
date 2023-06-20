@@ -9,15 +9,16 @@ import hydra
 import lightning as L
 import torch
 from omegaconf import OmegaConf
-from torch import nn
+from sklearn.metrics import pairwise_kernels
 
 from dal_toolbox import datasets
 from dal_toolbox import metrics
 from dal_toolbox.active_learning import ActiveLearningDataModule
-from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, typiclust, XPAL
+from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, typiclust, xpal
 # noinspection PyUnresolvedReferences
 from dal_toolbox.datasets.utils import FeatureDataset
 from dal_toolbox.models import deterministic
+from dal_toolbox.models.parzen_window_classifier import PWC
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything, is_running_on_slurm
 
@@ -57,7 +58,7 @@ def main(args):
 
     # Setup Query
     logger.info('Building query strategy: %s', args.al_strategy.name)
-    al_strategy = build_al_strategy(args.al_strategy.name, args)
+    al_strategy = build_al_strategy(args.al_strategy.name, args, num_classes=num_classes, trainset=trainset)
 
     # Setup Model
     logger.info('Building model: %s', args.model.name)
@@ -106,28 +107,41 @@ def main(args):
             queried_indices[f'cycle{i_acq}'] = indices
 
         #  model cold start
-        model.reset_states()
+        if args.model.name != "parzen_window":
+            model.reset_states()
 
         # Train with updated annotations
         logger.info('Training..')
-        callbacks = []
-        if is_running_on_slurm():
-            callbacks.append(MetricLogger())
-        trainer = L.Trainer(
-            max_epochs=args.model.num_epochs,
-            enable_checkpointing=False,
-            callbacks=callbacks,
-            default_root_dir=args.output_dir,
-            enable_progress_bar=is_running_on_slurm() is False,
-            check_val_every_n_epoch=args.val_interval,
-        )
-        trainer.fit(model, al_datamodule)
+        # TODO (ynagel) There has to be some kind of better way
+        if args.model.name != "parzen_window":
+            callbacks = []
+            if is_running_on_slurm():
+                callbacks.append(MetricLogger())
+            trainer = L.Trainer(
+                max_epochs=args.model.num_epochs,
+                enable_checkpointing=False,
+                callbacks=callbacks,
+                default_root_dir=args.output_dir,
+                enable_progress_bar=is_running_on_slurm() is False,
+                check_val_every_n_epoch=args.val_interval,
+            )
+            trainer.fit(model, al_datamodule)
+        else:
+            X = torch.cat([batch[0] for batch in al_datamodule.labeled_dataloader()[0]]).numpy()
+            y = torch.cat([batch[1] for batch in al_datamodule.labeled_dataloader()[0]]).numpy()
+            model.fit(X, y)
 
-        # Evaluate resulting model
-        logger.info('Evaluation..')
-        predictions = trainer.predict(model, al_datamodule.test_dataloader())
-        logits = torch.cat([pred[0] for pred in predictions])
-        targets = torch.cat([pred[1] for pred in predictions])
+        if args.model.name != "parzen_window":
+            # Evaluate resulting model
+            logger.info('Evaluation..')
+            predictions = trainer.predict(model, al_datamodule.test_dataloader())
+            logits = torch.cat([pred[0] for pred in predictions])
+            targets = torch.cat([pred[1] for pred in predictions])
+        else:
+            X = torch.cat([batch[0] for batch in al_datamodule.test_dataloader()]).numpy()
+            targets = torch.cat([batch[1] for batch in al_datamodule.test_dataloader()])
+            logits = torch.from_numpy(model.predict_proba(X))  # TODO (ynagel) These are not really logits
+
         test_stats = {
             'accuracy': metrics.Accuracy()(logits, targets).item(),
             'nll': torch.nn.CrossEntropyLoss()(logits, targets).item(),
@@ -166,6 +180,9 @@ def build_model(args, num_classes, feature_size=None):
             model = deterministic.linear.LinearModel(feature_size, num_classes)
             optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
+        elif args.model.name == "parzen_window":
+            model = PWC(n_classes=num_classes, metric='cosine')
+            return model
     else:
         if args.model.name == 'resnet18_deterministic':
             model = deterministic.resnet.ResNet18(num_classes=num_classes)
@@ -185,7 +202,7 @@ def build_model(args, num_classes, feature_size=None):
     return model
 
 
-def build_al_strategy(name, args):
+def build_al_strategy(name, args, num_classes=None, trainset=None):
     if name == "random":
         query = random.RandomSampling()
     elif name == "entropy":
@@ -196,8 +213,10 @@ def build_al_strategy(name, args):
         query = badge.Badge(subset_size=args.al_strategy.subset_size)
     elif name == "typiclust":
         query = typiclust.TypiClust(subset_size=args.al_strategy.subset_size)
-    elif args.al_strategy.name == "xpal":
-        query = XPAL(num_classes, subset_size=args.al_strategy.subset_size)
+    elif name == "xpal":
+        features = torch.stack([batch[0] for batch in trainset])
+        S = pairwise_kernels(X=features, Y=features, metric="cosine")
+        query = xpal.XPAL(num_classes, S, subset_size=args.al_strategy.subset_size)
     else:
         raise NotImplementedError(f"Active learning strategy {name} is not implemented!")
     return query
