@@ -11,9 +11,10 @@ from torch.utils.data import DataLoader
 from omegaconf import OmegaConf
 
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp
+from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
 from dal_toolbox.active_learning import ActiveLearningDataModule
-from dal_toolbox.utils import seed_everything
+from dal_toolbox.utils import seed_everything, is_running_on_slurm
 from dal_toolbox import metrics
 from dal_toolbox import datasets
 from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge
@@ -91,9 +92,10 @@ def main(args):
             max_epochs=args.model.n_epochs,
             default_root_dir=args.output_dir,
             enable_checkpointing=False,
-            enable_progress_bar=True,
             logger=False,
-            check_val_every_n_epoch=args.val_every
+            check_val_every_n_epoch=args.val_every,
+            enable_progress_bar=(not is_running_on_slurm()),
+            callbacks=[MetricLogger()] if is_running_on_slurm() else []
         )
         trainer.fit(model, al_datamodule)
 
@@ -117,7 +119,6 @@ def main(args):
             "unlabeled_indices": al_datamodule.unlabeled_indices,
             "n_unlabeled_samples": len(al_datamodule.unlabeled_indices),
         })
-        cycle_results.keys()
         results[f'cycle{i_acq}'] = cycle_results
 
     # Save results
@@ -304,11 +305,11 @@ def build_model(args, **kwargs):
 
 
 def build_datasets(args):
-    if args.dataset.name == 'CIFAR10':
+    if args.dataset == 'CIFAR10':
         data = datasets.cifar.CIFAR10(args.dataset_path)
-    elif args.dataset.name == 'CIFAR100':
+    elif args.dataset == 'CIFAR100':
         data = datasets.cifar.CIFAR100(args.dataset_path)
-    elif args.dataset.name == 'SVHN':
+    elif args.dataset == 'SVHN':
         data = datasets.svhn.SVHN(args.dataset_path)
     else:
         raise NotImplementedError('Dataset not available')
