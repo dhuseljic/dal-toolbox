@@ -6,11 +6,12 @@ import lightning as L
 import torch
 import hydra
 import ray
-import ray.tune as tune
+from ray import tune, air
 
 from omegaconf import OmegaConf
 from ray.tune.search.optuna import OptunaSearch
-from torch.utils.data import Subset, DataLoader, random_split
+from torch.utils.data import Subset, DataLoader
+from sklearn.model_selection import KFold
 from dal_toolbox import datasets
 from dal_toolbox import models
 from dal_toolbox import metrics
@@ -22,20 +23,12 @@ from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
 def train(config, args, al_dataset, num_classes):
     seed_everything(100 + args.random_seed)
 
-    # indices = torch.randperm(len(al_dataset))
-    # kf = KFold(n_splits=args.num_folds)
-    # for train_indices, val_indices in kf.split(indices):
-    #     train_indices = indices[train_indices]
-    #     val_indices = indices[val_indices]
-    #     train_ds = Subset(al_dataset, indices=train_indices)
-    #     val_ds = Subset(al_dataset, indices=val_indices)
-
     all_val_stats = []
-    for _ in range(args.num_folds):
-        # Train test split
-        num_samples = len(al_dataset)
-        num_samples_val = int(args.val_split * len(al_dataset))
-        train_ds, val_ds = random_split(al_dataset, lengths=[num_samples - num_samples_val, num_samples_val])
+    kf = KFold(n_splits=args.num_folds, shuffle=True)
+    indices = range(len(al_dataset))
+    for train_indices, val_indices in kf.split(indices):
+        train_ds = Subset(al_dataset, indices=train_indices)
+        val_ds = Subset(al_dataset, indices=val_indices)
 
         # Create dataloaders
         train_loader = DataLoader(train_ds, batch_size=args.train_batch_size, shuffle=True, drop_last=True)
@@ -52,6 +45,7 @@ def train(config, args, al_dataset, num_classes):
             enable_progress_bar=False,
             default_root_dir=args.output_dir,
             fast_dev_run=args.fast_dev_run,
+            logger=False,
         )
         trainer.fit(model, train_loader, val_dataloaders=val_loader)
         val_stats = trainer.validate(model, val_loader)[0]
@@ -102,14 +96,18 @@ def main(args):
     al_dataset = Subset(data.train_dataset, indices=indices)
 
     # Start hyperparameter search
-    ray.init()
+    num_cpus = int(os.environ.get('SLURM_CPUS_PER_TASK', args.num_cpus))
+    num_gpus = torch.cuda.device_count()
+    ray.init(address='local', num_cpus=num_cpus, num_gpus=num_gpus, ignore_reinit_error=True)
+
     search_space = {"lr": tune.loguniform(1e-5, .1), "weight_decay": tune.loguniform(1e-5, .1)}
     objective = tune.with_resources(train, resources={'cpu': args.num_cpus, 'gpu': args.num_gpus})
     objective = tune.with_parameters(objective, args=args, al_dataset=al_dataset, num_classes=data.num_classes)
-    search_alg = OptunaSearch(points_to_evaluate=[{'lr': args.lr, 'weight_decay': args.weight_decay}])
+    search_alg = OptunaSearch(
+        points_to_evaluate=[{'lr': args.lr, 'weight_decay': args.weight_decay}], seed=args.random_seed)
     tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=args.num_opt_samples, metric="val_acc", mode="max")
-
-    tuner = tune.Tuner(objective, param_space=search_space, tune_config=tune_config)
+    tuner = tune.Tuner(objective, param_space=search_space, tune_config=tune_config,
+                       run_config=air.RunConfig(storage_path=args.output_dir))
     results = tuner.fit()
     print('Best Hyperparameters for NLL: {}'.format(results.get_best_result(metric='val_nll', mode='min').config))
     print('Best Hyperparameters for ACC: {}'.format(results.get_best_result(metric='val_acc', mode='max').config))
