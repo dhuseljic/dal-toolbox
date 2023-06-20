@@ -6,16 +6,11 @@ defaults:
 al_cycle:
   n_init: 2
   acq_size: 2
-  n_acq: 19
+  n_acq: 49
   cold_start: True
 
 dataset_path: ./experiments/udal/notebooks/synthetic_images/pixel_sum_dataset.pth
-device: cuda
-
 random_seed: 1
-val_batch_size: 128
-print_freq_eval: 100
-print_freq_train: 100
 
 output_dir: ./output/
 hydra:
