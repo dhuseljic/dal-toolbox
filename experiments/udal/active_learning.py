@@ -84,10 +84,9 @@ def main(args):
             al_datamodule.update_annotations(indices)
             queried_indices[f'cycle{i_acq}'] = indices
 
-        # Reset parameters
-        model.reset_states()
 
         # Train
+        model.reset_states(reset_model_parameters=args.al_cycle.cold_start)
         trainer = L.Trainer(
             max_epochs=args.model.n_epochs,
             default_root_dir=args.output_dir,
