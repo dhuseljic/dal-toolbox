@@ -1,8 +1,12 @@
 import numpy as np
+import torch
 from scipy.spatial.distance import cdist
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.metrics import pairwise_kernels
 from sklearn.utils import check_random_state, check_array
+from torch import nn
+
+from dal_toolbox.models.utils.base import BaseModule
 
 
 def kernels(X, Y, metric, **kwargs):
@@ -15,6 +19,58 @@ def kernels(X, Y, metric, **kwargs):
     elif metric == 'categorical':
         gamma = kwargs.pop('gamma')
         return np.exp(-gamma * cdist(XA=X, XB=Y, metric='hamming'))
+
+
+class PWCLightning(BaseModule):
+    """
+    Wrapper for PWC to work with lightning.
+    """
+
+    def __init__(self, n_classes, metric='rbf', n_neighbors=None, random_state=42, **kwargs):
+        model = PWC(n_classes, metric, n_neighbors, random_state, **kwargs)
+        super().__init__(model)
+        self.fake_layer = nn.Parameter(torch.Tensor([1.0]))
+
+        self.training_inputs = []
+        self.training_targets = []
+        self.validation_inputs = []
+
+    def training_step(self, batch):
+        inputs, targets = batch
+        self.training_inputs.append(inputs)
+        self.training_targets.append(targets)
+
+    def validation_step(self, batch, batch_idx):
+        inputs, targets = batch
+        self.validation_inputs.append(inputs)
+
+    def on_train_end(self) -> None:
+        X = torch.cat(self.training_inputs).numpy(force=True)
+        y = torch.cat(self.training_targets).numpy(force=True)
+
+        self.model.fit(X, y)
+
+        self.training_inputs = []
+        self.training_targets = []
+
+    def on_validation_end(self) -> None:
+        X = torch.cat(self.validation_inputs).numpy(force=True)
+
+        probas = self.model.predict_proba(X)
+
+        self.validation_inputs = []
+        return probas
+
+    def predict_step(self, batch, batch_idx, dataloader_idx=0):
+        inputs, targets = batch
+
+        inputs = inputs.numpy(force=True)
+        probas = self.model.predict_proba(inputs)
+
+        return torch.Tensor(probas), targets
+
+    def reset_states(self, reset_model_parameters=True):
+        self.model.reset()
 
 
 class PWC(BaseEstimator, ClassifierMixin):
@@ -72,6 +128,8 @@ class PWC(BaseEstimator, ClassifierMixin):
         self.X_ = None
         self.y_ = None
         self.Z_ = None
+
+        self.state_dict = lambda: self.get_params(deep=True)
 
     def fit(self, X, y):
         """

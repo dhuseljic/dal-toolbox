@@ -18,7 +18,7 @@ from dal_toolbox.active_learning.strategies import random, uncertainty, coreset,
 # noinspection PyUnresolvedReferences
 from dal_toolbox.datasets.utils import FeatureDataset
 from dal_toolbox.models import deterministic
-from dal_toolbox.models.parzen_window_classifier import PWC
+from dal_toolbox.models.parzen_window_classifier import PWC, PWCLightning
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything, is_running_on_slurm
 
@@ -107,40 +107,29 @@ def main(args):
             queried_indices[f'cycle{i_acq}'] = indices
 
         #  model cold start
-        if args.model.name != "parzen_window":
-            model.reset_states()
+        model.reset_states()
 
         # Train with updated annotations
         logger.info('Training..')
         # TODO (ynagel) There has to be some kind of better way
-        if args.model.name != "parzen_window":
-            callbacks = []
-            if is_running_on_slurm():
-                callbacks.append(MetricLogger())
-            trainer = L.Trainer(
-                max_epochs=args.model.num_epochs,
-                enable_checkpointing=False,
-                callbacks=callbacks,
-                default_root_dir=args.output_dir,
-                enable_progress_bar=is_running_on_slurm() is False,
-                check_val_every_n_epoch=args.val_interval,
-            )
-            trainer.fit(model, al_datamodule)
-        else:
-            X = torch.cat([batch[0] for batch in al_datamodule.labeled_dataloader()[0]]).numpy()
-            y = torch.cat([batch[1] for batch in al_datamodule.labeled_dataloader()[0]]).numpy()
-            model.fit(X, y)
+        callbacks = []
+        if is_running_on_slurm():
+            callbacks.append(MetricLogger())
+        trainer = L.Trainer(
+            max_epochs=args.model.num_epochs,
+            enable_checkpointing=False,
+            callbacks=callbacks,
+            default_root_dir=args.output_dir,
+            enable_progress_bar=is_running_on_slurm() is False,
+            check_val_every_n_epoch=args.val_interval,
+        )
+        trainer.fit(model, al_datamodule)
 
-        if args.model.name != "parzen_window":
-            # Evaluate resulting model
-            logger.info('Evaluation..')
-            predictions = trainer.predict(model, al_datamodule.test_dataloader())
-            logits = torch.cat([pred[0] for pred in predictions])
-            targets = torch.cat([pred[1] for pred in predictions])
-        else:
-            X = torch.cat([batch[0] for batch in al_datamodule.test_dataloader()]).numpy()
-            targets = torch.cat([batch[1] for batch in al_datamodule.test_dataloader()])
-            logits = torch.from_numpy(model.predict_proba(X))  # TODO (ynagel) These are not really logits
+        # Evaluate resulting model
+        logger.info('Evaluation..')
+        predictions = trainer.predict(model, al_datamodule.test_dataloader())
+        logits = torch.cat([pred[0] for pred in predictions])
+        targets = torch.cat([pred[1] for pred in predictions])
 
         test_stats = {
             'accuracy': metrics.Accuracy()(logits, targets).item(),
@@ -181,7 +170,7 @@ def build_model(args, num_classes, feature_size=None):
             optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
         elif args.model.name == "parzen_window":
-            model = PWC(n_classes=num_classes, metric='cosine')
+            model = PWCLightning(n_classes=num_classes, metric='cosine')
             return model
     else:
         if args.model.name == 'resnet18_deterministic':
