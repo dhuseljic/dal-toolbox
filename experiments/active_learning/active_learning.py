@@ -164,13 +164,18 @@ def main(args):
 
 def build_model(args, num_classes, feature_size=None):
     model = None
+    optimizer = None
+    lr_scheduler = None
+
     if args.precomputed_features:
         if args.model.name == "linear":
             model = deterministic.linear.LinearModel(feature_size, num_classes)
             optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
         elif args.model.name == "parzen_window":
-            model = PWCLightning(n_classes=num_classes, metric='cosine')
+            model = PWCLightning(n_classes=num_classes, metric='cosine',
+                                 train_metrics={'train_acc': metrics.Accuracy()},
+                                 val_metrics={'val_acc': metrics.Accuracy()})
             return model
     else:
         if args.model.name == 'resnet18_deterministic':

@@ -1,4 +1,4 @@
 name: parzen_window
 num_epochs: 1
-train_batch_size: 1
-predict_batch_size: 1
+train_batch_size: 100
+predict_batch_size: 100

@@ -28,8 +28,8 @@ class PWCLightning(BaseModule):
 
     def __init__(self, n_classes, metric='rbf', n_neighbors=None, random_state=42, **kwargs):
         model = PWC(n_classes, metric, n_neighbors, random_state, **kwargs)
-        super().__init__(model)
-        self.fake_layer = nn.Parameter(torch.Tensor([1.0]))
+        super().__init__(model, **kwargs)
+        self.fake_layer = nn.Parameter(torch.Tensor([1.0])) # This is a fake parameter to satisfy any optimizers
 
         self.training_inputs = []
         self.training_targets = []
@@ -37,11 +37,19 @@ class PWCLightning(BaseModule):
 
     def training_step(self, batch):
         inputs, targets = batch
+
+        probas = torch.from_numpy(self.model.predict_proba(inputs.numpy(force=True)))
+        targets = targets.cpu()
+        self.log_train_metrics(probas, targets)
         self.training_inputs.append(inputs)
         self.training_targets.append(targets)
 
     def validation_step(self, batch, batch_idx):
         inputs, targets = batch
+
+        probas = torch.from_numpy(self.model.predict_proba(inputs.numpy(force=True)))
+        targets = targets.cpu()
+        self.log_val_metrics(probas, targets)
         self.validation_inputs.append(inputs)
 
     def on_train_end(self) -> None:
