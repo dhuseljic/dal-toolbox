@@ -29,7 +29,7 @@ class PWCLightning(BaseModule):
     def __init__(self, n_classes, metric='rbf', n_neighbors=None, random_state=42, **kwargs):
         model = PWC(n_classes, metric, n_neighbors, random_state, **kwargs)
         super().__init__(model, **kwargs)
-        self.fake_layer = nn.Parameter(torch.Tensor([1.0])) # This is a fake parameter to satisfy any optimizers
+        self.fake_layer = nn.Parameter(torch.Tensor([1.0]))  # This is a fake parameter to satisfy any optimizers
 
         self.training_inputs = []
         self.training_targets = []
@@ -270,3 +270,28 @@ class PWC(BaseEstimator, ClassifierMixin):
     def get_params(self, deep=True):
         return {'n_classes': self.n_classes_, 'metric': self.metric_, 'n_neighbors': self.n_neighbors_,
                 'random_state': self.random_state_, **self.kwargs_}
+
+    def get_logits(self, dataloader, device):
+        inputs = torch.cat([b[0] for b in dataloader]).numpy(force=True)
+        logits = self.predict_proba(inputs)
+        return torch.from_numpy(logits)
+
+    def get_probas(self, dataloader, device):
+        inputs = torch.cat([b[0] for b in dataloader]).numpy(force=True)
+        probas = self.predict_proba(inputs)
+        return torch.from_numpy(probas)
+
+    def get_representations(self, dataloader, device, return_labels=False):
+        all_features = []
+        all_labels = []
+        for batch in dataloader:
+            features = batch[0]
+            labels = batch[1]
+            all_features.append(features.cpu())
+            all_labels.append(labels)
+        features = torch.cat(all_features)
+
+        if return_labels:
+            labels = torch.cat(all_labels)
+            return features, labels
+        return features
