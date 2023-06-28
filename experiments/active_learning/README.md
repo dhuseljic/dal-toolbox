@@ -109,13 +109,26 @@ All slurm scripts used to run these experiments can be found [here](slurm/ynagel
 | CIFAR100 | ResNet18 | <img src="./notebooks/learning_curves/CIFAR100/resnet18/budet1000.png"/> | <img src="./notebooks/learning_curves/CIFAR100/resnet18/budet2500.png"/> | <img src="./notebooks/learning_curves/CIFAR100/resnet18/budet5000.png"/> | <img src="./notebooks/learning_curves/CIFAR100/resnet18/budet10000.png"/> |
 | SVHN     | ResNet18 | <img src="./notebooks/learning_curves/SVHN/resnet18/budet1000.png"/>     | <img src="./notebooks/learning_curves/SVHN/resnet18/budet2500.png"/>     | <img src="./notebooks/learning_curves/SVHN/resnet18/budet5000.png"/>     | <img src="./notebooks/learning_curves/SVHN/resnet18/budet10000.png"/>     |
 
+TypiClust might not work for high budgets, since there might not be enough uncovered clusters.
+Therefore, the `subset_size` parameter was set to 30000 for all TypiClust experiments.
+Furthermore, TypiClust was not used in CIFAR100 experiments with budget 5000 and 10000 for the same reasoning.
+
+### Experiments with precomputed features
+
+| Dataset | Model   | Budget 60                                                                    |
+|---------|---------|------------------------------------------------------------------------------|
+| CIFAR10 | Linear  | <img src="./notebooks/learning_curves/CIFAR10/linear/budet60.png"/>          |
+| CIFAR10 | Linear  | <img src="./notebooks/learning_curves/CIFAR10/linear/budet60_typiinit.png"/> |
+|         |         |                                                                              |
+
 
 ## TO-DO's
 
 - SVHN Budget 1000 uses more optimized hyperparameters than the other budgets, leading to performance discrepancies.
 - Implement/test more strategies and models
 - Comparison with state-of-the-art
-- TypiClust dependency
+- TypiClust dependency - Pandas?
+- TypiClust - High Budget --> High MAX_NUM_CLUSTERS
 
 ## Sources
 
