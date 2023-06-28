@@ -30,6 +30,7 @@ srun python -u active_learning.py \
 	dataset=$dataset \
 	dataset_path=/mnt/stud/home/ynagel/data \
 	al_strategy=$al_strat \
+	al_strategy.subset_size=30000 \
 	al_cycle.n_init=$n_init \
 	al_cycle.acq_size=$acq_size \
 	al_cycle.n_acq=$n_acq \
