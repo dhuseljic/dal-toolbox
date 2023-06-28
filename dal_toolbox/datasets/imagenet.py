@@ -1,24 +1,54 @@
 import os
 import warnings
 import torch
-from torchvision.transforms import autoaugment, transforms
+import torchvision
+from enum import Enum
+from torchvision.transforms import autoaugment
 from torchvision.transforms.functional import InterpolationMode
 from torchvision import datasets
-from .base import AbstractData
+from .base import BaseData, BaseTransforms
 
 
-class ImageNet(AbstractData):
+class ImageNetTransforms(Enum):
+    mean: tuple = (0.485, 0.456, 0.406)
+    std: tuple = (0.229, 0.224, 0.225)
+
+
+class ImageNetStandardTransforms(BaseTransforms):
+    def __init__(self) -> None:
+        super().__init__()
+        self.mean = ImageNetTransforms.mean.value
+        self.std = ImageNetTransforms.std.value
+
+    @property
+    def train_transform(self):
+        transform = ClassificationPresetTrain(crop_size=224, mean=self.mean, std=self.std)
+        return transform
+
+    @property
+    def eval_transform(self):
+        transform = ClassificationPresetEval(crop_size=224, mean=self.mean, std=self.std)
+        return transform
+
+    @property
+    def query_transform(self):
+        transform = ClassificationPresetEval(crop_size=224, mean=self.mean, std=self.std)
+        return transform
+
+
+class ImageNet(BaseData):
     def __init__(
             self,
             dataset_path: str,
-            mean=(0.485, 0.456, 0.406),
-            std=(0.229, 0.224, 0.225),
+            transforms: BaseTransforms = None,
             val_split: float = 0.1,
             seed: int = None,
     ) -> None:
-        self.mean = mean
-        self.std = std
         path = self._check_path(dataset_path)
+        transforms = ImageNetStandardTransforms() if transforms is None else transforms
+        self.train_transform = transforms.train_transform
+        self.eval_transform = transforms.eval_transform
+        self.query_transform = transforms.query_transform
         super().__init__(path, val_split, seed)
 
     def _check_path(self, path):
@@ -42,33 +72,19 @@ class ImageNet(AbstractData):
 
     @property
     def full_train_dataset(self):
-        return datasets.ImageNet(self.dataset_path, split='train', transform=self.train_transforms)
+        return datasets.ImageNet(self.dataset_path, split='train', transform=self.train_transform)
 
     @property
     def full_train_dataset_eval_transforms(self):
-        return datasets.ImageNet(self.dataset_path, split='train', transform=self.eval_transforms)
+        return datasets.ImageNet(self.dataset_path, split='train', transform=self.eval_transform)
 
     @property
     def full_train_dataset_query_transforms(self):
-        return datasets.ImageNet(self.dataset_path, split='train', transform=self.query_transforms)
+        return datasets.ImageNet(self.dataset_path, split='train', transform=self.query_transform)
 
     @property
     def test_dataset(self):
-        return datasets.ImageNet(self.dataset_path, split='val', transform=self.eval_transforms)
-
-    @property
-    def train_transforms(self):
-        train_transform = ClassificationPresetTrain(crop_size=224, mean=self.mean, std=self.std)
-        return train_transform
-
-    @property
-    def eval_transforms(self):
-        eval_transform = ClassificationPresetEval(crop_size=224, mean=self.mean, std=self.std)
-        return eval_transform
-
-    @property
-    def query_transforms(self):
-        return self.eval_transforms
+        return datasets.ImageNet(self.dataset_path, split='val', transform=self.eval_transform)
 
 
 # Transforms from: https://github.com/pytorch/vision/blob/main/references/classification/presets.py
@@ -86,9 +102,9 @@ class ClassificationPresetTrain:
         augmix_severity=3,
         random_erase_prob=0.0,
     ):
-        trans = [transforms.RandomResizedCrop(crop_size, interpolation=interpolation)]
+        trans = [torchvision.transforms.RandomResizedCrop(crop_size, interpolation=interpolation)]
         if hflip_prob > 0:
-            trans.append(transforms.RandomHorizontalFlip(hflip_prob))
+            trans.append(torchvision.transforms.RandomHorizontalFlip(hflip_prob))
         if auto_augment_policy is not None:
             if auto_augment_policy == "ra":
                 trans.append(autoaugment.RandAugment(interpolation=interpolation, magnitude=ra_magnitude))
@@ -101,15 +117,15 @@ class ClassificationPresetTrain:
                 trans.append(autoaugment.AutoAugment(policy=aa_policy, interpolation=interpolation))
         trans.extend(
             [
-                transforms.PILToTensor(),
-                transforms.ConvertImageDtype(torch.float),
-                transforms.Normalize(mean=mean, std=std),
+                torchvision.transforms.PILToTensor(),
+                torchvision.transforms.ConvertImageDtype(torch.float),
+                torchvision.transforms.Normalize(mean=mean, std=std),
             ]
         )
         if random_erase_prob > 0:
-            trans.append(transforms.RandomErasing(p=random_erase_prob))
+            trans.append(torchvision.transforms.RandomErasing(p=random_erase_prob))
 
-        self.transforms = transforms.Compose(trans)
+        self.transforms = torchvision.transforms.Compose(trans)
 
     def __call__(self, img):
         return self.transforms(img)
@@ -126,15 +142,13 @@ class ClassificationPresetEval:
         interpolation=InterpolationMode.BILINEAR,
     ):
 
-        self.transforms = transforms.Compose(
-            [
-                transforms.Resize(resize_size, interpolation=interpolation),
-                transforms.CenterCrop(crop_size),
-                transforms.PILToTensor(),
-                transforms.ConvertImageDtype(torch.float),
-                transforms.Normalize(mean=mean, std=std),
-            ]
-        )
+        self.transforms = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(resize_size, interpolation=interpolation),
+            torchvision.transforms.CenterCrop(crop_size),
+            torchvision.transforms.PILToTensor(),
+            torchvision.transforms.ConvertImageDtype(torch.float),
+            torchvision.transforms.Normalize(mean=mean, std=std),
+        ])
 
     def __call__(self, img):
         return self.transforms(img)
