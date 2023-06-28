@@ -74,12 +74,16 @@ class XPAL(Query):
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
         labeled_loader, labeled_indices = al_datamodule.labeled_dataloader()
 
+        # TODO (ynagel) This is really inefficient
         existing_indices = unlabeled_indices + labeled_indices
         indices = [e for e in range(self.S.shape[0]) if e not in existing_indices]
 
-        # TODO (ynagel) Can this even be implemented this way?
-        S_ = np.delete(self.S, indices, 0)
-        S_ = np.delete(S_, indices, 1)
+        if self.subset_size is None:
+            S_ = self.S
+        else:
+            # TODO (ynagel) Can this even be implemented this way?
+            S_ = np.delete(self.S, indices, 0)
+            S_ = np.delete(S_, indices, 1)
 
         y_labeled = []
 
