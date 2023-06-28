@@ -31,17 +31,7 @@ def unfreeze_bn(model, backup):
             module.num_batches_tracked.data = backup[name + '.num_batches_tracked']
 
 
-class SSLModel(DeterministicModel):
-    def configure_optimizers(self):
-        out = super().configure_optimizers()
-        if isinstance(out, dict):
-            # If the output is a dictionary, we have a scheduler available, set to step for ssl algorithms
-            scheduler_conf = {'scheduler': out['lr_scheduler'], 'interval': 'step'}
-            out = {'optimizer': out['optimizer'], 'lr_scheduler': scheduler_conf}
-        return out
-
-
-class DeterministicPseudoLabelModel(SSLModel):
+class DeterministicPseudoLabelModel(DeterministicModel):
     def __init__(
             self,
             model: nn.Module,
@@ -54,7 +44,7 @@ class DeterministicPseudoLabelModel(SSLModel):
             train_metrics: dict = None,
             val_metrics: dict = None,
     ):
-        super().__init__(model, loss_fn, optimizer, lr_scheduler, train_metrics, val_metrics)
+        super().__init__(model, loss_fn, optimizer, lr_scheduler, train_metrics, val_metrics, scheduler_interval='step')
         self.cutoff_proba = cutoff_proba
         self.unsup_warmup = unsup_warmup
         self.unsup_weight = unsup_weight
@@ -88,7 +78,7 @@ class DeterministicPseudoLabelModel(SSLModel):
         return loss
 
 
-class DeterministicPiModel(SSLModel):
+class DeterministicPiModel(DeterministicModel):
     def __init__(
             self,
             model: nn.Module,
@@ -101,7 +91,7 @@ class DeterministicPiModel(SSLModel):
             train_metrics: dict = None,
             val_metrics: dict = None,
     ):
-        super().__init__(model, loss_fn, optimizer, lr_scheduler, train_metrics, val_metrics)
+        super().__init__(model, loss_fn, optimizer, lr_scheduler, train_metrics, val_metrics, scheduler_interval='step')
         self.num_classes = num_classes
         self.unsup_warmup = unsup_warmup
         self.unsup_weight = unsup_weight
@@ -113,7 +103,7 @@ class DeterministicPiModel(SSLModel):
         logits = self(inputs)
         supervised_loss = self.loss_fn(logits, targets)
 
-        unlabeled_batch = batch['unlabeled']
+        unlabeled_batch = batch['unlabeled'][0]
         unlabeled_inputs_aug1 = unlabeled_batch[0]
         unlabeled_inputs_aug2 = unlabeled_batch[1]
 
@@ -137,7 +127,7 @@ class DeterministicPiModel(SSLModel):
         return loss
 
 
-class DeterministicFixMatchModel(SSLModel):
+class DeterministicFixMatchModel(DeterministicModel):
     def __init__(
             self,
             model: nn.Module,
@@ -149,7 +139,7 @@ class DeterministicFixMatchModel(SSLModel):
             train_metrics: dict = None,
             val_metrics: dict = None,
     ):
-        super().__init__(model, loss_fn, optimizer, lr_scheduler, train_metrics, val_metrics)
+        super().__init__(model, loss_fn, optimizer, lr_scheduler, train_metrics, val_metrics, scheduler_interval='step')
         self.cutoff_proba = cutoff_proba
         self.unsup_weight = unsup_weight
 
@@ -162,7 +152,7 @@ class DeterministicFixMatchModel(SSLModel):
         supervised_loss = self.loss_fn(logits, targets)
 
         # Unsupervised
-        unlabeled_batch = batch['unlabeled']
+        unlabeled_batch = batch['unlabeled'][0]
         inputs_weak = unlabeled_batch[0]
         inputs_strong = unlabeled_batch[1]
 

@@ -5,7 +5,24 @@ from ..utils import setup_rng
 from lightning.pytorch.utilities import rank_zero_warn
 
 
-class AbstractData(ABC):
+class BaseTransforms(ABC):
+    @property
+    @abstractmethod
+    def train_transform(self):
+        pass
+
+    @property
+    @abstractmethod
+    def eval_transform(self):
+        pass
+
+    @property
+    @abstractmethod
+    def query_transform(self):
+        pass
+
+
+class BaseData(ABC):
     def __init__(self, dataset_path: str, val_split: float = .1, seed: int = None) -> None:
         super().__init__()
         self.dataset_path = dataset_path
@@ -62,19 +79,4 @@ class AbstractData(ABC):
     @property
     @abstractmethod
     def test_dataset(self):
-        pass
-
-    @property
-    @abstractmethod
-    def train_transforms(self):
-        pass
-
-    @property
-    @abstractmethod
-    def query_transforms(self):
-        pass
-
-    @property
-    @abstractmethod
-    def eval_transforms(self):
         pass
