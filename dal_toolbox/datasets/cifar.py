@@ -5,6 +5,7 @@ import torchvision
 
 from .base import BaseData, BaseTransforms
 from .corruptions import GaussianNoise
+from .utils import ContrastiveTransformations
 
 
 class PlainTransforms(BaseTransforms):
@@ -144,7 +145,7 @@ class CIFAR10ContrastiveTransforms(CIFAR10StandardTransforms):
             torchvision.transforms.ToTensor(),
             # transforms.Normalize(self.mean, self.std),  # TODO (dhuseljic) Discuss if this should be used
         ])
-        return transform
+        return ContrastiveTransformations(transform)
 
     @property
     def eval_transform(self):
