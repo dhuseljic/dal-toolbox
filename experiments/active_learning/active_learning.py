@@ -186,16 +186,18 @@ def build_model(args, num_classes, feature_size=None):
 
 
 def build_al_strategy(name, args):
+    subset_size = None if args.al_strategy.subset_size == "None" else args.al_strategy.subset_size
+
     if name == "random":
         query = random.RandomSampling()
     elif name == "entropy":
-        query = uncertainty.EntropySampling(subset_size=args.al_strategy.subset_size)
+        query = uncertainty.EntropySampling(subset_size=subset_size)
     elif name == "coreset":
-        query = coreset.CoreSet(subset_size=args.al_strategy.subset_size)
+        query = coreset.CoreSet(subset_size=subset_size)
     elif name == "badge":
-        query = badge.Badge(subset_size=args.al_strategy.subset_size)
+        query = badge.Badge(subset_size=subset_size)
     elif name == "typiclust":
-        query = typiclust.TypiClust(subset_size=args.al_strategy.subset_size)
+        query = typiclust.TypiClust(subset_size=subset_size)
     else:
         raise NotImplementedError(f"Active learning strategy {name} is not implemented!")
     return query
