@@ -74,21 +74,22 @@ class XPAL(Query):
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
         labeled_loader, labeled_indices = al_datamodule.labeled_dataloader()
 
-        # TODO (ynagel) This is really inefficient
-        existing_indices = unlabeled_indices + labeled_indices
-        indices = [e for e in range(self.S.shape[0]) if e not in existing_indices]
-
         if self.subset_size is None:
             S_ = self.S
         else:
-            # TODO (ynagel) Can this even be implemented this way?
-            S_ = np.delete(self.S, indices, 0)
-            S_ = np.delete(S_, indices, 1)
+            # Deletes entries from S, that are not part of the labeled/unlabeled subset
+            existing_indices = np.concatenate([unlabeled_indices, labeled_indices])
+            indices_to_remove = np.arange(self.S.shape[0])
+            mask = np.equal.outer(indices_to_remove, existing_indices)
+            indices_to_remove = indices_to_remove[~np.logical_or.reduce(mask, axis=1)]
+
+            S_ = np.delete(self.S, indices_to_remove, 0)
+            S_ = np.delete(S_, indices_to_remove, 1)
 
         y_labeled = []
 
-        for _, labels, _ in labeled_loader:
-            y_labeled.append(labels)
+        for batch in labeled_loader:
+            y_labeled.append(batch[1])
         y_labeled = torch.cat(y_labeled).tolist()
 
         # unlabeled_features = model.get_representations(unlabeled_dataloader)
