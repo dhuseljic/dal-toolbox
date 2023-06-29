@@ -76,6 +76,9 @@ class XPAL(Query):
 
         if self.subset_size is None:
             S_ = self.S
+
+            mapped_labeled_indices = unlabeled_indices
+            mapped_unlabeled_indices = labeled_indices
         else:
             # Deletes entries from S, that are not part of the labeled/unlabeled subset
             existing_indices = np.concatenate([unlabeled_indices, labeled_indices])
@@ -86,27 +89,23 @@ class XPAL(Query):
             S_ = np.delete(self.S, indices_to_remove, 0)
             S_ = np.delete(S_, indices_to_remove, 1)
 
+            # Remapping indices
+            mapping = np.argsort(np.argsort(existing_indices))
+            mapped_labeled_indices = mapping[len(unlabeled_indices):]
+            mapped_unlabeled_indices = mapping[:len(unlabeled_indices)]
+
         y_labeled = []
 
         for batch in labeled_loader:
             y_labeled.append(batch[1])
         y_labeled = torch.cat(y_labeled).tolist()
 
-        # unlabeled_features = model.get_representations(unlabeled_dataloader)
-        # labeled_features = model.get_representations(labeled_loader)
-
-        # Mapping to new indices in S_
-        unlabeled_indices_mapped = np.arange(0, len(unlabeled_indices))
-        labeled_indices_mapped = np.arange(len(unlabeled_indices), len(unlabeled_indices) + len(labeled_indices))
-
-        # features = torch.cat([unlabeled_features, labeled_features])
-
         Z = np.eye(self.num_classes)[y_labeled]
-        K_x = S_[:, labeled_indices_mapped] @ Z
-        K_c = K_x[unlabeled_indices_mapped]
+        K_x = S_[:, mapped_labeled_indices] @ Z
+        K_c = K_x[mapped_unlabeled_indices]
 
         # calculate loss reduction for each unlabeled sample
-        gains = xpal_gain(K_c=K_c, K_x=K_x, S=S_[unlabeled_indices_mapped], alpha_c=self.alpha_c_, alpha_x=self.alpha_x_)
+        gains = xpal_gain(K_c=K_c, K_x=K_x, S=S_[mapped_unlabeled_indices], alpha_c=self.alpha_c_, alpha_x=self.alpha_x_)
 
         _, indices = torch.topk(torch.Tensor(gains), acq_size)
 
