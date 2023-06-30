@@ -64,6 +64,7 @@ def main(args):
     logger.info('Building model: %s', args.model.name)
 
     model = build_model(args, num_classes=num_classes, feature_size=feature_size)
+    accelerator = "auto" if args.model.name != "parzen_window" else "cpu"
 
     # Setup AL Module
     logger.info(f'Creating AL Datamodule with {args.al_cycle.n_init} initial samples, '
@@ -111,7 +112,6 @@ def main(args):
 
         # Train with updated annotations
         logger.info('Training..')
-        # TODO (ynagel) There has to be some kind of better way
         callbacks = []
         if is_running_on_slurm():
             callbacks.append(MetricLogger())
@@ -119,6 +119,7 @@ def main(args):
             max_epochs=args.model.num_epochs,
             enable_checkpointing=False,
             callbacks=callbacks,
+            accelerator=accelerator,
             default_root_dir=args.output_dir,
             enable_progress_bar=is_running_on_slurm() is False,
             check_val_every_n_epoch=args.val_interval,
@@ -173,7 +174,9 @@ def build_model(args, num_classes, feature_size=None):
             optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
         elif args.model.name == "parzen_window":
-            model = PWCLightning(n_classes=num_classes, metric='cosine',
+            model = PWCLightning(n_classes=num_classes,
+                                 random_state=args.random_seed,
+                                 kernel_params=args.model,
                                  train_metrics={'train_acc': metrics.Accuracy()},
                                  val_metrics={'val_acc': metrics.Accuracy()})
             return model

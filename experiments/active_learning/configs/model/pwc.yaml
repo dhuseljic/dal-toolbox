@@ -1,4 +1,8 @@
 name: parzen_window
 num_epochs: 1
-train_batch_size: 100
-predict_batch_size: 100
+train_batch_size: 1000
+predict_batch_size: 1000
+n_neighbors: null
+kernel:
+  name: rbf
+  gamma: 1.0

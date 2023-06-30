@@ -26,8 +26,12 @@ class PWCLightning(BaseModule):
     Wrapper for PWC to work with lightning.
     """
 
-    def __init__(self, n_classes, metric='rbf', n_neighbors=None, random_state=42, **kwargs):
-        model = PWC(n_classes, metric, n_neighbors, random_state, **kwargs)
+    def __init__(self, n_classes, random_state, kernel_params, **kwargs):
+        # TODO (ynagel) Maybe find a better solution for this
+        metric = kernel_params["kernel"]["name"]
+        gamma = kernel_params["kernel"]["gamma"]
+        n_neighbors = kernel_params["n_neighbors"]
+        model = PWC(n_classes, metric, n_neighbors, random_state, **{"gamma": gamma})
         super().__init__(model, **kwargs)
         self.fake_layer = nn.Parameter(torch.Tensor([1.0]))  # This is a fake parameter to satisfy any optimizers
 
