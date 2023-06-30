@@ -4,9 +4,9 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --array=1-3%3
-#SBATCH --job-name=al_baselines_ssl
-#SBATCH --output=/mnt/stud/home/ynagel/logs/al_baselines_ssl/%A_%a__%x.log
+#SBATCH --array=1-10%3
+#SBATCH --job-name=al_baselines
+#SBATCH --output=/mnt/stud/home/ynagel/logs/al_baselines/%A_%a__%x.log
 
 date;hostname;pwd
 source /mnt/stud/home/ynagel/dal-toolbox/venv/bin/activate
@@ -18,10 +18,10 @@ dataset=CIFAR10
 al_strat=entropy
 n_init=10
 acq_size=10
-n_acq=5
+n_acq=9
 budget=$((n_init + n_acq * acq_size))
 random_seed=$SLURM_ARRAY_TASK_ID
-output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines_ssl/${dataset}/${model}/${al_strat}/budget_${budget}/seed${random_seed}/
+output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines/${dataset}/${model}/${al_strat}/budget_${budget}_typiclust_init/seed${random_seed}/
 
 srun python -u active_learning.py \
 	model=$model \
@@ -35,7 +35,8 @@ srun python -u active_learning.py \
 	al_cycle.n_init=$n_init \
 	al_cycle.acq_size=$acq_size \
 	al_cycle.n_acq=$n_acq \
+	al_cycle.init_strategy=typiclust \
 	random_seed=$random_seed \
 	output_dir=$output_dir \
 	precomputed_features=True \
-	precomputed_features_dir=resnet18_cifar10_87_leacc.pth
+	precomputed_features_dir=/mnt/stud/home/ynagel/data/resnet18_cifar10_87_leacc.pth
