@@ -9,7 +9,6 @@ import hydra
 import lightning as L
 import torch
 from omegaconf import OmegaConf
-from sklearn.metrics import pairwise_kernels
 
 from dal_toolbox import datasets
 from dal_toolbox import metrics
@@ -18,9 +17,9 @@ from dal_toolbox.active_learning.strategies import random, uncertainty, coreset,
 # noinspection PyUnresolvedReferences
 from dal_toolbox.datasets.utils import FeatureDataset
 from dal_toolbox.models import deterministic
-from dal_toolbox.models.parzen_window_classifier import PWC, PWCLightning, kernels
+from dal_toolbox.models.parzen_window_classifier import PWCLightning
 from dal_toolbox.models.utils.callbacks import MetricLogger
-from dal_toolbox.utils import seed_everything, is_running_on_slurm
+from dal_toolbox.utils import seed_everything, is_running_on_slurm, kernels
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")

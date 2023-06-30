@@ -1,24 +1,11 @@
 import numpy as np
 import torch
-from scipy.spatial.distance import cdist
 from sklearn.base import BaseEstimator, ClassifierMixin
-from sklearn.metrics import pairwise_kernels
 from sklearn.utils import check_random_state, check_array
 from torch import nn
 
 from dal_toolbox.models.utils.base import BaseModule
-
-
-def kernels(X, Y, metric, **kwargs):
-    metric = str(metric)
-    if metric == 'rbf':
-        gamma = kwargs.pop('gamma')
-        return pairwise_kernels(X=X, Y=Y, metric=metric, gamma=gamma)
-    elif metric == 'cosine':
-        return pairwise_kernels(X=X, Y=Y, metric=metric)
-    elif metric == 'categorical':
-        gamma = kwargs.pop('gamma')
-        return np.exp(-gamma * cdist(XA=X, XB=Y, metric='hamming'))
+from dal_toolbox.utils import kernels
 
 
 class PWCLightning(BaseModule):

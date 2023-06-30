@@ -1,20 +1,20 @@
-import os
 import copy
-import time
+import datetime
 import errno
 import hashlib
-import datetime
+import os
 import random
+import time
+from collections import defaultdict, deque, OrderedDict
+from typing import List, Optional, Tuple
 
-import torch
 import lightning as L
-import torch.distributed as dist
-
 import numpy as np
 import pylab as plt
-
-from typing import List, Optional, Tuple
-from collections import defaultdict, deque, OrderedDict
+import torch
+import torch.distributed as dist
+from scipy.spatial.distance import cdist
+from sklearn.metrics import pairwise_kernels
 from torch.utils.data import DataLoader
 from torchvision.utils import make_grid
 
@@ -557,3 +557,15 @@ def plot_mcp(results, classes='all', ax=None, plot_bars=False):
             bar_x = [conf for conf in results_cls['confs'] if not np.isnan(conf)]
             bar_y = [n for n in results_cls['n_samples'] if n != 0]
             plt.bar(bar_x, bar_y, width=.05, alpha=.3)
+
+
+def kernels(X, Y, metric, **kwargs):
+    metric = str(metric)
+    if metric == 'rbf':
+        gamma = kwargs.pop('gamma')
+        return pairwise_kernels(X=X, Y=Y, metric=metric, gamma=gamma)
+    elif metric == 'cosine':
+        return pairwise_kernels(X=X, Y=Y, metric=metric)
+    elif metric == 'categorical':
+        gamma = kwargs.pop('gamma')
+        return np.exp(-gamma * cdist(XA=X, XB=Y, metric='hamming'))
