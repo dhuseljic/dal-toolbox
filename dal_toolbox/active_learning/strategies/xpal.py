@@ -2,12 +2,9 @@
 
 import numpy as np
 import torch
-from sklearn.metrics import pairwise_kernels
-from torch.utils.data import DataLoader
+from sklearn.utils import check_array
 
 from .query import Query
-
-from sklearn.utils import check_array
 
 
 class XPAL(Query):

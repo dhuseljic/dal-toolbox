@@ -18,7 +18,7 @@ from dal_toolbox.active_learning.strategies import random, uncertainty, coreset,
 # noinspection PyUnresolvedReferences
 from dal_toolbox.datasets.utils import FeatureDataset
 from dal_toolbox.models import deterministic
-from dal_toolbox.models.parzen_window_classifier import PWC, PWCLightning
+from dal_toolbox.models.parzen_window_classifier import PWC, PWCLightning, kernels
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything, is_running_on_slurm
 
@@ -214,7 +214,7 @@ def build_al_strategy(name, args, num_classes=None, trainset=None):
         query = typiclust.TypiClust(subset_size=subset_size)
     elif name == "xpal":
         features = torch.stack([batch[0] for batch in trainset])
-        S = pairwise_kernels(X=features, Y=features, metric="cosine")
+        S = kernels(X=features, Y=features, metric=args.al_strategy.kernel.name, gamma=args.al_strategy.kernel.gamma)
         query = xpal.XPAL(num_classes, S, subset_size=subset_size)
     else:
         raise NotImplementedError(f"Active learning strategy {name} is not implemented!")
