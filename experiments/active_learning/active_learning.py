@@ -36,7 +36,8 @@ def main(args):
     # Setup Dataset
     logger.info('Building datasets.')
     if args.precomputed_features:
-        features = torch.load(args.precomputed_features_dir)
+        map = "cpu" if not torch.cuda.is_available() else None
+        features = torch.load(args.precomputed_features_dir, map_location=map)
 
         trainset = features['trainset']
         queryset = trainset
