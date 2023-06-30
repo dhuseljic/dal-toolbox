@@ -24,41 +24,33 @@ class PWCLightning(BaseModule):
 
         self.training_inputs = []
         self.training_targets = []
-        self.validation_inputs = []
 
     def training_step(self, batch):
-        inputs, targets = batch
+        inputs, targets = batch[0], batch[1]
 
-        probas = torch.from_numpy(self.model.predict_proba(inputs.numpy(force=True)))
-        targets = targets.cpu()
-        self.log_train_metrics(probas, targets)
         self.training_inputs.append(inputs)
         self.training_targets.append(targets)
 
     def validation_step(self, batch, batch_idx):
-        inputs, targets = batch
+        X, y = batch[0].numpy(force=True), batch[1]
 
-        probas = torch.from_numpy(self.model.predict_proba(inputs.numpy(force=True)))
-        targets = targets.cpu()
-        self.log_val_metrics(probas, targets)
-        self.validation_inputs.append(inputs)
+        y_proba = self.model.predict_proba(X)
+        self.log_val_metrics(torch.from_numpy(y_proba), y)
 
-    def on_train_end(self) -> None:
+    def on_train_epoch_end(self) -> None:
+        if self.current_epoch > 0:
+            pass
+
         X = torch.cat(self.training_inputs).numpy(force=True)
-        y = torch.cat(self.training_targets).numpy(force=True)
+        y = torch.cat(self.training_targets)
 
-        self.model.fit(X, y)
+        self.model.fit(X, y.numpy(force=True))
+
+        y_proba = self.model.predict_proba(X)
+        self.log_train_metrics(torch.from_numpy(y_proba), y)
 
         self.training_inputs = []
         self.training_targets = []
-
-    def on_validation_end(self) -> None:
-        X = torch.cat(self.validation_inputs).numpy(force=True)
-
-        probas = self.model.predict_proba(X)
-
-        self.validation_inputs = []
-        return probas
 
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         inputs, targets = batch

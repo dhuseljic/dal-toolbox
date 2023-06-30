@@ -1,5 +1,5 @@
 name: parzen_window
-num_epochs: 1
+num_epochs: 2
 train_batch_size: 1000
 predict_batch_size: 1000
 n_neighbors: null
