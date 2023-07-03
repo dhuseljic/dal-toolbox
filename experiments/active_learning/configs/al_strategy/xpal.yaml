@@ -1,5 +1,5 @@
 name: xpal
 subset_size: 10_000
 kernel:
-  name: cosine
-  gamma: 1.0
+  name: rbf
+  gamma: 0.05
