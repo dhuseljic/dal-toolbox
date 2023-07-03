@@ -14,7 +14,7 @@ from torch import nn
 from dal_toolbox import datasets
 from dal_toolbox import metrics
 from dal_toolbox.active_learning import ActiveLearningDataModule
-from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, typiclust
+from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, typiclust, prob_cover
 # noinspection PyUnresolvedReferences
 from dal_toolbox.datasets.utils import FeatureDataset
 from dal_toolbox.models import deterministic
@@ -198,6 +198,8 @@ def build_al_strategy(name, args):
         query = badge.Badge(subset_size=subset_size)
     elif name == "typiclust":
         query = typiclust.TypiClust(subset_size=subset_size)
+    elif name == "probcover":
+        query = prob_cover.ProbCover(subset_size=subset_size, delta=args.al_strategy.delta)
     else:
         raise NotImplementedError(f"Active learning strategy {name} is not implemented!")
     return query
