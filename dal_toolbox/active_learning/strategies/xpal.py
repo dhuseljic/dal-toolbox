@@ -74,8 +74,8 @@ class XPAL(Query):
         if self.subset_size is None:
             S_ = self.S
 
-            mapped_labeled_indices = unlabeled_indices
-            mapped_unlabeled_indices = labeled_indices
+            mapped_labeled_indices = labeled_indices
+            mapped_unlabeled_indices = unlabeled_indices
         else:
             # Deletes entries from S, that are not part of the labeled/unlabeled subset
             existing_indices = np.concatenate([unlabeled_indices, labeled_indices])
