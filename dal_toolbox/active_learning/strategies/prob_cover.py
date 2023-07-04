@@ -43,18 +43,22 @@ def estimate_delta(data, num_classes, alpha=0.95):
     labels = kmeans.labels_
 
     # TODO (ynagel) These values have to be computed and explained somehow
-    deltas = np.linspace(1.0, 20.0, 500)
+    deltas = np.linspace(1.0, 20.0, 1000)
 
-    last_delta = deltas[0]
-    # TODO (ynagel) Binary search should be faster than iterating if min-max search values are chosen properly
-    for delta in deltas:
-        purity = calculate_purity(data, labels, delta)
-        print(f"Delta: {delta:.5f} results in Purity: {purity:5f}")
+    low = 0
+    high = len(deltas) - 1
+    delta = 1.0
+    while low <= high:
+        mid = (low + high) // 2
+        purity = calculate_purity(data, labels, deltas[mid])
+
         if purity < alpha:
-            break
-        last_delta = delta
+            high = mid - 1
+        else:
+            delta = deltas[mid]  # Current best delta
+            low = mid + 1
 
-    return last_delta
+    return delta
 
 
 # TODO (ynagel) This has a rounding problem when calculating the distance of a point to itself, sometimes resulting in a
