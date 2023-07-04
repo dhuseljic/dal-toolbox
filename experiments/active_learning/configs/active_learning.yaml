@@ -15,6 +15,7 @@ dataset_path: ./data/
 val_interval: 25
 
 precomputed_features: False
+standardize_precomputed_features: False
 precomputed_features_dir: model_features_dict.pth
 
 output_dir: ./output/

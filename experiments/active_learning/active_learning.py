@@ -9,6 +9,7 @@ import hydra
 import lightning as L
 import torch
 from omegaconf import OmegaConf
+from sklearn.preprocessing import StandardScaler
 
 from dal_toolbox import datasets
 from dal_toolbox import metrics
@@ -43,6 +44,12 @@ def main(args):
         queryset = trainset
         valset = features['valset']
         testset = features['testset']
+
+        if args.standardize_precomputed_features:
+            scaler = StandardScaler().fit(trainset.features)
+            trainset.features = torch.from_numpy(scaler.transform(trainset.features)).to(dtype=torch.float32)
+            valset.features = torch.from_numpy(scaler.transform(valset.features)).to(dtype=torch.float32)
+            testset.features = torch.from_numpy(scaler.transform(testset.features)).to(dtype=torch.float32)
 
         num_classes = len(torch.unique(trainset.labels))
         feature_size = trainset.features.shape[1]
