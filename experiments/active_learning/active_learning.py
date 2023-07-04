@@ -57,7 +57,7 @@ def main(args):
 
     # Setup Query
     logger.info('Building query strategy: %s', args.al_strategy.name)
-    al_strategy = build_al_strategy(args.al_strategy.name, args)
+    al_strategy = build_al_strategy(args.al_strategy.name, args, trainset, num_classes)
 
     # Setup Model
     logger.info('Building model: %s', args.model.name)
@@ -185,7 +185,7 @@ def build_model(args, num_classes, feature_size=None):
     return model
 
 
-def build_al_strategy(name, args):
+def build_al_strategy(name, args, trainset=None, num_classes=None):
     subset_size = None if args.al_strategy.subset_size == "None" else args.al_strategy.subset_size
 
     if name == "random":
@@ -199,7 +199,15 @@ def build_al_strategy(name, args):
     elif name == "typiclust":
         query = typiclust.TypiClust(subset_size=subset_size)
     elif name == "probcover":
-        query = prob_cover.ProbCover(subset_size=subset_size, delta=args.al_strategy.delta)
+
+        delta = args.al_strategy.delta
+        if delta is None:
+            import time
+            start = time.time()
+            delta = prob_cover.estimate_delta(trainset.features, num_classes, args.al_strategy.alpha)
+            print(f"Took {time.time() - start} seconds to calculate delta.")
+        print(f"Using delta={delta:.5f}")
+        query = prob_cover.ProbCover(subset_size=subset_size, delta=delta)
     else:
         raise NotImplementedError(f"Active learning strategy {name} is not implemented!")
     return query

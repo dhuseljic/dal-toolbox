@@ -1,3 +1,4 @@
 name: probcover
 subset_size: 30_000
-delta: 7.5
+delta: null
+alpha: 0.95
