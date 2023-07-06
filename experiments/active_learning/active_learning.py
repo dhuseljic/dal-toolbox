@@ -16,7 +16,7 @@ from dal_toolbox import metrics
 from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, typiclust, xpal
 # noinspection PyUnresolvedReferences
-from dal_toolbox.datasets.utils import FeatureDataset
+from dal_toolbox.datasets.utils import FeatureDataset, FeatureDatasetWrapper
 from dal_toolbox.models import deterministic
 from dal_toolbox.models.parzen_window_classifier import PWCLightning
 from dal_toolbox.models.utils.callbacks import MetricLogger
@@ -37,31 +37,29 @@ def main(args):
     # Setup Dataset
     logger.info('Building datasets.')
     if args.precomputed_features:
-        map = "cpu" if not torch.cuda.is_available() else None
-        features = torch.load(args.precomputed_features_dir, map_location=map)
-
-        trainset = features['trainset']
-        queryset = trainset
-        valset = features['valset']
-        testset = features['testset']
+        data = FeatureDatasetWrapper(args.precomputed_features_dir)
+        feature_size = data.num_features
 
         if args.standardize_precomputed_features:
-            scaler = StandardScaler().fit(trainset.features)
-            trainset.features = torch.from_numpy(scaler.transform(trainset.features)).to(dtype=torch.float32)
-            valset.features = torch.from_numpy(scaler.transform(valset.features)).to(dtype=torch.float32)
-            testset.features = torch.from_numpy(scaler.transform(testset.features)).to(dtype=torch.float32)
+            train_features = data.train_dataset.dataset.features
+            scaler = StandardScaler().fit(train_features)
 
-        num_classes = len(torch.unique(trainset.labels))
-        feature_size = trainset.features.shape[1]
+            data.train_dataset.dataset.features = torch.from_numpy(scaler.transform(train_features)).to(
+                dtype=torch.float32)
+            data.val_dataset.dataset.features = torch.from_numpy(
+                scaler.transform(data.val_dataset.dataset.features)).to(dtype=torch.float32)
+            data.test_dataset.features = torch.from_numpy(scaler.transform(data.test_dataset.features)).to(
+                dtype=torch.float32)
     else:
         data = build_dataset(args)
-        trainset = data.train_dataset
-        queryset = data.query_dataset
-        valset = data.val_dataset
-        testset = data.test_dataset
-
-        num_classes = data.num_classes
         feature_size = None
+
+    trainset = data.train_dataset
+    queryset = data.query_dataset
+    valset = data.val_dataset
+    testset = data.test_dataset
+
+    num_classes = data.num_classes
 
     # Setup Query
     logger.info('Building query strategy: %s', args.al_strategy.name)
