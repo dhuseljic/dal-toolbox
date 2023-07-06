@@ -222,7 +222,8 @@ def build_al_strategy(name, args, num_classes=None, trainset=None):
     elif name == "xpal":
         features = torch.stack([batch[0] for batch in trainset])
         S = kernels(X=features, Y=features, metric=args.al_strategy.kernel.name, gamma=args.al_strategy.kernel.gamma)
-        query = xpal.XPAL(num_classes, S, subset_size=subset_size)
+        alpha = args.al_strategy.alpha
+        query = xpal.XPAL(num_classes, S, subset_size=subset_size, alpha_c=alpha, alpha_x=alpha)
     else:
         raise NotImplementedError(f"Active learning strategy {name} is not implemented!")
     return query

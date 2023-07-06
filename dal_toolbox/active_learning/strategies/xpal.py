@@ -48,7 +48,7 @@ class XPAL(Query):
         Random state for annotator selection.
     """
 
-    def __init__(self, num_classes, S, alpha_c=1, alpha_x=1, subset_size=None, random_seed=None):
+    def __init__(self, num_classes, S, alpha_c, alpha_x, subset_size=None, random_seed=None):
         super().__init__(random_seed)
 
         self.num_classes = num_classes
