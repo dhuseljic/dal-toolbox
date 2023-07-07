@@ -12,7 +12,7 @@ from .base import DeterministicModel
 from .. import deterministic
 from ..utils.base import BaseModule
 from ... import metrics
-from ...datasets.base import AbstractData
+from ...datasets.base import BaseData
 from ...datasets.utils import FeatureDataset
 
 
@@ -69,7 +69,7 @@ class LinearEvaluationAccuracy:
 
     def __init__(self,
                  model: BaseModule,
-                 data: AbstractData,
+                 data: BaseData,
                  device: torch.device,
                  train_batch_size: int = 4096,
                  val_batch_size: int = 512,
