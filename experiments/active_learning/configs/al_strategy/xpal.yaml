@@ -3,4 +3,4 @@ subset_size: 10_000
 alpha: 1e-3
 kernel:
   name: rbf
-  gamma: 0.05
+  gamma: calculate

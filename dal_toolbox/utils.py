@@ -569,3 +569,17 @@ def kernels(X, Y, metric, **kwargs):
     elif metric == 'categorical':
         gamma = kwargs.pop('gamma')
         return np.exp(-gamma * cdist(XA=X, XB=Y, metric='hamming'))
+
+
+def _calculate_mean_gamma(data, delta=(np.sqrt(2) * 1e-6)):
+    N = data.shape[0]
+    n_features = data.shape[1]
+    variance = torch.var(data, dim=0).numpy()
+
+    denominator = 2 * N * np.sum(variance)
+    numerator = (N - 1) * np.log((N - 1) / delta ** 2)
+    if denominator <= 0:
+        gamma = 1 / n_features
+    else:
+        gamma = 0.5 * numerator / denominator
+    return float(gamma)

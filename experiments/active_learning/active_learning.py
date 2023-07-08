@@ -20,7 +20,7 @@ from dal_toolbox.datasets.utils import FeatureDataset, FeatureDatasetWrapper
 from dal_toolbox.models import deterministic
 from dal_toolbox.models.parzen_window_classifier import PWCLightning
 from dal_toolbox.models.utils.callbacks import MetricLogger
-from dal_toolbox.utils import seed_everything, is_running_on_slurm, kernels
+from dal_toolbox.utils import seed_everything, is_running_on_slurm, kernels, _calculate_mean_gamma
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
@@ -55,6 +55,7 @@ def main(args):
         feature_size = None
 
     trainset = data.train_dataset
+    features = torch.stack([batch[0] for batch in trainset])
     queryset = data.query_dataset
     valset = data.val_dataset
     testset = data.test_dataset
@@ -63,13 +64,20 @@ def main(args):
 
     # Setup Query
     logger.info('Building query strategy: %s', args.al_strategy.name)
-    al_strategy = build_al_strategy(args.al_strategy.name, args, num_classes=num_classes, trainset=trainset)
+    al_strategy = build_al_strategy(args.al_strategy.name, args, num_classes=num_classes, train_features=features)
 
     # Setup Model
     logger.info('Building model: %s', args.model.name)
 
+    if args.model.name == "parzen_window":
+        accelerator = "cpu"
+        if args.model.kernel.gamma == "calculate":
+            args.model.kernel.gamma = _calculate_mean_gamma(features)
+            logger.info(f"Calculated gamma as {args.model.kernel.gamma}.")
+    else:
+        accelerator = "auto"
+
     model = build_model(args, num_classes=num_classes, feature_size=feature_size)
-    accelerator = "auto" if args.model.name != "parzen_window" else "cpu"
 
     # Setup AL Module
     logger.info(f'Creating AL Datamodule with {args.al_cycle.n_init} initial samples, '
@@ -204,7 +212,7 @@ def build_model(args, num_classes, feature_size=None):
     return model
 
 
-def build_al_strategy(name, args, num_classes=None, trainset=None):
+def build_al_strategy(name, args, num_classes=None, train_features=None):
     subset_size = None if args.al_strategy.subset_size == "None" else args.al_strategy.subset_size
 
     if name == "random":
@@ -218,8 +226,12 @@ def build_al_strategy(name, args, num_classes=None, trainset=None):
     elif name == "typiclust":
         query = typiclust.TypiClust(subset_size=subset_size)
     elif name == "xpal":
-        features = torch.stack([batch[0] for batch in trainset])
-        S = kernels(X=features, Y=features, metric=args.al_strategy.kernel.name, gamma=args.al_strategy.kernel.gamma)
+        if args.al_strategy.kernel.gamma == "calculate":
+            gamma = _calculate_mean_gamma(train_features)
+        else:
+            gamma = args.al_strategy.kernel.gamma
+
+        S = kernels(X=train_features, Y=train_features, metric=args.al_strategy.kernel.name, gamma=gamma)
         alpha = args.al_strategy.alpha
         query = xpal.XPAL(num_classes, S, subset_size=subset_size, alpha_c=alpha, alpha_x=alpha)
     else:
