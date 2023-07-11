@@ -3,30 +3,27 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=6
 #SBATCH --partition=main
-#SBATCH --array=0-89
-#SBATCH --job-name=xpal_hparams
-#SBATCH --output=/mnt/stud/home/ynagel/logs/xpal_hparams/%A_%a__%x.log
+#SBATCH --array=1-10
+#SBATCH --job-name=al_baselines
+#SBATCH --output=/mnt/stud/home/ynagel/logs/al_baselines/%A_%a__%x.log
 
 date;hostname;pwd
 source /mnt/stud/home/ynagel/dal-toolbox/venv/bin/activate
 cd ~/dal-toolbox/experiments/active_learning/
 
-random_seed_array=(0 1 2 3 4 5 6 7 8 9)
-gamma_array=(0.001 0.005 0.01 0.018384  0.05 0.1 1.0 5.0 10.0)
-
-random_seed=${random_seed_array[$((SLURM_ARRAY_TASK_ID / 9 % 10)) + 1]}
-gamma=${gamma_array[$((SLURM_ARRAY_TASK_ID % 9)) + 1]}
-
 model=pwc
 dataset=CIFAR10
 kernel=rbf
+alpha=1e-12
+gamma=calculate
 
-al_strat=random
+al_strat=xpal
 n_init=10
 acq_size=10
 n_acq=9
 budget=$((n_init + n_acq * acq_size))
-output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/xpal_hparams/${dataset}_standardized/${model}/${al_strat}/budget_${budget}/${kernel}/${gamma}/seed${random_seed}/
+random_seed=$SLURM_ARRAY_TASK_ID
+output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines/${dataset}/${model}_standardized/${al_strat}/budget_${budget}/seed${random_seed}/
 
 srun python -u active_learning.py \
 	model=$model \
@@ -38,6 +35,9 @@ srun python -u active_learning.py \
 	al_cycle.n_init=$n_init \
 	al_cycle.acq_size=$acq_size \
 	al_cycle.n_acq=$n_acq \
+	al_strategy.kernel.name=$kernel \
+	al_strategy.kernel.gamma=$gamma \
+	al_strategy.alpha=$alpha \
 	random_seed=$random_seed \
 	output_dir=$output_dir \
 	precomputed_features=True \

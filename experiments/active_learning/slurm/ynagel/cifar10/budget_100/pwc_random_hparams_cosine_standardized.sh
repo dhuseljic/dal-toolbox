@@ -1,7 +1,7 @@
 #!/usr/bin/zsh
-#SBATCH --mem=32gb
+#SBATCH --mem=24gb
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=6
 #SBATCH --partition=main
 #SBATCH --array=0-9
 #SBATCH --job-name=xpal_hparams

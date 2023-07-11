@@ -5,4 +5,4 @@ predict_batch_size: 1000
 n_neighbors: null
 kernel:
   name: rbf
-  gamma: calculate
+  gamma: 0.05

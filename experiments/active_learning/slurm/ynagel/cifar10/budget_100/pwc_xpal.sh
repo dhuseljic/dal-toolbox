@@ -1,9 +1,9 @@
 #!/usr/bin/zsh
-#SBATCH --mem=128gb
+#SBATCH --mem=24gb
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=6
 #SBATCH --partition=main
-#SBATCH --array=1-10%3
+#SBATCH --array=1-10
 #SBATCH --job-name=al_baselines
 #SBATCH --output=/mnt/stud/home/ynagel/logs/al_baselines/%A_%a__%x.log
 
@@ -27,7 +27,6 @@ srun python -u active_learning.py \
 	dataset=$dataset \
 	dataset_path=/mnt/stud/home/ynagel/data \
 	al_strategy=$al_strat \
-	al_strategy.subset_size=None \
 	al_cycle.n_init=$n_init \
 	al_cycle.acq_size=$acq_size \
 	al_cycle.n_acq=$n_acq \
