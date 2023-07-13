@@ -566,6 +566,8 @@ def kernels(X, Y, metric, **kwargs):
         return pairwise_kernels(X=X, Y=Y, metric=metric, gamma=gamma)
     elif metric == 'cosine':
         return pairwise_kernels(X=X, Y=Y, metric=metric)
+    elif metric == 'angular':
+        return 1 - np.arccos(np.clip(pairwise_kernels(X=X, Y=Y, metric="cosine"), -1.0, 1.0)) / np.pi
     elif metric == 'categorical':
         gamma = kwargs.pop('gamma')
         return np.exp(-gamma * cdist(XA=X, XB=Y, metric='hamming'))
