@@ -57,7 +57,7 @@ class XPAL(Query):
         self.alpha_x_ = alpha_x
         self.subset_size = subset_size
 
-    def query(self, *, model, al_datamodule, acq_size, **kwargs):
+    def query(self, *, model, al_datamodule, acq_size, return_gains=False, **kwargs):
         """Compute score for each unlabeled sample. Score is to be maximized.
         Parameters
         ----------
@@ -104,10 +104,12 @@ class XPAL(Query):
         # calculate loss reduction for each unlabeled sample
         gains = xpal_gain(K_c=K_c, K_x=K_x, S=S_[mapped_unlabeled_indices], alpha_c=self.alpha_c_, alpha_x=self.alpha_x_)
 
-        _, indices = torch.topk(torch.Tensor(gains), acq_size)
+        top_gains, indices = torch.topk(torch.Tensor(gains), acq_size)
 
         actual_indices = [int(unlabeled_indices[i]) for i in indices]
 
+        if return_gains:
+            return actual_indices, top_gains
         return actual_indices
 
 
