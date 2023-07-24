@@ -1,3 +1,5 @@
+import inspect
+
 import torch
 import torch.nn.functional as F
 
@@ -66,3 +68,78 @@ class SNGPModel(BaseModule):
         )
         lml = log_likelihood - complexity_term
         return lml.sum()
+
+    def update_posterior(self, dataloader, lmb=1):
+        # TODO(dhuseljic): what to do, when scale features is False, is the updating still correct?
+        self.eval()
+
+        # check if return_random_features is in forward_kwargs
+        forward_kwargs = inspect.signature(self.model.forward).parameters
+        if 'return_random_features' not in forward_kwargs:
+            raise ValueError('Define the kwarg `return_random_features` in the forward method of your model.')
+
+        # get rff features
+        phis_list = []
+        targets_list = []
+        with torch.no_grad():
+            for inputs, targets in dataloader:
+                logits, phis = self.model(inputs, return_random_features=True)
+                phis_list.append(phis)
+                targets_list.append(targets)
+        phis = torch.cat(phis_list)
+        targets = torch.cat(targets_list)
+        num_classes = logits.size(-1)
+
+        # Get the random feature layer
+        for m in self.model.modules():
+            if isinstance(m, RandomFeatureGaussianProcess):
+                random_feature_gp = m
+
+        mean = random_feature_gp.beta.weight.data.clone()
+        cov = random_feature_gp.covariance_matrix.data.clone()
+        targets_onehot = F.one_hot(targets, num_classes=num_classes)
+
+        for phi, target_onehot in zip(phis, targets_onehot):
+            for _ in range(lmb):
+                tmp_1 = cov @ phi
+                tmp_2 = torch.outer(tmp_1, tmp_1)
+
+                # Compute new prediction.
+                var = F.linear(phi, tmp_1)
+                logits = F.linear(phi, mean)
+                probas = logits.softmax(-1)
+                probas_max = probas.max()
+
+                # Update covariance matrix.
+                num = probas_max * (1-probas_max)
+                denom = 1 + num * var
+                factor = num / denom
+                cov_update = factor * tmp_2
+                cov -= cov_update
+
+                # Update mean.
+                tmp_3 = F.linear(cov, phi)
+                tmp_4 = (target_onehot - probas)
+                mean += torch.outer(tmp_4, tmp_3)
+
+                # Undo cov update.
+                cov += cov_update
+
+                # Compute new prediction.
+                var = F.linear(phi, tmp_1)
+                logits = F.linear(phi, mean)
+                probas = logits.softmax(-1)
+                probas_max = probas.max()
+
+                # Update covariance matrix.
+                num = probas_max * (1 - probas_max)
+                denom = 1 + num * var
+                factor = num / denom
+                cov_update = factor * tmp_2
+                cov -= cov_update
+
+        random_feature_gp.beta.weight.data = mean
+        random_feature_gp.covariance_matrix.data = cov
+        # model_reweighted = copy.deepcopy(model)
+        # model_reweighted.model.last.beta.weight.data = mean
+        # model_reweighted.model.last.covariance_matrix.data = cov
