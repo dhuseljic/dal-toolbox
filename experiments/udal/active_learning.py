@@ -43,7 +43,7 @@ def main(args):
     test_loader = DataLoader(data.test_dataset, batch_size=args.model.predict_batch_size)
     if args.ood_datasets:
         logging.info('Building ood datasets.')
-        ood_datasets = build_ood_datasets(args, id_mean=data.mean, id_std=data.std)
+        ood_datasets = build_ood_datasets(args, transforms=data.transforms)
         ood_loaders = {name: DataLoader(ds, batch_size=args.model.predict_batch_size)
                        for name, ds in ood_datasets.items()}
     else:
@@ -317,15 +317,15 @@ def build_datasets(args):
     return data
 
 
-def build_ood_datasets(args, id_mean, id_std):
+def build_ood_datasets(args, transforms):
     ood_datasets = {}
     for ds_name in args.ood_datasets:
         if ds_name == 'CIFAR10':
-            data = datasets.cifar.CIFAR10(args.dataset_path, mean=id_mean, std=id_std)
+            data = datasets.cifar.CIFAR10(args.dataset_path, transforms=transforms)
         elif ds_name == 'CIFAR100':
-            data = datasets.cifar.CIFAR100(args.dataset_path, mean=id_mean, std=id_std)
+            data = datasets.cifar.CIFAR100(args.dataset_path, transforms=transforms)
         elif ds_name == 'SVHN':
-            data = datasets.svhn.SVHN(args.dataset_path, mean=id_mean, std=id_std)
+            data = datasets.svhn.SVHN(args.dataset_path, transforms=transforms)
         else:
             raise NotImplementedError(f'Dataset {ds_name} not implemented.')
         ood_datasets[ds_name] = data.test_dataset

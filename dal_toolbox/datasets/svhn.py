@@ -51,10 +51,10 @@ class SVHN(BaseData):
             val_split: float = 0.1,
             seed: int = None
     ) -> None:
-        transforms = SVHNStandardTransforms() if transforms is None else transforms
-        self.train_transform = transforms.train_transform
-        self.eval_transform = transforms.eval_transform
-        self.query_transform = transforms.query_transform
+        self.transforms = SVHNStandardTransforms() if transforms is None else transforms
+        self.train_transform = self.transforms.train_transform
+        self.eval_transform = self.transforms.eval_transform
+        self.query_transform = self.transforms.query_transform
         super().__init__(dataset_path, val_split, seed)
 
     @property
