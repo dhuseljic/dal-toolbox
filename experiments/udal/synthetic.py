@@ -82,7 +82,7 @@ def main(args):
 
         # Train with updated annotations
         logging.info('Training on labeled pool with %s samples', len(al_datamodule.labeled_indices))
-        model.reset_states(reset_model_parameters=args.cold_start)
+        model.reset_states(reset_model_parameters=args.al_cycle.cold_start)
         trainer = L.Trainer(
             max_epochs=args.model.n_epochs,
             default_root_dir=args.output_dir,
@@ -146,7 +146,7 @@ def build_query(args, **kwargs):
     elif args.al_strategy.name == "epistemic":
         query = Epistemic(
             ensemble_size=20,
-            num_epochs=20,
+            num_epochs=50,
             lr=1e-2,
             momentum=0.9,
             weight_decay=0.01,
