@@ -33,6 +33,11 @@ def gt_proba_mapping(pixel_sum):
 
 @hydra.main(version_base=None, config_path="./configs", config_name="synthetic")
 def main(args):
+    # Change lr for this simple problem to be higher
+    args.model.optimizer.lr = 0.1
+    # Change weight decay for low number of samples
+    args.model.optimizer.weight_decay = 0.1
+
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
     os.makedirs(args.output_dir, exist_ok=True)
@@ -163,7 +168,10 @@ class Aleatoric(query.Query):
         del kwargs
         unlabeled_loader, unlabeled_indices = al_datamodule.unlabeled_dataloader()
 
-        gt_probas_pos = torch.cat([gt_proba_mapping(batch[0].mean(dim=(1, 2, 3))) for batch in unlabeled_loader])
+        pixel_sums = [batch[0].mean(dim=(1, 2, 3)) for batch in unlabeled_loader]
+        gt_proba_pos = [gt_proba_mapping(px_sum) for px_sum in pixel_sums]
+        gt_probas_pos = torch.cat(gt_proba_pos)
+
         gt_probas = torch.stack((1-gt_probas_pos, gt_probas_pos), dim=1)
         scores = entropy_from_probas(gt_probas)
         _, indices = scores.topk(acq_size)
