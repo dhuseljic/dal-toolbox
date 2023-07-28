@@ -27,9 +27,9 @@ from active_learning import build_model
 
 
 def gt_proba_mapping(pixel_sum):
-    val = np.cos(pixel_sum*2*np.pi)+1
-    val = val / 2
-    return val
+    # val = np.cos(pixel_sum*2*np.pi)+1
+    # val = val / 2
+    return pixel_sum
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="synthetic")
