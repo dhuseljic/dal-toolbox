@@ -15,7 +15,8 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader, TensorDataset, Subset
 from omegaconf import OmegaConf
 
-from dal_toolbox.active_learning.strategies import random, uncertainty, query
+from dal_toolbox.active_learning.strategies.query import Query
+from dal_toolbox.active_learning.strategies import random, uncertainty
 from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.utils import seed_everything, is_running_on_slurm
 from dal_toolbox.metrics import Accuracy, entropy_from_probas, ensemble_entropy_from_logits
@@ -149,19 +150,13 @@ def build_query(args, **kwargs):
     elif args.al_strategy.name == "aleatoric":
         query = Aleatoric()
     elif args.al_strategy.name == "epistemic":
-        query = Epistemic(
-            ensemble_size=20,
-            num_epochs=50,
-            lr=1e-2,
-            momentum=0.9,
-            weight_decay=0.01,
-        )
+        query = Epistemic(ensemble_size=20, num_epochs=100, train_batch_size=32, lr=0.001, momentum=0.9, weight_decay=0.05)
     else:
         raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
     return query
 
 
-class Aleatoric(query.Query):
+class Aleatoric(Query):
 
     @torch.no_grad()
     def query(self, *, al_datamodule, acq_size, **kwargs):
@@ -180,10 +175,11 @@ class Aleatoric(query.Query):
         return actual_indices
 
 
-class Epistemic(query.Query):
-    def __init__(self, ensemble_size, num_epochs, lr, weight_decay, momentum, random_seed=None):
+class Epistemic(Query):
+    def __init__(self, ensemble_size, num_epochs, train_batch_size, lr, weight_decay, momentum, random_seed=None):
         super().__init__(random_seed)
         self.num_epochs = num_epochs
+        self.train_batch_size = train_batch_size
         self.ensemble_size = ensemble_size
         self.num_classes = 2
         self.lr = lr
@@ -203,10 +199,9 @@ class Epistemic(query.Query):
     def query(self, *, al_datamodule, acq_size, **kwargs):
         del kwargs
 
-        # Train ensemble
-        model = self.build_ensemble()
+        ensemble = self.build_ensemble()
         sampler = torch.utils.data.SubsetRandomSampler(indices=al_datamodule.labeled_indices)
-        train_loader = DataLoader(al_datamodule.train_dataset, sampler=sampler, batch_size=32)
+        train_loader = DataLoader(al_datamodule.train_dataset, sampler=sampler, batch_size=self.train_batch_size)
         trainer = L.Trainer(
             max_epochs=self.num_epochs,
             enable_checkpointing=False,
@@ -214,13 +209,13 @@ class Epistemic(query.Query):
             enable_progress_bar=False,
             callbacks=[],
         )
-        trainer.fit(model, train_loader)
+        trainer.fit(ensemble, train_loader)
         # trainer.logged_metrics.keys()
-        # [f"{k}: {m}" for k, m in trainer.logged_metrics.items() if 'train_acc' in k]
+        #[f"{k}: {m}" for k, m in trainer.logged_metrics.items() if 'train_loss' in k]
 
         # Select with highest epistemic uncertainty
         unlabeled_loader, unlabeled_indices = al_datamodule.unlabeled_dataloader()
-        predictions = trainer.predict(model, unlabeled_loader)
+        predictions = trainer.predict(ensemble, unlabeled_loader)
         logits = torch.cat([pred[0] for pred in predictions])
         scores = ensemble_entropy_from_logits(logits)
         _, indices = scores.topk(acq_size)
