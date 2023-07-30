@@ -22,14 +22,6 @@ from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
 def train(config, args, al_dataset, num_classes):
     seed_everything(100 + args.random_seed)
 
-    # indices = torch.randperm(len(al_dataset))
-    # kf = KFold(n_splits=args.num_folds)
-    # for train_indices, val_indices in kf.split(indices):
-    #     train_indices = indices[train_indices]
-    #     val_indices = indices[val_indices]
-    #     train_ds = Subset(al_dataset, indices=train_indices)
-    #     val_ds = Subset(al_dataset, indices=val_indices)
-
     all_val_stats = []
     for _ in range(args.num_folds):
         # Train test split
