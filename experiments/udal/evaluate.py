@@ -38,7 +38,7 @@ def main(args):
     test_loader = DataLoader(data.test_dataset, batch_size=args.model.predict_batch_size)
     if args.ood_datasets:
         logging.info('Building ood datasets.')
-        ood_datasets = build_ood_datasets(args, id_mean=data.mean, id_std=data.std)
+        ood_datasets = build_ood_datasets(args, transforms=data.transforms)
         ood_loaders = {name: DataLoader(ds, batch_size=args.model.predict_batch_size) for name, ds in ood_datasets.items()}
     else:
         ood_loaders = None
@@ -86,12 +86,13 @@ def main(args):
         logits = torch.cat([preds[0] for preds in predictions])
         targets = torch.cat([preds[1] for preds in predictions])
         test_stats = evaluate(logits, targets)
-        for name, loader in ood_loaders.items():
-            predictions_ood = trainer.predict(model, loader)
-            logits_ood = torch.cat([preds[0] for preds in predictions_ood])
-            ood_stats = evaluate_ood(logits, logits_ood)
-            ood_stats = {f'{key}_{name}': val for key, val in ood_stats.items()}
-            test_stats.update(ood_stats)
+        if ood_loaders is not None:
+            for name, loader in ood_loaders.items():
+                predictions_ood = trainer.predict(model, loader)
+                logits_ood = torch.cat([preds[0] for preds in predictions_ood])
+                ood_stats = evaluate_ood(logits, logits_ood)
+                ood_stats = {f'{key}_{name}': val for key, val in ood_stats.items()}
+                test_stats.update(ood_stats)
         logging.info("[Acq %s] Test statistics: %s", i_acq, test_stats)
 
         cycle_results['test_stats'] = test_stats
