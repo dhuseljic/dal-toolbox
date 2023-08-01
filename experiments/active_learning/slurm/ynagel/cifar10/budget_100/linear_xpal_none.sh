@@ -1,5 +1,5 @@
 #!/usr/bin/zsh
-#SBATCH --mem=32gb
+#SBATCH --mem=128gb
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
@@ -15,13 +15,13 @@ cd ~/dal-toolbox/experiments/active_learning/
 model=linear
 dataset=CIFAR10
 
-al_strat=typiclust
+al_strat=xpal
 n_init=10
 acq_size=10
 n_acq=9
 budget=$((n_init + n_acq * acq_size))
 random_seed=$SLURM_ARRAY_TASK_ID
-output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines/${dataset}/${model}/${al_strat}/budget_${budget}/seed${random_seed}/
+output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines/${dataset}/${model}/${al_strat}_None/budget_${budget}/seed${random_seed}/
 
 srun python -u active_learning.py \
 	model=$model \
@@ -32,6 +32,7 @@ srun python -u active_learning.py \
 	dataset=$dataset \
 	dataset_path=/mnt/stud/home/ynagel/data \
 	al_strategy=$al_strat \
+	al_strategy.subset_size=None \
 	al_cycle.n_init=$n_init \
 	al_cycle.acq_size=$acq_size \
 	al_cycle.n_acq=$n_acq \

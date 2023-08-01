@@ -9,17 +9,18 @@ import hydra
 import lightning as L
 import torch
 from omegaconf import OmegaConf
-from torch import nn
+from sklearn.preprocessing import StandardScaler
 
 from dal_toolbox import datasets
 from dal_toolbox import metrics
 from dal_toolbox.active_learning import ActiveLearningDataModule
-from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, typiclust, prob_cover
+from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, typiclust, xpal, prob_cover
 # noinspection PyUnresolvedReferences
-from dal_toolbox.datasets.utils import FeatureDataset
+from dal_toolbox.datasets.utils import FeatureDataset, FeatureDatasetWrapper
 from dal_toolbox.models import deterministic
+from dal_toolbox.models.parzen_window_classifier import PWCLightning
 from dal_toolbox.models.utils.callbacks import MetricLogger
-from dal_toolbox.utils import seed_everything, is_running_on_slurm
+from dal_toolbox.utils import seed_everything, is_running_on_slurm, kernels, _calculate_mean_gamma
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
@@ -36,31 +37,45 @@ def main(args):
     # Setup Dataset
     logger.info('Building datasets.')
     if args.precomputed_features:
-        features = torch.load(args.precomputed_features_dir)
+        data = FeatureDatasetWrapper(args.precomputed_features_dir)
+        feature_size = data.num_features
 
-        trainset = features['trainset']
-        queryset = trainset
-        valset = features['valset']
-        testset = features['testset']
+        if args.standardize_precomputed_features:
+            train_features = data.train_dataset.dataset.features
+            scaler = StandardScaler().fit(train_features)
 
-        num_classes = len(torch.unique(trainset.labels))
-        feature_size = trainset.features.shape[1]
+            data.train_dataset.dataset.features = torch.from_numpy(scaler.transform(train_features)).to(
+                dtype=torch.float32)
+            data.val_dataset.dataset.features = torch.from_numpy(
+                scaler.transform(data.val_dataset.dataset.features)).to(dtype=torch.float32)
+            data.test_dataset.features = torch.from_numpy(scaler.transform(data.test_dataset.features)).to(
+                dtype=torch.float32)
     else:
         data = build_dataset(args)
-        trainset = data.train_dataset
-        queryset = data.query_dataset
-        valset = data.val_dataset
-        testset = data.test_dataset
-
-        num_classes = data.num_classes
         feature_size = None
+
+    trainset = data.train_dataset
+    features = torch.stack([batch[0] for batch in trainset])
+    queryset = data.query_dataset
+    valset = data.val_dataset
+    testset = data.test_dataset
+
+    num_classes = data.num_classes
 
     # Setup Query
     logger.info('Building query strategy: %s', args.al_strategy.name)
-    al_strategy = build_al_strategy(args.al_strategy.name, args, trainset, num_classes)
+    al_strategy = build_al_strategy(args.al_strategy.name, args, num_classes=num_classes, train_features=features)
 
     # Setup Model
     logger.info('Building model: %s', args.model.name)
+
+    if args.model.name == "parzen_window":
+        accelerator = "cpu"
+        if args.model.kernel.gamma == "calculate":
+            args.model.kernel.gamma = _calculate_mean_gamma(features)
+            logger.info(f"Calculated gamma as {args.model.kernel.gamma}.")
+    else:
+        accelerator = "auto"
 
     model = build_model(args, num_classes=num_classes, feature_size=feature_size)
 
@@ -117,6 +132,7 @@ def main(args):
             max_epochs=args.model.num_epochs,
             enable_checkpointing=False,
             callbacks=callbacks,
+            accelerator=accelerator,
             default_root_dir=args.output_dir,
             enable_progress_bar=is_running_on_slurm() is False,
             check_val_every_n_epoch=args.val_interval,
@@ -128,6 +144,7 @@ def main(args):
         predictions = trainer.predict(model, al_datamodule.test_dataloader())
         logits = torch.cat([pred[0] for pred in predictions])
         targets = torch.cat([pred[1] for pred in predictions])
+
         test_stats = {
             'accuracy': metrics.Accuracy()(logits, targets).item(),
             'nll': torch.nn.CrossEntropyLoss()(logits, targets).item(),
@@ -161,11 +178,21 @@ def main(args):
 
 def build_model(args, num_classes, feature_size=None):
     model = None
+    optimizer = None
+    lr_scheduler = None
+
     if args.precomputed_features:
         if args.model.name == "linear":
             model = deterministic.linear.LinearModel(feature_size, num_classes)
             optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
+        elif args.model.name == "parzen_window":
+            model = PWCLightning(n_classes=num_classes,
+                                 random_state=args.random_seed,
+                                 kernel_params=args.model,
+                                 train_metrics={'train_acc': metrics.Accuracy()},
+                                 val_metrics={'val_acc': metrics.Accuracy()})
+            return model
     else:
         if args.model.name == 'resnet18_deterministic':
             model = deterministic.resnet.ResNet18(num_classes=num_classes)
@@ -185,7 +212,7 @@ def build_model(args, num_classes, feature_size=None):
     return model
 
 
-def build_al_strategy(name, args, trainset=None, num_classes=None):
+def build_al_strategy(name, args, num_classes=None, train_features=None):
     subset_size = None if args.al_strategy.subset_size == "None" else args.al_strategy.subset_size
 
     if name == "random":
@@ -198,6 +225,15 @@ def build_al_strategy(name, args, trainset=None, num_classes=None):
         query = badge.Badge(subset_size=subset_size)
     elif name == "typiclust":
         query = typiclust.TypiClust(subset_size=subset_size)
+    elif name == "xpal":
+        if args.al_strategy.kernel.gamma == "calculate":
+            gamma = _calculate_mean_gamma(train_features)
+        else:
+            gamma = args.al_strategy.kernel.gamma
+
+        S = kernels(X=train_features, Y=train_features, metric=args.al_strategy.kernel.name, gamma=gamma)
+        alpha = args.al_strategy.alpha
+        query = xpal.XPAL(num_classes, S, subset_size=subset_size, alpha_c=alpha, alpha_x=alpha)
     elif name == "probcover":
 
         delta = args.al_strategy.delta

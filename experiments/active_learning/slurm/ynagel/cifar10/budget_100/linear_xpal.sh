@@ -15,7 +15,7 @@ cd ~/dal-toolbox/experiments/active_learning/
 model=linear
 dataset=CIFAR10
 
-al_strat=typiclust
+al_strat=xpal
 n_init=10
 acq_size=10
 n_acq=9

@@ -1,34 +1,31 @@
 #!/usr/bin/zsh
-#SBATCH --mem=32gb
+#SBATCH --mem=24gb
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
-#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=6
 #SBATCH --partition=main
-#SBATCH --array=1-10
-#SBATCH --job-name=al_baselines
-#SBATCH --output=/mnt/stud/home/ynagel/logs/al_baselines/%A_%a__%x.log
+#SBATCH --array=0-9
+#SBATCH --job-name=xpal_hparams
+#SBATCH --output=/mnt/stud/home/ynagel/logs/xpal_hparams/%A_%a__%x.log
 
 date;hostname;pwd
 source /mnt/stud/home/ynagel/dal-toolbox/venv/bin/activate
 cd ~/dal-toolbox/experiments/active_learning/
 
-model=linear
+model=pwc
 dataset=CIFAR10
+kernel=cosine
 
-al_strat=typiclust
+al_strat=random
 n_init=10
 acq_size=10
 n_acq=9
 budget=$((n_init + n_acq * acq_size))
 random_seed=$SLURM_ARRAY_TASK_ID
-output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines/${dataset}/${model}/${al_strat}/budget_${budget}/seed${random_seed}/
+output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/xpal_hparams/${dataset}/${model}/${al_strat}/budget_${budget}/${kernel}/seed${random_seed}/
 
 srun python -u active_learning.py \
 	model=$model \
-	model.optimizer.lr=0.25 \
-	model.optimizer.weight_decay=0.0 \
-	model.train_batch_size=64 \
-	model.num_epochs=100 \
+	model.kernel.name=$kernel \
 	dataset=$dataset \
 	dataset_path=/mnt/stud/home/ynagel/data \
 	al_strategy=$al_strat \
