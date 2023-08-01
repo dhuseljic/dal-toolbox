@@ -150,7 +150,7 @@ def build_query(args, **kwargs):
     elif args.al_strategy.name == "aleatoric":
         query = Aleatoric()
     elif args.al_strategy.name == "epistemic":
-        query = Epistemic(ensemble_size=20, num_epochs=100, train_batch_size=32, lr=0.001, momentum=0.9, weight_decay=0.001)
+        query = Epistemic(ensemble_size=20, num_epochs=100, train_batch_size=32, lr=0.001, momentum=0.9, weight_decay=0.005)
     else:
         raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
     return query
