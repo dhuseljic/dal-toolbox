@@ -238,11 +238,8 @@ def build_al_strategy(name, args, num_classes=None, train_features=None):
 
         delta = args.al_strategy.delta
         if delta is None:
-            import time
-            start = time.time()
-            delta = prob_cover.estimate_delta(trainset.features, num_classes, args.al_strategy.alpha)
-            print(f"Took {time.time() - start} seconds to calculate delta.")
-        print(f"Using delta={delta:.5f}")
+            delta = prob_cover.estimate_delta(train_features, num_classes, args.al_strategy.alpha)
+            print(f"Using calculated delta={delta:.5f}")
         query = prob_cover.ProbCover(subset_size=subset_size, delta=delta)
     else:
         raise NotImplementedError(f"Active learning strategy {name} is not implemented!")
