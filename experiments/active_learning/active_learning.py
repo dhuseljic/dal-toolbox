@@ -14,10 +14,11 @@ from sklearn.preprocessing import StandardScaler
 from dal_toolbox import datasets
 from dal_toolbox import metrics
 from dal_toolbox.active_learning import ActiveLearningDataModule
-from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, typiclust, xpal, prob_cover
+from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, typiclust, xpal, prob_cover, eer
 # noinspection PyUnresolvedReferences
 from dal_toolbox.datasets.utils import FeatureDataset, FeatureDatasetWrapper
-from dal_toolbox.models import deterministic
+from dal_toolbox.metrics import ensemble_log_softmax
+from dal_toolbox.models import deterministic, mc_dropout
 from dal_toolbox.models.parzen_window_classifier import PWCLightning
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything, is_running_on_slurm, kernels, _calculate_mean_gamma
@@ -39,6 +40,7 @@ def main(args):
     if args.precomputed_features:
         data = FeatureDatasetWrapper(args.precomputed_features_dir)
         feature_size = data.num_features
+        features = torch.stack([batch[0] for batch in data.train_dataset])
 
         if args.standardize_precomputed_features:
             train_features = data.train_dataset.dataset.features
@@ -53,9 +55,9 @@ def main(args):
     else:
         data = build_dataset(args)
         feature_size = None
+        features = None  # This takes up too much memory otherwise
 
     trainset = data.train_dataset
-    features = torch.stack([batch[0] for batch in trainset])
     queryset = data.query_dataset
     valset = data.val_dataset
     testset = data.test_dataset
@@ -145,6 +147,9 @@ def main(args):
         logits = torch.cat([pred[0] for pred in predictions])
         targets = torch.cat([pred[1] for pred in predictions])
 
+        if logits.ndim == 3:
+            logits = ensemble_log_softmax(logits)
+
         test_stats = {
             'accuracy': metrics.Accuracy()(logits, targets).item(),
             'nll': torch.nn.CrossEntropyLoss()(logits, targets).item(),
@@ -198,6 +203,18 @@ def build_model(args, num_classes, feature_size=None):
             model = deterministic.resnet.ResNet18(num_classes=num_classes)
             optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
+        elif args.model.name == "resnet18_mcdropout":
+            model = mc_dropout.resnet.DropoutResNet18(num_classes=num_classes, n_passes=args.model.n_passes,
+                                                      dropout_rate=args.model.dropout_rate)  # TODO (ynagel) These should be adjustable
+            optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
+            lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
+
+            model = mc_dropout.MCDropoutModel(
+                model, optimizer=optimizer, lr_scheduler=lr_scheduler,
+                train_metrics={'train_acc': metrics.Accuracy()},
+                val_metrics={'val_acc': metrics.Accuracy()}
+            )
+            return model
 
     if model is None:
         sys.exit(f"Model {args.model.name} is not implemented, "
@@ -241,6 +258,8 @@ def build_al_strategy(name, args, num_classes=None, train_features=None):
             delta = prob_cover.estimate_delta(train_features, num_classes, args.al_strategy.alpha)
             print(f"Using calculated delta={delta:.5f}")
         query = prob_cover.ProbCover(subset_size=subset_size, delta=delta)
+    elif name == "eer":
+        query = eer.MELL(subset_size=subset_size)
     else:
         raise NotImplementedError(f"Active learning strategy {name} is not implemented!")
     return query
