@@ -37,7 +37,7 @@ def main(args):
     # Change lr for this simple problem to be higher
     args.model.optimizer.lr = 0.001
     # Change weight decay for low number of samples
-    args.model.optimizer.weight_decay = 0.05
+    args.model.optimizer.weight_decay = 0.005
 
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
