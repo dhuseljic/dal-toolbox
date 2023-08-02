@@ -1,9 +1,9 @@
 name: resnet18_mcdropout
-num_epochs: 3
-train_batch_size: 128
-predict_batch_size: 128
+num_epochs: 200
+train_batch_size: 32
+predict_batch_size: 32
 dropout_rate: 0.2
-n_passes: 3
+n_passes: 100
 optimizer:
   lr: 0.1
   weight_decay: 3e-4
