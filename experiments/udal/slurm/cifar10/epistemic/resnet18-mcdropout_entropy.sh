@@ -11,10 +11,10 @@ date;hostname;pwd
 source ~/envs/dal-toolbox/bin/activate
 cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/
 
-model=resnet18_ensemble
+model=resnet18_mcdropout
 dataset=CIFAR10
 ood_datasets=\[CIFAR100,\ SVHN\]
-al_strat=random
+al_strat=bayesian_entropy
 n_init=128
 acq_size=128
 n_acq=38
