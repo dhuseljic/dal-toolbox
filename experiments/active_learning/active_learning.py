@@ -40,7 +40,6 @@ def main(args):
     if args.precomputed_features:
         data = FeatureDatasetWrapper(args.precomputed_features_dir)
         feature_size = data.num_features
-        features = torch.stack([batch[0] for batch in data.train_dataset])
 
         if args.standardize_precomputed_features:
             train_features = data.train_dataset.dataset.features
@@ -52,6 +51,8 @@ def main(args):
                 scaler.transform(data.val_dataset.dataset.features)).to(dtype=torch.float32)
             data.test_dataset.features = torch.from_numpy(scaler.transform(data.test_dataset.features)).to(
                 dtype=torch.float32)
+
+        features = torch.stack([batch[0] for batch in data.train_dataset])
     else:
         data = build_dataset(args)
         feature_size = None
@@ -77,6 +78,7 @@ def main(args):
             args.model.kernel.gamma = _calculate_mean_gamma(features)
             logger.info(f"Calculated gamma as {args.model.kernel.gamma}.")
     else:
+        # accelerator = "cpu"
         accelerator = "auto"
 
     model = build_model(args, num_classes=num_classes, feature_size=feature_size)
