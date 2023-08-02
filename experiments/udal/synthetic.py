@@ -34,9 +34,8 @@ def gt_proba_mapping(pixel_sum):
 
 @hydra.main(version_base=None, config_path="./configs", config_name="synthetic")
 def main(args):
-    # Change lr for this simple problem to be higher
-    args.model.optimizer.lr = 0.001
-    # Change weight decay for low number of samples
+    # Change hp for this simple problem to have a higher lr and wd
+    args.model.optimizer.lr = 0.1
     args.model.optimizer.weight_decay = 0.005
 
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
