@@ -165,18 +165,21 @@ def evaluate_ood(logits_id, logits_ood):
 def build_query(args, **kwargs):
     if args.al_strategy.name == "random":
         query = random.RandomSampling()
+    # Aleatoric
     elif args.al_strategy.name == "least_confident":
         query = uncertainty.LeastConfidentSampling(subset_size=args.al_strategy.subset_size,)
     elif args.al_strategy.name == "margin":
         query = uncertainty.MarginSampling(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == "entropy":
         query = uncertainty.EntropySampling(subset_size=args.al_strategy.subset_size)
+    # Epistemic
     elif args.al_strategy.name == "bayesian_entropy":
         query = uncertainty.BayesianEntropySampling(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == 'variation_ratio':
         query = uncertainty.VariationRatioSampling(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == 'bald':
         query = uncertainty.BALDSampling(subset_size=args.al_strategy.subset_size)
+    # Batch..tbd
     elif args.al_strategy.name == "coreset":
         query = coreset.CoreSet(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == "badge":
