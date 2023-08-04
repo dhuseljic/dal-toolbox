@@ -11,8 +11,9 @@ date;hostname;pwd
 source /mnt/stud/home/ynagel/dal-toolbox/venv/bin/activate
 cd /mnt/stud/home/ynagel/dal-toolbox/experiments/udal/
 
-model=resnet18
+model=resnet18_sngp
 dataset=CIFAR100
+ood_datasets=\[CIFAR10,\ SVHN\]
 al_strat=random
 n_init=128
 acq_size=128
@@ -25,6 +26,7 @@ echo "Starting script. Writing results to ${output_dir}"
 srun python -u active_learning.py \
 	model=$model \
 	dataset=$dataset \
+	ood_datasets=$ood_datasets \
 	dataset_path=/mnt/stud/home/ynagel/data \
 	al_strategy=$al_strat \
 	al_cycle.n_init=$n_init \
