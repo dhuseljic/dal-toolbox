@@ -95,7 +95,8 @@ class XPAL(Query):
 
         for batch in labeled_loader:
             y_labeled.append(batch[1])
-        y_labeled = torch.cat(y_labeled).tolist()
+        if len(y_labeled) > 0:
+            y_labeled = torch.cat(y_labeled).tolist()
 
         Z = np.eye(self.num_classes)[y_labeled]
         K_x = S_[:, mapped_labeled_indices] @ Z
