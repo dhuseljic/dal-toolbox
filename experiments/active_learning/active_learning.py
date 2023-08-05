@@ -14,7 +14,7 @@ from sklearn.preprocessing import StandardScaler
 from dal_toolbox import datasets
 from dal_toolbox import metrics
 from dal_toolbox.active_learning import ActiveLearningDataModule
-from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, typiclust, xpal
+from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, typiclust, xpal, xpalclust
 # noinspection PyUnresolvedReferences
 from dal_toolbox.datasets.utils import FeatureDataset, FeatureDatasetWrapper
 from dal_toolbox.models import deterministic
@@ -225,7 +225,7 @@ def build_al_strategy(name, args, num_classes=None, train_features=None):
         query = badge.Badge(subset_size=subset_size)
     elif name == "typiclust":
         query = typiclust.TypiClust(subset_size=subset_size)
-    elif name == "xpal":
+    elif name == "xpal" or "xpalclust":
         if args.al_strategy.kernel.gamma == "calculate":
             gamma = _calculate_mean_gamma(train_features)
         else:
@@ -233,7 +233,10 @@ def build_al_strategy(name, args, num_classes=None, train_features=None):
 
         S = kernels(X=train_features, Y=train_features, metric=args.al_strategy.kernel.name, gamma=gamma)
         alpha = args.al_strategy.alpha
-        query = xpal.XPAL(num_classes, S, subset_size=subset_size, alpha_c=alpha, alpha_x=alpha)
+        if name == "xpal":
+            query = xpal.XPAL(num_classes, S, subset_size=subset_size, alpha_c=alpha, alpha_x=alpha)
+        elif name == "xpalclust":
+            query = xpalclust.XPALClust(num_classes, S, subset_size=subset_size, alpha_c=alpha, alpha_x=alpha)
     else:
         raise NotImplementedError(f"Active learning strategy {name} is not implemented!")
     return query
