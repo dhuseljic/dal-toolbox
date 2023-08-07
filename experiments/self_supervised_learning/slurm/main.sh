@@ -18,7 +18,8 @@ dataset=CIFAR100
 output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/self_supervised_learning/${dataset}/seed${random_seed}/
 
 srun python -u main.py \
+	dataset=$dataset \
 	dataset_path=/mnt/stud/home/ynagel/data \
 	output_dir=$output_dir \
 	random_seed=$random_seed \
-	ssl_model.num_epochs=$n_epochs \
+	ssl_model.n_epochs=$n_epochs \
