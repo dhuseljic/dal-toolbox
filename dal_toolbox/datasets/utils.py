@@ -5,7 +5,7 @@ from torch.utils.data import Dataset, DataLoader
 from dal_toolbox.models.utils.base import BaseModule
 
 
-class ContrastiveTransformations:
+class RepeatTransformations:
     def __init__(self, base_transforms, n_views=2):
         self.base_transforms = base_transforms
         self.n_views = n_views

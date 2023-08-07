@@ -5,7 +5,7 @@ import torchvision
 
 from .base import BaseData, BaseTransforms
 from .corruptions import GaussianNoise
-from .utils import ContrastiveTransformations
+from .utils import RepeatTransformations
 
 
 class PlainTransforms(BaseTransforms):
@@ -145,7 +145,7 @@ class CIFAR10ContrastiveTransforms(CIFAR10StandardTransforms):
             torchvision.transforms.ToTensor(),
             # transforms.Normalize(self.mean, self.std),  # TODO (dhuseljic) Discuss if this should be used
         ])
-        return ContrastiveTransformations(transform)
+        return RepeatTransformations(transform)
 
     @property
     def eval_transform(self):
@@ -204,7 +204,7 @@ class CIFAR100ContrastiveTransforms(CIFAR100StandardTransforms):
             torchvision.transforms.ToTensor(),
             # transforms.Normalize(self.mean, self.std),  # TODO (dhuseljic) Discuss if this should be used
         ])
-        return ContrastiveTransformations(transform)
+        return RepeatTransformations(transform)
 
     @property
     def eval_transform(self):
