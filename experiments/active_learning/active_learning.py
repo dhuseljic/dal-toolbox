@@ -97,7 +97,7 @@ def main(args):
         indices = init_al_strategy.query(
             model=model,
             al_datamodule=al_datamodule,
-            acq_size=args.al_cycle.acq_size
+            acq_size=args.al_cycle.n_init
         )
         al_datamodule.update_annotations(indices)
     queried_indices['cycle0'] = al_datamodule.labeled_indices
