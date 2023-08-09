@@ -17,10 +17,10 @@ class SNGPModel(BaseModule):
             train_metrics: dict = None,
             val_metrics: dict = None,
             scheduler_interval='epoch',
-            forward_kwargs=None,
+            predict_kwargs=None,
     ):
         super().__init__(model, loss_fn, optimizer, lr_scheduler, train_metrics, val_metrics, scheduler_interval)
-        self.forward_kwargs = dict(mean_field=True) if forward_kwargs is None else forward_kwargs
+        self.predict_kwargs = dict(mean_field=True) if predict_kwargs is None else predict_kwargs
 
     def training_step(self, batch):
         inputs, targets = batch
@@ -51,7 +51,7 @@ class SNGPModel(BaseModule):
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         inputs, targets = batch
 
-        logits = self(inputs, **self.forward_kwargs)
+        logits = self(inputs, **self.predict_kwargs)
 
         logits = self._gather(logits)
         targets = self._gather(targets)

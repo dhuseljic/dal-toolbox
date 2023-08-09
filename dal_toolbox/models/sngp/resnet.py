@@ -137,7 +137,7 @@ class ResNetSNGP(nn.Module):
             )
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
-    
+
     def forward(self, x, mean_field=False, monte_carlo=False, return_cov=False):
         out = F.relu(self.bn1(self.conv1(x)))
         out = self.layer1(out)
@@ -164,15 +164,14 @@ class ResNetSNGP(nn.Module):
         return features.squeeze()
 
     @torch.inference_mode()
-    def get_logits(self, dataloader, device, forward_kwargs=None):
-        # TODO
+    def get_logits(self, dataloader, device):
         self.to(device)
         self.eval()
-        forward_kwargs = {} if forward_kwargs is None else forward_kwargs
         all_logits = []
         for batch in dataloader:
             inputs = batch[0]
-            logits = self(inputs.to(device), **forward_kwargs)
+            # TODO: Handle with forward_kwargs? currently only monte carlo supported
+            logits = self(inputs.to(device), monte_carlo=True)
             all_logits.append(logits)
         logits = torch.cat(all_logits)
         return logits
