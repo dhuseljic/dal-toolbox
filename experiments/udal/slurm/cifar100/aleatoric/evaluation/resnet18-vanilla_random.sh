@@ -4,8 +4,8 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --array=1-3%10
-#SBATCH --job-name=eval_random_resnet18-vanilla_cifar100
+#SBATCH --array=1-10%10
+#SBATCH --job-name=udal
 #SBATCH --output=/mnt/stud/home/ynagel/logs/udal/evaluation/%A_%a__%x.log
 date;hostname;pwd
 source /mnt/stud/home/ynagel/dal-toolbox/venv/bin/activate
