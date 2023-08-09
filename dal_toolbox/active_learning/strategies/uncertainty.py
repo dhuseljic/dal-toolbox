@@ -21,10 +21,11 @@ class UncertaintySampling(Query, ABC):
         al_datamodule: ActiveLearningDataModule,
         acq_size: int,
         return_utilities: bool = False,
+        # forward_kwargs: dict = None, TODO
         **kwargs
     ):
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
-        logits = model.get_logits(unlabeled_dataloader)
+        logits = model.get_logits(unlabeled_dataloader) # , **forward_kwargs)
         scores = self.get_utilities(logits)
         _, indices = scores.topk(acq_size)
 
