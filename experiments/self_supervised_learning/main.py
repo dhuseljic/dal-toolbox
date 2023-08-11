@@ -33,7 +33,17 @@ def build_encoder(name, return_output_dim=False):
         encoder = deterministic.resnet.ResNet18(num_classes=1)  # Linear layer will be replaced
         encoder.linear = nn.Identity()  # Replace layer after max pool
 
-        encoder_output_dim = 512  # TODO (ynagel) Load dynamically maybe?
+        encoder_output_dim = 512
+    elif name == "resnet50_deterministic":
+        encoder = deterministic.resnet.ResNet50(num_classes=1)
+        encoder.linear = nn.Identity()
+
+        encoder_output_dim = 2048
+    elif name == "wide_resnet_28_10":
+        encoder = deterministic.wide_resnet.wide_resnet_28_10(num_classes=1, dropout_rate=0.3) # TODO (ynagel) Dropout rate?
+        encoder.linear = nn.Identity()
+
+        encoder_output_dim = 640
     else:
         raise NotImplementedError(f"{name} is not implemented!")
 
