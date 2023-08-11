@@ -5,21 +5,7 @@ import torchvision
 
 from .base import BaseData, BaseTransforms
 from .corruptions import GaussianNoise
-from .utils import RepeatTransformations
-
-
-class PlainTransforms(BaseTransforms):
-    @property
-    def train_transform(self):
-        return torchvision.transforms.Compose([torchvision.transforms.ToTensor(), ])
-
-    @property
-    def query_transform(self):
-        return torchvision.transforms.Compose([torchvision.transforms.ToTensor(), ])
-
-    @property
-    def eval_transform(self):
-        return torchvision.transforms.Compose([torchvision.transforms.ToTensor(), ])
+from .utils import RepeatTransformations, PlainTransforms
 
 
 class CIFAR10Transforms(Enum):

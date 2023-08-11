@@ -3,6 +3,7 @@ import warnings
 import torchvision
 from enum import Enum
 from .base import BaseData, BaseTransforms
+from .utils import PlainTransforms, RepeatTransformations
 
 
 class SVHNTransforms(Enum):
@@ -81,6 +82,48 @@ class SVHN(BaseData):
     @property
     def test_dataset(self):
         return torchvision.datasets.SVHN(self.dataset_path, split='test', transform=self.eval_transform)
+
+
+class SVHNPlain(SVHN):
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
+        super().__init__(dataset_path, PlainTransforms(), val_split, seed)
+
+
+class SVHNContrastiveTransforms(SVHNStandardTransforms):
+    def __init__(self, color_distortion_strength: float):
+        super().__init__()
+        self._s = color_distortion_strength
+
+    # TODO (ynagel) These are currently the ones used with CIFAR10, might need changes
+    @property
+    def train_transform(self):
+        color_jitter = torchvision.transforms.ColorJitter(0.8 * self._s, 0.8 * self._s, 0.8 * self._s, 0.2 * self._s)
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.RandomResizedCrop(size=32),
+            torchvision.transforms.RandomHorizontalFlip(p=0.5),
+            torchvision.transforms.RandomApply([color_jitter], p=0.8),
+            torchvision.transforms.RandomGrayscale(p=0.2),
+            # GaussianBlur not used in original paper, however, other papers assign it importance
+            torchvision.transforms.RandomApply([torchvision.transforms.GaussianBlur(kernel_size=3)], p=0.5),
+            torchvision.transforms.ToTensor(),
+            # transforms.Normalize(self.mean, self.std),
+        ])
+        return RepeatTransformations(transform)
+
+    @property
+    def eval_transform(self):
+        return self.train_transform
+
+
+class SVHNContrastive(SVHN):
+    """
+    Contrastive version of SVHN.
+
+    This means that the transforms are repeated twice for each image, resulting in two views for each input image.
+    """
+
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None, cds=0.5) -> None:
+        super().__init__(dataset_path, SVHNContrastiveTransforms(color_distortion_strength=cds), val_split, seed)
 
 
 def build_svhn(split, ds_path, mean=(0.4377, 0.4438, 0.4728), std=(0.1980, 0.2010, 0.1970), return_info=False):

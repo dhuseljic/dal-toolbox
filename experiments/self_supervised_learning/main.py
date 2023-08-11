@@ -196,6 +196,8 @@ def build_plain_dataset(args):
         data = datasets.CIFAR10Plain(args.dataset_path)
     elif args.dataset.name == 'CIFAR100':
         data = datasets.CIFAR100Plain(args.dataset_path)
+    elif args.dataset.name == 'SVHN':
+        data = datasets.SVHNPlain(args.dataset_path)
     else:
         sys.exit(f"Dataset {args.dataset.name} not implemented.")
 
@@ -207,6 +209,8 @@ def build_contrastive_dataset(args):
         data = datasets.CIFAR10Contrastive(args.dataset_path, args.dataset.color_distortion_strength)
     elif args.dataset.name == 'CIFAR100':
         data = datasets.CIFAR100Contrastive(args.dataset_path, args.dataset.color_distortion_strength)
+    elif args.dataset.name == 'SVHN':
+        data = datasets.SVHNContrastive(args.dataset_path, args.dataset.color_distortion_strength)
     else:
         sys.exit(f"Dataset {args.dataset.name} not implemented.")
 

@@ -1,7 +1,9 @@
 import numpy as np
 import torch
+import torchvision
 from torch.utils.data import Dataset, DataLoader
 
+from dal_toolbox.datasets.base import BaseTransforms
 from dal_toolbox.models.utils.base import BaseModule
 
 
@@ -14,6 +16,20 @@ class RepeatTransformations:
         return [self.base_transforms(x) for i in range(self.n_views)]
 
 
+class PlainTransforms(BaseTransforms):
+    @property
+    def train_transform(self):
+        return torchvision.transforms.Compose([torchvision.transforms.ToTensor(), ])
+
+    @property
+    def query_transform(self):
+        return torchvision.transforms.Compose([torchvision.transforms.ToTensor(), ])
+
+    @property
+    def eval_transform(self):
+        return torchvision.transforms.Compose([torchvision.transforms.ToTensor(), ])
+
+
 class FeatureDataset(Dataset):
     """
     Dataset for feature representations of a model.
@@ -21,6 +37,7 @@ class FeatureDataset(Dataset):
     This dataset class takes a ``model`` and a ``dataset`` and saves the features to use for later. Some tasks (e.g. the
     linear evaluation accuracy) need datasets that entail the feature representations of a model.
     """
+
     def __init__(self, model: BaseModule, dataset: Dataset, device: torch.device) -> None:
         """
         Initializes ``FeatureDataset``.
