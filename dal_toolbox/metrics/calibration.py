@@ -226,6 +226,27 @@ class TopLabelCalibrationError(TopLabelCalibrationPlot):
         return calibration_error(confs, accs, n_samples, self.p)
 
 
+class OverconfidenceError(TopLabelCalibrationPlot):
+    """
+    [1] S. Thulasidasan, G. Chennupati, J. A. Bilmes, T. Bhattacharya, and S.
+        Michalak, “On mixup training: Improved calibration and predictive
+        uncertainty for deep neural networks,” Advances in Neural Information
+        Processing Systems, vol. 32, 2019.
+    """
+
+    def __init__(self, num_bins=15, p=1):
+        super().__init__(num_bins)
+        self.p = p
+
+    def forward(self, probas: torch.Tensor, labels: torch.Tensor):
+        results = super().forward(probas, labels)
+        confs = results['confs']
+        accs = results['accs']
+        n_samples = results['n_samples']
+        bin_weights = n_samples / n_samples.sum()
+        return torch.nansum(bin_weights * confs * torch.maximum(confs-accs, torch.zeros_like(confs)))
+
+
 class MarginalCalibrationPlot(nn.Module):
     """Computes the calibration plot for each class."""
 
