@@ -144,6 +144,7 @@ def evaluate(logits, targets):
     test_stats["brier"] = metrics.BrierScore()(logits, targets).item()
     test_stats["tce"] = metrics.ExpectedCalibrationError()(logits, targets).item()
     test_stats["ace"] = metrics.AdaptiveCalibrationError()(logits, targets).item()
+    test_stats["oce"] = metrics.OverconfidenceError()(logits, targets).item()
     return test_stats
 
 

@@ -238,7 +238,8 @@ class OverconfidenceError(TopLabelCalibrationPlot):
         super().__init__(num_bins)
         self.p = p
 
-    def forward(self, probas: torch.Tensor, labels: torch.Tensor):
+    def forward(self, logits: torch.Tensor, labels: torch.Tensor):
+        probas = torch.softmax(logits, dim=-1)
         results = super().forward(probas, labels)
         confs = results['confs']
         accs = results['accs']
