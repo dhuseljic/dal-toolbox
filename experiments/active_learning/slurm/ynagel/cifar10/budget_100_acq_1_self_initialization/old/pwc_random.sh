@@ -14,10 +14,10 @@ cd ~/dal-toolbox/experiments/active_learning/
 model=pwc
 dataset=CIFAR10
 
-al_strat=xpal
-n_init=1
+al_strat=random
+n_init=10
 acq_size=1
-n_acq=99
+n_acq=90
 budget=$((n_init + n_acq * acq_size))
 random_seed=$SLURM_ARRAY_TASK_ID
 output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines/${dataset}/${model}/${al_strat}/budget_${budget}_acq_${acq_size}_self_initialization/seed${random_seed}/

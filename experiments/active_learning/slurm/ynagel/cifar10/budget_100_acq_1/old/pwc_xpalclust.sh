@@ -14,13 +14,13 @@ cd ~/dal-toolbox/experiments/active_learning/
 model=pwc
 dataset=CIFAR10
 
-al_strat=xpal
-n_init=1
+al_strat=xpalclust
+n_init=10
 acq_size=1
-n_acq=99
+n_acq=90
 budget=$((n_init + n_acq * acq_size))
 random_seed=$SLURM_ARRAY_TASK_ID
-output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines/${dataset}/${model}/${al_strat}/budget_${budget}_acq_${acq_size}_self_initialization/seed${random_seed}/
+output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines/${dataset}/${model}/${al_strat}/budget_${budget}_acq_${acq_size}/seed${random_seed}/
 
 srun python -u active_learning.py \
 	model=$model \
@@ -30,7 +30,6 @@ srun python -u active_learning.py \
 	al_cycle.n_init=$n_init \
 	al_cycle.acq_size=$acq_size \
 	al_cycle.n_acq=$n_acq \
-	al_cycle.init_strategy=$al_strat \
 	random_seed=$random_seed \
 	output_dir=$output_dir \
 	precomputed_features=True \

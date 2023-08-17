@@ -15,9 +15,9 @@ model=pwc
 dataset=CIFAR10
 
 al_strat=typiclust
-n_init=10
+n_init=1
 acq_size=1
-n_acq=90
+n_acq=99
 budget=$((n_init + n_acq * acq_size))
 random_seed=$SLURM_ARRAY_TASK_ID
 output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines/${dataset}/${model}/${al_strat}/budget_${budget}_acq_${acq_size}_self_initialization/seed${random_seed}/
