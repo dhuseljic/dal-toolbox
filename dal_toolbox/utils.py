@@ -29,12 +29,12 @@ def seed_everything(seed: int):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-def setup_rng(self, seed=None):
+def setup_rng(seed=None):
     """Returns a numpy random number generator. """
     if seed is None:
         rng = np.random.mtrand._rand
     else:
-        rng = np.random.RandomState(self.seed)
+        rng = np.random.RandomState(seed)
     return rng
 
 def write_scalar_dict(writer, dict, prefix, global_step=None):

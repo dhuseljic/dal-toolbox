@@ -1,5 +1,6 @@
 import numpy as np
 from abc import ABC, abstractmethod
+from ...utils import setup_rng
 
 
 class Query(ABC):
@@ -7,10 +8,7 @@ class Query(ABC):
         self.random_seed = random_seed
 
         # set rng which should be used for all random stuff
-        if random_seed is None:
-            self.rng = np.random.mtrand._rand
-        else:
-            self.rng = np.random.RandomState(self.random_seed)
+        self.rng = setup_rng(random_seed)
 
     @abstractmethod
     def query(self):

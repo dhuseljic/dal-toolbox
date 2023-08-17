@@ -4,35 +4,29 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --array=1-3%10
-#SBATCH --job-name=al_random_resnet18-ensemble_cifar10
+#SBATCH --array=1-10%10
+#SBATCH --job-name=udal
 #SBATCH --output=/mnt/work/dhuseljic/logs/udal/active_learning/%A_%a__%x.log
 date;hostname;pwd
-source /mnt/home/dhuseljic/.zshrc
-conda activate uncertainty_evaluation
-
+source ~/envs/dal-toolbox/bin/activate
 cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/
-export CUDA_LAUNCH_BLOCKING=1
-export HYDRA_FULL_ERROR=1
 
 model=resnet18_ensemble
 dataset=CIFAR10
-
+ood_datasets=\[CIFAR100,\ SVHN\]
 al_strat=random
-n_init=100
-acq_size=100
-n_acq=19
+n_init=128
+acq_size=128
+n_acq=38
 random_seed=$SLURM_ARRAY_TASK_ID
 init_pool_file=/mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/initial_pools/CIFAR10/random_${n_init}_seed${random_seed}.json
-
-output_dir=/mnt/work/deep_al/results/udal/active_learning/${dataset}/${model}/${al_strat}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/
+output_dir=/mnt/work/dhuseljic/results/udal/active_learning/${dataset}/${model}/${al_strat}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/
 
 echo "Starting script. Writing results to ${output_dir}"
 srun python -u active_learning.py \
 	model=$model \
-	model.optimizer.lr=0.0766450142252356 \
-	model.optimizer.weight_decay=0.014745096744053244 \
 	dataset=$dataset \
+	ood_datasets=$ood_datasets \
 	dataset_path=/mnt/work/dhuseljic/datasets \
 	al_strategy=$al_strat \
 	al_cycle.n_init=$n_init \

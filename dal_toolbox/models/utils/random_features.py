@@ -67,6 +67,7 @@ class RandomFeatureGaussianProcess(nn.Module):
                  random_feature_type: str = 'orf',
                  scale_random_features: bool = True,
                  mean_field_factor: float = math.pi/8,
+                 mc_samples: int = 1000,
                  cov_momentum: float = -1,
                  ridge_penalty: float = 1,
                  ):
@@ -87,6 +88,7 @@ class RandomFeatureGaussianProcess(nn.Module):
 
         # Inference
         self.mean_field_factor = mean_field_factor
+        self.mc_samples = mc_samples
 
         # Covariance computation
         self.ridge_penalty = ridge_penalty
@@ -146,8 +148,9 @@ class RandomFeatureGaussianProcess(nn.Module):
         # probas = logits.softmax(-1)
         # probas_max = probas.max(1)[0]
         # multiplier = probas_max * (1-probas_max)
-        self.precision_matrix = self.precision_matrix.to(phi)
+        # gaussian likelihood
         multiplier = 1
+        self.precision_matrix = self.precision_matrix.to(phi)
         precision_matrix_minibatch = torch.matmul(multiplier*phi.T, phi)
         if self.cov_momentum > 0:
             batch_size = len(phi)
@@ -177,6 +180,33 @@ class RandomFeatureGaussianProcess(nn.Module):
         logits, cov = self.forward(x, return_cov=True)
         scaled_logits = mean_field_logits(logits, cov, self.mean_field_factor)
         return scaled_logits
+
+    @torch.no_grad()
+    def forward_monte_carlo(self, x):
+        if self.training:
+            raise ValueError("Call eval mode before!")
+        logits, cov = self.forward(x, return_cov=True)
+
+        gp_mean = logits
+        gp_var = cov.diag()
+        gp_var = gp_var.unsqueeze(-1).expand_as(gp_mean)
+        gp_std = torch.sqrt(gp_var)
+
+        gaussian = torch.distributions.Normal(loc=gp_mean,  scale=gp_std)
+        mc_logits = gaussian.sample(sample_shape=(self.mc_samples,)).permute(1, 0, 2)
+        return mc_logits
+
+        # TODO: Problem here: random features are someimtes not positive definite?
+        # # Sample from Laplace distribution with shared cov. Example with 10 classes and 1024 rff dimensions:
+        # # mean has shape 10 x 1024 and cov has shape 1024 x 1024, cov gets broadcasted to (10 x 1024 x 1024)
+        # # The sampled weights have the shape mc_samples x 10 x 1024
+        # gaussian = torch.distributions.MultivariateNormal(
+        #     loc=self.beta.weight, covariance_matrix=self.covariance_matrix)
+        # sampled_weights = gaussian.sample(sample_shape=(self.mc_samples,))
+
+        # # MC-Integration
+        # mc_logits = torch.einsum('nd,mkd->nmk', phi, sampled_weights)
+        # return mc_logits
 
 
 def orthogonal_random_(tensor, std=1):

@@ -11,9 +11,10 @@ from torch.utils.data import DataLoader
 from omegaconf import OmegaConf
 
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp
+from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
 from dal_toolbox.active_learning import ActiveLearningDataModule
-from dal_toolbox.utils import seed_everything
+from dal_toolbox.utils import seed_everything, is_running_on_slurm
 from dal_toolbox import metrics
 from dal_toolbox import datasets
 from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge
@@ -31,22 +32,22 @@ def main(args):
 
     # Setup Dataset
     logging.info('Building datasets.')
-    train_ds, query_ds, val_ds, ds_info = build_datasets(args)
-    val_loader = DataLoader(val_ds, batch_size=args.model.predict_batch_size)
+    data = build_datasets(args)
+    al_datamodule = ActiveLearningDataModule(
+        train_dataset=data.train_dataset,
+        val_dataset=data.val_dataset,
+        query_dataset=data.query_dataset,
+        train_batch_size=args.model.train_batch_size,
+        predict_batch_size=args.model.predict_batch_size,
+    )
+    test_loader = DataLoader(data.test_dataset, batch_size=args.model.predict_batch_size)
     if args.ood_datasets:
         logging.info('Building ood datasets.')
-        ood_datasets = build_ood_datasets(args)
+        ood_datasets = build_ood_datasets(args, transforms=data.transforms)
         ood_loaders = {name: DataLoader(ds, batch_size=args.model.predict_batch_size)
                        for name, ds in ood_datasets.items()}
     else:
         ood_loaders = None
-
-    al_datamodule = ActiveLearningDataModule(
-        train_dataset=train_ds,
-        query_dataset=query_ds,
-        train_batch_size=args.model.train_batch_size,
-        predict_batch_size=args.model.predict_batch_size,
-    )
 
     if args.al_cycle.init_pool_file is not None:
         logging.info('Using initial labeled pool from %s.', args.al_cycle.init_pool_file)
@@ -61,7 +62,7 @@ def main(args):
 
     # Setup Model
     logging.info('Building model: %s', args.model.name)
-    model = build_model(args, n_classes=ds_info['n_classes'])
+    model = build_model(args, num_classes=data.num_classes)
 
     # Setup Query
     logging.info('Building query strategy: %s', args.al_strategy.name)
@@ -83,29 +84,33 @@ def main(args):
             al_datamodule.update_annotations(indices)
             queried_indices[f'cycle{i_acq}'] = indices
 
-        # Reset parameters
-        model.reset_states()
 
         # Train
+        model.reset_states(reset_model_parameters=args.al_cycle.cold_start)
         trainer = L.Trainer(
             max_epochs=args.model.n_epochs,
             default_root_dir=args.output_dir,
             enable_checkpointing=False,
-            enable_progress_bar=True,
+            logger=False,
+            check_val_every_n_epoch=args.val_every,
+            enable_progress_bar=(not is_running_on_slurm()),
+            callbacks=[MetricLogger()] if is_running_on_slurm() else [],
+            fast_dev_run=args.fast_dev_run
         )
         trainer.fit(model, al_datamodule)
 
         # Evaluate resulting model
-        predictions = trainer.predict(model, val_loader)
+        predictions = trainer.predict(model, test_loader)
         logits = torch.cat([preds[0] for preds in predictions])
         targets = torch.cat([preds[1] for preds in predictions])
         test_stats = evaluate(logits, targets)
-        for name, loader in ood_loaders.items():
-            predictions_ood = trainer.predict(model, loader)
-            logits_ood = torch.cat([preds[0] for preds in predictions_ood])
-            ood_stats = evaluate_ood(logits, logits_ood)
-            ood_stats = {f'{key}_{name}': val for key, val in ood_stats.items()}
-            test_stats.update(ood_stats)
+        if ood_loaders is not None:
+            for name, loader in ood_loaders.items():
+                predictions_ood = trainer.predict(model, loader)
+                logits_ood = torch.cat([preds[0] for preds in predictions_ood])
+                ood_stats = evaluate_ood(logits, logits_ood)
+                ood_stats = {f'{key}_{name}': val for key, val in ood_stats.items()}
+                test_stats.update(ood_stats)
         logging.info("[Acq %s] Test statistics: %s", i_acq, test_stats)
 
         cycle_results['test_stats'] = test_stats
@@ -115,7 +120,6 @@ def main(args):
             "unlabeled_indices": al_datamodule.unlabeled_indices,
             "n_unlabeled_samples": len(al_datamodule.unlabeled_indices),
         })
-        cycle_results.keys()
         results[f'cycle{i_acq}'] = cycle_results
 
     # Save results
@@ -161,18 +165,21 @@ def evaluate_ood(logits_id, logits_ood):
 def build_query(args, **kwargs):
     if args.al_strategy.name == "random":
         query = random.RandomSampling()
+    # Aleatoric
     elif args.al_strategy.name == "least_confident":
         query = uncertainty.LeastConfidentSampling(subset_size=args.al_strategy.subset_size,)
     elif args.al_strategy.name == "margin":
         query = uncertainty.MarginSampling(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == "entropy":
         query = uncertainty.EntropySampling(subset_size=args.al_strategy.subset_size)
+    # Epistemic
     elif args.al_strategy.name == "bayesian_entropy":
         query = uncertainty.BayesianEntropySampling(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == 'variation_ratio':
         query = uncertainty.VariationRatioSampling(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == 'bald':
         query = uncertainty.BALDSampling(subset_size=args.al_strategy.subset_size)
+    # Batch..tbd
     elif args.al_strategy.name == "coreset":
         query = coreset.CoreSet(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == "badge":
@@ -183,7 +190,7 @@ def build_query(args, **kwargs):
 
 
 def build_model(args, **kwargs):
-    num_classes = kwargs['n_classes']
+    num_classes = kwargs['num_classes']
 
     if args.model.name == 'resnet18_deterministic':
         model = deterministic.resnet.ResNet18(num_classes)
@@ -197,10 +204,10 @@ def build_model(args, **kwargs):
         )
         lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
         model = deterministic.DeterministicModel(
-            model, criterion, optimizer, lr_scheduler, {'train_acc': metrics.Accuracy()}
+            model, criterion, optimizer, lr_scheduler,
+            {'train_acc': metrics.Accuracy()}, {'val_acc': metrics.Accuracy()}
         )
         return model
-
     elif args.model.name == 'resnet18_labelsmoothing':
         model = deterministic.resnet.ResNet18(num_classes)
         criterion = nn.CrossEntropyLoss(label_smoothing=args.model.label_smoothing)
@@ -213,9 +220,9 @@ def build_model(args, **kwargs):
         )
         lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
         model = deterministic.DeterministicModel(
-            model, criterion, optimizer, lr_scheduler, {'train_acc': metrics.Accuracy()}
+            model, criterion, optimizer, lr_scheduler,
+            {'train_acc': metrics.Accuracy()}, {'val_acc': metrics.Accuracy()}
         )
-
     elif args.model.name == 'resnet18_mixup':
         model = deterministic.resnet.ResNet18(num_classes)
         criterion = nn.CrossEntropyLoss()
@@ -228,10 +235,9 @@ def build_model(args, **kwargs):
         )
         lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
         model = deterministic.DeterministicMixupModel(
-            model, num_classes, args.model.mixup_alpha, criterion, optimizer, lr_scheduler, {
-                'train_acc': metrics.Accuracy()}
+            model, num_classes, args.model.mixup_alpha, criterion, optimizer, lr_scheduler,
+            {'train_acc': metrics.Accuracy()}, {'val_acc': metrics.Accuracy()}
         )
-
     elif args.model.name == 'resnet18_mcdropout':
         model = mc_dropout.resnet.DropoutResNet18(num_classes, args.model.n_passes, args.model.dropout_rate)
         criterion = nn.CrossEntropyLoss()
@@ -244,9 +250,9 @@ def build_model(args, **kwargs):
         )
         lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
         model = mc_dropout.MCDropoutModel(
-            model, criterion, optimizer, lr_scheduler, train_metrics={'train_acc': metrics.Accuracy()},
+            model, criterion, optimizer, lr_scheduler,
+            {'train_acc': metrics.Accuracy()}, {'val_acc': metrics.Accuracy()}
         )
-
     elif args.model.name == 'resnet18_ensemble':
         members, lr_scheduler_list, optimizer_list = [], [], []
         for _ in range(args.model.n_member):
@@ -264,9 +270,9 @@ def build_model(args, **kwargs):
             lr_scheduler_list.append(lrs)
         criterion = nn.CrossEntropyLoss()
         model = ensemble.EnsembleModel(
-            members, criterion, optimizer_list, lr_scheduler_list, train_metrics={'train_acc': metrics.Accuracy()},
+            members, criterion, optimizer_list, lr_scheduler_list,
+            {'train_acc': metrics.Accuracy()}, {'val_acc': metrics.Accuracy()},
         )
-
     elif args.model.name == 'resnet18_sngp':
         model = sngp.resnet.resnet18_sngp(
             num_classes=num_classes,
@@ -293,9 +299,9 @@ def build_model(args, **kwargs):
         )
         lr_scheduler = CosineAnnealingLRLinearWarmup(optimizer, num_epochs=args.model.n_epochs, warmup_epochs=10)
         model = sngp.SNGPModel(
-            model, criterion, optimizer, lr_scheduler, train_metrics={'train_acc': metrics.Accuracy()},
+            model, criterion, optimizer, lr_scheduler,
+            {'train_acc': metrics.Accuracy()}, {'val_acc': metrics.Accuracy()},
         )
-
     else:
         raise NotImplementedError()
 
@@ -303,41 +309,30 @@ def build_model(args, **kwargs):
 
 
 def build_datasets(args):
-    # TODO
-
-    if args.dataset.name == 'CIFAR10':
-        train_ds, ds_info = datasets.cifar.build_cifar10('train', args.dataset_path, return_info=True)
-        query_ds = datasets.cifar.build_cifar10('query', args.dataset_path)
-        test_ds = datasets.cifar.build_cifar10('test', args.dataset_path)
-
-    elif args.dataset.name == 'CIFAR100':
-        train_ds, ds_info = datasets.cifar.build_cifar100('train', args.dataset_path, return_info=True)
-        query_ds = datasets.cifar.build_cifar100('query', args.dataset_path)
-        test_ds = datasets.cifar.build_cifar100('test', args.dataset_path)
-
-    elif args.dataset.name == 'SVHN':
-        train_ds, ds_info = datasets.svhn.build_svhn('train', args.dataset_path, return_info=True)
-        query_ds = datasets.svhn.build_svhn('query', args.dataset_path)
-        test_ds = datasets.svhn.build_svhn('test', args.dataset_path)
-
+    if args.dataset == 'CIFAR10':
+        data = datasets.cifar.CIFAR10(args.dataset_path)
+    elif args.dataset == 'CIFAR100':
+        data = datasets.cifar.CIFAR100(args.dataset_path)
+    elif args.dataset == 'SVHN':
+        data = datasets.svhn.SVHN(args.dataset_path)
     else:
         raise NotImplementedError('Dataset not available')
 
-    return train_ds, query_ds, test_ds, ds_info
+    return data
 
 
-def build_ood_datasets(args):
+def build_ood_datasets(args, transforms):
     ood_datasets = {}
     for ds_name in args.ood_datasets:
         if ds_name == 'CIFAR10':
-            ood_ds = datasets.cifar.build_cifar10('test', args.dataset_path)
+            data = datasets.cifar.CIFAR10(args.dataset_path, transforms=transforms)
         elif ds_name == 'CIFAR100':
-            ood_ds = datasets.cifar.build_cifar100('test', args.dataset_path)
+            data = datasets.cifar.CIFAR100(args.dataset_path, transforms=transforms)
         elif ds_name == 'SVHN':
-            ood_ds = datasets.svhn.build_svhn('test', args.dataset_path)
+            data = datasets.svhn.SVHN(args.dataset_path, transforms=transforms)
         else:
             raise NotImplementedError(f'Dataset {ds_name} not implemented.')
-        ood_datasets[ds_name] = ood_ds
+        ood_datasets[ds_name] = data.test_dataset
 
     return ood_datasets
 

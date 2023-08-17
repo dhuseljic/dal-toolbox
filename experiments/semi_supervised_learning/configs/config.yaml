@@ -4,15 +4,11 @@ defaults:
 
 dataset: CIFAR10
 dataset_path: ./data/
-n_labeled_samples: 40
-n_unlabeled_samples: 50000
-eval_interval: 1
-
-device: cuda
+num_labeled: 40
+num_unlabeled: 50000
+val_interval: 1
 random_seed: 42
-val_batch_size: 128
-print_freq_eval: 100
-print_freq_train: 100
+fast_dev_run: False
 
 output_dir: ./output/
 hydra:

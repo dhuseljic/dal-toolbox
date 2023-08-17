@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 from ..utils.random_features import RandomFeatureGaussianProcess
@@ -6,6 +7,20 @@ from ..utils.base import BaseModule
 
 
 class SNGPModel(BaseModule):
+
+    def __init__(
+            self,
+            model: nn.Module,
+            loss_fn: nn.Module = nn.CrossEntropyLoss(),
+            optimizer: torch.optim.Optimizer = None,
+            lr_scheduler: torch.optim.lr_scheduler.LRScheduler = None,
+            train_metrics: dict = None,
+            val_metrics: dict = None,
+            scheduler_interval='epoch',
+            predict_kwargs=None,
+    ):
+        super().__init__(model, loss_fn, optimizer, lr_scheduler, train_metrics, val_metrics, scheduler_interval)
+        self.predict_kwargs = dict(mean_field=True) if predict_kwargs is None else predict_kwargs
 
     def training_step(self, batch):
         inputs, targets = batch
@@ -23,10 +38,10 @@ class SNGPModel(BaseModule):
     def on_train_epoch_end(self):
         self._synchronize_precision_matrix()
 
-    def validation_step(self, batch):
+    def validation_step(self, batch, batch_idx):
         inputs, targets = batch
 
-        logits = self(inputs)
+        logits = self(inputs, mean_field=True)
         loss = self.loss_fn(logits, targets)
         self.log('val_loss', loss, prog_bar=True)
 
@@ -34,9 +49,9 @@ class SNGPModel(BaseModule):
         return loss
 
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
-        # TODO(dhuseljic): discuss with mherde; maybe can be used for AL?
         inputs, targets = batch
-        logits = self(inputs, mean_field=True)
+
+        logits = self(inputs, **self.predict_kwargs)
 
         logits = self._gather(logits)
         targets = self._gather(targets)

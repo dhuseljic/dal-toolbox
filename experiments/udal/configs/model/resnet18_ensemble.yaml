@@ -1,6 +1,6 @@
 name: resnet18_ensemble
 n_epochs: 200
-train_batch_size: 128
+train_batch_size: 32
 predict_batch_size: 256
 n_member: 4
 optimizer:

@@ -46,7 +46,7 @@ class EnsembleModel(BaseModule):
         """Returns the logits from each ensemble member.
 
         Returns:
-            torch.Tensor: Tensor of shape (ensemble_size, num_samples, num_classes).
+            torch.Tensor: Tensor of shape (num_samples, ensemble_size, num_classes).
         """
         logits_list = []
         for member in self.model:
