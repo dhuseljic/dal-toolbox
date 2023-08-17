@@ -181,7 +181,6 @@ def xpal_gain(K_c, K_x=None, S=None, alpha_x=1, alpha_c=1):
 
     # indicates where a decision flip can be reached
     I = D_x - S < 0
-    print('#decision_flips: {}'.format(np.sum(I)))
 
     # compute normalization constants per candidate sample
     K_c_alpha_c_norm = K_c + alpha_c
