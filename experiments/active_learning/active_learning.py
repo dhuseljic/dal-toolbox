@@ -14,7 +14,8 @@ from sklearn.preprocessing import StandardScaler
 from dal_toolbox import datasets
 from dal_toolbox import metrics
 from dal_toolbox.active_learning import ActiveLearningDataModule
-from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, typiclust, xpal, xpalclust
+from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, typiclust, xpal, xpalclust, \
+    randomclust
 # noinspection PyUnresolvedReferences
 from dal_toolbox.datasets.utils import FeatureDataset, FeatureDatasetWrapper
 from dal_toolbox.models import deterministic
@@ -225,6 +226,8 @@ def build_al_strategy(name, args, num_classes=None, train_features=None):
         query = badge.Badge(subset_size=subset_size)
     elif name == "typiclust":
         query = typiclust.TypiClust(subset_size=subset_size)
+    elif name == "randomclust":
+        query = randomclust.RandomClust(subset_size=subset_size)
     elif name == "xpal" or "xpalclust":
         if args.al_strategy.kernel.gamma == "calculate":
             gamma = _calculate_mean_gamma(train_features)
