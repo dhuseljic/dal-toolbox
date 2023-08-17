@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 
-from dal_toolbox.datasets.base import AbstractData
+from dal_toolbox.datasets.base import BaseData
 from dal_toolbox.models.utils.base import BaseModule
 
 
@@ -17,7 +17,7 @@ class ContrastiveTransformations:
         return [self.base_transforms(x) for i in range(self.n_views)]
 
 
-class FeatureDatasetWrapper(AbstractData):
+class FeatureDatasetWrapper(BaseData):
     """
     Wrapper for FeatureDatasets to be used with AbstractData
     """
