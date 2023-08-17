@@ -11,29 +11,26 @@ date;hostname;pwd
 source /mnt/stud/home/ynagel/dal-toolbox/venv/bin/activate
 cd ~/dal-toolbox/experiments/active_learning/
 
-model=linear
+model=pwc
 dataset=CIFAR10
 
-al_strat=xpal
+al_strat=typiclust
 n_init=1
 acq_size=1
-n_acq=99
+n_acq=299
 budget=$((n_init + n_acq * acq_size))
 random_seed=$SLURM_ARRAY_TASK_ID
-output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines/${dataset}/${model}/${al_strat}/budget_${budget}_acq_${acq_size}/seed${random_seed}/
+output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines/${dataset}/${model}/${al_strat}/budget_${budget}_acq_${acq_size}_self_initialization/seed${random_seed}/
 
 srun python -u active_learning.py \
 	model=$model \
-	model.optimizer.lr=0.25 \
-	model.optimizer.weight_decay=0.0 \
-	model.train_batch_size=64 \
-	model.num_epochs=100 \
 	dataset=$dataset \
 	dataset_path=/mnt/stud/home/ynagel/data \
 	al_strategy=$al_strat \
 	al_cycle.n_init=$n_init \
 	al_cycle.acq_size=$acq_size \
 	al_cycle.n_acq=$n_acq \
+	al_cycle.init_strategy=$al_strat \
 	random_seed=$random_seed \
 	output_dir=$output_dir \
 	precomputed_features=True \

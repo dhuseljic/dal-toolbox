@@ -2,7 +2,6 @@
 #SBATCH --mem=24gb
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=6
-#SBATCH --gres=gpu:1
 #SBATCH --partition=main
 #SBATCH --array=1-10
 #SBATCH --job-name=al_baselines
