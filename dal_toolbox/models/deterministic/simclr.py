@@ -1,5 +1,6 @@
 import logging
 import os
+import warnings
 
 import lightning as L
 import torch
@@ -197,6 +198,7 @@ class LinearEvaluationAccuracy:
         else:
             raise NotImplementedError(f"Data split {dataset} is not implemented for compute().")
 
+
     def save_features_and_model_state_dict(self, name: str = "model_features_dict", path: str = "") -> None:
         """
         Saves the encoder features as well as the feature datasets used during training/testing.
@@ -204,6 +206,7 @@ class LinearEvaluationAccuracy:
             name: The name of file to save the information to.
             path: The path of where to save the file.
         """
+        warnings.warn("save_features_and_model_state_dict is deprecated.")
         path = os.path.join(path + os.path.sep + f"{name}.pth")
         torch.save({'trainset': self.trainset,
                     'valset': self.valset,
@@ -271,3 +274,6 @@ class SimCLR(DeterministicModel):
                 log_str += (metr + " : " + str(round(val.item(), 5)) + ", ")
             logging.info(log_str)
         return super().on_train_epoch_end()
+
+    def get_representations(self, dataloader, device):
+        return self.encoder.get_representations(dataloader, device)

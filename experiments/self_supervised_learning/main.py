@@ -40,7 +40,8 @@ def build_encoder(name, return_output_dim=False):
 
         encoder_output_dim = 2048
     elif name == "wide_resnet_28_10":
-        encoder = deterministic.wide_resnet.wide_resnet_28_10(num_classes=1, dropout_rate=0.3) # TODO (ynagel) Dropout rate?
+        encoder = deterministic.wide_resnet.wide_resnet_28_10(num_classes=1,
+                                                              dropout_rate=0.3)  # TODO (ynagel) Dropout rate?
         encoder.linear = nn.Identity()
 
         encoder_output_dim = 640
@@ -197,8 +198,10 @@ def main(args):
                                   progressbar=is_running_on_slurm() is False,
                                   )
     acc = lr.compute_accuracy('test')
-    lr.save_features_and_model_state_dict(path=trainer.log_dir)
     logger.info(f"Final linear evaluation test accuracy: {acc}")
+    save_feature_dataset_and_model(model, build_plain_dataset(args), device, path=trainer.log_dir,
+                                   name=f"{args.ssl_model.encoder}_{args.dataset.name}_{acc:.3f}")
+    logger.info(f"Saved model under {trainer.log_dir}")
 
 
 def build_plain_dataset(args):
@@ -225,6 +228,19 @@ def build_contrastive_dataset(args):
         sys.exit(f"Dataset {args.dataset.name} not implemented.")
 
     return data
+
+
+def save_feature_dataset_and_model(model, dataset, device, path, name):
+    train_dataloader = DataLoader(dataset.full_train_dataset, batch_size=256)
+    test_dataloader = DataLoader(dataset.test_dataset, batch_size=256)
+
+    feature_trainset = model.get_representations(train_dataloader, device)
+    feature_testset = model.get_representations(test_dataloader, device)
+
+    path = os.path.join(path + os.path.sep + f"{name}.pth")
+    torch.save({'trainset': feature_trainset,
+                'testset': feature_testset,
+                'model': model.encoder.state_dict()}, path)
 
 
 if __name__ == '__main__':
