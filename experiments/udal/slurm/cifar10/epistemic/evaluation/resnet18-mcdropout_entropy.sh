@@ -19,11 +19,11 @@ acq_size=128
 n_acq=38
 random_seed=$SLURM_ARRAY_TASK_ID
 queried_indices_json=/mnt/work/dhuseljic/results/udal/active_learning/${dataset}/${model}/${al_strat}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/queried_indices.json
-output_dir=/mnt/work/dhuseljic/results/udal/evaluation/${dataset}/${model}/${al_strat}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/
+output_dir=/mnt/work/dhuseljic/results/udal/evaluation/${dataset}/${model}_sngp/${al_strat}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/
 
 echo "Starting script. Writing results to ${output_dir}"
 srun python -u evaluate.py \
-	model=resnet18 \
+	model=resnet18_sngp \
 	dataset=$dataset \
 	dataset_path=/mnt/work/dhuseljic/datasets \
 	queried_indices_json=$queried_indices_json \
