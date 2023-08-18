@@ -85,7 +85,7 @@ class WideResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x, return_features=False):
         out = self.conv1(x)
         out = self.layer1(out)
         out = self.layer2(out)
@@ -93,7 +93,10 @@ class WideResNet(nn.Module):
         out = F.relu(self.bn1(out))
         out = F.avg_pool2d(out, 8)
         out = out.view(out.size(0), -1)
+        features = out
         out = self.linear(out)
+        if return_features:
+            out = (out, features)
         return out
 
     @torch.no_grad()
@@ -116,3 +119,15 @@ class WideResNet(nn.Module):
         logits = torch.cat(all_logits)
         probas = logits.softmax(-1)
         return probas
+
+    @torch.inference_mode()
+    def get_representations(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_features = []
+        for batch in dataloader:
+            inputs = batch[0]
+            _, features = self(inputs.to(device), return_features=True)
+            all_features.append(features.cpu())
+        features = torch.cat(all_features)
+        return features
