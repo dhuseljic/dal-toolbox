@@ -31,7 +31,7 @@ def main(args):
 
     # Setup Model
     logger.info('Building model: %s', args.model.name)
-    model = build_model(args, num_classes=dataset.num_classes)
+    model = build_model(args, num_classes=dataset.num_classes, input_shape=dataset.full_train_dataset.data.shape[1:])
 
     callbacks = []
     if is_running_on_slurm():
@@ -85,21 +85,27 @@ def main(args):
                                    name=f"supervised_{args.model.name}_{args.dataset.name}_{results['test']['accuracy']:.3f}")
 
 
-def build_model(args, num_classes):
+def build_model(args, num_classes, input_shape=None):
     if args.model.name == 'resnet18_deterministic':
         model = deterministic.resnet.ResNet18(num_classes=num_classes)
-        optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
-        model = deterministic.DeterministicModel(
-            model,
-            optimizer=optimizer,
-            lr_scheduler=lr_scheduler,
-            train_metrics={'train_acc': metrics.Accuracy()},
-            val_metrics={'val_acc': metrics.Accuracy()},
-        )
+    elif args.model.name == 'spectral_resnet18_deterministic':
+        model = deterministic.spectral_resnet.spectral_resnet18(num_classes=num_classes,
+                                                                input_shape=input_shape[::-1],  # TODO (ynagel) Ask what order this is supposed to be in
+                                                                norm_bound=args.model.norm_bound,
+                                                                n_power_iterations=args.model.n_power_iterations,
+                                                                spectral_norm=args.model.spectral_norm)
     else:
         raise NotImplementedError(f"Model {args.model.name} is not implemented!")
 
+    optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
+    model = deterministic.DeterministicModel(
+        model,
+        optimizer=optimizer,
+        lr_scheduler=lr_scheduler,
+        train_metrics={'train_acc': metrics.Accuracy()},
+        val_metrics={'val_acc': metrics.Accuracy()},
+    )
     return model
 
 

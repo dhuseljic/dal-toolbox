@@ -1,0 +1,11 @@
+name: spectral_resnet18_deterministic
+num_epochs: 200
+train_batch_size: 64
+predict_batch_size: 256
+norm_bound: 1.0
+n_power_iterations: 1
+spectral_norm: True
+optimizer:
+  lr: 0.1
+  weight_decay: 2e-4
+  momentum: 0.9
