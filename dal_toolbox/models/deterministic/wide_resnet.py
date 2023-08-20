@@ -121,13 +121,20 @@ class WideResNet(nn.Module):
         return probas
 
     @torch.inference_mode()
-    def get_representations(self, dataloader, device):
+    def get_representations(self, dataloader, device, return_labels=False):
         self.to(device)
         self.eval()
         all_features = []
+        all_labels = []
         for batch in dataloader:
             inputs = batch[0]
+            labels = batch[1]
             _, features = self(inputs.to(device), return_features=True)
             all_features.append(features.cpu())
+            all_labels.append(labels)
         features = torch.cat(all_features)
+
+        if return_labels:
+            labels = torch.cat(all_labels)
+            return features, labels
         return features

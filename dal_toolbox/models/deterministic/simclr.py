@@ -275,5 +275,5 @@ class SimCLR(DeterministicModel):
             logging.info(log_str)
         return super().on_train_epoch_end()
 
-    def get_representations(self, dataloader, device):
-        return self.encoder.get_representations(dataloader, device)
+    def get_representations(self, dataloader, device, return_labels=False):
+        return self.encoder.get_representations(dataloader, device, return_labels)

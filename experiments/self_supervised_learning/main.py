@@ -14,6 +14,7 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 from dal_toolbox import datasets, metrics
+from dal_toolbox.datasets.utils import FeatureDataset
 from dal_toolbox.models import deterministic
 from dal_toolbox.models.deterministic import simclr
 from dal_toolbox.models.deterministic.simclr import InfoNCELoss, LinearEvaluationAccuracy
@@ -154,6 +155,7 @@ def main(args):
                                 shuffle=False)
 
     model = build_ssl(args.ssl_model.name, args)
+    logger.info(f"Using square-root adjusted learning rate {model.optimizer.defaults['lr']}")
 
     callbacks = [
         ModelCheckpoint(save_weights_only=False, mode="max", monitor="val_acc_top5", every_n_epochs=1),
@@ -231,15 +233,12 @@ def build_contrastive_dataset(args):
 
 
 def save_feature_dataset_and_model(model, dataset, device, path, name):
-    train_dataloader = DataLoader(dataset.full_train_dataset, batch_size=256)
-    test_dataloader = DataLoader(dataset.test_dataset, batch_size=256)
-
-    feature_trainset = model.get_representations(train_dataloader, device)
-    feature_testset = model.get_representations(test_dataloader, device)
+    trainset = FeatureDataset(model, dataset.full_train_dataset, device)
+    testset = FeatureDataset(model, dataset.test_dataset, device)
 
     path = os.path.join(path + os.path.sep + f"{name}.pth")
-    torch.save({'trainset': feature_trainset,
-                'testset': feature_testset,
+    torch.save({'trainset': trainset,
+                'testset': testset,
                 'model': model.encoder.state_dict()}, path)
 
 
