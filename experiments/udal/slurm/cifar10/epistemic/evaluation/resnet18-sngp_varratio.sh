@@ -12,6 +12,7 @@ source ~/envs/dal-toolbox/bin/activate
 cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/
 
 dataset=CIFAR10
+ood_datasets=\[CIFAR100,\ SVHN\]
 model=resnet18_sngp
 al_strat=variation_ratio
 n_init=128
