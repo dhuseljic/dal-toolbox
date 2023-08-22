@@ -163,7 +163,7 @@ def main(args):
     ]
 
     if args.le_model.callback.enabled:
-        callbacks.append(LinearEvaluationCallback(model.encoder_output_dim, args, logger))
+        callbacks.append(LinearEvaluationCallback(device, args, logger))
 
     # Create a Trainer Module
     trainer = L.Trainer(
