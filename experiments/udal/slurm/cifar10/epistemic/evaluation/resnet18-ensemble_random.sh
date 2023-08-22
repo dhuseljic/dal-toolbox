@@ -12,6 +12,7 @@ source ~/envs/dal-toolbox/bin/activate
 cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/
 
 dataset=CIFAR10
+ood_datasets=\[CIFAR100,\ SVHN\]
 model=resnet18_ensemble
 al_strat=random
 n_init=128
@@ -25,6 +26,7 @@ echo "Starting script. Writing results to ${output_dir}"
 srun python -u evaluate.py \
 	model=resnet18_sngp \
 	dataset=$dataset \
+	ood_datasets=$ood_datasets \
 	dataset_path=/mnt/work/dhuseljic/datasets \
 	queried_indices_json=$queried_indices_json \
 	output_dir=$output_dir \
