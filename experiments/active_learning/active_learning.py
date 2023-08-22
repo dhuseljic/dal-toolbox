@@ -142,20 +142,48 @@ def main(args):
 
         # Evaluate resulting model
         logger.info('Evaluation..')
-        predictions = trainer.predict(model, al_datamodule.test_dataloader())
-        logits = torch.cat([pred[0] for pred in predictions])
-        targets = torch.cat([pred[1] for pred in predictions])
+        train_predictions = trainer.predict(model, al_datamodule.train_dataloader())
+        train_logits = torch.cat([pred[0] for pred in train_predictions])
+        train_targets = torch.cat([pred[1] for pred in train_predictions])
+
+        train_stats = {
+            'accuracy': metrics.Accuracy()(train_logits, train_targets).item(),
+            'nll': torch.nn.CrossEntropyLoss()(train_logits, train_targets).item(),
+            'brier': metrics.BrierScore()(train_logits, train_targets).item(),
+            'ece': metrics.ExpectedCalibrationError()(train_logits, train_targets).item(),
+            'ace': metrics.AdaptiveCalibrationError()(train_logits, train_targets).item(),
+        }
+        logger.info('Train stats: %s', train_stats)
+
+        validation_predictions = trainer.predict(model, al_datamodule.val_dataloader())
+        validation_logits = torch.cat([pred[0] for pred in validation_predictions])
+        validation_targets = torch.cat([pred[1] for pred in validation_predictions])
+
+        validation_stats = {
+            'accuracy': metrics.Accuracy()(validation_logits, validation_targets).item(),
+            'nll': torch.nn.CrossEntropyLoss()(validation_logits, validation_targets).item(),
+            'brier': metrics.BrierScore()(validation_logits, validation_targets).item(),
+            'ece': metrics.ExpectedCalibrationError()(validation_logits, validation_targets).item(),
+            'ace': metrics.AdaptiveCalibrationError()(validation_logits, validation_targets).item(),
+        }
+        logger.info('Validation stats: %s', validation_stats)
+        
+        test_predictions = trainer.predict(model, al_datamodule.test_dataloader())
+        test_logits = torch.cat([pred[0] for pred in test_predictions])
+        test_targets = torch.cat([pred[1] for pred in test_predictions])
 
         test_stats = {
-            'accuracy': metrics.Accuracy()(logits, targets).item(),
-            'nll': torch.nn.CrossEntropyLoss()(logits, targets).item(),
-            'brier': metrics.BrierScore()(logits, targets).item(),
-            'ece': metrics.ExpectedCalibrationError()(logits, targets).item(),
-            'ace': metrics.AdaptiveCalibrationError()(logits, targets).item(),
+            'accuracy': metrics.Accuracy()(test_logits, test_targets).item(),
+            'nll': torch.nn.CrossEntropyLoss()(test_logits, test_targets).item(),
+            'brier': metrics.BrierScore()(test_logits, test_targets).item(),
+            'ece': metrics.ExpectedCalibrationError()(test_logits, test_targets).item(),
+            'ace': metrics.AdaptiveCalibrationError()(test_logits, test_targets).item(),
         }
-        logger.info('Evaluation stats: %s', test_stats)
+        logger.info('test stats: %s', test_stats)
 
         cycle_results.update({
+            "train_stats": train_stats,
+            "validation_stats": validation_stats,
             "test_stats": test_stats,
             "labeled_indices": al_datamodule.labeled_indices,
             "n_labeled_samples": len(al_datamodule.labeled_indices),
