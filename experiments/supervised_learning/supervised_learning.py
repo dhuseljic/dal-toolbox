@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 
 from dal_toolbox import datasets
 from dal_toolbox import metrics
+from dal_toolbox.datasets.utils import FeatureDataset
 from dal_toolbox.models import deterministic
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything, is_running_on_slurm
@@ -90,7 +91,8 @@ def build_model(args, num_classes, input_shape=None):
         model = deterministic.resnet.ResNet18(num_classes=num_classes)
     elif args.model.name == 'spectral_resnet18_deterministic':
         model = deterministic.spectral_resnet.spectral_resnet18(num_classes=num_classes,
-                                                                input_shape=input_shape[::-1],  # TODO (ynagel) Ask what order this is supposed to be in
+                                                                input_shape=input_shape[::-1],
+                                                                # TODO (ynagel) Ask what order this is supposed to be in
                                                                 norm_bound=args.model.norm_bound,
                                                                 n_power_iterations=args.model.n_power_iterations,
                                                                 spectral_norm=args.model.spectral_norm)
@@ -123,15 +125,12 @@ def build_datasets(args):
 
 
 def save_feature_dataset_and_model(model, dataset, device, path, name):
-    train_dataloader = DataLoader(dataset.full_train_dataset_eval_transforms, batch_size=256)
-    test_dataloader = DataLoader(dataset.test_dataset, batch_size=256)
-
-    feature_trainset = model.get_representations(dataloader=train_dataloader, device=device)
-    feature_testset = model.get_representations(dataloader=test_dataloader, device=device)
+    trainset = FeatureDataset(model, dataset.full_train_dataset, device)
+    testset = FeatureDataset(model, dataset.test_dataset, device)
 
     path = os.path.join(path + os.path.sep + f"{name}.pth")
-    torch.save({'trainset': feature_trainset,
-                'testset': feature_testset,
+    torch.save({'trainset': trainset,
+                'testset': testset,
                 'model': model.state_dict()}, path)
 
 

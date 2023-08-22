@@ -47,7 +47,7 @@ class FeatureDataset(Dataset):
             device: The ``torch.device``, with which the features are extracted
         """
         dataloader = DataLoader(dataset, batch_size=512, num_workers=4)
-        features, labels = model.get_representations(dataloader, device, return_labels=True)
+        features, labels = model.get_representations(dataloader, device=device, return_labels=True)
         self.features = features.detach()
         self.labels = labels
 

@@ -134,13 +134,20 @@ class SpectralResNet(nn.Module):
         return logits
 
     @torch.inference_mode()
-    def get_representations(self, dataloader, device):
+    def get_representations(self, dataloader, device, return_labels=True):
         self.to(device)
         self.eval()
         all_features = []
+        all_labels = []
         for batch in dataloader:
             inputs = batch[0]
-            logits = self.forward_feature(inputs.to(device))
-            all_features.append(logits)
+            labels = batch[1]
+            features = self.forward_feature(inputs.to(device))
+            all_features.append(features.cpu())
+            all_labels.append(labels)
         features = torch.cat(all_features)
+
+        if return_labels:
+            labels = torch.cat(all_labels)
+            return features, labels
         return features
