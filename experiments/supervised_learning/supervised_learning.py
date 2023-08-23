@@ -25,14 +25,14 @@ def main(args):
 
     # Setup Dataset
     logger.info('Building dataset.')
-    dataset = build_datasets(args)
+    dataset, input_shape = build_datasets(args)
     train_dataloader = DataLoader(dataset.train_dataset, batch_size=args.model.train_batch_size)
     validation_dataloader = DataLoader(dataset.val_dataset, batch_size=args.model.predict_batch_size)
     test_dataloader = DataLoader(dataset.test_dataset, batch_size=args.model.predict_batch_size)
 
     # Setup Model
     logger.info('Building model: %s', args.model.name)
-    model = build_model(args, num_classes=dataset.num_classes, input_shape=dataset.full_train_dataset.data.shape[1:])
+    model = build_model(args, num_classes=dataset.num_classes, input_shape=input_shape)
 
     callbacks = []
     if is_running_on_slurm():
@@ -114,14 +114,17 @@ def build_model(args, num_classes, input_shape=None):
 def build_datasets(args):
     if args.dataset.name == 'CIFAR10':
         data = datasets.CIFAR10(args.dataset_path)
+        shape = (32, 32, 3)
     elif args.dataset.name == 'CIFAR100':
         data = datasets.CIFAR100(args.dataset_path)
+        shape = (32, 32, 3)
     elif args.dataset.name == 'SVHN':
         data = datasets.SVHN(args.dataset_path)
+        shape = (32, 32, 3)
     else:
         raise NotImplementedError(f"Dataset {args.dataset.name} is not implemented!")
 
-    return data
+    return data, shape
 
 
 def save_feature_dataset_and_model(model, dataset, device, path, name):

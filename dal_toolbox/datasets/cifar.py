@@ -170,6 +170,22 @@ class CIFAR100StandardTransforms(BaseTransforms):
         ])
         return transform
 
+    @property
+    def eval_transform(self):
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std)
+        ])
+        return transform
+
+    @property
+    def query_transform(self):
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std)
+        ])
+        return transform
+
 
 # TODO (ynagel) These are currently the same as for CIFAR10. There might be better settings.
 class CIFAR100ContrastiveTransforms(CIFAR100StandardTransforms):
