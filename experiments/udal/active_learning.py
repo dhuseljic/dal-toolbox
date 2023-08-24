@@ -134,6 +134,13 @@ def main(args):
     with open(file_name, 'w', encoding='utf-8') as f:
         json.dump(queried_indices, f, sort_keys=False)
 
+    # Save model
+    logging.info("Saving model weights to %s.", file_name)
+    torch.save(model.state_dict(), os.path.join(args.output_dir, 'lit_model_final.pth'))
+    torch.save(model.model.state_dict(), os.path.join(args.output_dir, 'model_final.pth'))
+    
+
+
 
 def evaluate(logits, targets):
     test_stats = {}
