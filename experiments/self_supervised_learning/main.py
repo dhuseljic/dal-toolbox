@@ -6,6 +6,7 @@ import sys
 
 import hydra
 import lightning as L
+import numpy as np
 import torch.cuda
 from lightning import Callback
 from lightning.pytorch.callbacks import LearningRateMonitor, ModelCheckpoint
@@ -237,9 +238,14 @@ def main(args):
         simclr_metrics_reordered["train_loss"].append(epoch["train_loss"])
         simclr_metrics_reordered["train_acc_top1"].append(epoch["train_acc_top1"])
         simclr_metrics_reordered["train_acc_top5"].append(epoch["train_acc_top5"])
-        simclr_metrics_reordered["val_loss"].append(epoch["val_loss"])
-        simclr_metrics_reordered["val_acc_top1"].append(epoch["val_acc_top1"])
-        simclr_metrics_reordered["val_acc_top5"].append(epoch["val_acc_top5"])
+        if "val_loss" in epoch.keys():
+            simclr_metrics_reordered["val_loss"].append(epoch["val_loss"])
+            simclr_metrics_reordered["val_acc_top1"].append(epoch["val_acc_top1"])
+            simclr_metrics_reordered["val_acc_top5"].append(epoch["val_acc_top5"])
+        else:
+            simclr_metrics_reordered["val_loss"].append(np.nan)
+            simclr_metrics_reordered["val_acc_top1"].append(np.nan)
+            simclr_metrics_reordered["val_acc_top5"].append(np.nan)
 
     results["SimCLR"] = simclr_metrics_reordered
     results["LinearEvaluation"] = callbacks[3].metrics
@@ -284,7 +290,7 @@ def save_feature_dataset_and_model(model, dataset, device, path, name):
     trainset = FeatureDataset(model, dataset.full_train_dataset, device)
     testset = FeatureDataset(model, dataset.test_dataset, device)
 
-    path = os.path.join(path + os.path.sep + f"{name}.pth")
+    path = os.path.join(path + f"{name}.pth")
     torch.save({'trainset': trainset,
                 'testset': testset,
                 'model': model.encoder.state_dict()}, path)
