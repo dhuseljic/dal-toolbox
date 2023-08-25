@@ -22,7 +22,7 @@ from dal_toolbox.models.deterministic import simclr
 from dal_toolbox.models.deterministic.simclr import InfoNCELoss, LinearEvaluationAccuracy
 from dal_toolbox.models.utils.callbacks import MetricHistory
 from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
-from dal_toolbox.utils import is_running_on_slurm
+from dal_toolbox.utils import is_running_on_slurm, seed_everything
 
 
 def build_ssl(name, args):
@@ -155,7 +155,7 @@ def main(args):
         device = torch.device("cpu")
 
     # To be reproducible
-    L.seed_everything(args.random_seed)
+    seed_everything(args.random_seed)
 
     # Create a Data Module
     data = build_contrastive_dataset(args)
@@ -185,6 +185,7 @@ def main(args):
     if args.le_model.callback.enabled:
         callbacks.append(LinearEvaluationCallback(device, args, plain_data, logger))
 
+    logging.getLogger("lightning.pytorch").setLevel(logging.ERROR)
     # Create a Trainer Module
     trainer = L.Trainer(
         default_root_dir=os.path.join(args.output_dir, "lightning", "SimCLR"),
@@ -197,7 +198,6 @@ def main(args):
     )
 
     logger.info("Training SSL")
-    logging.getLogger("lightning.pytorch").setLevel(logging.ERROR)
     trainer.fit(model, train_dataloader, val_dataloader)
 
     logger.info("Starting linear evaluation.")
@@ -222,12 +222,14 @@ def main(args):
                                   progressbar=is_running_on_slurm() is False,
                                   )
 
-    val_acc = lr.compute_accuracy('val')
+    final_train_acc = lr.compute_accuracy('train')
+    final_val_acc = lr.compute_accuracy('val')
+    final_test_acc = lr.compute_accuracy('test')
     logger.info(f"Epoch {trainer.current_epoch} - "
                 f"Linear evaluation accuracy: "
-                f"Train : {lr.compute_accuracy():3f}, "
-                f"Validation: {val_acc:3f}, "
-                f"Test: {lr.compute_accuracy('test'):3f}")
+                f"Train : {final_train_acc:3f}, "
+                f"Validation: {final_val_acc:3f}, "
+                f"Test: {final_test_acc:3f}")
 
     results = {}
     simclr_metrics: list = callbacks[2].metrics
@@ -249,6 +251,9 @@ def main(args):
 
     results["SimCLR"] = simclr_metrics_reordered
     results["LinearEvaluation"] = callbacks[3].metrics
+    results["FinalLinearEvaluation"] = {"final_train_acc": final_train_acc,
+                                        "final_val_acc": final_val_acc,
+                                        "final_test_acc": final_test_acc}
 
     file_name = os.path.join(args.output_dir, 'results.json')
     with open(file_name, 'w', encoding='utf-8') as f:
@@ -256,7 +261,7 @@ def main(args):
     logger.info(f"Saved results under {file_name}")
 
     file_name = save_feature_dataset_and_model(model, plain_data, device, path=args.output_dir,
-                                               name=f"{args.ssl_model.encoder}_{args.dataset.name}_{val_acc:.3f}")
+                                               name=f"{args.ssl_model.encoder}_{args.dataset.name}_{final_val_acc:.3f}")
     logger.info(f"Saved model under {file_name}")
 
 
