@@ -80,7 +80,6 @@ class LinearEvaluationAccuracy:
                  weight_decay: float = 0.0,
                  momentum: float = 0.9,
                  epochs: int = 90,
-                 val_interval: int = 25,
                  output_dir: str = "",
                  checkpoint: bool = False,
                  progressbar: bool = False) -> None:
@@ -168,9 +167,10 @@ class LinearEvaluationAccuracy:
             max_epochs=epochs,
             enable_checkpointing=checkpoint,
             callbacks=callbacks,
-            check_val_every_n_epoch=val_interval,
+            check_val_every_n_epoch=10,
             enable_progress_bar=progressbar,
-            num_sanity_val_steps=0
+            num_sanity_val_steps=0,
+            enable_model_summary=False
         )
 
         self.trainer.fit(self.model, self.train_dataloader, self.val_dataloader)
@@ -185,18 +185,20 @@ class LinearEvaluationAccuracy:
             dataset: Which dataset to compute accuracy on. Can be either ``train``, ``val`` or ``test``.
         """
         if dataset == 'train':
-            return self.trainer.logged_metrics["train_acc"].float()
+            predictions = self.trainer.predict(self.model, self.train_dataloader,
+                                               ckpt_path='best' if self.checkpoint else None)
         elif dataset == 'val':
-            return self.trainer.logged_metrics["val_acc"].float()
+            predictions = self.trainer.predict(self.model, self.val_dataloader,
+                                               ckpt_path='best' if self.checkpoint else None)
         elif dataset == 'test':
             predictions = self.trainer.predict(self.model, self.test_dataloader,
                                                ckpt_path='best' if self.checkpoint else None)
-
-            logits = torch.cat([pred[0] for pred in predictions])
-            targets = torch.cat([pred[1] for pred in predictions])
-            return metrics.Accuracy()(logits, targets).item()
         else:
             raise NotImplementedError(f"Data split {dataset} is not implemented for compute().")
+
+        logits = torch.cat([pred[0] for pred in predictions])
+        targets = torch.cat([pred[1] for pred in predictions])
+        return metrics.Accuracy()(logits, targets).item()
 
 
     def save_features_and_model_state_dict(self, name: str = "model_features_dict", path: str = "") -> None:
@@ -269,7 +271,7 @@ class SimCLR(DeterministicModel):
 
     def on_train_epoch_end(self) -> None:
         if self.log_on_epoch_end:
-            log_str = "Current Performance-Metric-Values: "
+            log_str = f"Epoch {self.trainer.current_epoch} - SimCLR Performance-Metric-Values - "
             for metr, val in self.trainer.logged_metrics.items():
                 log_str += (metr + " : " + str(round(val.item(), 5)) + ", ")
             logging.info(log_str)
