@@ -14,8 +14,8 @@ cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/
 model=resnet18
 dataset=CIFAR100
 al_strat=margin
-n_init=1024
-acq_size=1024
+n_init=2048
+acq_size=2048
 n_acq=9
 random_seed=$SLURM_ARRAY_TASK_ID
 init_pool_file=/mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/initial_pools/${dataset}/random_${n_init}_seed${random_seed}.json
