@@ -267,18 +267,18 @@ def build_al_strategy(name, args, num_classes=None, train_features=None, results
         S = kernels(X=train_features, Y=train_features, metric=args.al_strategy.kernel.name, gamma=gamma)
 
         if isinstance(args.al_strategy.alpha, str):
-            S_cpy = S.copy()
-            np.fill_diagonal(S_cpy, np.nan)  # Filter out self-similarity
+            np.fill_diagonal(S, np.nan)  # Filter out self-similarity
             if args.al_strategy.alpha == "median":
-                alpha = np.nanmedian(S_cpy)
+                alpha = np.nanmedian(S)
             elif args.al_strategy.alpha == "mean":
-                alpha = np.nanmean(S_cpy)
+                alpha = np.nanmean(S)
             elif "quantile" in args.al_strategy.alpha:
                 q = float(args.al_strategy.alpha.split("_")[1])
-                alpha = np.nanquantile(S_cpy, q=q)
+                alpha = np.nanquantile(S, q=q)
             else:
                 raise NotImplementedError(f"Alpha strategy {args.al_strategy.alpha} is not implemented")
             results["alpha"] = alpha
+            np.fill_diagonal(S, 1.0)  # Fill it back in
         else:
             alpha = args.al_strategy.alpha
         print(f"Using alpha = {alpha}")
