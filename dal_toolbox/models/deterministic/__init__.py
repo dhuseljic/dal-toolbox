@@ -7,6 +7,7 @@ from . import roberta
 from . import linear
 
 from . import resnet
+from . import spectral_resnet
 from . import wide_resnet
 
 from . import train

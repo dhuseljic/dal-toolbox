@@ -2,19 +2,35 @@ import warnings
 
 import numpy as np
 import torch
+import torchvision
 from torch.utils.data import Dataset, DataLoader
 
+from dal_toolbox.datasets.base import BaseTransforms
 from dal_toolbox.datasets.base import BaseData
 from dal_toolbox.models.utils.base import BaseModule
 
 
-class ContrastiveTransformations:
+class RepeatTransformations:
     def __init__(self, base_transforms, n_views=2):
         self.base_transforms = base_transforms
         self.n_views = n_views
 
     def __call__(self, x):
         return [self.base_transforms(x) for i in range(self.n_views)]
+
+
+class PlainTransforms(BaseTransforms):
+    @property
+    def train_transform(self):
+        return torchvision.transforms.Compose([torchvision.transforms.ToTensor(), ])
+
+    @property
+    def query_transform(self):
+        return torchvision.transforms.Compose([torchvision.transforms.ToTensor(), ])
+
+    @property
+    def eval_transform(self):
+        return torchvision.transforms.Compose([torchvision.transforms.ToTensor(), ])
 
 
 class FeatureDatasetWrapper(BaseData):
@@ -89,7 +105,7 @@ class FeatureDataset(Dataset):
             device: The ``torch.device``, with which the features are extracted
         """
         dataloader = DataLoader(dataset, batch_size=512, num_workers=4)
-        features, labels = model.get_representations(dataloader, device, return_labels=True)
+        features, labels = model.get_representations(dataloader, device=device, return_labels=True)
         self.features = features.detach()
         self.labels = labels
 

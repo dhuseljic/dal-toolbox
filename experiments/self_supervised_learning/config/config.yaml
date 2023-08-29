@@ -18,7 +18,6 @@ le_model:
 dataset_path: ./data/
 random_seed: 42
 ssl_val_interval: 5
-le_val_interval: 25
 n_cpus: 16
 
 # Define output dir

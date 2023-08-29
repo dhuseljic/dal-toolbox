@@ -5,21 +5,7 @@ import torchvision
 
 from .base import BaseData, BaseTransforms
 from .corruptions import GaussianNoise
-from .utils import ContrastiveTransformations
-
-
-class PlainTransforms(BaseTransforms):
-    @property
-    def train_transform(self):
-        return torchvision.transforms.Compose([torchvision.transforms.ToTensor(), ])
-
-    @property
-    def query_transform(self):
-        return torchvision.transforms.Compose([torchvision.transforms.ToTensor(), ])
-
-    @property
-    def eval_transform(self):
-        return torchvision.transforms.Compose([torchvision.transforms.ToTensor(), ])
+from .utils import RepeatTransformations, PlainTransforms
 
 
 class CIFAR10Transforms(Enum):
@@ -128,7 +114,7 @@ class CIFAR10C(CIFAR10):
 
 
 class CIFAR10ContrastiveTransforms(CIFAR10StandardTransforms):
-    def __init__(self, color_distortion_strength: float = 1.0):
+    def __init__(self, color_distortion_strength: float):
         super().__init__()
         self._s = color_distortion_strength
 
@@ -145,7 +131,7 @@ class CIFAR10ContrastiveTransforms(CIFAR10StandardTransforms):
             torchvision.transforms.ToTensor(),
             # transforms.Normalize(self.mean, self.std),  # TODO (dhuseljic) Discuss if this should be used
         ])
-        return ContrastiveTransformations(transform)
+        return RepeatTransformations(transform)
 
     @property
     def eval_transform(self):
@@ -159,8 +145,8 @@ class CIFAR10Contrastive(CIFAR10):
     This means that the transforms are repeated twice for each image, resulting in two views for each input image.
     """
 
-    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
-        super().__init__(dataset_path, CIFAR10ContrastiveTransforms(), val_split, seed)
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None, cds=0.5) -> None:
+        super().__init__(dataset_path, CIFAR10ContrastiveTransforms(color_distortion_strength=cds), val_split, seed)
 
 
 class CIFAR100Transforms(Enum):
@@ -183,6 +169,44 @@ class CIFAR100StandardTransforms(BaseTransforms):
             torchvision.transforms.Normalize(self.mean, self.std)
         ])
         return transform
+
+    @property
+    def eval_transform(self):
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std)
+        ])
+        return transform
+
+    @property
+    def query_transform(self):
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std)
+        ])
+        return transform
+
+
+# TODO (ynagel) These are currently the same as for CIFAR10. There might be better settings.
+class CIFAR100ContrastiveTransforms(CIFAR100StandardTransforms):
+    def __init__(self, color_distortion_strength: float):
+        super().__init__()
+        self._s = color_distortion_strength
+
+    @property
+    def train_transform(self):
+        color_jitter = torchvision.transforms.ColorJitter(0.8 * self._s, 0.8 * self._s, 0.8 * self._s, 0.2 * self._s)
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.RandomResizedCrop(size=32),
+            torchvision.transforms.RandomHorizontalFlip(p=0.5),
+            torchvision.transforms.RandomApply([color_jitter], p=0.8),
+            torchvision.transforms.RandomGrayscale(p=0.2),
+            # GaussianBlur not used in original paper, however, other papers assign it importance
+            torchvision.transforms.RandomApply([torchvision.transforms.GaussianBlur(kernel_size=3)], p=0.5),
+            torchvision.transforms.ToTensor(),
+            # transforms.Normalize(self.mean, self.std),  # TODO (dhuseljic) Discuss if this should be used
+        ])
+        return RepeatTransformations(transform)
 
     @property
     def eval_transform(self):
@@ -237,6 +261,22 @@ class CIFAR100(BaseData):
     @property
     def test_dataset(self):
         return torchvision.datasets.CIFAR100(self.dataset_path, train=False, transform=self.eval_transform)
+
+
+class CIFAR100Contrastive(CIFAR100):
+    """
+    Contrastive version of CIFAR100.
+
+    This means that the transforms are repeated twice for each image, resulting in two views for each input image.
+    """
+
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None, cds=1.0) -> None:
+        super().__init__(dataset_path, CIFAR10ContrastiveTransforms(color_distortion_strength=cds), val_split, seed)
+
+
+class CIFAR100Plain(CIFAR100):
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
+        super().__init__(dataset_path, PlainTransforms(), val_split, seed)
 
 
 def build_cifar10(split, ds_path, mean=(0.4914, 0.4822, 0.4465), std=(0.247, 0.243, 0.262), return_info=False):
