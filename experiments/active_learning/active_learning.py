@@ -66,7 +66,8 @@ def main(args):
 
     # Setup Query
     logger.info('Building query strategy: %s', args.al_strategy.name)
-    al_strategy = build_al_strategy(args.al_strategy.name, args, num_classes=num_classes, train_features=features)
+    al_strategy = build_al_strategy(args.al_strategy.name, args, num_classes=num_classes, train_features=features,
+                                    results=results)
 
     # Setup Model
     logger.info('Building model: %s', args.model.name)
@@ -75,6 +76,7 @@ def main(args):
         accelerator = "cpu"
         if args.model.kernel.gamma == "calculate":
             args.model.kernel.gamma = _calculate_mean_gamma(features)
+            results["gamma"] = args.model.kernel.gamma
             logger.info(f"Calculated gamma as {args.model.kernel.gamma}.")
     else:
         accelerator = "auto"
@@ -242,7 +244,7 @@ def build_model(args, num_classes, feature_size=None):
     return model
 
 
-def build_al_strategy(name, args, num_classes=None, train_features=None):
+def build_al_strategy(name, args, num_classes=None, train_features=None, results=None):
     subset_size = None if args.al_strategy.subset_size == "None" else args.al_strategy.subset_size
 
     if name == "random":
@@ -276,6 +278,7 @@ def build_al_strategy(name, args, num_classes=None, train_features=None):
                 alpha = np.nanquantile(S_cpy, q=q)
             else:
                 raise NotImplementedError(f"Alpha strategy {args.al_strategy.alpha} is not implemented")
+            results["alpha"] = alpha
         else:
             alpha = args.al_strategy.alpha
         print(f"Using alpha = {alpha}")
