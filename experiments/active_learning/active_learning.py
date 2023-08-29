@@ -7,6 +7,7 @@ import time
 
 import hydra
 import lightning as L
+import numpy as np
 import torch
 from omegaconf import OmegaConf
 from sklearn.preprocessing import StandardScaler
@@ -167,7 +168,7 @@ def main(args):
             'ace': metrics.AdaptiveCalibrationError()(validation_logits, validation_targets).item(),
         }
         logger.info('Validation stats: %s', validation_stats)
-        
+
         test_predictions = trainer.predict(model, al_datamodule.test_dataloader())
         test_logits = torch.cat([pred[0] for pred in test_predictions])
         test_targets = torch.cat([pred[1] for pred in test_predictions])
@@ -261,9 +262,24 @@ def build_al_strategy(name, args, num_classes=None, train_features=None):
             gamma = _calculate_mean_gamma(train_features)
         else:
             gamma = args.al_strategy.kernel.gamma
-
         S = kernels(X=train_features, Y=train_features, metric=args.al_strategy.kernel.name, gamma=gamma)
-        alpha = args.al_strategy.alpha
+
+        if isinstance(args.al_strategy.alpha, str):
+            S_cpy = S.copy()
+            np.fill_diagonal(S_cpy, np.nan)  # Filter out self-similarity
+            if args.al_strategy.alpha == "median":
+                alpha = np.nanmedian(S_cpy)
+            elif args.al_strategy.alpha == "mean":
+                alpha = np.nanmean(S_cpy)
+            elif "quantile" in args.al_strategy.alpha:
+                q = float(args.al_strategy.alpha.split("_")[1])
+                alpha = np.nanquantile(S_cpy, q=q)
+            else:
+                raise NotImplementedError(f"Alpha strategy {args.al_strategy.alpha} is not implemented")
+        else:
+            alpha = args.al_strategy.alpha
+        print(f"Using alpha = {alpha}")
+
         if name == "xpal":
             query = xpal.XPAL(num_classes, S, subset_size=subset_size, alpha_c=alpha, alpha_x=alpha)
         elif name == "xpalclust":
