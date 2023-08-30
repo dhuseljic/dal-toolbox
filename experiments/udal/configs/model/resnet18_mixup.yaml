@@ -2,7 +2,7 @@ name: resnet18_mixup
 n_epochs: 200
 train_batch_size: 32
 predict_batch_size: 256
-mixup_alpha: 0.4
+mixup_alpha: 0.2
 optimizer:
   lr: 0.01
   weight_decay: 0.005
