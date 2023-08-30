@@ -42,7 +42,7 @@ srun python -u active_learning.py \
 	al_cycle.n_init=$n_init \
 	al_cycle.acq_size=$acq_size \
 	al_cycle.n_acq=$n_acq \
-	al_cycle.init_strategy=$al_strat \
+	al_cycle.init_strategy=$init_strategy \
 	random_seed=$random_seed \
 	output_dir=$output_dir \
 	precomputed_features=True \
