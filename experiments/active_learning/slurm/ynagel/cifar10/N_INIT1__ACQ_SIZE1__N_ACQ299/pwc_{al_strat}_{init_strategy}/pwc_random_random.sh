@@ -13,7 +13,7 @@ cd ~/dal-toolbox/experiments/active_learning/ || exit
 
 model=pwc
 model_kernel_name=rbf
-model_kernel_gamma=0.05
+model_kernel_gamma=calculate
 model_train_batch_size=10
 
 dataset=CIFAR10
