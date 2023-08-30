@@ -277,7 +277,7 @@ def build_al_strategy(name, args, num_classes=None, train_features=None, results
                 alpha = np.nanquantile(S, q=q)
             else:
                 raise NotImplementedError(f"Alpha strategy {args.al_strategy.alpha} is not implemented")
-            results["alpha"] = alpha
+            results["alpha"] = float(alpha)
             np.fill_diagonal(S, 1.0)  # Fill it back in
         else:
             alpha = args.al_strategy.alpha
