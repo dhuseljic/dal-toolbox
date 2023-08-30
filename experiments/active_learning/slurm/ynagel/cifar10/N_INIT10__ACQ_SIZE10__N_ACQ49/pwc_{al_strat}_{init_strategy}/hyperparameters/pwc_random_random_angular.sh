@@ -32,7 +32,7 @@ output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/xpal_hparams/${dataset}/${m
 srun python -u active_learning.py \
 	model=$model \
 	model.kernel.name=$model_kernel_name  \
-	model.train_batch_size$model_train_batch_size \
+	model.train_batch_size=$model_train_batch_size \
 	dataset=$dataset \
 	dataset_path=/mnt/stud/home/ynagel/data \
 	al_strategy=$al_strat \

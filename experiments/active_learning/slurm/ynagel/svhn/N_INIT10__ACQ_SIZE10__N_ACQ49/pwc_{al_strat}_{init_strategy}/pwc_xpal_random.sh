@@ -35,7 +35,7 @@ srun python -u active_learning.py \
 	model=$model \
 	model.kernel.name=$model_kernel_name \
 	model.kernel.gamma=$model_kernel_gamma \
-	model.train_batch_size$model_train_batch_size \
+	model.train_batch_size=$model_train_batch_size \
 	dataset=$dataset \
 	dataset_path=/mnt/stud/home/ynagel/data \
 	al_strategy=$al_strat \
