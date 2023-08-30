@@ -11,7 +11,7 @@ date;hostname;pwd
 source /mnt/stud/home/ynagel/dal-toolbox/venv/bin/activate
 cd ~/dal-toolbox/experiments/active_learning/ || exit
 
-model=linear
+model=pwc
 model_kernel_name=rbf
 model_kernel_gamma=0.05
 model_train_batch_size=10
