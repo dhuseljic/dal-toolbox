@@ -97,7 +97,8 @@ def main(args):
     if args.al_cycle.init_strategy == "random":
         al_datamodule.random_init(n_samples=args.al_cycle.n_init)
     else:
-        init_al_strategy = build_al_strategy(args.al_cycle.init_strategy, args, num_classes, train_features=features)
+        init_al_strategy = build_al_strategy(args.al_cycle.init_strategy, args, num_classes, train_features=features,
+                                             results=results)
         indices = init_al_strategy.query(
             model=model,
             al_datamodule=al_datamodule,
