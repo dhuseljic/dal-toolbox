@@ -90,17 +90,16 @@ class SVHNPlain(SVHN):
 
 
 class SVHNContrastiveTransforms(SVHNStandardTransforms):
-    def __init__(self, color_distortion_strength: float):
+    def __init__(self, color_distortion_strength: float, rotation_probability: float):
         super().__init__()
         self._s = color_distortion_strength
+        self.rotation_prob = rotation_probability
 
-    # TODO (ynagel) These are currently the ones used with CIFAR10, might need changes
     @property
     def train_transform(self):
         color_jitter = torchvision.transforms.ColorJitter(0.8 * self._s, 0.8 * self._s, 0.8 * self._s, 0.2 * self._s)
         transform = torchvision.transforms.Compose([
-            torchvision.transforms.RandomResizedCrop(size=32),
-            torchvision.transforms.RandomHorizontalFlip(p=0.5),
+            torchvision.transforms.RandomApply(torchvision.transforms.RandomRotation(30), self.rotation_prob),
             torchvision.transforms.RandomApply([color_jitter], p=0.8),
             torchvision.transforms.RandomGrayscale(p=0.2),
             # GaussianBlur not used in original paper, however, other papers assign it importance
@@ -122,8 +121,10 @@ class SVHNContrastive(SVHN):
     This means that the transforms are repeated twice for each image, resulting in two views for each input image.
     """
 
-    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None, cds=0.5) -> None:
-        super().__init__(dataset_path, SVHNContrastiveTransforms(color_distortion_strength=cds), val_split, seed)
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None, cds=0.5, r_prob=0.33) -> None:
+        super().__init__(dataset_path,
+                         SVHNContrastiveTransforms(color_distortion_strength=cds, rotation_probability=r_prob),
+                         val_split, seed)
 
 
 def build_svhn(split, ds_path, mean=(0.4377, 0.4438, 0.4728), std=(0.1980, 0.2010, 0.1970), return_info=False):

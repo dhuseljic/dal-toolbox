@@ -1,2 +1,3 @@
 name: SVHN
 color_distortion_strength: 0.5
+rotation_probability: 0.33

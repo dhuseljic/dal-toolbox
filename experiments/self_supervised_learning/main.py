@@ -284,7 +284,7 @@ def build_contrastive_dataset(args):
     elif args.dataset.name == 'CIFAR100':
         data = datasets.CIFAR100Contrastive(args.dataset_path, args.dataset.color_distortion_strength)
     elif args.dataset.name == 'SVHN':
-        data = datasets.SVHNContrastive(args.dataset_path, args.dataset.color_distortion_strength)
+        data = datasets.SVHNContrastive(args.dataset_path, args.dataset.color_distortion_strength, args.dataset.rotation_probability)
     else:
         sys.exit(f"Dataset {args.dataset.name} not implemented.")
 
