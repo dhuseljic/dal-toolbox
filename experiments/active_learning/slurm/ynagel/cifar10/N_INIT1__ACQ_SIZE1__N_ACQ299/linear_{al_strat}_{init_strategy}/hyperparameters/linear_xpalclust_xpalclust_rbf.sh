@@ -25,7 +25,7 @@ model_num_epochs=100
 dataset=CIFAR10
 
 al_strat=xpalclust
-init_strategy=random
+init_strategy=xpalclust
 al_strat_alpha=${alpha_array[$((SLURM_ARRAY_TASK_ID % 18)) + 1]}
 al_strat_kernel_name=rbf
 al_strat_kernel_gamma=calculate
