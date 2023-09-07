@@ -16,10 +16,11 @@ from dal_toolbox import datasets
 from dal_toolbox import metrics
 from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, typiclust, xpal, xpalclust, \
-    randomclust
+    randomclust, prob_cover, eer
 # noinspection PyUnresolvedReferences
 from dal_toolbox.datasets.utils import FeatureDataset, FeatureDatasetWrapper
-from dal_toolbox.models import deterministic
+from dal_toolbox.metrics import ensemble_log_softmax
+from dal_toolbox.models import deterministic, mc_dropout
 from dal_toolbox.models.parzen_window_classifier import PWCLightning
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything, is_running_on_slurm, kernels, _calculate_mean_gamma
@@ -52,12 +53,14 @@ def main(args):
                 scaler.transform(data.val_dataset.dataset.features)).to(dtype=torch.float32)
             data.test_dataset.features = torch.from_numpy(scaler.transform(data.test_dataset.features)).to(
                 dtype=torch.float32)
+
+        features = torch.stack([batch[0] for batch in data.train_dataset])
     else:
         data = build_dataset(args)
         feature_size = None
+        features = None  # This takes up too much memory otherwise
 
     trainset = data.train_dataset
-    features = torch.stack([batch[0] for batch in trainset])
     queryset = data.query_dataset
     valset = data.val_dataset
     testset = data.test_dataset
@@ -79,6 +82,7 @@ def main(args):
             results["gamma"] = args.model.kernel.gamma
             logger.info(f"Calculated gamma as {args.model.kernel.gamma}.")
     else:
+        # accelerator = "cpu"
         accelerator = "auto"
 
     model = build_model(args, num_classes=num_classes, feature_size=feature_size)
@@ -231,6 +235,18 @@ def build_model(args, num_classes, feature_size=None):
             model = deterministic.resnet.ResNet18(num_classes=num_classes)
             optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
+        elif args.model.name == "resnet18_mcdropout":
+            model = mc_dropout.resnet.DropoutResNet18(num_classes=num_classes, n_passes=args.model.n_passes,
+                                                      dropout_rate=args.model.dropout_rate)  # TODO (ynagel) These should be adjustable
+            optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
+            lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
+
+            model = mc_dropout.MCDropoutModel(
+                model, optimizer=optimizer, lr_scheduler=lr_scheduler,
+                train_metrics={'train_acc': metrics.Accuracy()},
+                val_metrics={'val_acc': metrics.Accuracy()}
+            )
+            return model
 
     if model is None:
         sys.exit(f"Model {args.model.name} is not implemented, "
@@ -288,6 +304,18 @@ def build_al_strategy(name, args, num_classes=None, train_features=None, results
             query = xpal.XPAL(num_classes, S, subset_size=subset_size, alpha_c=alpha, alpha_x=alpha)
         elif name == "xpalclust":
             query = xpalclust.XPALClust(num_classes, S, subset_size=subset_size, alpha_c=alpha, alpha_x=alpha)
+        S = kernels(X=train_features, Y=train_features, metric=args.al_strategy.kernel.name, gamma=gamma)
+        alpha = args.al_strategy.alpha
+        query = xpal.XPAL(num_classes, S, subset_size=subset_size, alpha_c=alpha, alpha_x=alpha)
+    elif name == "probcover":
+
+        delta = args.al_strategy.delta
+        if delta is None:
+            delta = prob_cover.estimate_delta(train_features, num_classes, args.al_strategy.alpha)
+            print(f"Using calculated delta={delta:.5f}")
+        query = prob_cover.ProbCover(subset_size=subset_size, delta=delta)
+    elif name == "eer":
+        query = eer.MELL(subset_size=subset_size)
     else:
         raise NotImplementedError(f"Active learning strategy {name} is not implemented!")
     return query

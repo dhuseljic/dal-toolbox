@@ -571,6 +571,8 @@ def kernels(X, Y, metric, **kwargs):
     elif metric == 'categorical':
         gamma = kwargs.pop('gamma')
         return np.exp(-gamma * cdist(XA=X, XB=Y, metric='hamming'))
+    else:
+        raise NotImplementedError(f"Kernel metric \"{metric}\" is not implemented.")
 
 
 def _calculate_mean_gamma(data, delta=(np.sqrt(2) * 1e-6)):
