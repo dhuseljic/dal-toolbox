@@ -267,11 +267,11 @@ def main(args):
 
 def build_plain_dataset(args):
     if args.dataset.name == 'CIFAR10':
-        data = datasets.CIFAR10Plain(args.dataset_path)
+        data = datasets.CIFAR10Plain(args.dataset_path, seed=args.random_seed)
     elif args.dataset.name == 'CIFAR100':
-        data = datasets.CIFAR100Plain(args.dataset_path)
+        data = datasets.CIFAR100Plain(args.dataset_path, seed=args.random_seed)
     elif args.dataset.name == 'SVHN':
-        data = datasets.SVHNPlain(args.dataset_path)
+        data = datasets.SVHNPlain(args.dataset_path, seed=args.random_seed)
     else:
         sys.exit(f"Dataset {args.dataset.name} not implemented.")
 
@@ -280,11 +280,14 @@ def build_plain_dataset(args):
 
 def build_contrastive_dataset(args):
     if args.dataset.name == 'CIFAR10':
-        data = datasets.CIFAR10Contrastive(args.dataset_path, args.dataset.color_distortion_strength)
+        data = datasets.CIFAR10Contrastive(args.dataset_path, cds=args.dataset.color_distortion_strength,
+                                           seed=args.random_seed)
     elif args.dataset.name == 'CIFAR100':
-        data = datasets.CIFAR100Contrastive(args.dataset_path, args.dataset.color_distortion_strength)
+        data = datasets.CIFAR100Contrastive(args.dataset_path, cds=args.dataset.color_distortion_strength,
+                                            seed=args.random_seed)
     elif args.dataset.name == 'SVHN':
-        data = datasets.SVHNContrastive(args.dataset_path, args.dataset.color_distortion_strength, args.dataset.rotation_probability)
+        data = datasets.SVHNContrastive(args.dataset_path, cds=args.dataset.color_distortion_strength,
+                                        r_prob=args.dataset.rotation_probability, seed=args.random_seed)
     else:
         sys.exit(f"Dataset {args.dataset.name} not implemented.")
 
