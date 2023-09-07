@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
-#SBATCH --array=1-10%10
+#SBATCH --array=1-10%2
 #SBATCH --job-name=udal
 #SBATCH --output=/mnt/stud/home/ynagel/logs/udal/active_learning/%A_%a__%x.log
 date;hostname;pwd
