@@ -5,6 +5,7 @@ import hashlib
 import os
 import random
 import time
+import warnings
 from collections import defaultdict, deque, OrderedDict
 from typing import List, Optional, Tuple
 
@@ -29,6 +30,7 @@ def seed_everything(seed: int):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
+
 def setup_rng(seed=None):
     """Returns a numpy random number generator. """
     if seed is None:
@@ -36,6 +38,7 @@ def setup_rng(seed=None):
     else:
         rng = np.random.RandomState(seed)
     return rng
+
 
 def write_scalar_dict(writer, dict, prefix, global_step=None):
     for key, val in dict.items():
@@ -46,7 +49,7 @@ def unnormalize(img_normalized, mean=(0.5, 0.5, 0.5), std=(0.2, 0.2, 0.2)):
     device = img_normalized.device
     mean = torch.Tensor(mean).view(-1, 1, 1).to(device)
     std = torch.Tensor(std).view(-1, 1, 1).to(device)
-    return img_normalized*std + mean
+    return img_normalized * std + mean
 
 
 def plot_grids(train_ds, test_ds_id, test_ds_ood):
@@ -460,11 +463,11 @@ def reduce_across_processes(val):
 
 
 def set_weight_decay(
-    model: torch.nn.Module,
-    weight_decay: float,
-    norm_weight_decay: Optional[float] = None,
-    norm_classes: Optional[List[type]] = None,
-    custom_keys_weight_decay: Optional[List[Tuple[str, float]]] = None,
+        model: torch.nn.Module,
+        weight_decay: float,
+        norm_weight_decay: Optional[float] = None,
+        norm_classes: Optional[List[type]] = None,
+        custom_keys_weight_decay: Optional[List[Tuple[str, float]]] = None,
 ):
     if not norm_classes:
         norm_classes = [
@@ -576,14 +579,19 @@ def kernels(X, Y, metric, **kwargs):
 
 
 def _calculate_mean_gamma(data, delta=(np.sqrt(2) * 1e-6)):
-    N = data.shape[0]
+    """
+    From "The Mean and Median Criteria for Kernel Bandwidth Selection for Support Vector Data Description"
+    https://ieeexplore.ieee.org/document/8215749
+    """
+    n_samples = data.shape[0]
     n_features = data.shape[1]
     variance = torch.var(data, dim=0).numpy()
 
-    denominator = 2 * N * np.sum(variance)
-    numerator = (N - 1) * np.log((N - 1) / delta ** 2)
+    denominator = 2 * n_samples * np.sum(variance)
+    numerator = (n_samples - 1) * np.log((n_samples - 1) / delta ** 2)
     if denominator <= 0:
         gamma = 1 / n_features
+        warnings.warn("The variance of the provided data is 0.")
     else:
-        gamma = 0.5 * numerator / denominator
+        gamma = 0.5 * numerator / denominator  # Combined from gamma = 1/2 s^2. We can remove the squareroot and simply divide in half
     return float(gamma)
