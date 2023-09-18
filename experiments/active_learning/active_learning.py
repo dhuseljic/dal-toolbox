@@ -304,11 +304,7 @@ def build_al_strategy(name, args, num_classes=None, train_features=None, results
             query = xpal.XPAL(num_classes, S, subset_size=subset_size, alpha_c=alpha, alpha_x=alpha)
         elif name == "xpalclust":
             query = xpalclust.XPALClust(num_classes, S, subset_size=subset_size, alpha_c=alpha, alpha_x=alpha)
-        S = kernels(X=train_features, Y=train_features, metric=args.al_strategy.kernel.name, gamma=gamma)
-        alpha = args.al_strategy.alpha
-        query = xpal.XPAL(num_classes, S, subset_size=subset_size, alpha_c=alpha, alpha_x=alpha)
     elif name == "probcover":
-
         delta = args.al_strategy.delta
         if delta is None:
             delta = prob_cover.estimate_delta(train_features, num_classes, args.al_strategy.alpha)
