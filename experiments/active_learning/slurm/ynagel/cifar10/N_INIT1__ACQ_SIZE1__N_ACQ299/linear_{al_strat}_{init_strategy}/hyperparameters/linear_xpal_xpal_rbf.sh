@@ -13,7 +13,7 @@ source /mnt/stud/home/ynagel/dal-toolbox/venv/bin/activate
 cd ~/dal-toolbox/experiments/active_learning/ || exit
 
 random_seed_array=(0 1 2 3 4)
-alpha_array=(1e-1 1e-3 1e-5 1e-7 1e-9 1e-11 1e-13 1e-15 1e-17 1e-19 mean quantile_0.1 quantile_0.25 quantile_0.33 median quantile_0.66 quantile_0.75 quantile_0.9)
+alpha_array=(1e-1 1e-3 1e-5 1e-7 1e-9 1e-11 1e-13 1e-15 1e-17 0.0 mean quantile_0.1 quantile_0.25 quantile_0.33 median quantile_0.66 quantile_0.75 quantile_0.9)
 
 random_seed=${random_seed_array[$((SLURM_ARRAY_TASK_ID / 18 % 5)) + 1]}
 
@@ -56,4 +56,4 @@ srun python -u active_learning.py \
 	random_seed=$random_seed \
 	output_dir=$output_dir \
 	precomputed_features=True \
-	precomputed_features_dir=/mnt/stud/home/ynagel/data/wide_resnet_28_10_CIFAR10_0.912.pth
+	precomputed_features_dir=/mnt/stud/home/ynagel/data/wide_resnet_28_10_CIFAR10_0.937.pth
