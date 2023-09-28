@@ -22,16 +22,16 @@ dataset=CIFAR10
 
 al_strat=xpal
 init_strategy=xpal
-al_strat_alpha=quantile_0.1
+al_strat_alpha=1e-3
 al_strat_kernel_name=rbf
 al_strat_kernel_gamma=calculate
 subset_size=10000
-n_init=1
-acq_size=1
-n_acq=299
+n_init=10
+acq_size=10
+n_acq=49
 
 random_seed=$SLURM_ARRAY_TASK_ID
-output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines/${dataset}/${model}/${al_strat}_${init_strategy}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/
+output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines/${dataset}/${model}/${al_strat}_${init_strategy}_default/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/
 
 srun python -u active_learning.py \
 	model=$model \
