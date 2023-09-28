@@ -1,10 +1,10 @@
 #!/usr/bin/zsh
-#SBATCH --mem=48gb
+#SBATCH --mem=24gb
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=6
 #SBATCH --partition=main
-#SBATCH --nodelist=cpu-epyc-[1-8]
-#SBATCH --array=0-90
+#SBATCH --nodelist=cpu-epyc-1
+#SBATCH --array=0-144
 #SBATCH --job-name=xpal_hparams
 #SBATCH --output=/mnt/stud/home/ynagel/logs/xpal_hparams/%A_%a__%x.log
 
@@ -13,9 +13,9 @@ source /mnt/stud/home/ynagel/dal-toolbox/venv/bin/activate
 cd ~/dal-toolbox/experiments/active_learning/ || exit
 
 random_seed_array=(0 1 2 3 4)
-alpha_array=(1e-1 1e-3 1e-5 1e-7 1e-9 1e-11 1e-13 1e-15 1e-17 0.0 mean quantile_0.1 quantile_0.25 quantile_0.33 median quantile_0.66 quantile_0.75 quantile_0.9)
+alpha_array=(1e-1 1e-2 1e-3 1e-4 1e-5 1e-6 1e-7 1e-8 1e-9 1e-10 1e-11 1e-12 1e-13 1e-14 1e-15 1e-16 1e-17 1e-18 1e-19 1e-20 0.0 mean quantile_0.1 quantile_0.25 quantile_0.33 median quantile_0.66 quantile_0.75 quantile_0.9)
 
-random_seed=${random_seed_array[$((SLURM_ARRAY_TASK_ID / 18 % 5)) + 1]}
+random_seed=${random_seed_array[$((SLURM_ARRAY_TASK_ID / 29 % 5)) + 1]}
 
 model=pwc
 model_kernel_name=rbf
@@ -25,7 +25,7 @@ dataset=CIFAR10
 
 al_strat=xpalclust
 init_strategy=random
-al_strat_alpha=${alpha_array[$((SLURM_ARRAY_TASK_ID % 18)) + 1]}
+al_strat_alpha=${alpha_array[$((SLURM_ARRAY_TASK_ID % 29)) + 1]}
 al_strat_kernel_name=$model_kernel_name
 al_strat_kernel_gamma=$model_kernel_gamma
 subset_size=10000
