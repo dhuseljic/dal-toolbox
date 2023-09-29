@@ -99,7 +99,7 @@ class SVHNContrastiveTransforms(SVHNStandardTransforms):
     def train_transform(self):
         color_jitter = torchvision.transforms.ColorJitter(0.8 * self._s, 0.8 * self._s, 0.8 * self._s, 0.2 * self._s)
         transform = torchvision.transforms.Compose([
-            torchvision.transforms.RandomApply(torchvision.transforms.RandomRotation(30), self.rotation_prob),
+            torchvision.transforms.RandomApply([torchvision.transforms.RandomRotation(30)], self.rotation_prob),
             torchvision.transforms.RandomApply([color_jitter], p=0.8),
             torchvision.transforms.RandomGrayscale(p=0.2),
             # GaussianBlur not used in original paper, however, other papers assign it importance
