@@ -54,5 +54,28 @@ class LinearModel(nn.Module):
 
     @torch.inference_mode()
     def get_grad_representations(self, dataloader, device):
-        raise NotImplementedError("Gradient representations are not possible for linear model.")
+        self.eval()
+        self.to(device)
 
+        embedding = []
+        for batch in dataloader:
+            inputs = batch[0]
+            embedding_batch = torch.empty([len(inputs), self.in_dimension * self.num_classes])
+            logits = self(inputs.to(device)).cpu()
+            features = inputs.cpu()
+
+            probas = logits.softmax(-1)
+            max_indices = probas.argmax(-1)
+
+            for n in range(len(inputs)):
+                for c in range(self.num_classes):
+                    if c == max_indices[n]:
+                        embedding_batch[n, self.in_dimension * c: self.in_dimension * (c + 1)] = \
+                            features[n] * (1 - probas[n, c])
+                    else:
+                        embedding_batch[n, self.in_dimension * c: self.in_dimension * (c + 1)] = \
+                            features[n] * (-1 * probas[n, c])
+            embedding.append(embedding_batch)
+        # Concat all embeddings
+        embedding = torch.cat(embedding)
+        return embedding
