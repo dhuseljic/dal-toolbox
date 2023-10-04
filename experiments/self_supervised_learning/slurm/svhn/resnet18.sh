@@ -21,7 +21,7 @@ accumulate_array=(1 4)
 # Dataset
 dataset=SVHN
 color_distortion_strength=0.5
-rotation_probability=0.7
+rotation_probability=0.0
 
 # SIMCLR
 n_epochs=801

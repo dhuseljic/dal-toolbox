@@ -3,7 +3,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=6
 #SBATCH --partition=main
-#SBATCH --nodelist=cpu-epyc-1
+#SBATCH --nodelist=cpu-epyc-3
 #SBATCH --array=0-144
 #SBATCH --job-name=xpal_hparams
 #SBATCH --output=/mnt/stud/home/ynagel/logs/xpal_hparams/%A_%a__%x.log

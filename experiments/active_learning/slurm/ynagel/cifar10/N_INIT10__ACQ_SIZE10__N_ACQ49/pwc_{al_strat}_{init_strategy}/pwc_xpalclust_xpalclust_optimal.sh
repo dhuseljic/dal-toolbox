@@ -3,7 +3,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --partition=main
-#SBATCH --nodelist=cpu-epyc-2
+#SBATCH --nodelist=cpu-epyc-5
 #SBATCH --array=1-10
 #SBATCH --job-name=al_baselines
 #SBATCH --output=/mnt/stud/home/ynagel/logs/al_baselines/%A_%a__%x.log
@@ -21,7 +21,7 @@ dataset=CIFAR10
 
 al_strat=xpalclust
 init_strategy=xpalclust
-al_strat_alpha=TODO
+al_strat_alpha=1e-13
 al_strat_kernel_name=$model_kernel_name
 al_strat_kernel_gamma=$model_kernel_gamma
 subset_size=10000
