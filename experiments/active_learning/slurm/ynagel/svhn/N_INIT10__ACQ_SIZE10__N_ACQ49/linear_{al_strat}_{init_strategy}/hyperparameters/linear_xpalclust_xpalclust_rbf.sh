@@ -17,27 +17,31 @@ alpha_array=(1e-1 1e-2 1e-3 1e-4 1e-5 1e-6 1e-7 1e-8 1e-9 1e-10 1e-11 1e-12 1e-1
 
 random_seed=${random_seed_array[$((SLURM_ARRAY_TASK_ID / 29 % 5)) + 1]}
 
-model=pwc
-model_kernel_name=rbf
-model_kernel_gamma=calculate
+model=linear
+model_optimizer_lr=0.25
+model_optimizer_weight_decay=0.0
+model_train_batch_size=64
+model_num_epochs=100
 
 dataset=SVHN
 
-al_strat=xpal
-init_strategy=xpal
+al_strat=xpalclust
+init_strategy=xpalclust
 al_strat_alpha=${alpha_array[$((SLURM_ARRAY_TASK_ID % 29)) + 1]}
-al_strat_kernel_name=$model_kernel_name
-al_strat_kernel_gamma=$model_kernel_gamma
+al_strat_kernel_name=rbf
+al_strat_kernel_gamma=calculate
 subset_size=10000
 n_init=10
 acq_size=10
 n_acq=49
-output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/xpal_hparams/${dataset}/${model}/${al_strat}_${init_strategy}/${al_strat_alpha}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/${model_kernel_name}/${model_kernel_gamma}/seed${random_seed}/
+output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/xpal_hparams/${dataset}/${model}/${al_strat}_${init_strategy}/${al_strat_alpha}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/${al_strat_kernel_name}/${al_strat_kernel_gamma}/seed${random_seed}/
 
 srun python -u active_learning.py \
 	model=$model \
-	model.kernel.name=$model_kernel_name \
-	model.kernel.gamma=$model_kernel_gamma \
+	model.optimizer.lr=$model_optimizer_lr \
+	model.optimizer.weight_decay=$model_optimizer_weight_decay \
+	model.train_batch_size=$model_train_batch_size \
+	model.num_epochs=$model_num_epochs \
 	dataset=$dataset \
 	dataset_path=/mnt/stud/home/ynagel/data \
 	al_strategy=$al_strat \

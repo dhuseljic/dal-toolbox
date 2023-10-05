@@ -12,15 +12,14 @@ date;hostname;pwd
 source /mnt/stud/home/ynagel/dal-toolbox/venv/bin/activate
 cd ~/dal-toolbox/experiments/active_learning/ || exit
 
-model=linear
-model_optimizer_lr=0.25
-model_optimizer_weight_decay=0.0
-model_train_batch_size=64
-model_num_epochs=100
+model=pwc
+model_kernel_name=rbf
+model_kernel_gamma=calculate
+model_train_batch_size=10
 
 dataset=SVHN
 
-al_strat=random
+al_strat=badge
 init_strategy=random
 subset_size=10000
 n_init=1
@@ -32,10 +31,9 @@ output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines/${dataset}/${m
 
 srun python -u active_learning.py \
 	model=$model \
-	model.optimizer.lr=$model_optimizer_lr \
-	model.optimizer.weight_decay=$model_optimizer_weight_decay \
+	model.kernel.name=$model_kernel_name \
+	model.kernel.gamma=$model_kernel_gamma \
 	model.train_batch_size=$model_train_batch_size \
-	model.num_epochs=$model_num_epochs \
 	dataset=$dataset \
 	dataset_path=/mnt/stud/home/ynagel/data \
 	al_strategy=$al_strat \

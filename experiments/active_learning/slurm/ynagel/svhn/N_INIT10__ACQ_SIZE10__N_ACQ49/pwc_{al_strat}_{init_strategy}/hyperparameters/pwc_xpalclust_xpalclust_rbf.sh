@@ -23,8 +23,8 @@ model_kernel_gamma=calculate
 
 dataset=SVHN
 
-al_strat=xpal
-init_strategy=xpal
+al_strat=xpalclust
+init_strategy=xpalclust
 al_strat_alpha=${alpha_array[$((SLURM_ARRAY_TASK_ID % 29)) + 1]}
 al_strat_kernel_name=$model_kernel_name
 al_strat_kernel_gamma=$model_kernel_gamma

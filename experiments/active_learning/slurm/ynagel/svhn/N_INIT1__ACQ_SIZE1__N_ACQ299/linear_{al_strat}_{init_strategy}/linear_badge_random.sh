@@ -20,7 +20,7 @@ model_num_epochs=100
 
 dataset=SVHN
 
-al_strat=random
+al_strat=badge
 init_strategy=random
 subset_size=10000
 n_init=1

@@ -1,5 +1,5 @@
 #!/usr/bin/zsh
-#SBATCH --mem=24gb
+#SBATCH --mem=32gb
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=6
 #SBATCH --partition=main
@@ -29,9 +29,9 @@ al_strat_alpha=${alpha_array[$((SLURM_ARRAY_TASK_ID % 29)) + 1]}
 al_strat_kernel_name=$model_kernel_name
 al_strat_kernel_gamma=$model_kernel_gamma
 subset_size=10000
-n_init=10
-acq_size=10
-n_acq=49
+n_init=1
+acq_size=1
+n_acq=299
 output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/xpal_hparams/${dataset}/${model}/${al_strat}_${init_strategy}/${al_strat_alpha}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/${model_kernel_name}/${model_kernel_gamma}/seed${random_seed}/
 
 srun python -u active_learning.py \
