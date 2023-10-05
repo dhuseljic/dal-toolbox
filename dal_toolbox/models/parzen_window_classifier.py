@@ -278,3 +278,27 @@ class PWC(BaseEstimator, ClassifierMixin):
             labels = torch.cat(all_labels)
             return features, labels
         return features
+
+    def get_grad_representations(self, dataloader, device):
+        embedding = []
+        for batch in dataloader:
+            inputs = batch[0]
+            in_dimension = inputs.shape[-1]
+            embedding_batch = torch.empty([len(inputs), in_dimension * self.n_classes_])
+            features = inputs.cpu()
+
+            probas = self.predict_proba(inputs, normalize=True)
+            max_indices = probas.argmax(-1)
+
+            for n in range(len(inputs)):
+                for c in range(self.n_classes_):
+                    if c == max_indices[n]:
+                        embedding_batch[n, in_dimension * c: in_dimension * (c + 1)] = \
+                            features[n] * (1 - probas[n, c])
+                    else:
+                        embedding_batch[n, in_dimension * c: in_dimension * (c + 1)] = \
+                            features[n] * (-1 * probas[n, c])
+            embedding.append(embedding_batch)
+        # Concat all embeddings
+        embedding = torch.cat(embedding)
+        return embedding
