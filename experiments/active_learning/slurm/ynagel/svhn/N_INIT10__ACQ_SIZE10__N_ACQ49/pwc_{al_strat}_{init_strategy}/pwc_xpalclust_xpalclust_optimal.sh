@@ -1,5 +1,5 @@
 #!/usr/bin/zsh
-#SBATCH --mem=32gb
+#SBATCH --mem=40gb
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --partition=main

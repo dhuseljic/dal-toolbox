@@ -1,9 +1,9 @@
 #!/usr/bin/zsh
-#SBATCH --mem=24gb
+#SBATCH --mem=40gb
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=6
 #SBATCH --partition=main
-#SBATCH --nodelist=cpu-epyc-2
+#SBATCH --nodelist=cpu-epyc-5
 #SBATCH --array=0-144
 #SBATCH --job-name=xpal_hparams
 #SBATCH --output=/mnt/stud/home/ynagel/logs/xpal_hparams/%A_%a__%x.log
