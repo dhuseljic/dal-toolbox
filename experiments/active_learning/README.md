@@ -91,8 +91,7 @@ Instead of using a normal dataset one can use precomputed features to train on.
 (The `dataset` parameter will then be ignored.)
 This setting can be enabled with by setting the parameter `precomputed_features` to `True`.
 Here the directory where the saved features are has to be specified with `precomputed_features_dir`.
-This has to be a dictionary with three fields: `trainset`, `valset` and `testset`.
-Each field has to be of class `FeatureDataset` located [here](../../dal_toolbox/datasets/utils.py).
+This has to be a dictionary with three fields: `trainset` and `testset`.
 
 The `model` parameter has to be set to `linear`, which will result in a linear layer, which will be trained on the precomputed features.
 
@@ -115,20 +114,9 @@ Furthermore, TypiClust was not used in CIFAR100 experiments with budget 5000 and
 
 ### Experiments with precomputed features
 
-| Dataset | Model   | Budget 60                                                                    |
-|---------|---------|------------------------------------------------------------------------------|
-| CIFAR10 | Linear  | <img src="./notebooks/learning_curves/CIFAR10/linear/budet100.png"/>          |
-| CIFAR10 | Linear  | <img src="./notebooks/learning_curves/CIFAR10/linear/budet100_typiinit.png"/> |
-|         |         |                                                                              |
-
-
-## TO-DO's
-
-- SVHN Budget 1000 uses more optimized hyperparameters than the other budgets, leading to performance discrepancies.
-- Implement/test more strategies and models
-- Comparison with state-of-the-art
-- TypiClust dependency - Pandas?
-- TypiClust - High Budget --> High MAX_NUM_CLUSTERS
+| Dataset | Model  | Budget 60                                                           | Budget 200                                                           |
+|---------|--------|---------------------------------------------------------------------|----------------------------------------------------------------------|
+| CIFAR10 | Linear | <img src="./notebooks/learning_curves/CIFAR10/linear/budet60.png"/> | <img src="./notebooks/learning_curves/CIFAR10/linear/budet200.png"/> |
 
 ## Sources
 
