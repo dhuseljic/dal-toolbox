@@ -92,7 +92,6 @@ def build_model(args, num_classes, input_shape=None):
     elif args.model.name == 'spectral_resnet18_deterministic':
         model = deterministic.spectral_resnet.spectral_resnet18(num_classes=num_classes,
                                                                 input_shape=input_shape[::-1],
-                                                                # TODO (ynagel) Ask what order this is supposed to be in
                                                                 norm_bound=args.model.norm_bound,
                                                                 n_power_iterations=args.model.n_power_iterations,
                                                                 spectral_norm=args.model.spectral_norm)

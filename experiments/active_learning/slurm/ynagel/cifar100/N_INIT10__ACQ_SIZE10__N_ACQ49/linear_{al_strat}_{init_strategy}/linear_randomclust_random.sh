@@ -3,7 +3,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --partition=main
-#SBATCH --nodelist=cpu-epyc-[1-8]
+#SBATCH --nodelist=cpu-epyc-3
 #SBATCH --array=1-10
 #SBATCH --job-name=al_baselines
 #SBATCH --output=/mnt/stud/home/ynagel/logs/al_baselines/%A_%a__%x.log
@@ -47,4 +47,4 @@ srun python -u active_learning.py \
 	random_seed=$random_seed \
 	output_dir=$output_dir \
 	precomputed_features=True \
-	precomputed_features_dir=/mnt/stud/home/ynagel/data/ # TODO (ynagel) Replace with new feature space data
+	precomputed_features_dir=/mnt/stud/home/ynagel/data/wide_resnet_28_10_CIFAR100_0.682.pth

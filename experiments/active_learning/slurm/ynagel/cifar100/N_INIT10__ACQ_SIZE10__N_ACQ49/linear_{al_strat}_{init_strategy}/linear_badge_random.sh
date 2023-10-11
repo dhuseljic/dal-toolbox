@@ -3,7 +3,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --partition=main
-#SBATCH --nodelist=cpu-epyc-3
+#SBATCH --nodelist=cpu-epyc-5
 #SBATCH --array=1-10
 #SBATCH --job-name=al_baselines
 #SBATCH --output=/mnt/stud/home/ynagel/logs/al_baselines/%A_%a__%x.log
@@ -12,15 +12,16 @@ date;hostname;pwd
 source /mnt/stud/home/ynagel/dal-toolbox/venv/bin/activate
 cd ~/dal-toolbox/experiments/active_learning/ || exit
 
-model=pwc
-model_kernel_name=rbf
-model_kernel_gamma=calculate
-model_train_batch_size=10
+model=linear
+model_optimizer_lr=0.25
+model_optimizer_weight_decay=0.0
+model_train_batch_size=64
+model_num_epochs=100
 
 dataset=CIFAR100
 
-al_strat=randomclust
-init_strategy=randomclust
+al_strat=badge
+init_strategy=random
 subset_size=10000
 n_init=10
 acq_size=10
@@ -31,9 +32,10 @@ output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines/${dataset}/${m
 
 srun python -u active_learning.py \
 	model=$model \
-	model.kernel.name=$model_kernel_name \
-	model.kernel.gamma=$model_kernel_gamma \
+	model.optimizer.lr=$model_optimizer_lr \
+	model.optimizer.weight_decay=$model_optimizer_weight_decay \
 	model.train_batch_size=$model_train_batch_size \
+	model.num_epochs=$model_num_epochs \
 	dataset=$dataset \
 	dataset_path=/mnt/stud/home/ynagel/data \
 	al_strategy=$al_strat \

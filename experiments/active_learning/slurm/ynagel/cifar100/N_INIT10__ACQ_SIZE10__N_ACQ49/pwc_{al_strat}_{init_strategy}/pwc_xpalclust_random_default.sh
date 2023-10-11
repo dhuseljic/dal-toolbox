@@ -1,36 +1,36 @@
 #!/usr/bin/zsh
 #SBATCH --mem=24gb
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=6
+#SBATCH --cpus-per-task=8
 #SBATCH --partition=main
-#SBATCH --nodelist=cpu-epyc-[1-8]
-#SBATCH --array=0-70
-#SBATCH --job-name=xpal_hparams
-#SBATCH --output=/mnt/stud/home/ynagel/logs/xpal_hparams/%A_%a__%x.log
+#SBATCH --nodelist=cpu-epyc-6
+#SBATCH --array=1-10
+#SBATCH --job-name=al_baselines
+#SBATCH --output=/mnt/stud/home/ynagel/logs/al_baselines/%A_%a__%x.log
 
 date;hostname;pwd
 source /mnt/stud/home/ynagel/dal-toolbox/venv/bin/activate
 cd ~/dal-toolbox/experiments/active_learning/ || exit
 
-random_seed_array=(0 1 2 3 4)
-gamma_array=(calculate 0.001 0.005 0.0075 0.01 0.025 0.05 0.075 0.1 0.25 0.5 1.0 5.0 10.0)
-
 model=pwc
 model_kernel_name=rbf
-model_kernel_gamma=${gamma_array[$((SLURM_ARRAY_TASK_ID % 14)) + 1]}
+model_kernel_gamma=calculate
 model_train_batch_size=10
 
 dataset=CIFAR100
 
-al_strat=random
+al_strat=xpalclust
 init_strategy=random
+al_strat_alpha=1e-3
+al_strat_kernel_name=$model_kernel_name
+al_strat_kernel_gamma=$model_kernel_gamma
 subset_size=10000
 n_init=10
 acq_size=10
 n_acq=49
 
-random_seed=${random_seed_array[$((SLURM_ARRAY_TASK_ID / 14 % 5)) + 1]}
-output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/xpal_hparams/${dataset}/${model}/${al_strat}_${init_strategy}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/${model_kernel_name}/${model_kernel_gamma}/seed${random_seed}/
+random_seed=$SLURM_ARRAY_TASK_ID
+output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines/${dataset}/${model}/${al_strat}_${init_strategy}_default/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/
 
 srun python -u active_learning.py \
 	model=$model \
@@ -40,6 +40,9 @@ srun python -u active_learning.py \
 	dataset=$dataset \
 	dataset_path=/mnt/stud/home/ynagel/data \
 	al_strategy=$al_strat \
+	al_strategy.alpha=$al_strat_alpha \
+	al_strategy.kernel.name=$al_strat_kernel_name \
+	al_strategy.kernel.gamma=$al_strat_kernel_gamma \
 	al_strategy.subset_size=$subset_size \
 	al_cycle.n_init=$n_init \
 	al_cycle.acq_size=$acq_size \
@@ -48,4 +51,4 @@ srun python -u active_learning.py \
 	random_seed=$random_seed \
 	output_dir=$output_dir \
 	precomputed_features=True \
-	precomputed_features_dir=/mnt/stud/home/ynagel/data/ # TODO (ynagel) Replace with new feature space data
+	precomputed_features_dir=/mnt/stud/home/ynagel/data/wide_resnet_28_10_CIFAR100_0.682.pth

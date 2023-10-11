@@ -23,7 +23,7 @@ model_kernel_gamma=calculate
 
 dataset=CIFAR100
 
-al_strat=xpal
+al_strat=xpalclust
 init_strategy=random
 al_strat_alpha=${alpha_array[$((SLURM_ARRAY_TASK_ID % 29)) + 1]}
 al_strat_kernel_name=$model_kernel_name

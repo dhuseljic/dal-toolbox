@@ -187,7 +187,6 @@ class CIFAR100StandardTransforms(BaseTransforms):
         return transform
 
 
-# TODO (ynagel) These are currently the same as for CIFAR10. There might be better settings.
 class CIFAR100ContrastiveTransforms(CIFAR100StandardTransforms):
     def __init__(self, color_distortion_strength: float):
         super().__init__()

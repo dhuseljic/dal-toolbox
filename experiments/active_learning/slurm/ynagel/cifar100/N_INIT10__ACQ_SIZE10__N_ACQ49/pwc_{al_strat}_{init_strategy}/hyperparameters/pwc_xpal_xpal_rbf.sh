@@ -1,5 +1,5 @@
 #!/usr/bin/zsh
-#SBATCH --mem=40gb
+#SBATCH --mem=48gb
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=6
 #SBATCH --partition=main
@@ -24,7 +24,7 @@ model_kernel_gamma=calculate
 dataset=CIFAR100
 
 al_strat=xpal
-init_strategy=random
+init_strategy=xpal
 al_strat_alpha=${alpha_array[$((SLURM_ARRAY_TASK_ID % 29)) + 1]}
 al_strat_kernel_name=$model_kernel_name
 al_strat_kernel_gamma=$model_kernel_gamma

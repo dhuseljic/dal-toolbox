@@ -1,9 +1,9 @@
 #!/usr/bin/zsh
-#SBATCH --mem=24gb
+#SBATCH --mem=32gb
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --partition=main
-#SBATCH --nodelist=cpu-epyc-[1-8]
+#SBATCH --nodelist=cpu-epyc-2
 #SBATCH --array=1-10
 #SBATCH --job-name=al_baselines
 #SBATCH --output=/mnt/stud/home/ynagel/logs/al_baselines/%A_%a__%x.log
@@ -21,7 +21,7 @@ dataset=CIFAR100
 
 al_strat=xpal
 init_strategy=xpal
-al_strat_alpha=1e-11
+al_strat_alpha=1e-17
 al_strat_kernel_name=$model_kernel_name
 al_strat_kernel_gamma=$model_kernel_gamma
 subset_size=10000
@@ -30,7 +30,7 @@ acq_size=1
 n_acq=299
 
 random_seed=$SLURM_ARRAY_TASK_ID
-output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines/${dataset}/${model}/${al_strat}_${init_strategy}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/
+output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines/${dataset}/${model}/${al_strat}_${init_strategy}_optimal/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/
 
 srun python -u active_learning.py \
 	model=$model \
@@ -51,4 +51,4 @@ srun python -u active_learning.py \
 	random_seed=$random_seed \
 	output_dir=$output_dir \
 	precomputed_features=True \
-	precomputed_features_dir=/mnt/stud/home/ynagel/data/ # TODO (ynagel) Replace with new feature space data
+	precomputed_features_dir=/mnt/stud/home/ynagel/data/wide_resnet_28_10_CIFAR100_0.682.pth

@@ -44,8 +44,7 @@ def build_encoder(name, return_output_dim=False):
 
         encoder_output_dim = 2048
     elif name == "wide_resnet_28_10":
-        encoder = deterministic.wide_resnet.wide_resnet_28_10(num_classes=1,
-                                                              dropout_rate=0.3)  # TODO (ynagel) Dropout rate?
+        encoder = deterministic.wide_resnet.wide_resnet_28_10(num_classes=1, dropout_rate=0.3)
         encoder.linear = nn.Identity()
 
         encoder_output_dim = 640

@@ -79,6 +79,7 @@ The following active learning strategies are implemented:
 | BADGE [[5](#sources)]     | `badge`     |
 | TypiClust [[6](#sources)] | `typiclust` |
 
+For TypiClust to work, [pandas](https://pandas.pydata.org/) has to be installed.
 Furthermore, the following hyperparameters can be adjusted for each active learning strategy:
 
 | Argument                  | Standard Parameter | Description                                                                                                                                       |

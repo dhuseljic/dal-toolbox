@@ -127,7 +127,7 @@ class ResNet18(nn.Module):
         all_labels = []
         for batch in dataloader:
             inputs = batch[0]
-            labels = batch[1]  # TODO (ynagel) This might not be possible for all dataloaders
+            labels = batch[1]
             _, features = self(inputs.to(device), return_features=True)
             all_features.append(features.cpu())
             all_labels.append(labels)
@@ -235,7 +235,7 @@ class ResNet50(nn.Module):
         all_labels = []
         for batch in dataloader:
             inputs = batch[0]
-            labels = batch[1]  # TODO (ynagel) This might not be possible for all dataloaders
+            labels = batch[1]
             _, features = self(inputs.to(device), return_features=True)
             all_features.append(features.cpu())
             all_labels.append(labels)

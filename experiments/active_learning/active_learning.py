@@ -237,7 +237,7 @@ def build_model(args, num_classes, feature_size=None):
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
         elif args.model.name == "resnet18_mcdropout":
             model = mc_dropout.resnet.DropoutResNet18(num_classes=num_classes, n_passes=args.model.n_passes,
-                                                      dropout_rate=args.model.dropout_rate)  # TODO (ynagel) These should be adjustable
+                                                      dropout_rate=args.model.dropout_rate)
             optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
 
