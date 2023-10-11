@@ -1,7 +1,5 @@
 # TODO (ynagel) There is currently a lot of redundancy in this code
 
-# https://github.com/dakot/probal/blob/master/src/query_strategies/expected_probabilistic_active_learning.py
-
 import numpy as np
 import pandas as pd
 import torch
@@ -12,8 +10,8 @@ from dal_toolbox.active_learning.strategies.xpal import xpal_gain
 
 
 class XPALClust(Query):
-    """XPAL
-    The expected probabilistic active learning (xPAL) strategy.
+    """XPALClust
+    The expected probabilistic active learning (xPAL) strategy combined with the clustering strategy from TypiClust.
     Parameters
     ----------
     n_classes: int
@@ -28,10 +26,10 @@ class XPALClust(Query):
     alpha_x: float | array-like, shape (n_classes)
         Prior probabilities for the Dirichlet distribution of the samples in the evaluation set.
         Default is 1 for all classes.
-    data_set: base.DataSet
-        Data set containing samples and class labels.
-    random_state: numeric | np.random.RandomState
-        Random state for annotator selection.
+    subset_size: int
+        How much of the unlabeled dataset is taken into account.
+    random_seed: numeric | np.random.RandomState
+        Random seed for annotator selection.
     Attributes
     ----------
     n_classes_: int
@@ -46,10 +44,6 @@ class XPALClust(Query):
     alpha_x_: float | array-like, shape (n_classes)
         Prior probabilities for the Dirichlet distribution of the samples in the evaluation set.
         Default is 1 for all classes.
-    data_set_: base.DataSet
-        Data set containing samples, class labels, and optionally confidences of annotator(s).
-    random_state_: numeric | np.random.RandomState
-        Random state for annotator selection.
     """
     MIN_CLUSTER_SIZE = 5
     MAX_NUM_CLUSTERS = 500

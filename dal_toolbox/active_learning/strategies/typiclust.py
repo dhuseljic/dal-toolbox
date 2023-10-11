@@ -1,3 +1,6 @@
+# Implementation of https://arxiv.org/abs/2202.02794.
+# Code partially from https://github.com/avihu111/TypiClust/blob/main/deep-al/pycls/al/typiclust.py
+
 import numpy as np
 import pandas as pd
 import torch
@@ -11,10 +14,6 @@ from dal_toolbox.models.utils.base import BaseModule
 
 def get_nn(features, num_neighbors):
     features = features.numpy().astype(np.float32)
-
-    # TODO (ynagel) The results of sklearn are not identical with faiss.
-    #  Maybe find a way to get faiss working consistently and leave it as an option.
-    #  However, the difference is small so it might be okay to leave it as is.
     nn_calculator = NearestNeighbors(n_neighbors=num_neighbors + 1, metric='sqeuclidean', n_jobs=-1).fit(features)
     distances, indices = nn_calculator.kneighbors(features)
 

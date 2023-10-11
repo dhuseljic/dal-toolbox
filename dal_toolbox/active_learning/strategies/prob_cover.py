@@ -1,3 +1,6 @@
+# Implementation of https://arxiv.org/abs/2205.11320. It is currently not working correctly.
+# Code partially from https://github.com/avihu111/TypiClust/blob/main/deep-al/pycls/al/prob_cover.py
+
 import numpy as np
 import pandas as pd
 import torch

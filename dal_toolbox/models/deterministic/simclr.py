@@ -200,22 +200,6 @@ class LinearEvaluationAccuracy:
         targets = torch.cat([pred[1] for pred in predictions])
         return metrics.Accuracy()(logits, targets).item()
 
-
-    def save_features_and_model_state_dict(self, name: str = "model_features_dict", path: str = "") -> None:
-        """
-        Saves the encoder features as well as the feature datasets used during training/testing.
-        Args:
-            name: The name of file to save the information to.
-            path: The path of where to save the file.
-        """
-        warnings.warn("save_features_and_model_state_dict is deprecated.")
-        path = os.path.join(path + os.path.sep + f"{name}.pth")
-        torch.save({'trainset': self.trainset,
-                    'valset': self.valset,
-                    'testset': self.testset,
-                    'model': self.encoder.state_dict()}, path)
-
-
 class SimCLR(DeterministicModel):
     """
     Implements `A Simple Framework for Contrastive Learning of Visual Representations` by Chen et al. in a pytorch

@@ -1,56 +1,23 @@
 # TODO (ynagel) There is currently a lot of redundancy in this code
 import random
 
-# https://github.com/dakot/probal/blob/master/src/query_strategies/expected_probabilistic_active_learning.py
-
 import numpy as np
 import pandas as pd
 import torch
 
 from dal_toolbox.active_learning.strategies import Query
 from dal_toolbox.active_learning.strategies.typiclust import kmeans
-from dal_toolbox.active_learning.strategies.xpal import xpal_gain
 
 
 class RandomClust(Query):
-    """XPAL
-    The expected probabilistic active learning (xPAL) strategy.
+    """
+    Randomly samples the instances inside TypiClust clusters.
     Parameters
     ----------
-    n_classes: int
-        Number of classes.
-    S: array-like, shape (n_samples, n_samples)
-        Similarity matrix defining the similarities between all pairs of available samples, e.g., S[i,j] describes
-        the similarity between the samples x_i and x_j.
-        Default similarity matrix is the unit matrix.
-    alpha_c: float | array-like, shape (n_classes)
-        Prior probabilities for the Dirichlet distribution of the candidate samples.
-        Default is 1 for all classes.
-    alpha_x: float | array-like, shape (n_classes)
-        Prior probabilities for the Dirichlet distribution of the samples in the evaluation set.
-        Default is 1 for all classes.
-    data_set: base.DataSet
-        Data set containing samples and class labels.
-    random_state: numeric | np.random.RandomState
-        Random state for annotator selection.
-    Attributes
-    ----------
-    n_classes_: int
-        Number of classes.
-    S_: array-like, shape (n_samples, n_samples)
-        Similarity matrix defining the similarities between all pairs of available samples, e.g., S[i,j] describes
-        the similarity between the samples x_i and x_j.
-        Default similarity matrix is the unit matrix.
-    alpha_c_: float | array-like, shape (n_classes)
-        Prior probabilities for the Dirichlet distribution of the candidate samples.
-        Default is 1 for all classes.
-    alpha_x_: float | array-like, shape (n_classes)
-        Prior probabilities for the Dirichlet distribution of the samples in the evaluation set.
-        Default is 1 for all classes.
-    data_set_: base.DataSet
-        Data set containing samples, class labels, and optionally confidences of annotator(s).
-    random_state_: numeric | np.random.RandomState
-        Random state for annotator selection.
+    subset_size: int
+        How much of the unlabeled dataset is taken into account.
+    random_seed: numeric | np.random.RandomState
+        Random seed for annotator selection.
     """
     MIN_CLUSTER_SIZE = 5
     MAX_NUM_CLUSTERS = 500

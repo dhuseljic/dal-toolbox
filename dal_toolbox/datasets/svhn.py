@@ -121,7 +121,7 @@ class SVHNContrastive(SVHN):
     This means that the transforms are repeated twice for each image, resulting in two views for each input image.
     """
 
-    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None, cds=0.5, r_prob=0.33) -> None:
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None, cds=0.5, r_prob=0.7) -> None:
         super().__init__(dataset_path,
                          SVHNContrastiveTransforms(color_distortion_strength=cds, rotation_probability=r_prob),
                          val_split, seed)
