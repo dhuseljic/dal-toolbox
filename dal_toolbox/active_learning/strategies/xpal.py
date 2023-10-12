@@ -1,4 +1,5 @@
-# https://github.com/dakot/probal/blob/master/src/query_strategies/expected_probabilistic_active_learning.py
+# Implementation of https://arxiv.org/pdf/2006.01732.pdf.
+# Code partially taken from https://github.com/dakot/probal/blob/master/src/query_strategies/expected_probabilistic_active_learning.py
 
 import numpy as np
 import torch
@@ -24,10 +25,10 @@ class XPAL(Query):
     alpha_x: float | array-like, shape (n_classes)
         Prior probabilities for the Dirichlet distribution of the samples in the evaluation set.
         Default is 1 for all classes.
-    data_set: base.DataSet
-        Data set containing samples and class labels.
-    random_state: numeric | np.random.RandomState
-        Random state for annotator selection.
+    subset_size: int
+        How much of the unlabeled dataset is taken into account.
+    random_seed: numeric | np.random.RandomState
+        Random seed for annotator selection.
     Attributes
     ----------
     n_classes_: int
@@ -42,10 +43,6 @@ class XPAL(Query):
     alpha_x_: float | array-like, shape (n_classes)
         Prior probabilities for the Dirichlet distribution of the samples in the evaluation set.
         Default is 1 for all classes.
-    data_set_: base.DataSet
-        Data set containing samples, class labels, and optionally confidences of annotator(s).
-    random_state_: numeric | np.random.RandomState
-        Random state for annotator selection.
     """
 
     def __init__(self, num_classes, S, alpha_c, alpha_x, subset_size=None, random_seed=None):
@@ -177,7 +174,7 @@ def xpal_gain(K_c, K_x=None, S=None, alpha_x=1, alpha_c=1):
     # compute required labels per class to flip decision
     with np.errstate(divide='ignore', invalid='ignore'):
         D_x = np.nanmin(np.divide(R_x - np.min(R_x, axis=1, keepdims=True), R[:, y_hat].T), axis=1)
-        D_x = np.tile(D_x, (len(S), 1))  # TODO This takes up a lot of space with large datasets
+        D_x = np.tile(D_x, (len(S), 1))  # TODO (ynagel) This takes up a lot of space with large datasets
 
     # indicates where a decision flip can be reached
     I = D_x - S < 0
@@ -189,7 +186,6 @@ def xpal_gain(K_c, K_x=None, S=None, alpha_x=1, alpha_c=1):
     # stores gain per candidate sample
     gains = np.zeros(n_candidate_samples)
 
-    # TODO This has to be adapted for DNNs
     # compute gain for each candidate sample
     flip_indices = np.argwhere(np.sum(I, axis=1) > 0)[:, 0]
     for ik_c in flip_indices:

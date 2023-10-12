@@ -70,6 +70,8 @@ class PWC(BaseEstimator, ClassifierMixin):
     The Parzen window classifier (PWC) [1] is a simple and probabilistic classifier. This classifier is based on a
     non-parametric density estimation obtained by applying a kernel function.
 
+    Taken from https://github.com/dakot/probal/blob/master/src/classifier/parzen_window_classifier.py.
+
     Parameters
     ----------
     n_classes: int,

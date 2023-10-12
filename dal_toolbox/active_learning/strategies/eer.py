@@ -1,3 +1,6 @@
+# Implementation of https://arxiv.org/abs/2211.09283. It is currently not working.
+
+import warnings
 from abc import ABC
 
 import numpy as np
@@ -12,6 +15,7 @@ from ...models.utils.base import BaseModule
 class MELL(Query, ABC):
     def __init__(self, subset_size=None, random_seed=None):
         super().__init__(random_seed=random_seed)
+        warnings.warn("MELL does currently not work as expected.")
         self.subset_size = subset_size
 
     @torch.no_grad()
