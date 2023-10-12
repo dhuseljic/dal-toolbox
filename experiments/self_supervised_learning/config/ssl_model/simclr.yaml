@@ -6,6 +6,7 @@ temperature: 0.1
 n_epochs: 100
 
 train_batch_size: 1024
+accumulate_batches: 1
 val_batch_size: 512
 optimizer:
   base_lr: 0.075

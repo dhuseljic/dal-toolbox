@@ -9,9 +9,14 @@ outputs/
 wandb/
 lightning_logs/
 output_glae/
+venv/
+build/
 
 *.pdf
 *.png
 *.jpg
 *.pth
+*.ipynb_checkpoints
 .dev
+
+!experiments/active_learning/notebooks/learning_curves/**

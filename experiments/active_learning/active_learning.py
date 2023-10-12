@@ -1,23 +1,29 @@
-import os
-import time
+import datetime
 import json
 import logging
-import datetime
+import os
+import sys
+import time
 
-import torch
 import hydra
-
 import lightning as L
-from torch.utils.data import DataLoader
+import numpy as np
+import torch
 from omegaconf import OmegaConf
+from sklearn.preprocessing import StandardScaler
 
-from dal_toolbox import metrics
-from dal_toolbox.models import deterministic
 from dal_toolbox import datasets
+from dal_toolbox import metrics
 from dal_toolbox.active_learning import ActiveLearningDataModule
-from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge
-from dal_toolbox.utils import seed_everything, is_running_on_slurm
+from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, typiclust, xpal, xpalclust, \
+    randomclust, prob_cover, eer
+# noinspection PyUnresolvedReferences
+from dal_toolbox.datasets.utils import FeatureDataset, FeatureDatasetWrapper
+from dal_toolbox.metrics import ensemble_log_softmax
+from dal_toolbox.models import deterministic, mc_dropout
+from dal_toolbox.models.parzen_window_classifier import PWCLightning
 from dal_toolbox.models.utils.callbacks import MetricLogger
+from dal_toolbox.utils import seed_everything, is_running_on_slurm, kernels, _calculate_mean_gamma
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
@@ -33,28 +39,77 @@ def main(args):
 
     # Setup Dataset
     logger.info('Building datasets.')
-    data = build_datasets(args)
-    test_loader = DataLoader(data.test_dataset, batch_size=args.model.predict_batch_size)
+    if args.precomputed_features:
+        data = FeatureDatasetWrapper(args.precomputed_features_dir)
+        feature_size = data.num_features
 
-    # Setup AL Module
-    logger.info('Creating AL Datamodule with %s initial samples.', args.al_cycle.n_init)
-    al_datamodule = ActiveLearningDataModule(
-        train_dataset=data.train_dataset,
-        query_dataset=data.query_dataset,
-        val_dataset=data.val_dataset,
-        train_batch_size=args.model.train_batch_size,
-        predict_batch_size=args.model.predict_batch_size,
-    )
-    al_datamodule.random_init(n_samples=args.al_cycle.n_init)
-    queried_indices['cycle0'] = al_datamodule.labeled_indices
+        if args.standardize_precomputed_features:
+            train_features = data.train_dataset.dataset.features
+            scaler = StandardScaler().fit(train_features)
 
-    # Setup Model
-    logger.info('Building model: %s', args.model.name)
-    model = build_model(args, num_classes=data.num_classes)
+            data.train_dataset.dataset.features = torch.from_numpy(scaler.transform(train_features)).to(
+                dtype=torch.float32)
+            data.val_dataset.dataset.features = torch.from_numpy(
+                scaler.transform(data.val_dataset.dataset.features)).to(dtype=torch.float32)
+            data.test_dataset.features = torch.from_numpy(scaler.transform(data.test_dataset.features)).to(
+                dtype=torch.float32)
+
+        features = torch.stack([batch[0] for batch in data.train_dataset])
+    else:
+        data = build_dataset(args)
+        feature_size = None
+        features = None  # This takes up too much memory otherwise
+
+    trainset = data.train_dataset
+    queryset = data.query_dataset
+    valset = data.val_dataset
+    testset = data.test_dataset
+
+    num_classes = data.num_classes
 
     # Setup Query
     logger.info('Building query strategy: %s', args.al_strategy.name)
-    al_strategy = build_al_strategy(args)
+    al_strategy = build_al_strategy(args.al_strategy.name, args, num_classes=num_classes, train_features=features,
+                                    results=results)
+
+    # Setup Model
+    logger.info('Building model: %s', args.model.name)
+
+    if args.model.name == "parzen_window":
+        accelerator = "cpu"
+        if args.model.kernel.gamma == "calculate":
+            args.model.kernel.gamma = _calculate_mean_gamma(features)
+            results["gamma"] = args.model.kernel.gamma
+            logger.info(f"Calculated gamma as {args.model.kernel.gamma}.")
+    else:
+        # accelerator = "cpu"
+        accelerator = "auto"
+
+    model = build_model(args, num_classes=num_classes, feature_size=feature_size)
+
+    # Setup AL Module
+    logger.info(f'Creating AL Datamodule with {args.al_cycle.n_init} initial samples, '
+                f'chosen with strategy {args.al_cycle.init_strategy}.')
+    al_datamodule = ActiveLearningDataModule(
+        train_dataset=trainset,
+        query_dataset=queryset,
+        val_dataset=valset,
+        test_dataset=testset,
+        train_batch_size=args.model.train_batch_size,
+        predict_batch_size=args.model.predict_batch_size,
+    )
+    if args.al_cycle.init_strategy == "random":
+        al_datamodule.random_init(n_samples=args.al_cycle.n_init)
+    else:
+        init_al_strategy = build_al_strategy(args.al_cycle.init_strategy, args, num_classes, train_features=features,
+                                             results=results)
+        indices = init_al_strategy.query(
+            model=model,
+            al_datamodule=al_datamodule,
+            acq_size=args.al_cycle.n_init
+        )
+        al_datamodule.update_annotations(indices)
+    queried_indices['cycle0'] = al_datamodule.labeled_indices
 
     # Active Learning Cycles
     for i_acq in range(0, args.al_cycle.n_acq + 1):
@@ -86,6 +141,7 @@ def main(args):
             max_epochs=args.model.num_epochs,
             enable_checkpointing=False,
             callbacks=callbacks,
+            accelerator=accelerator,
             default_root_dir=args.output_dir,
             enable_progress_bar=is_running_on_slurm() is False,
             check_val_every_n_epoch=args.val_interval,
@@ -94,19 +150,48 @@ def main(args):
 
         # Evaluate resulting model
         logger.info('Evaluation..')
-        predictions = trainer.predict(model, test_loader)
-        logits = torch.cat([pred[0] for pred in predictions])
-        targets = torch.cat([pred[1] for pred in predictions])
-        test_stats = {
-            'accuracy': metrics.Accuracy()(logits, targets).item(),
-            'nll': torch.nn.CrossEntropyLoss()(logits, targets).item(),
-            'brier': metrics.BrierScore()(logits, targets).item(),
-            'ece': metrics.ExpectedCalibrationError()(logits, targets).item(),
-            'ace': metrics.AdaptiveCalibrationError()(logits, targets).item(),
+        train_predictions = trainer.predict(model, al_datamodule.train_dataloader())
+        train_logits = torch.cat([pred[0] for pred in train_predictions])
+        train_targets = torch.cat([pred[1] for pred in train_predictions])
+
+        train_stats = {
+            'accuracy': metrics.Accuracy()(train_logits, train_targets).item(),
+            'nll': torch.nn.CrossEntropyLoss()(train_logits, train_targets).item(),
+            'brier': metrics.BrierScore()(train_logits, train_targets).item(),
+            'ece': metrics.ExpectedCalibrationError()(train_logits, train_targets).item(),
+            'ace': metrics.AdaptiveCalibrationError()(train_logits, train_targets).item(),
         }
-        logger.info('Evaluation stats: %s', test_stats)
+        logger.info('Train stats: %s', train_stats)
+
+        validation_predictions = trainer.predict(model, al_datamodule.val_dataloader())
+        validation_logits = torch.cat([pred[0] for pred in validation_predictions])
+        validation_targets = torch.cat([pred[1] for pred in validation_predictions])
+
+        validation_stats = {
+            'accuracy': metrics.Accuracy()(validation_logits, validation_targets).item(),
+            'nll': torch.nn.CrossEntropyLoss()(validation_logits, validation_targets).item(),
+            'brier': metrics.BrierScore()(validation_logits, validation_targets).item(),
+            'ece': metrics.ExpectedCalibrationError()(validation_logits, validation_targets).item(),
+            'ace': metrics.AdaptiveCalibrationError()(validation_logits, validation_targets).item(),
+        }
+        logger.info('Validation stats: %s', validation_stats)
+
+        test_predictions = trainer.predict(model, al_datamodule.test_dataloader())
+        test_logits = torch.cat([pred[0] for pred in test_predictions])
+        test_targets = torch.cat([pred[1] for pred in test_predictions])
+
+        test_stats = {
+            'accuracy': metrics.Accuracy()(test_logits, test_targets).item(),
+            'nll': torch.nn.CrossEntropyLoss()(test_logits, test_targets).item(),
+            'brier': metrics.BrierScore()(test_logits, test_targets).item(),
+            'ece': metrics.ExpectedCalibrationError()(test_logits, test_targets).item(),
+            'ace': metrics.AdaptiveCalibrationError()(test_logits, test_targets).item(),
+        }
+        logger.info('test stats: %s', test_stats)
 
         cycle_results.update({
+            "train_stats": train_stats,
+            "validation_stats": validation_stats,
             "test_stats": test_stats,
             "labeled_indices": al_datamodule.labeled_indices,
             "n_labeled_samples": len(al_datamodule.labeled_indices),
@@ -128,45 +213,119 @@ def main(args):
         json.dump(queried_indices, f, sort_keys=False)
 
 
-def build_model(args, num_classes):
-    if args.model.name == 'resnet18_deterministic':
-        model = deterministic.resnet.ResNet18(num_classes=num_classes)
-        optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
-        model = deterministic.DeterministicModel(
-            model,
-            optimizer=optimizer,
-            lr_scheduler=lr_scheduler,
-            train_metrics={'train_acc': metrics.Accuracy()},
-            val_metrics={'val_acc': metrics.Accuracy()},
-        )
+def build_model(args, num_classes, feature_size=None):
+    model = None
+    optimizer = None
+    lr_scheduler = None
+
+    if args.precomputed_features:
+        if args.model.name == "linear":
+            model = deterministic.linear.LinearModel(feature_size, num_classes)
+            optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
+            lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
+        elif args.model.name == "parzen_window":
+            model = PWCLightning(n_classes=num_classes,
+                                 random_state=args.random_seed,
+                                 kernel_params=args.model,
+                                 train_metrics={'train_acc': metrics.Accuracy()},
+                                 val_metrics={'val_acc': metrics.Accuracy()})
+            return model
+    else:
+        if args.model.name == 'resnet18_deterministic':
+            model = deterministic.resnet.ResNet18(num_classes=num_classes)
+            optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
+            lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
+        elif args.model.name == "resnet18_mcdropout":
+            model = mc_dropout.resnet.DropoutResNet18(num_classes=num_classes, n_passes=args.model.n_passes,
+                                                      dropout_rate=args.model.dropout_rate)
+            optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
+            lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
+
+            model = mc_dropout.MCDropoutModel(
+                model, optimizer=optimizer, lr_scheduler=lr_scheduler,
+                train_metrics={'train_acc': metrics.Accuracy()},
+                val_metrics={'val_acc': metrics.Accuracy()}
+            )
+            return model
+
+    if model is None:
+        sys.exit(f"Model {args.model.name} is not implemented, "
+                 f"or not compatible with precomputed features == {args.precomputed_features}")
+
+    model = deterministic.DeterministicModel(
+        model, optimizer=optimizer, lr_scheduler=lr_scheduler,
+        train_metrics={'train_acc': metrics.Accuracy()},
+        val_metrics={'val_acc': metrics.Accuracy()},
+    )
 
     return model
 
 
-def build_al_strategy(args):
-    if args.al_strategy.name == "random":
+def build_al_strategy(name, args, num_classes=None, train_features=None, results=None):
+    subset_size = None if args.al_strategy.subset_size == "None" else args.al_strategy.subset_size
+
+    if name == "random":
         query = random.RandomSampling()
-    elif args.al_strategy.name == "entropy":
-        query = uncertainty.EntropySampling(subset_size=args.al_strategy.subset_size)
-    elif args.al_strategy.name == "coreset":
-        query = coreset.CoreSet(subset_size=args.al_strategy.subset_size)
-    elif args.al_strategy.name == "badge":
-        query = badge.Badge(subset_size=args.al_strategy.subset_size)
+    elif name == "entropy":
+        query = uncertainty.EntropySampling(subset_size=subset_size)
+    elif name == "coreset":
+        query = coreset.CoreSet(subset_size=subset_size)
+    elif name == "badge":
+        query = badge.Badge(subset_size=subset_size)
+    elif name == "typiclust":
+        query = typiclust.TypiClust(subset_size=subset_size)
+    elif name == "randomclust":
+        query = randomclust.RandomClust(subset_size=subset_size)
+    elif name == "xpal" or "xpalclust":
+        if args.al_strategy.kernel.gamma == "calculate":
+            gamma = _calculate_mean_gamma(train_features)
+        else:
+            gamma = args.al_strategy.kernel.gamma
+        S = kernels(X=train_features, Y=train_features, metric=args.al_strategy.kernel.name, gamma=gamma)
+
+        if isinstance(args.al_strategy.alpha, str):
+            np.fill_diagonal(S, np.nan)  # Filter out self-similarity
+            if args.al_strategy.alpha == "median":
+                alpha = np.nanmedian(S)
+            elif args.al_strategy.alpha == "mean":
+                alpha = np.nanmean(S)
+            elif "quantile" in args.al_strategy.alpha:
+                q = float(args.al_strategy.alpha.split("_")[1])
+                alpha = np.nanquantile(S, q=q)
+            else:
+                raise NotImplementedError(f"Alpha strategy {args.al_strategy.alpha} is not implemented")
+            results["alpha"] = float(alpha)
+            np.fill_diagonal(S, 1.0)  # Fill it back in
+        else:
+            alpha = args.al_strategy.alpha
+        print(f"Using alpha = {alpha}")
+
+        if name == "xpal":
+            query = xpal.XPAL(num_classes, S, subset_size=subset_size, alpha_c=alpha, alpha_x=alpha)
+        elif name == "xpalclust":
+            query = xpalclust.XPALClust(num_classes, S, subset_size=subset_size, alpha_c=alpha, alpha_x=alpha)
+    elif name == "probcover":
+        delta = args.al_strategy.delta
+        if delta is None:
+            delta = prob_cover.estimate_delta(train_features, num_classes, args.al_strategy.alpha)
+            print(f"Using calculated delta={delta:.5f}")
+        query = prob_cover.ProbCover(subset_size=subset_size, delta=delta)
+    elif name == "eer":
+        query = eer.MELL(subset_size=subset_size)
     else:
-        raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
+        raise NotImplementedError(f"Active learning strategy {name} is not implemented!")
     return query
 
 
-def build_datasets(args):
+def build_dataset(args):
     if args.dataset.name == 'CIFAR10':
         data = datasets.CIFAR10(args.dataset_path)
-
     elif args.dataset.name == 'CIFAR100':
         data = datasets.CIFAR100(args.dataset_path)
-
     elif args.dataset.name == 'SVHN':
         data = datasets.SVHN(args.dataset_path)
+    else:
+        raise NotImplementedError(f"Dataset {args.al_strategy.name} is not implemented!")
 
     return data
 

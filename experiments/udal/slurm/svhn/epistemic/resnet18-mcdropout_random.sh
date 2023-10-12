@@ -25,6 +25,7 @@ output_dir=/mnt/work/dhuseljic/results/udal/active_learning/${dataset}/${model}/
 echo "Starting script. Writing results to ${output_dir}"
 srun python -u active_learning.py \
 	model=$model \
+	model.dropout_rate=0.1 \
 	dataset=$dataset \
 	ood_datasets=$ood_datasets \
 	dataset_path=/mnt/work/dhuseljic/datasets \
