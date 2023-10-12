@@ -118,6 +118,7 @@ Furthermore, TypiClust was not used in CIFAR100 experiments with budget 5000 and
 | Dataset | Model  | Budget 60                                                           | Budget 200                                                           |
 |---------|--------|---------------------------------------------------------------------|----------------------------------------------------------------------|
 | CIFAR10 | Linear | <img src="./notebooks/learning_curves/CIFAR10/linear/budet60.png"/> | <img src="./notebooks/learning_curves/CIFAR10/linear/budet200.png"/> |
+| SVHN    | Linear | <img src="./notebooks/learning_curves/SVHN/linear/budet60.png"/>    | <img src="./notebooks/learning_curves/SVHN/linear/budet200.png"/>    |
 
 ## Sources
 
