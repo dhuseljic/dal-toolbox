@@ -232,7 +232,7 @@ def build_model(args, num_classes, feature_size=None):
             return model
     else:
         if args.model.name == 'resnet18_deterministic':
-            model = deterministic.resnet.ResNet18(num_classes=num_classes)
+            model = deterministic.resnet.ResNet18(num_classes=num_classes, imagenethead=("ImageNet" in args.dataset.name))
             optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
         elif args.model.name == "resnet18_mcdropout":
