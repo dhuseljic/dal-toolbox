@@ -20,17 +20,24 @@ class RepeatTransformations:
 
 
 class PlainTransforms(BaseTransforms):
+    def __init__(self, resize=None):
+        if resize:
+            self.transform = torchvision.transforms.Compose(
+                [torchvision.transforms.Resize(resize), torchvision.transforms.ToTensor()])
+        else:
+            self.transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
+
     @property
     def train_transform(self):
-        return torchvision.transforms.Compose([torchvision.transforms.ToTensor(), ])
+        return self.transform
 
     @property
     def query_transform(self):
-        return torchvision.transforms.Compose([torchvision.transforms.ToTensor(), ])
+        return self.transform
 
     @property
     def eval_transform(self):
-        return torchvision.transforms.Compose([torchvision.transforms.ToTensor(), ])
+        return self.transform
 
 
 class FeatureDatasetWrapper(BaseData):

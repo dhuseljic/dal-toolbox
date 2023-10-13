@@ -1,0 +1,2 @@
+name: ImageNet50
+color_distortion_strength: 1.0

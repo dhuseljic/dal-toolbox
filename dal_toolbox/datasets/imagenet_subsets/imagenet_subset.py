@@ -7,6 +7,8 @@ from torchvision import transforms as tf
 
 from dal_toolbox.datasets import ImageNet
 from dal_toolbox.datasets.base import BaseTransforms
+from dal_toolbox.datasets.imagenet import ImageNetContrastiveTransforms
+from dal_toolbox.datasets.utils import PlainTransforms
 
 
 class ImageNetSubSetWrapper(ImageNet):
@@ -46,6 +48,22 @@ class ImageNet50(ImageNetSubSetWrapper):
         return 50
 
 
+class ImageNet50Contrastive(ImageNet50):
+    """
+    Contrastive version of ImageNet50.
+
+    This means that the transforms are repeated twice for each image, resulting in two views for each input image.
+    """
+
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None, cds=1.0) -> None:
+        super().__init__(dataset_path, ImageNetContrastiveTransforms(color_distortion_strength=cds), val_split, seed)
+
+
+class ImageNet50Plain(ImageNet50):
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
+        super().__init__(dataset_path, PlainTransforms(resize=(224, 224)), val_split, seed)
+
+
 class ImageNet100(ImageNetSubSetWrapper):
     def __init__(self, dataset_path: str, transforms: BaseTransforms = None, val_split: float = 0.1,
                  seed: int = None) -> None:
@@ -56,6 +74,22 @@ class ImageNet100(ImageNetSubSetWrapper):
         return 100
 
 
+class ImageNet100Plain(ImageNet100):
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
+        super().__init__(dataset_path, PlainTransforms(resize=(224, 224)), val_split, seed)
+
+
+class ImageNet100Contrastive(ImageNet100):
+    """
+    Contrastive version of ImageNet100.
+
+    This means that the transforms are repeated twice for each image, resulting in two views for each input image.
+    """
+
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None, cds=1.0) -> None:
+        super().__init__(dataset_path, ImageNetContrastiveTransforms(color_distortion_strength=cds), val_split, seed)
+
+
 class ImageNet200(ImageNetSubSetWrapper):
     def __init__(self, dataset_path: str, transforms: BaseTransforms = None, val_split: float = 0.1,
                  seed: int = None) -> None:
@@ -64,6 +98,22 @@ class ImageNet200(ImageNetSubSetWrapper):
     @property
     def num_classes(self):
         return 200
+
+
+class ImageNet200Contrastive(ImageNet200):
+    """
+    Contrastive version of ImageNet200.
+
+    This means that the transforms are repeated twice for each image, resulting in two views for each input image.
+    """
+
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None, cds=1.0) -> None:
+        super().__init__(dataset_path, ImageNetContrastiveTransforms(color_distortion_strength=cds), val_split, seed)
+
+
+class ImageNet200Plain(ImageNet200):
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
+        super().__init__(dataset_path, PlainTransforms(resize=(224, 224)), val_split, seed)
 
 
 class ImageNetSubset(data.Dataset):
