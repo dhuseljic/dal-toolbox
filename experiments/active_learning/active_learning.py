@@ -324,8 +324,16 @@ def build_dataset(args):
         data = datasets.CIFAR100(args.dataset_path)
     elif args.dataset.name == 'SVHN':
         data = datasets.SVHN(args.dataset_path)
+    elif args.dataset.name == 'ImageNet':
+        data = datasets.ImageNet(args.dataset.path)
+    elif args.dataset.name == 'ImageNet50':
+        data = datasets.ImageNet50(args.dataset.path)
+    elif args.dataset.name == 'ImageNet100':
+        data = datasets.ImageNet100(args.dataset.path)
+    elif args.dataset.name == 'ImageNet200':
+        data = datasets.ImageNet200(args.dataset.path)
     else:
-        raise NotImplementedError(f"Dataset {args.al_strategy.name} is not implemented!")
+        raise NotImplementedError(f"Dataset {args.dataset.name} is not implemented!")
 
     return data
 
