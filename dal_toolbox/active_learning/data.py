@@ -49,6 +49,9 @@ class ActiveLearningDataModule(L.LightningDataModule):
         self.labeled_indices = []
 
     def train_dataloader(self):
+        if len(self.labeled_indices) == 0:
+            raise ValueError('No instances labeled yet. Initialize the labeled pool first.')
+
         # TODO(dhuseljic): Add support for semi-supervised learning loaders.
         labeled_dataset = Subset(self.train_dataset, indices=self.labeled_indices)
 
@@ -131,17 +134,17 @@ class ActiveLearningDataModule(L.LightningDataModule):
         self.update_annotations(indices)
 
 
-class QueryDataset(Subset):
+class QueryDataset(Dataset):
     """A helper class which returns also the index along with the instances and targets."""
     #problem with dictionary output of dataset
 
     def __init__(self, dataset):
-        super().__init__(dataset=dataset, indices=range(len(dataset)))
+        super().__init__()
         self.dataset = dataset
 
     def __getitem__(self, index):
         # TODO(dhuseljic): discuss with marek, index instead of target? maybe dictionary? leave it like that?
-        data = super().__getitem__(index)
+        data = self.dataset.__getitem__(index)
         if isinstance(data, dict):
             instance = {
                 'input_ids': data['input_ids'], 
@@ -151,8 +154,11 @@ class QueryDataset(Subset):
             }
             return instance
         else:
-            instance, target = super().__getitem__(index)
+            instance, target = self.dataset.__getitem__(index)
             return instance, target, index
+    
+    def __len__(self):
+        return len(self.dataset)
 
 
 class ALDataset:

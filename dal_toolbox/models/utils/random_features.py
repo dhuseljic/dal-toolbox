@@ -65,7 +65,7 @@ class RandomFeatureGaussianProcess(nn.Module):
                  kernel_scale: float = 1,
                  normalize_input: bool = False,
                  random_feature_type: str = 'orf',
-                 scale_random_features: bool = True,
+                 scale_random_features: bool = False,
                  mean_field_factor: float = math.pi/8,
                  mc_samples: int = 1000,
                  cov_momentum: float = -1,
