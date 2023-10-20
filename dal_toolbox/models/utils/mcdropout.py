@@ -85,7 +85,7 @@ class _ConsistentMCDropout(nn.Module):
 
         k = input.shape[0] if self.training else MCDropoutModule.n_passes
         mc_input = MCDropoutModule.unflatten_tensor(input, k)
-        mc_output = mc_input.masked_fill(mask, 0) / (1 - self.p)
+        mc_output = mc_input.masked_fill(mask.to(mc_input.device), 0) / (1 - self.p)
 
         # Flatten MCDI, batch into one dimension again.
         return MCDropoutModule.flatten_tensor(mc_output)

@@ -103,7 +103,7 @@ class DeterministicPiModel(DeterministicModel):
         logits = self(inputs)
         supervised_loss = self.loss_fn(logits, targets)
 
-        unlabeled_batch = batch['unlabeled'][0]
+        unlabeled_batch = batch['unlabeled']
         unlabeled_inputs_aug1 = unlabeled_batch[0]
         unlabeled_inputs_aug2 = unlabeled_batch[1]
 
@@ -152,7 +152,7 @@ class DeterministicFixMatchModel(DeterministicModel):
         supervised_loss = self.loss_fn(logits, targets)
 
         # Unsupervised
-        unlabeled_batch = batch['unlabeled'][0]
+        unlabeled_batch = batch['unlabeled']
         inputs_weak = unlabeled_batch[0]
         inputs_strong = unlabeled_batch[1]
 
