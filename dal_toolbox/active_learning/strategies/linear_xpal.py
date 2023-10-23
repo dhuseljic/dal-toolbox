@@ -1,5 +1,6 @@
 # Linear Implementation of https://arxiv.org/pdf/2006.01732.pdf.
 # Code partially taken from https://github.com/dakot/probal/blob/master/src/query_strategies/expected_probabilistic_active_learning.py
+import logging
 
 import lightning as L
 import numpy as np
@@ -48,9 +49,11 @@ class LinearXPAL(Query):
         Default is 1 for all classes.
     """
 
-    def __init__(self, subset_size=None, random_seed=None):
+    def __init__(self, alpha = 100.0, beta=100.0, subset_size=None, random_seed=None):
         super().__init__(random_seed)
         self.subset_size = subset_size
+        self.alpha = alpha
+        self.beta = beta
 
     def query(self, *, model, al_datamodule, acq_size, return_gains=False, **kwargs):
         trainer = L.Trainer(
@@ -62,18 +65,20 @@ class LinearXPAL(Query):
             check_val_every_n_epoch=100,
             enable_model_summary=False,
         )
+
+        logging.getLogger("lightning.pytorch").setLevel(logging.ERROR)
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
         labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
         labels = torch.unique(al_datamodule.train_dataset.dataset.labels).tolist()
         num_samples = len(unlabeled_indices) + len(labeled_indices)
         f_L_predictions = trainer.predict(model, [unlabeled_dataloader, labeled_dataloader])
-        f_L_unlabeled_predictions = torch.softmax(torch.cat([pred[0] for pred in f_L_predictions[0]]), dim=1)
+        f_L_unlabeled_predictions = torch.softmax(torch.cat([pred[0] for pred in f_L_predictions[0]]) + self.beta, dim=1)
         f_L_unlabeled_prediction_classes = torch.cat([pred[1] for pred in f_L_predictions[0]])
         f_L_labeled_prediction_classes = torch.cat([pred[1] for pred in f_L_predictions[1]])
 
         gains = []
         # Calculate gain for each unlabeled sample
-        for x, x_pred in tqdm(zip(unlabeled_indices, f_L_unlabeled_predictions)):
+        for x, x_pred in tqdm(zip(unlabeled_indices, f_L_unlabeled_predictions), total=len(unlabeled_indices)):
             gain = 0.0
 
             L_plus_indices = labeled_indices + [x]
@@ -90,9 +95,9 @@ class LinearXPAL(Query):
                 trainer.fit(model, train_dataloaders=dloader)  # Create f_L_plus
 
                 f_L_plus_predictions = trainer.predict(model, [unlabeled_dataloader, labeled_dataloader])
-                f_L_plus_unlabeled_predictions = torch.softmax(torch.cat([pred[0] for pred in f_L_plus_predictions[0]]), dim=1)
+                f_L_plus_unlabeled_predictions = torch.softmax(torch.cat([pred[0] for pred in f_L_plus_predictions[0]]) + self.alpha, dim=1)
                 f_L_plus_unlabeled_prediction_classes = torch.cat([pred[1] for pred in f_L_plus_predictions[0]])
-                f_L_plus_labeled_predictions = torch.softmax(torch.cat([pred[0] for pred in f_L_plus_predictions[1]]), dim=1)
+                f_L_plus_labeled_predictions = torch.softmax(torch.cat([pred[0] for pred in f_L_plus_predictions[1]]) + self.alpha, dim=1)
                 f_L_plus_labeled_prediction_classes = torch.cat([pred[1] for pred in f_L_plus_predictions[1]])
 
                 sum_ = 0.0
@@ -109,6 +114,8 @@ class LinearXPAL(Query):
         top_gains, indices = torch.topk(torch.Tensor(gains), acq_size)
 
         actual_indices = [int(unlabeled_indices[i]) for i in indices]
+
+        logging.getLogger("lightning.pytorch").setLevel(logging.INFO)
 
         if return_gains:
             return actual_indices, top_gains
