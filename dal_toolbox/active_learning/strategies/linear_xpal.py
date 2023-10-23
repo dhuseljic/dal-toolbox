@@ -1,6 +1,7 @@
 # Linear Implementation of https://arxiv.org/pdf/2006.01732.pdf.
 # Code partially taken from https://github.com/dakot/probal/blob/master/src/query_strategies/expected_probabilistic_active_learning.py
 import logging
+import time
 
 import lightning as L
 import numpy as np
@@ -49,7 +50,7 @@ class LinearXPAL(Query):
         Default is 1 for all classes.
     """
 
-    def __init__(self, alpha = 100.0, beta=100.0, subset_size=None, random_seed=None):
+    def __init__(self, alpha = 0.0, beta=0.0, subset_size=None, random_seed=None):
         super().__init__(random_seed)
         self.subset_size = subset_size
         self.alpha = alpha
@@ -73,17 +74,20 @@ class LinearXPAL(Query):
         num_samples = len(unlabeled_indices) + len(labeled_indices)
         f_L_predictions = trainer.predict(model, [unlabeled_dataloader, labeled_dataloader])
         f_L_unlabeled_predictions = torch.softmax(torch.cat([pred[0] for pred in f_L_predictions[0]]) + self.beta, dim=1)
-        f_L_unlabeled_prediction_classes = torch.cat([pred[1] for pred in f_L_predictions[0]])
-        f_L_labeled_prediction_classes = torch.cat([pred[1] for pred in f_L_predictions[1]])
+        f_L_unlabeled_prediction_classes = f_L_unlabeled_predictions.argmax(-1)
+        f_L_labeled_predictions = torch.softmax(torch.cat([pred[0] for pred in f_L_predictions[1]]) + self.beta, dim=1)
+        f_L_labeled_prediction_classes = f_L_labeled_predictions.argmax(-1)
 
         gains = []
+
+        fits = []
         # Calculate gain for each unlabeled sample
-        for x, x_pred in tqdm(zip(unlabeled_indices, f_L_unlabeled_predictions), total=len(unlabeled_indices)):
+        for x, x_pred in tqdm(zip(unlabeled_indices, f_L_unlabeled_predictions), total=len(unlabeled_indices), desc="Canidate", leave=False, colour="blue"):
             gain = 0.0
 
             L_plus_indices = labeled_indices + [x]
             L_plus_data = al_datamodule.train_dataset[L_plus_indices]
-            for candidate_label in labels:
+            for candidate_label in tqdm(labels, desc="Canidate Label", leave=False, colour="green"):
 
                 dataset = CustomDataset(L_plus_data, candidate_label)
 
@@ -92,13 +96,18 @@ class LinearXPAL(Query):
                                     enable_progress_bar=False, check_val_every_n_epoch=100, enable_model_summary=False)
 
                 model.reset_states()
+                tic = time.perf_counter()
+
                 trainer.fit(model, train_dataloaders=dloader)  # Create f_L_plus
+
+                toc = time.perf_counter()
+                fits.append(toc - tic)
 
                 f_L_plus_predictions = trainer.predict(model, [unlabeled_dataloader, labeled_dataloader])
                 f_L_plus_unlabeled_predictions = torch.softmax(torch.cat([pred[0] for pred in f_L_plus_predictions[0]]) + self.alpha, dim=1)
-                f_L_plus_unlabeled_prediction_classes = torch.cat([pred[1] for pred in f_L_plus_predictions[0]])
+                f_L_plus_unlabeled_prediction_classes = f_L_plus_unlabeled_predictions.argmax(-1)
                 f_L_plus_labeled_predictions = torch.softmax(torch.cat([pred[0] for pred in f_L_plus_predictions[1]]) + self.alpha, dim=1)
-                f_L_plus_labeled_prediction_classes = torch.cat([pred[1] for pred in f_L_plus_predictions[1]])
+                f_L_plus_labeled_prediction_classes = f_L_plus_labeled_predictions.argmax(-1)
 
                 sum_ = 0.0
                 for label in labels:
@@ -108,7 +117,7 @@ class LinearXPAL(Query):
 
                 sum_ /= num_samples
                 gain += x_pred[candidate_label] * sum_
-            gain = -gain
+            # gain = -gain # TODO (ynagel) Do we need this?
             gains.append(gain)
 
         top_gains, indices = torch.topk(torch.Tensor(gains), acq_size)
@@ -116,6 +125,7 @@ class LinearXPAL(Query):
         actual_indices = [int(unlabeled_indices[i]) for i in indices]
 
         logging.getLogger("lightning.pytorch").setLevel(logging.INFO)
+        print(f"Took on average {np.mean(fits)} seconds to fit linear model." )
 
         if return_gains:
             return actual_indices, top_gains
