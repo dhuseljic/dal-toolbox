@@ -15,7 +15,8 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader, TensorDataset, Subset
 from omegaconf import OmegaConf
 
-from dal_toolbox.active_learning.strategies import random, uncertainty, query
+from dal_toolbox.active_learning.strategies.query import Query
+from dal_toolbox.active_learning.strategies import random, uncertainty
 from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.utils import seed_everything, is_running_on_slurm
 from dal_toolbox.metrics import Accuracy, entropy_from_probas, ensemble_entropy_from_logits
@@ -26,13 +27,17 @@ from active_learning import build_model
 
 
 def gt_proba_mapping(pixel_sum):
-    val = np.cos(pixel_sum*2*np.pi)+1
-    val = val / 2
-    return val
+    # val = np.cos(pixel_sum*2*np.pi)+1
+    # val = val / 2
+    return pixel_sum
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="synthetic")
 def main(args):
+    # Change hp for this simple problem to have a higher lr and wd
+    args.model.optimizer.lr = 0.01
+    args.model.optimizer.weight_decay = 0.005
+
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
     os.makedirs(args.output_dir, exist_ok=True)
@@ -82,7 +87,7 @@ def main(args):
 
         # Train with updated annotations
         logging.info('Training on labeled pool with %s samples', len(al_datamodule.labeled_indices))
-        model.reset_states(reset_model_parameters=args.cold_start)
+        model.reset_states(reset_model_parameters=args.al_cycle.cold_start)
         trainer = L.Trainer(
             max_epochs=args.model.n_epochs,
             default_root_dir=args.output_dir,
@@ -144,26 +149,24 @@ def build_query(args, **kwargs):
     elif args.al_strategy.name == "aleatoric":
         query = Aleatoric()
     elif args.al_strategy.name == "epistemic":
-        query = Epistemic(
-            ensemble_size=20,
-            num_epochs=20,
-            lr=1e-2,
-            momentum=0.9,
-            weight_decay=0.01,
-        )
+        query = Epistemic(ensemble_size=20, num_epochs=200, train_batch_size=32,
+                          lr=0.01, momentum=0.9, weight_decay=0.005)
     else:
         raise NotImplementedError(f"{args.al_strategy.name} is not implemented!")
     return query
 
 
-class Aleatoric(query.Query):
+class Aleatoric(Query):
 
     @torch.no_grad()
     def query(self, *, al_datamodule, acq_size, **kwargs):
         del kwargs
         unlabeled_loader, unlabeled_indices = al_datamodule.unlabeled_dataloader()
 
-        gt_probas_pos = torch.cat([gt_proba_mapping(batch[0].mean(dim=(1, 2, 3))) for batch in unlabeled_loader])
+        pixel_sums = [batch[0].mean(dim=(1, 2, 3)) for batch in unlabeled_loader]
+        gt_proba_pos = [gt_proba_mapping(px_sum) for px_sum in pixel_sums]
+        gt_probas_pos = torch.cat(gt_proba_pos)
+
         gt_probas = torch.stack((1-gt_probas_pos, gt_probas_pos), dim=1)
         scores = entropy_from_probas(gt_probas)
         _, indices = scores.topk(acq_size)
@@ -172,10 +175,11 @@ class Aleatoric(query.Query):
         return actual_indices
 
 
-class Epistemic(query.Query):
-    def __init__(self, ensemble_size, num_epochs, lr, weight_decay, momentum, random_seed=None):
+class Epistemic(Query):
+    def __init__(self, ensemble_size, num_epochs, train_batch_size, lr, weight_decay, momentum, random_seed=None):
         super().__init__(random_seed)
         self.num_epochs = num_epochs
+        self.train_batch_size = train_batch_size
         self.ensemble_size = ensemble_size
         self.num_classes = 2
         self.lr = lr
@@ -195,10 +199,9 @@ class Epistemic(query.Query):
     def query(self, *, al_datamodule, acq_size, **kwargs):
         del kwargs
 
-        # Train ensemble
-        model = self.build_ensemble()
+        ensemble = self.build_ensemble()
         sampler = torch.utils.data.SubsetRandomSampler(indices=al_datamodule.labeled_indices)
-        train_loader = DataLoader(al_datamodule.train_dataset, sampler=sampler, batch_size=32)
+        train_loader = DataLoader(al_datamodule.train_dataset, sampler=sampler, batch_size=self.train_batch_size)
         trainer = L.Trainer(
             max_epochs=self.num_epochs,
             enable_checkpointing=False,
@@ -206,13 +209,13 @@ class Epistemic(query.Query):
             enable_progress_bar=False,
             callbacks=[],
         )
-        trainer.fit(model, train_loader)
+        trainer.fit(ensemble, train_loader)
         # trainer.logged_metrics.keys()
-        # [f"{k}: {m}" for k, m in trainer.logged_metrics.items() if 'train_acc' in k]
+        #[f"{k}: {m}" for k, m in trainer.logged_metrics.items() if 'train_loss' in k]
 
         # Select with highest epistemic uncertainty
         unlabeled_loader, unlabeled_indices = al_datamodule.unlabeled_dataloader()
-        predictions = trainer.predict(model, unlabeled_loader)
+        predictions = trainer.predict(ensemble, unlabeled_loader)
         logits = torch.cat([pred[0] for pred in predictions])
         scores = ensemble_entropy_from_logits(logits)
         _, indices = scores.topk(acq_size)

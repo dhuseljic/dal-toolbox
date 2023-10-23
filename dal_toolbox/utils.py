@@ -1,20 +1,21 @@
-import os
 import copy
-import time
+import datetime
 import errno
 import hashlib
-import datetime
+import os
 import random
+import time
+import warnings
+from collections import defaultdict, deque, OrderedDict
+from typing import List, Optional, Tuple
 
-import torch
 import lightning as L
-import torch.distributed as dist
-
 import numpy as np
 import pylab as plt
-
-from typing import List, Optional, Tuple
-from collections import defaultdict, deque, OrderedDict
+import torch
+import torch.distributed as dist
+from scipy.spatial.distance import cdist
+from sklearn.metrics import pairwise_kernels
 from torch.utils.data import DataLoader
 from torchvision.utils import make_grid
 
@@ -29,6 +30,7 @@ def seed_everything(seed: int):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
+
 def setup_rng(seed=None):
     """Returns a numpy random number generator. """
     if seed is None:
@@ -36,6 +38,7 @@ def setup_rng(seed=None):
     else:
         rng = np.random.RandomState(seed)
     return rng
+
 
 def write_scalar_dict(writer, dict, prefix, global_step=None):
     for key, val in dict.items():
@@ -46,7 +49,7 @@ def unnormalize(img_normalized, mean=(0.5, 0.5, 0.5), std=(0.2, 0.2, 0.2)):
     device = img_normalized.device
     mean = torch.Tensor(mean).view(-1, 1, 1).to(device)
     std = torch.Tensor(std).view(-1, 1, 1).to(device)
-    return img_normalized*std + mean
+    return img_normalized * std + mean
 
 
 def plot_grids(train_ds, test_ds_id, test_ds_ood):
@@ -460,11 +463,11 @@ def reduce_across_processes(val):
 
 
 def set_weight_decay(
-    model: torch.nn.Module,
-    weight_decay: float,
-    norm_weight_decay: Optional[float] = None,
-    norm_classes: Optional[List[type]] = None,
-    custom_keys_weight_decay: Optional[List[Tuple[str, float]]] = None,
+        model: torch.nn.Module,
+        weight_decay: float,
+        norm_weight_decay: Optional[float] = None,
+        norm_classes: Optional[List[type]] = None,
+        custom_keys_weight_decay: Optional[List[Tuple[str, float]]] = None,
 ):
     if not norm_classes:
         norm_classes = [
@@ -557,3 +560,38 @@ def plot_mcp(results, classes='all', ax=None, plot_bars=False):
             bar_x = [conf for conf in results_cls['confs'] if not np.isnan(conf)]
             bar_y = [n for n in results_cls['n_samples'] if n != 0]
             plt.bar(bar_x, bar_y, width=.05, alpha=.3)
+
+
+def kernels(X, Y, metric, **kwargs):
+    metric = str(metric)
+    if metric == 'rbf':
+        gamma = kwargs.pop('gamma')
+        return pairwise_kernels(X=X, Y=Y, metric=metric, gamma=gamma)
+    elif metric == 'cosine':
+        return pairwise_kernels(X=X, Y=Y, metric=metric)
+    elif metric == 'angular':
+        return 1 - np.arccos(np.clip(pairwise_kernels(X=X, Y=Y, metric="cosine"), -1.0, 1.0)) / np.pi
+    elif metric == 'categorical':
+        gamma = kwargs.pop('gamma')
+        return np.exp(-gamma * cdist(XA=X, XB=Y, metric='hamming'))
+    else:
+        raise NotImplementedError(f"Kernel metric \"{metric}\" is not implemented.")
+
+
+def _calculate_mean_gamma(data, delta=(np.sqrt(2) * 1e-6)):
+    """
+    From "The Mean and Median Criteria for Kernel Bandwidth Selection for Support Vector Data Description"
+    https://ieeexplore.ieee.org/document/8215749
+    """
+    n_samples = data.shape[0]
+    n_features = data.shape[1]
+    variance = torch.var(data, dim=0).numpy()
+
+    denominator = 2 * n_samples * np.sum(variance)
+    numerator = (n_samples - 1) * np.log((n_samples - 1) / delta ** 2)
+    if denominator <= 0:
+        gamma = 1 / n_features
+        warnings.warn("The variance of the provided data is 0.")
+    else:
+        gamma = 0.5 * numerator / denominator  # Combined from gamma = 1/2 s^2. We can remove the squareroot and simply divide in half
+    return float(gamma)

@@ -7,6 +7,6 @@ from . import imagenet
 
 from .mnist import build_mnist
 from .fashion_mnist import build_fashionmnist
-from .cifar import CIFAR10, CIFAR100, CIFAR10C, CIFAR10Contrastive, CIFAR10Plain
-from .svhn import SVHN
+from .cifar import CIFAR10, CIFAR100, CIFAR10C, CIFAR10Contrastive, CIFAR10Plain, CIFAR100Contrastive, CIFAR100Plain
+from .svhn import SVHN, SVHNContrastive, SVHNPlain
 from .imagenet import ImageNet

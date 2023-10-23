@@ -85,6 +85,7 @@ class ResNetSNGP(nn.Module):
                  random_feature_type='orf',
                  scale_random_features=False,
                  mean_field_factor=math.pi/8,
+                 mc_samples=1000,
                  cov_momentum=-1,
                  ridge_penalty=1,
                  ):
@@ -115,6 +116,7 @@ class ResNetSNGP(nn.Module):
             random_feature_type=random_feature_type,
             scale_random_features=scale_random_features,
             mean_field_factor=mean_field_factor,
+            mc_samples=mc_samples,
             cov_momentum=cov_momentum,
             ridge_penalty=ridge_penalty,
         )
@@ -136,7 +138,7 @@ class ResNetSNGP(nn.Module):
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
 
-    def forward(self, x, mean_field=False, return_cov=False):
+    def forward(self, x, mean_field=False, monte_carlo=False, return_cov=False):
         out = F.relu(self.bn1(self.conv1(x)))
         out = self.layer1(out)
         out = self.layer2(out)
@@ -146,6 +148,8 @@ class ResNetSNGP(nn.Module):
         out = out.view(out.size(0), -1)
         if mean_field:
             out = self.output_layer.forward_mean_field(out)
+        elif monte_carlo:
+            out = self.output_layer.forward_monte_carlo(out)
         else:
             out = self.output_layer(out, return_cov=return_cov)
         return out
@@ -166,7 +170,8 @@ class ResNetSNGP(nn.Module):
         all_logits = []
         for batch in dataloader:
             inputs = batch[0]
-            logits = self(inputs.to(device), mean_field=True)
+            # TODO: Handle with forward_kwargs? currently only monte carlo supported
+            logits = self(inputs.to(device), monte_carlo=True)
             all_logits.append(logits)
         logits = torch.cat(all_logits)
         return logits

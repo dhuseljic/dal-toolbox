@@ -1,0 +1,8 @@
+name: resnet18_deterministic
+num_epochs: 200
+train_batch_size: 64
+predict_batch_size: 256
+optimizer:
+  lr: 0.1
+  weight_decay: 2e-4
+  momentum: 0.9

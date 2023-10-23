@@ -43,7 +43,7 @@ def main(args):
     test_loader = DataLoader(data.test_dataset, batch_size=args.model.predict_batch_size)
     if args.ood_datasets:
         logging.info('Building ood datasets.')
-        ood_datasets = build_ood_datasets(args, id_mean=data.mean, id_std=data.std)
+        ood_datasets = build_ood_datasets(args, transforms=data.transforms)
         ood_loaders = {name: DataLoader(ds, batch_size=args.model.predict_batch_size)
                        for name, ds in ood_datasets.items()}
     else:
@@ -104,12 +104,13 @@ def main(args):
         logits = torch.cat([preds[0] for preds in predictions])
         targets = torch.cat([preds[1] for preds in predictions])
         test_stats = evaluate(logits, targets)
-        for name, loader in ood_loaders.items():
-            predictions_ood = trainer.predict(model, loader)
-            logits_ood = torch.cat([preds[0] for preds in predictions_ood])
-            ood_stats = evaluate_ood(logits, logits_ood)
-            ood_stats = {f'{key}_{name}': val for key, val in ood_stats.items()}
-            test_stats.update(ood_stats)
+        if ood_loaders is not None:
+            for name, loader in ood_loaders.items():
+                predictions_ood = trainer.predict(model, loader)
+                logits_ood = torch.cat([preds[0] for preds in predictions_ood])
+                ood_stats = evaluate_ood(logits, logits_ood)
+                ood_stats = {f'{key}_{name}': val for key, val in ood_stats.items()}
+                test_stats.update(ood_stats)
         logging.info("[Acq %s] Test statistics: %s", i_acq, test_stats)
 
         cycle_results['test_stats'] = test_stats
@@ -133,6 +134,13 @@ def main(args):
     with open(file_name, 'w', encoding='utf-8') as f:
         json.dump(queried_indices, f, sort_keys=False)
 
+    # Save model
+    logging.info("Saving model weights to %s.", file_name)
+    torch.save(model.state_dict(), os.path.join(args.output_dir, 'lit_model_final.pth'))
+    torch.save(model.model.state_dict(), os.path.join(args.output_dir, 'model_final.pth'))
+    
+
+
 
 def evaluate(logits, targets):
     test_stats = {}
@@ -143,6 +151,7 @@ def evaluate(logits, targets):
     test_stats["brier"] = metrics.BrierScore()(logits, targets).item()
     test_stats["tce"] = metrics.ExpectedCalibrationError()(logits, targets).item()
     test_stats["ace"] = metrics.AdaptiveCalibrationError()(logits, targets).item()
+    test_stats["oce"] = metrics.OverconfidenceError()(logits, targets).item()
     return test_stats
 
 
@@ -164,18 +173,21 @@ def evaluate_ood(logits_id, logits_ood):
 def build_query(args, **kwargs):
     if args.al_strategy.name == "random":
         query = random.RandomSampling()
+    # Aleatoric
     elif args.al_strategy.name == "least_confident":
         query = uncertainty.LeastConfidentSampling(subset_size=args.al_strategy.subset_size,)
     elif args.al_strategy.name == "margin":
         query = uncertainty.MarginSampling(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == "entropy":
         query = uncertainty.EntropySampling(subset_size=args.al_strategy.subset_size)
+    # Epistemic
     elif args.al_strategy.name == "bayesian_entropy":
         query = uncertainty.BayesianEntropySampling(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == 'variation_ratio':
         query = uncertainty.VariationRatioSampling(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == 'bald':
         query = uncertainty.BALDSampling(subset_size=args.al_strategy.subset_size)
+    # Batch..tbd
     elif args.al_strategy.name == "coreset":
         query = coreset.CoreSet(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == "badge":
@@ -317,15 +329,15 @@ def build_datasets(args):
     return data
 
 
-def build_ood_datasets(args, id_mean, id_std):
+def build_ood_datasets(args, transforms):
     ood_datasets = {}
     for ds_name in args.ood_datasets:
         if ds_name == 'CIFAR10':
-            data = datasets.cifar.CIFAR10(args.dataset_path, mean=id_mean, std=id_std)
+            data = datasets.cifar.CIFAR10(args.dataset_path, transforms=transforms)
         elif ds_name == 'CIFAR100':
-            data = datasets.cifar.CIFAR100(args.dataset_path, mean=id_mean, std=id_std)
+            data = datasets.cifar.CIFAR100(args.dataset_path, transforms=transforms)
         elif ds_name == 'SVHN':
-            data = datasets.svhn.SVHN(args.dataset_path, mean=id_mean, std=id_std)
+            data = datasets.svhn.SVHN(args.dataset_path, transforms=transforms)
         else:
             raise NotImplementedError(f'Dataset {ds_name} not implemented.')
         ood_datasets[ds_name] = data.test_dataset

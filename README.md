@@ -34,4 +34,5 @@ Examples of how to train models with semi-supervised learning algorithms:
 
 ### Active Learning
 Examples of how to implement an active learning cycle:
-- [Standard Active Learning](notebooks/2D-Examples/active_learning.ipynb)
+- [Standard Active Learning](notebooks/active_learning/deterministic.ipynb)
+- [Bayesian Active Learning](notebooks/active_learning/mc-dropout.ipynb)

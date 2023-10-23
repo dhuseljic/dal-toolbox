@@ -98,13 +98,13 @@ def main(args):
     # Start hyperparameter search
     num_cpus = int(os.environ.get('SLURM_CPUS_PER_TASK', args.num_cpus))
     num_gpus = torch.cuda.device_count()
-    ray.init(address='local', num_cpus=num_cpus, num_gpus=num_gpus, ignore_reinit_error=True)
+    ray.init(num_cpus=num_cpus, num_gpus=num_gpus, ignore_reinit_error=True,
+             _temp_dir=os.path.join(args.output_dir, 'tmp'))
 
     search_space = {"lr": tune.loguniform(1e-5, .1), "weight_decay": tune.loguniform(1e-5, .1)}
     objective = tune.with_resources(train, resources={'cpu': args.num_cpus, 'gpu': args.num_gpus})
     objective = tune.with_parameters(objective, args=args, al_dataset=al_dataset, num_classes=data.num_classes)
-    search_alg = OptunaSearch(
-        points_to_evaluate=[{'lr': args.lr, 'weight_decay': args.weight_decay}], seed=args.random_seed)
+    search_alg = OptunaSearch(points_to_evaluate=[{'lr': args.lr, 'weight_decay': args.weight_decay}])
     tune_config = tune.TuneConfig(search_alg=search_alg, num_samples=args.num_opt_samples, metric="val_acc", mode="max")
     tuner = tune.Tuner(objective, param_space=search_space, tune_config=tune_config,
                        run_config=air.RunConfig(storage_path=args.output_dir))

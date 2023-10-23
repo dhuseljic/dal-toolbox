@@ -8,7 +8,7 @@
 #SBATCH --job-name=udal_synthetic
 #SBATCH --output=/mnt/work/dhuseljic/logs/udal/synthetic/%A_%a__%x.log
 date;hostname;pwd
-source activate uncertainty_evaluation
+source ~/envs/dal-toolbox/bin/activate
 cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/udal/
 
 model=resnet18

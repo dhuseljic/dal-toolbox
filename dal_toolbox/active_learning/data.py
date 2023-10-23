@@ -22,6 +22,7 @@ class ActiveLearningDataModule(L.LightningDataModule):
             train_batch_size: int = 64,
             predict_batch_size: int = 256,
             seed: int = None,
+            fill_train_loader_batch: bool = True,
             collator = None
     ):
         super().__init__()
@@ -31,6 +32,7 @@ class ActiveLearningDataModule(L.LightningDataModule):
         self.query_dataset = QueryDataset(query_dataset) if query_dataset else QueryDataset(dataset=train_dataset)
         self.train_batch_size = train_batch_size
         self.predict_batch_size = predict_batch_size
+        self.fill_train_loader_batch = fill_train_loader_batch
         self.collator = collator
 
         if query_dataset is None:
@@ -47,10 +49,19 @@ class ActiveLearningDataModule(L.LightningDataModule):
         self.labeled_indices = []
 
     def train_dataloader(self):
+        if len(self.labeled_indices) == 0:
+            raise ValueError('No instances labeled yet. Initialize the labeled pool first.')
+
         # TODO(dhuseljic): Add support for semi-supervised learning loaders.
         labeled_dataset = Subset(self.train_dataset, indices=self.labeled_indices)
-        iter_per_epoch = len(labeled_dataset) // self.train_batch_size + 1
-        sampler = RandomSampler(labeled_dataset, num_samples=(iter_per_epoch * self.train_batch_size))
+
+        if self.fill_train_loader_batch:
+            iter_per_epoch = len(labeled_dataset) // self.train_batch_size + 1
+            num_samples = (iter_per_epoch * self.train_batch_size)
+        else:
+            num_samples = None
+
+        sampler = RandomSampler(labeled_dataset, num_samples=num_samples)
         train_loader = DataLoader(labeled_dataset, batch_size=self.train_batch_size, sampler=sampler, collate_fn=self.collator)
         return train_loader
 
@@ -123,17 +134,17 @@ class ActiveLearningDataModule(L.LightningDataModule):
         self.update_annotations(indices)
 
 
-class QueryDataset(Subset):
+class QueryDataset(Dataset):
     """A helper class which returns also the index along with the instances and targets."""
     #problem with dictionary output of dataset
 
     def __init__(self, dataset):
-        super().__init__(dataset=dataset, indices=range(len(dataset)))
+        super().__init__()
         self.dataset = dataset
 
     def __getitem__(self, index):
         # TODO(dhuseljic): discuss with marek, index instead of target? maybe dictionary? leave it like that?
-        data = super().__getitem__(index)
+        data = self.dataset.__getitem__(index)
         if isinstance(data, dict):
             instance = {
                 'input_ids': data['input_ids'], 
@@ -143,8 +154,11 @@ class QueryDataset(Subset):
             }
             return instance
         else:
-            instance, target = super().__getitem__(index)
+            instance, target = self.dataset.__getitem__(index)
             return instance, target, index
+    
+    def __len__(self):
+        return len(self.dataset)
 
 
 class ALDataset:
