@@ -16,7 +16,7 @@ from dal_toolbox import datasets
 from dal_toolbox import metrics
 from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, typiclust, xpal, xpalclust, \
-    randomclust, prob_cover, eer
+    randomclust, prob_cover, eer, linear_xpal
 # noinspection PyUnresolvedReferences
 from dal_toolbox.datasets.utils import FeatureDataset, FeatureDatasetWrapper
 from dal_toolbox.metrics import ensemble_log_softmax
@@ -276,7 +276,7 @@ def build_al_strategy(name, args, num_classes=None, train_features=None, results
         query = typiclust.TypiClust(subset_size=subset_size)
     elif name == "randomclust":
         query = randomclust.RandomClust(subset_size=subset_size)
-    elif name == "xpal" or "xpalclust":
+    elif name == "xpal" or name == "xpalclust":
         if args.al_strategy.kernel.gamma == "calculate":
             gamma = _calculate_mean_gamma(train_features)
         else:
@@ -312,6 +312,8 @@ def build_al_strategy(name, args, num_classes=None, train_features=None, results
         query = prob_cover.ProbCover(subset_size=subset_size, delta=delta)
     elif name == "eer":
         query = eer.MELL(subset_size=subset_size)
+    elif name == "linearxpal":
+        query = linear_xpal.LinearXPAL(subset_size=subset_size)
     else:
         raise NotImplementedError(f"Active learning strategy {name} is not implemented!")
     return query
