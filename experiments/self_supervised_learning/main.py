@@ -158,7 +158,9 @@ def main(args):
     seed_everything(args.random_seed)
 
     # Create a Data Module
+    logger.info("Building contrastive dataset")
     data = build_contrastive_dataset(args)
+    logger.info("Building plain dataset")
     plain_data = build_plain_dataset(args)
     train_dataloader = DataLoader(data.train_dataset,
                                   batch_size=args.ssl_model.train_batch_size,
@@ -170,6 +172,7 @@ def main(args):
                                 num_workers=args.n_cpus,
                                 shuffle=False)
 
+    logger.info("Building model")
     model = build_ssl(args.ssl_model.name, args)
     logger.info(f"Using square-root adjusted learning rate "
                 f"{math.sqrt(args.ssl_model.train_batch_size * args.ssl_model.accumulate_batches) * args.ssl_model.optimizer.base_lr}")
@@ -275,11 +278,11 @@ def build_plain_dataset(args):
     elif args.dataset.name == 'ImageNet':
         data = datasets.ImageNetPlain(args.dataset_path, seed=args.random_seed)
     elif args.dataset.name == 'ImageNet50':
-        data = datasets.ImageNet50Plain(args.dataset_path, seed=args.random_seed)
+        data = datasets.ImageNet50Plain(args.dataset_path, seed=args.random_seed, preload=args.dataset.preload)
     elif args.dataset.name == 'ImageNet100':
-        data = datasets.ImageNet100Plain(args.dataset_path, seed=args.random_seed)
+        data = datasets.ImageNet100Plain(args.dataset_path, seed=args.random_seed, preload=args.dataset.preload)
     elif args.dataset.name == 'ImageNet200':
-        data = datasets.ImageNet200Plain(args.dataset_path, seed=args.random_seed)
+        data = datasets.ImageNet200Plain(args.dataset_path, seed=args.random_seed, preload=args.dataset.preload)
     else:
         sys.exit(f"Dataset {args.dataset.name} not implemented.")
 
