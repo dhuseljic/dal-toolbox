@@ -21,7 +21,7 @@ dataset=SVHN
 
 al_strat=xpalclust
 init_strategy=random
-al_strat_alpha=TODO
+al_strat_alpha=1e-1
 al_strat_kernel_name=$model_kernel_name
 al_strat_kernel_gamma=$model_kernel_gamma
 subset_size=10000

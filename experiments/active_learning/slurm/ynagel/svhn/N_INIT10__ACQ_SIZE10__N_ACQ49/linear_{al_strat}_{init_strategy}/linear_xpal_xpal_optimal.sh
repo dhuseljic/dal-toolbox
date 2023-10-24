@@ -22,7 +22,7 @@ dataset=SVHN
 
 al_strat=xpal
 init_strategy=xpal
-al_strat_alpha=TODO
+al_strat_alpha=1e-4
 al_strat_kernel_name=rbf
 al_strat_kernel_gamma=calculate
 subset_size=10000
