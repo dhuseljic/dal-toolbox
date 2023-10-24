@@ -300,13 +300,13 @@ def build_contrastive_dataset(args):
                                             seed=args.random_seed)
     elif args.dataset.name == 'ImageNet50':
         data = datasets.ImageNet50Contrastive(args.dataset_path, cds=args.dataset.color_distortion_strength,
-                                              seed=args.random_seed)
+                                              seed=args.random_seed, preload=args.dataset.preload)
     elif args.dataset.name == 'ImageNet100':
         data = datasets.ImageNet100Contrastive(args.dataset_path, cds=args.dataset.color_distortion_strength,
-                                               seed=args.random_seed)
+                                               seed=args.random_seed, preload=args.dataset.preload)
     elif args.dataset.name == 'ImageNet200':
         data = datasets.ImageNet200Contrastive(args.dataset_path, cds=args.dataset.color_distortion_strength,
-                                               seed=args.random_seed)
+                                               seed=args.random_seed, preload=args.dataset.preload)
     else:
         sys.exit(f"Dataset {args.dataset.name} not implemented.")
 
