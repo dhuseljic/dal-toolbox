@@ -232,7 +232,7 @@ def build_model(args, num_classes, feature_size=None):
             return model
     else:
         if args.model.name == 'resnet18_deterministic':
-            model = deterministic.resnet.ResNet18(num_classes=num_classes)
+            model = deterministic.resnet.ResNet18(num_classes=num_classes, imagenethead=("ImageNet" in args.dataset.name))
             optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
         elif args.model.name == "resnet18_mcdropout":
@@ -326,8 +326,16 @@ def build_dataset(args):
         data = datasets.CIFAR100(args.dataset_path)
     elif args.dataset.name == 'SVHN':
         data = datasets.SVHN(args.dataset_path)
+    elif args.dataset.name == 'ImageNet':
+        data = datasets.ImageNet(args.dataset_path)
+    elif args.dataset.name == 'ImageNet50':
+        data = datasets.ImageNet50(args.dataset_path)
+    elif args.dataset.name == 'ImageNet100':
+        data = datasets.ImageNet100(args.dataset_path)
+    elif args.dataset.name == 'ImageNet200':
+        data = datasets.ImageNet200(args.dataset_path)
     else:
-        raise NotImplementedError(f"Dataset {args.al_strategy.name} is not implemented!")
+        raise NotImplementedError(f"Dataset {args.dataset.name} is not implemented!")
 
     return data
 
