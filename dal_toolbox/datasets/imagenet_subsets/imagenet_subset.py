@@ -139,8 +139,6 @@ class ImageNetLoader:
         # Gather the files (sorted)
         imgs = []
         for i, subdir in enumerate(subdirs):
-            if i > 2:
-                break
             files = sorted(glob(os.path.join(self.root, subdir, '*.JPEG')))
             for f in files:
                 if preload:
