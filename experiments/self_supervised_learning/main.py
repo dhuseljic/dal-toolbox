@@ -205,7 +205,7 @@ def main(args):
 
     logger.info("Starting linear evaluation.")
     # Load best performing SSL model
-    encoder, output_dim = build_encoder(args.ssl_model.encoder, True)
+    encoder, output_dim = build_encoder(args.ssl_model.encoder, True, args.dataset.name)
     projector = build_projector(args.ssl_model.projector, output_dim, args.ssl_model.projector_dim)  # will be replaced
     logger.info(f"Restoring best model checkpoint - {trainer.checkpoint_callback.best_model_path}")
     model = simclr.SimCLR.load_from_checkpoint(trainer.checkpoint_callback.best_model_path,
