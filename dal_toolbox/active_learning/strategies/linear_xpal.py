@@ -111,13 +111,13 @@ class LinearXPAL(Query):
 
                 sum_ = 0.0
                 for label in labels:
-                    unlabeled_gain = f_L_plus_unlabeled_predictions[:, label] * ((label == f_L_plus_unlabeled_prediction_classes).float() - (label == f_L_unlabeled_prediction_classes).float())
-                    labeled_gain = f_L_plus_labeled_predictions[:, label] * ((label == f_L_plus_labeled_prediction_classes).float() - (label == f_L_labeled_prediction_classes).float())
+                    unlabeled_gain = f_L_plus_unlabeled_predictions[:, label] * ((label != f_L_plus_unlabeled_prediction_classes).float() - (label != f_L_unlabeled_prediction_classes).float())
+                    labeled_gain = f_L_plus_labeled_predictions[:, label] * ((label != f_L_plus_labeled_prediction_classes).float() - (label != f_L_labeled_prediction_classes).float())
                     sum_ += torch.sum(unlabeled_gain) + torch.sum(labeled_gain)
 
                 sum_ /= num_samples
                 gain += x_pred[candidate_label] * sum_
-            # gain = -gain # TODO (ynagel) Do we need this?
+            gain = -gain
             gains.append(gain)
 
         top_gains, indices = torch.topk(torch.Tensor(gains), acq_size)
