@@ -1,5 +1,5 @@
 #!/usr/bin/zsh
-#SBATCH --mem=24gb
+#SBATCH --mem=46gb
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --partition=main
@@ -22,7 +22,7 @@ dataset=SVHN
 
 al_strat=xpal
 init_strategy=random
-al_strat_alpha=TODO
+al_strat_alpha=mean
 al_strat_kernel_name=rbf
 al_strat_kernel_gamma=calculate
 subset_size=10000

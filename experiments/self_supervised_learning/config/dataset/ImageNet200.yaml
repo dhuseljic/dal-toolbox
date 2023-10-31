@@ -1,0 +1,3 @@
+name: ImageNet200
+color_distortion_strength: 1.0
+preload: False

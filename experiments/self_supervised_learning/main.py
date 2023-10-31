@@ -32,19 +32,20 @@ def build_ssl(name, args):
         raise NotImplementedError(f"Self-supervised model \"{name}\" is not implemented!")
 
 
-def build_encoder(name, return_output_dim=False):
+def build_encoder(name, return_output_dim=False, dataset=""):
     if name == 'resnet18_deterministic':
-        encoder = deterministic.resnet.ResNet18(num_classes=1)  # Linear layer will be replaced
+        encoder = deterministic.resnet.ResNet18(num_classes=1, imagenethead=("ImageNet" in dataset))
         encoder.linear = nn.Identity()  # Replace layer after max pool
 
         encoder_output_dim = 512
     elif name == "resnet50_deterministic":
-        encoder = deterministic.resnet.ResNet50(num_classes=1)
+        encoder = deterministic.resnet.ResNet50(num_classes=1, imagenethead=("ImageNet" in dataset))
         encoder.linear = nn.Identity()
 
         encoder_output_dim = 2048
     elif name == "wide_resnet_28_10":
-        encoder = deterministic.wide_resnet.wide_resnet_28_10(num_classes=1, dropout_rate=0.3)
+        encoder = deterministic.wide_resnet.wide_resnet_28_10(num_classes=1, dropout_rate=0.3,
+                                                              imagenethead=("ImageNet" in dataset))
         encoder.linear = nn.Identity()
 
         encoder_output_dim = 640
@@ -67,7 +68,7 @@ def build_projector(name, input_dim, output_dim):
 
 
 def build_simclr(args) -> (nn.Module, nn.Module):
-    encoder, encoder_output_dim = build_encoder(args.ssl_model.encoder, True)
+    encoder, encoder_output_dim = build_encoder(args.ssl_model.encoder, True, args.dataset.name)
     projector = build_projector(args.ssl_model.projector, encoder_output_dim, args.ssl_model.projector_dim)
 
     optimizer = LARS(
@@ -271,6 +272,14 @@ def build_plain_dataset(args):
         data = datasets.CIFAR100Plain(args.dataset_path, seed=args.random_seed)
     elif args.dataset.name == 'SVHN':
         data = datasets.SVHNPlain(args.dataset_path, seed=args.random_seed)
+    elif args.dataset.name == 'ImageNet':
+        data = datasets.ImageNetPlain(args.dataset_path, seed=args.random_seed)
+    elif args.dataset.name == 'ImageNet50':
+        data = datasets.ImageNet50Plain(args.dataset_path, seed=args.random_seed)
+    elif args.dataset.name == 'ImageNet100':
+        data = datasets.ImageNet100Plain(args.dataset_path, seed=args.random_seed)
+    elif args.dataset.name == 'ImageNet200':
+        data = datasets.ImageNet200Plain(args.dataset_path, seed=args.random_seed)
     else:
         sys.exit(f"Dataset {args.dataset.name} not implemented.")
 
@@ -287,6 +296,18 @@ def build_contrastive_dataset(args):
     elif args.dataset.name == 'SVHN':
         data = datasets.SVHNContrastive(args.dataset_path, cds=args.dataset.color_distortion_strength,
                                         r_prob=args.dataset.rotation_probability, seed=args.random_seed)
+    elif args.dataset.name == 'ImageNet':
+        data = datasets.ImageNetContrastive(args.dataset_path, cds=args.dataset.color_distortion_strength,
+                                            seed=args.random_seed)
+    elif args.dataset.name == 'ImageNet50':
+        data = datasets.ImageNet50Contrastive(args.dataset_path, cds=args.dataset.color_distortion_strength,
+                                              seed=args.random_seed, preload=args.dataset.preload)
+    elif args.dataset.name == 'ImageNet100':
+        data = datasets.ImageNet100Contrastive(args.dataset_path, cds=args.dataset.color_distortion_strength,
+                                               seed=args.random_seed, preload=args.dataset.preload)
+    elif args.dataset.name == 'ImageNet200':
+        data = datasets.ImageNet200Contrastive(args.dataset_path, cds=args.dataset.color_distortion_strength,
+                                               seed=args.random_seed, preload=args.dataset.preload)
     else:
         sys.exit(f"Dataset {args.dataset.name} not implemented.")
 

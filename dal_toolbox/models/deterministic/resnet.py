@@ -62,17 +62,22 @@ class Bottleneck(nn.Module):
 
 
 class ResNet18(nn.Module):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, imagenethead=False):
         super().__init__()
         self.in_planes = 64
         self.block = BasicBlock
         self.num_blocks = [2, 2, 2, 2]
         self.num_classes = num_classes
 
-        # Init layer does not have a kernel size of 7 since cifar has a smaller
-        # size of 32x32
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(64)
+        if imagenethead:
+            self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
+            self.bn1 = nn.BatchNorm2d(64)
+            self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        else:
+            # Init layer does not have a kernel size of 7 since cifar has a smaller size of 32x32
+            self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+            self.bn1 = nn.BatchNorm2d(64)
+            self.maxpool = nn.Identity()
         self.layer1 = self._make_layer(self.block, 64, self.num_blocks[0], stride=1)
         self.layer2 = self._make_layer(self.block, 128, self.num_blocks[1], stride=2)
         self.layer3 = self._make_layer(self.block, 256, self.num_blocks[2], stride=2)
@@ -88,7 +93,7 @@ class ResNet18(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x, return_features=False):
-        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.maxpool(F.relu(self.bn1(self.conv1(x))))
         out = self.layer1(out)
         out = self.layer2(out)
         out = self.layer3(out)
@@ -170,17 +175,22 @@ class ResNet18(nn.Module):
 
 # TODO (ynagel, dhuseljic) This is a lot of repeated code
 class ResNet50(nn.Module):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, imagenethead=False):
         super().__init__()
         self.in_planes = 64
         self.block = Bottleneck
         self.num_blocks = [3, 4, 6, 3]
         self.num_classes = num_classes
 
-        # Init layer does not have a kernel size of 7 since cifar has a smaller
-        # size of 32x32
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(64)
+        if imagenethead:
+            self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
+            self.bn1 = nn.BatchNorm2d(64)
+            self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        else:
+            # Init layer does not have a kernel size of 7 since cifar has a smaller size of 32x32
+            self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+            self.bn1 = nn.BatchNorm2d(64)
+            self.maxpool = nn.Identity()
         self.layer1 = self._make_layer(self.block, 64, self.num_blocks[0], stride=1)
         self.layer2 = self._make_layer(self.block, 128, self.num_blocks[1], stride=2)
         self.layer3 = self._make_layer(self.block, 256, self.num_blocks[2], stride=2)
@@ -196,7 +206,7 @@ class ResNet50(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x, return_features=False):
-        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.maxpool(F.relu(self.bn1(self.conv1(x))))
         out = self.layer1(out)
         out = self.layer2(out)
         out = self.layer3(out)
