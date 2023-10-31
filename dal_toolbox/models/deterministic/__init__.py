@@ -4,7 +4,10 @@ from . import distilbert
 from . import distilroberta
 from . import roberta
 
+from . import linear
+
 from . import resnet
+from . import spectral_resnet
 from . import wide_resnet
 
 from . import train
@@ -13,3 +16,4 @@ from . import trainer
 
 from .trainer import *
 from .base import *
+
