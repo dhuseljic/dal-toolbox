@@ -40,6 +40,7 @@ srun python -u active_learning.py \
 	dataset=$dataset \
 	dataset_path=/mnt/stud/home/ynagel/data \
 	al_strategy=$al_strat \
+	al_strategy.precomputed=False \
 	al_strategy.alpha=$al_strat_alpha \
 	al_strategy.kernel.name=$al_strat_kernel_name \
 	al_strategy.kernel.gamma=$al_strat_kernel_gamma \
