@@ -100,14 +100,14 @@ class XPAL(Query):
 
             if len(labeled_instances) > 0:
                 labeled_instances = torch.cat(labeled_instances)
-            mapped_labeled_indices = torch.arange(len(labeled_instances))
+            mapped_labeled_indices = torch.arange(len(labeled_instances)).numpy()
 
             unlabeled_instances = []
             for batch in unlabeled_dataloader:
                 unlabeled_instances.append(batch[0])
             unlabeled_instances = torch.cat(unlabeled_instances)
             mapped_unlabeled_indices = torch.arange(start=len(labeled_instances),
-                                                    end=len(unlabeled_indices) + len(labeled_instances))
+                                                    end=len(unlabeled_indices) + len(labeled_instances)).numpy()
 
             if len(labeled_instances) > 0:
                 instances = torch.cat([labeled_instances, unlabeled_instances])#

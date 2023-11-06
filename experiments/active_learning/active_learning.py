@@ -313,7 +313,9 @@ def build_al_strategy(name, args, num_classes=None, train_features=None, results
                               precomputed=args.al_strategy.precomputed, gamma=gamma,
                               kernel=args.al_strategy.kernel.name)
         elif name == "xpalclust":
-            query = xpalclust.XPALClust(num_classes, S, subset_size=subset_size, alpha_c=alpha, alpha_x=alpha)
+            query = xpalclust.XPALClust(num_classes, S, subset_size=subset_size, alpha_c=alpha, alpha_x=alpha,
+                                        precomputed=args.al_strategy.precomputed, gamma=gamma,
+                                        kernel=args.al_strategy.kernel.name)
     elif name == "probcover":
         delta = args.al_strategy.delta
         if delta is None:
