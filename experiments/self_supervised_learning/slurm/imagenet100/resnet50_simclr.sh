@@ -24,8 +24,8 @@ encoder=resnet50_deterministic
 projector=mlp
 projector_dim=128
 temperature=0.1
-train_batch_size=512
-accumulate_batches=8
+train_batch_size=256
+accumulate_batches=16
 optimizer_base_lr=0.075
 optimizer_weight_decay=0.000001
 

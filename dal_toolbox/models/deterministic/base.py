@@ -55,7 +55,8 @@ class DeterministicModel(BaseModule):
         return loss
 
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
-        inputs, targets = batch
+        inputs = batch[0]
+        targets = batch[1]
         logits = self.model(inputs)
 
         logits = self._gather(logits)

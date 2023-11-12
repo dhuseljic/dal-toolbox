@@ -1,4 +1,5 @@
 import datetime
+import gc
 import json
 import logging
 import os
@@ -16,7 +17,7 @@ from dal_toolbox import datasets
 from dal_toolbox import metrics
 from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge, typiclust, xpal, xpalclust, \
-    randomclust, prob_cover, eer
+    randomclust, prob_cover, eer, linear_xpal
 # noinspection PyUnresolvedReferences
 from dal_toolbox.datasets.utils import FeatureDataset, FeatureDatasetWrapper
 from dal_toolbox.metrics import ensemble_log_softmax
@@ -110,6 +111,7 @@ def main(args):
         )
         al_datamodule.update_annotations(indices)
     queried_indices['cycle0'] = al_datamodule.labeled_indices
+    gc.collect()  # init_al_strategy sometimes takes too long to be automatically collected
 
     # Active Learning Cycles
     for i_acq in range(0, args.al_cycle.n_acq + 1):
@@ -232,7 +234,8 @@ def build_model(args, num_classes, feature_size=None):
             return model
     else:
         if args.model.name == 'resnet18_deterministic':
-            model = deterministic.resnet.ResNet18(num_classes=num_classes, imagenethead=("ImageNet" in args.dataset.name))
+            model = deterministic.resnet.ResNet18(num_classes=num_classes,
+                                                  imagenethead=("ImageNet" in args.dataset.name))
             optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
         elif args.model.name == "resnet18_mcdropout":
@@ -276,14 +279,19 @@ def build_al_strategy(name, args, num_classes=None, train_features=None, results
         query = typiclust.TypiClust(subset_size=subset_size)
     elif name == "randomclust":
         query = randomclust.RandomClust(subset_size=subset_size)
-    elif name == "xpal" or "xpalclust":
+    elif name == "xpal" or name == "xpalclust":
         if args.al_strategy.kernel.gamma == "calculate":
             gamma = _calculate_mean_gamma(train_features)
         else:
             gamma = args.al_strategy.kernel.gamma
-        S = kernels(X=train_features, Y=train_features, metric=args.al_strategy.kernel.name, gamma=gamma)
+        if args.al_strategy.precomputed:
+            S = kernels(X=train_features, Y=train_features, metric=args.al_strategy.kernel.name, gamma=gamma)
+        else:
+            S = None
 
         if isinstance(args.al_strategy.alpha, str):
+            if not args.al_strategy.precomputed:
+                sys.exit("Cannot compute alpha without precomputed S. Set precomputed to True.")
             np.fill_diagonal(S, np.nan)  # Filter out self-similarity
             if args.al_strategy.alpha == "median":
                 alpha = np.nanmedian(S)
@@ -301,9 +309,13 @@ def build_al_strategy(name, args, num_classes=None, train_features=None, results
         print(f"Using alpha = {alpha}")
 
         if name == "xpal":
-            query = xpal.XPAL(num_classes, S, subset_size=subset_size, alpha_c=alpha, alpha_x=alpha)
+            query = xpal.XPAL(num_classes, S, subset_size=subset_size, alpha_c=alpha, alpha_x=alpha,
+                              precomputed=args.al_strategy.precomputed, gamma=gamma,
+                              kernel=args.al_strategy.kernel.name)
         elif name == "xpalclust":
-            query = xpalclust.XPALClust(num_classes, S, subset_size=subset_size, alpha_c=alpha, alpha_x=alpha)
+            query = xpalclust.XPALClust(num_classes, S, subset_size=subset_size, alpha_c=alpha, alpha_x=alpha,
+                                        precomputed=args.al_strategy.precomputed, gamma=gamma,
+                                        kernel=args.al_strategy.kernel.name)
     elif name == "probcover":
         delta = args.al_strategy.delta
         if delta is None:
@@ -312,6 +324,8 @@ def build_al_strategy(name, args, num_classes=None, train_features=None, results
         query = prob_cover.ProbCover(subset_size=subset_size, delta=delta)
     elif name == "eer":
         query = eer.MELL(subset_size=subset_size)
+    elif name == "linearxpal":
+        query = linear_xpal.LinearXPAL(subset_size=subset_size)
     else:
         raise NotImplementedError(f"Active learning strategy {name} is not implemented!")
     return query
