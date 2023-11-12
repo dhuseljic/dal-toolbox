@@ -17,6 +17,9 @@ val_interval: 25
 precomputed_features: False
 standardize_precomputed_features: False
 precomputed_features_dir: model_features_dict.pth
+finetuning: False
+finetuning_dir: model_features_dict.pth
+finetuning_lr: 1e-5
 
 output_dir: ./output/
 hydra:

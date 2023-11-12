@@ -12,6 +12,7 @@ import numpy as np
 import torch
 from omegaconf import OmegaConf
 from sklearn.preprocessing import StandardScaler
+from torch import nn
 
 from dal_toolbox import datasets
 from dal_toolbox import metrics
@@ -22,6 +23,7 @@ from dal_toolbox.active_learning.strategies import random, uncertainty, coreset,
 from dal_toolbox.datasets.utils import FeatureDataset, FeatureDatasetWrapper
 from dal_toolbox.metrics import ensemble_log_softmax
 from dal_toolbox.models import deterministic, mc_dropout
+from dal_toolbox.models.deterministic.linear import LinearModel
 from dal_toolbox.models.parzen_window_classifier import PWCLightning
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything, is_running_on_slurm, kernels, _calculate_mean_gamma
@@ -40,6 +42,8 @@ def main(args):
 
     # Setup Dataset
     logger.info('Building datasets.')
+    if args.precomputed_features and args.fintuning:
+        raise RuntimeError("Cannot use precomputed features and finetuning at the same times")
     if args.precomputed_features:
         data = FeatureDatasetWrapper(args.precomputed_features_dir)
         feature_size = data.num_features
@@ -86,7 +90,10 @@ def main(args):
         # accelerator = "cpu"
         accelerator = "auto"
 
-    model = build_model(args, num_classes=num_classes, feature_size=feature_size)
+    if args.finetuning:
+        model = build_finetunig_model(args, num_classes=num_classes)
+    else:
+        model = build_model(args, num_classes=num_classes, feature_size=feature_size)
 
     # Setup AL Module
     logger.info(f'Creating AL Datamodule with {args.al_cycle.n_init} initial samples, '
@@ -215,6 +222,46 @@ def main(args):
         json.dump(queried_indices, f, sort_keys=False)
 
 
+def build_finetunig_model(args, num_classes):
+    model_params = torch.load(args.finetuning_dir)['model']
+
+    if args.model.name == 'resnet18_deterministic':
+        encoder = deterministic.resnet.ResNet18(num_classes=num_classes, imagenethead=("ImageNet" in args.dataset.name))
+        encoder_output_dim = 512
+    elif args.model.name == "resnet50_deterministic":
+        encoder = mc_dropout.resnet.DropoutResNet18(num_classes=num_classes, n_passes=args.model.n_passes,
+                                                    dropout_rate=args.model.dropout_rate)
+        encoder_output_dim = 2048
+    elif args.model.name == "wideresnet2810_deterministic":
+        encoder = deterministic.wide_resnet.wide_resnet_28_10(num_classes=num_classes,
+                                                              dropout_rate=args.model.dropout_rate,
+                                                              imagenethead=("ImageNet" in args.dataset.name))
+        encoder_output_dim = 640
+    else:
+        raise NotImplementedError(f"Model {args.model.name} not implemented.")
+
+    encoder.linear = nn.Identity()
+    encoder.load_state_dict(model_params)
+    encoder.linear = nn.Linear(encoder_output_dim, num_classes)
+
+    linear_params = [p for p in encoder.linear.parameters()]
+    base_params = [p[1] for p in encoder.named_parameters() if p[0] not in ["linear.weight", "linear.bias"]]
+
+    optimizer = torch.optim.SGD([
+        {'params': base_params, 'lr': args.finetuning_lr},
+        {'params': linear_params}
+    ], **args.model.optimizer)
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
+
+    model = deterministic.DeterministicModel(
+        encoder, optimizer=optimizer, lr_scheduler=lr_scheduler,
+        train_metrics={'train_acc': metrics.Accuracy()},
+        val_metrics={'val_acc': metrics.Accuracy()},
+    )
+
+    return model
+
+
 def build_model(args, num_classes, feature_size=None):
     model = None
     optimizer = None
@@ -250,6 +297,12 @@ def build_model(args, num_classes, feature_size=None):
                 val_metrics={'val_acc': metrics.Accuracy()}
             )
             return model
+        elif args.model.name == "wideresnet2810_deterministic":
+            model = deterministic.wide_resnet.wide_resnet_28_10(num_classes=num_classes,
+                                                                dropout_rate=args.model.dropout_rate,
+                                                                imagenethead=("ImageNet" in args.dataset.name))
+            optimizer = torch.optim.SGD(model.parameters(), **args.model.optimizer)
+            lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
 
     if model is None:
         sys.exit(f"Model {args.model.name} is not implemented, "
