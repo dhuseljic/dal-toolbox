@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --partition=main
 #SBATCH --nodelist=cpu-epyc-6
-#SBATCH --array=2-10
+#SBATCH --array=1-10
 #SBATCH --job-name=al_baselines
 #SBATCH --output=/mnt/stud/home/ynagel/logs/al_baselines/%A_%a__%x.log
 
@@ -28,7 +28,7 @@ al_strat_kernel_gamma=calculate
 subset_size=10000
 n_init=1
 acq_size=1
-n_acq=299
+n_acq=50
 
 random_seed=$SLURM_ARRAY_TASK_ID
 output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines/${dataset}/${model}/${al_strat}_${init_strategy}_default/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/

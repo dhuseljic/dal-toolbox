@@ -3,7 +3,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=6
 #SBATCH --partition=main
-#SBATCH --nodelist=cpu-epyc-5
+#SBATCH --nodelist=cpu-epyc-6
 #SBATCH --array=0-144
 #SBATCH --job-name=xpal_hparams
 #SBATCH --output=/mnt/stud/home/ynagel/logs/xpal_hparams/%A_%a__%x.log
@@ -29,9 +29,9 @@ al_strat_alpha=${alpha_array[$((SLURM_ARRAY_TASK_ID % 29)) + 1]}
 al_strat_kernel_name=$model_kernel_name
 al_strat_kernel_gamma=$model_kernel_gamma
 subset_size=10000
-n_init=10
-acq_size=10
-n_acq=49
+n_init=100
+acq_size=100
+n_acq=14
 output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/xpal_hparams/${dataset}/${model}/${al_strat}_${init_strategy}/${al_strat_alpha}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/${model_kernel_name}/${model_kernel_gamma}/seed${random_seed}/
 
 srun python -u active_learning.py \

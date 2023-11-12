@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --partition=main
 #SBATCH --nodelist=cpu-epyc-6
-#SBATCH --array=1-10
+#SBATCH --array=9
 #SBATCH --job-name=al_baselines
 #SBATCH --output=/mnt/stud/home/ynagel/logs/al_baselines/%A_%a__%x.log
 
