@@ -42,7 +42,7 @@ def main(args):
 
     # Setup Dataset
     logger.info('Building datasets.')
-    if args.precomputed_features and args.fintuning:
+    if args.precomputed_features and args.finetuning:
         raise RuntimeError("Cannot use precomputed features and finetuning at the same times")
     if args.precomputed_features:
         data = FeatureDatasetWrapper(args.precomputed_features_dir)
