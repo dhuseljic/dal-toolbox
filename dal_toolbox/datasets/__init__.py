@@ -8,7 +8,8 @@ from . import imagenet_subsets
 
 from .mnist import build_mnist
 from .fashion_mnist import build_fashionmnist
-from .cifar import CIFAR10, CIFAR100, CIFAR10C, CIFAR10Contrastive, CIFAR10Plain, CIFAR100Contrastive, CIFAR100Plain
+from .cifar import CIFAR10, CIFAR100, CIFAR10C, CIFAR10Contrastive, CIFAR10Plain, CIFAR100Contrastive, CIFAR100Plain, \
+    CIFAR10SimCLR, CIFAR10WithoutNormalization
 from .svhn import SVHN, SVHNContrastive, SVHNPlain
 from .imagenet import ImageNet, ImageNetContrastive, ImageNetPlain
 from .imagenet_subsets.imagenet_subset import ImageNet50, ImageNet50Contrastive, ImageNet50Plain, ImageNet100, \

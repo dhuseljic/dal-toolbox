@@ -387,6 +387,12 @@ def build_al_strategy(name, args, num_classes=None, train_features=None, results
 def build_dataset(args):
     if args.dataset.name == 'CIFAR10':
         data = datasets.CIFAR10(args.dataset_path)
+    elif args.dataset.name == 'CIFAR10_PLAIN':
+        data = datasets.CIFAR10Plain(args.dataset_path)
+    elif args.dataset.name == 'CIFAR10_NO_NORM':
+        data = datasets.CIFAR10WithoutNormalization(args.dataset_path)
+    elif args.dataset.name == 'CIFAR10_SIMCLR':
+        data = datasets.CIFAR10SimCLR(args.dataset_path)
     elif args.dataset.name == 'CIFAR100':
         data = datasets.CIFAR100(args.dataset_path)
     elif args.dataset.name == 'SVHN':
