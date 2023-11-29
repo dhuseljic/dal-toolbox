@@ -101,13 +101,13 @@ The `model` parameter has to be set to `linear`, which will result in a linear l
 ## Complete overview
 
 Here we see an overview of all baseline experiments performed.
-All slurm scripts used to run these experiments can be found [here](slurm/ynagel).
+All slurm scripts used to run these experiments can be found [here](../../experiments/active_learning/slurm/ynagel).
 
-| Dataset  | Model    | Budget 1000                                                    | Budget 2500                                                    | Budget 5000                                                    | Budget 10000                                                    |
-|----------|----------|----------------------------------------------------------------|----------------------------------------------------------------|----------------------------------------------------------------|-----------------------------------------------------------------|
-| CIFAR10  | ResNet18 | <img src="./learning_curves/CIFAR10/resnet18/budet1000.png"/>  | <img src="./learning_curves/CIFAR10/resnet18/budet2500.png"/>  | <img src="./learning_curves/CIFAR10/resnet18/budet5000.png"/>  | <img src="./learning_curves/CIFAR10/resnet18/budet10000.png"/>  |
-| CIFAR100 | ResNet18 | <img src="./learning_curves/CIFAR100/resnet18/budet1000.png"/> | <img src="./learning_curves/CIFAR100/resnet18/budet2500.png"/> | <img src="./learning_curves/CIFAR100/resnet18/budet5000.png"/> | <img src="./learning_curves/CIFAR100/resnet18/budet10000.png"/> |
-| SVHN     | ResNet18 | <img src="./learning_curves/SVHN/resnet18/budet1000.png"/>     | <img src="./learning_curves/SVHN/resnet18/budet2500.png"/>     | <img src="./learning_curves/SVHN/resnet18/budet5000.png"/>     | <img src="./learning_curves/SVHN/resnet18/budet10000.png"/>     |
+| Dataset  | Model    | Budget 1000                                                              | Budget 2500                                                              | Budget 5000                                                              | Budget 10000                                                              |
+|----------|----------|--------------------------------------------------------------------------|--------------------------------------------------------------------------|--------------------------------------------------------------------------|---------------------------------------------------------------------------|
+| CIFAR10  | ResNet18 | <img src="./notebooks/learning_curves/CIFAR10/resnet18/budet1000.png"/>  | <img src="./notebooks/learning_curves/CIFAR10/resnet18/budet2500.png"/>  | <img src="./notebooks/learning_curves/CIFAR10/resnet18/budet5000.png"/>  | <img src="./notebooks/learning_curves/CIFAR10/resnet18/budet10000.png"/>  |
+| CIFAR100 | ResNet18 | <img src="./notebooks/learning_curves/CIFAR100/resnet18/budet1000.png"/> | <img src="./notebooks/learning_curves/CIFAR100/resnet18/budet2500.png"/> | <img src="./notebooks/learning_curves/CIFAR100/resnet18/budet5000.png"/> | <img src="./notebooks/learning_curves/CIFAR100/resnet18/budet10000.png"/> |
+| SVHN     | ResNet18 | <img src="./notebooks/learning_curves/SVHN/resnet18/budet1000.png"/>     | <img src="./notebooks/learning_curves/SVHN/resnet18/budet2500.png"/>     | <img src="./notebooks/learning_curves/SVHN/resnet18/budet5000.png"/>     | <img src="./notebooks/learning_curves/SVHN/resnet18/budet10000.png"/>     |
 
 TypiClust might not work for high budgets, since there might not be enough uncovered clusters.
 Therefore, the `subset_size` parameter was set to 30000 for all TypiClust experiments.
@@ -115,10 +115,10 @@ Furthermore, TypiClust was not used in CIFAR100 experiments with budget 5000 and
 
 ### Experiments with precomputed features
 
-| Dataset | Model  | Budget 60                                                 | Budget 200                                                 |
-|---------|--------|-----------------------------------------------------------|------------------------------------------------------------|
-| CIFAR10 | Linear | <img src="./learning_curves/CIFAR10/linear/budet60.png"/> | <img src="./learning_curves/CIFAR10/linear/budet200.png"/> |
-| SVHN    | Linear | <img src="./learning_curves/SVHN/linear/budet60.png"/>    | <img src="./learning_curves/SVHN/linear/budet200.png"/>    |
+| Dataset | Model  | Budget 60                                                           | Budget 200                                                           |
+|---------|--------|---------------------------------------------------------------------|----------------------------------------------------------------------|
+| CIFAR10 | Linear | <img src="./notebooks/learning_curves/CIFAR10/linear/budet60.png"/> | <img src="./notebooks/learning_curves/CIFAR10/linear/budet200.png"/> |
+| SVHN    | Linear | <img src="./notebooks/learning_curves/SVHN/linear/budet60.png"/>    | <img src="./notebooks/learning_curves/SVHN/linear/budet200.png"/>    |
 
 ## Sources
 
