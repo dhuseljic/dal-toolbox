@@ -19,10 +19,10 @@ model_train_batch_size=128
 model_num_epochs=150
 finetuning_lr=0.01
 
-dataset=CIFAR10_SIMCLR
+dataset=SVHN_SIMCLR
 
-al_strat=entropy
-init_strategy=random
+al_strat=typiclust
+init_strategy=typiclust
 subset_size=10000
 n_init=10
 acq_size=10

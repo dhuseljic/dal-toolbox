@@ -19,9 +19,9 @@ model_train_batch_size=128
 model_num_epochs=150
 finetuning_lr=0.01
 
-dataset=CIFAR10_SIMCLR
+dataset=SVHN_SIMCLR
 
-al_strat=entropy
+al_strat=badge
 init_strategy=random
 subset_size=10000
 n_init=10

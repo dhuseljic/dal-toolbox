@@ -19,14 +19,14 @@ model_train_batch_size=128
 model_num_epochs=150
 finetuning_lr=0.01
 
-dataset=CIFAR10_SIMCLR
+dataset=CIFAR100_SIMCLR
 
 al_strat=entropy
 init_strategy=random
 subset_size=10000
-n_init=10
-acq_size=10
-n_acq=49
+n_init=100
+acq_size=100
+n_acq=14
 
 random_seed=$SLURM_ARRAY_TASK_ID
 output_dir=/mnt/stud/work/ynagel/results/active_learning/finetuning/${dataset}/${model}_finetuned/${al_strat}_${init_strategy}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/

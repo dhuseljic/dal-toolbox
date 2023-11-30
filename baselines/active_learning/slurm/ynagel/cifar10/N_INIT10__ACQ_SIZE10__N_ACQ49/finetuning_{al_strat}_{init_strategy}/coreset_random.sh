@@ -4,22 +4,22 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --partition=main
 #SBATCH --gres=gpu:1
-#SBATCH --array=1-5
+#SBATCH --array=1-10
 #SBATCH --job-name=al_baselines
-#SBATCH --output=/mnt/stud/home/ynagel/logs/al_baselines/%A_%a__%x.log
+#SBATCH --output=/mnt/stud/work/ynagel/logs/finetuning/%A_%a__%x.log
 
 date;hostname;pwd
 source /mnt/stud/home/ynagel/dal-toolbox/venv/bin/activate
 cd ~/dal-toolbox/experiments/active_learning/ || exit
 
 model=wideresnet2810
-model_optimizer_lr=0.01
+model_optimizer_lr=0.1
 model_optimizer_weight_decay=1e-4
 model_train_batch_size=128
 model_num_epochs=150
-finetuning_lr=0.001
+finetuning_lr=0.01
 
-dataset=CIFAR10
+dataset=CIFAR10_SIMCLR
 
 al_strat=coreset
 init_strategy=random
@@ -29,7 +29,7 @@ acq_size=10
 n_acq=49
 
 random_seed=$SLURM_ARRAY_TASK_ID
-output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines/${dataset}/${model}_finetuned/${al_strat}_${init_strategy}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/
+output_dir=/mnt/stud/work/ynagel/results/active_learning/finetuning/${dataset}/${model}_finetuned/${al_strat}_${init_strategy}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/
 
 srun python -u active_learning.py \
 	model=$model \
