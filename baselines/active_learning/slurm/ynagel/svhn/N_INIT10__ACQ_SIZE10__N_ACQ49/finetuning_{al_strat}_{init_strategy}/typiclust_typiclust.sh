@@ -49,4 +49,4 @@ srun python -u active_learning.py \
 	random_seed=$random_seed \
 	output_dir=$output_dir \
 	finetuning=True \
-	finetuning_dir=/mnt/stud/home/ynagel/data/wide_resnet_28_10_CIFAR10_0.937.pth
+	finetuning_dir=/mnt/stud/home/ynagel/data/wide_resnet_28_10_SVHN_0.905.pth
