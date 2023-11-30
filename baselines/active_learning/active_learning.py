@@ -395,8 +395,12 @@ def build_dataset(args):
         data = datasets.CIFAR10SimCLR(args.dataset_path)
     elif args.dataset.name == 'CIFAR100':
         data = datasets.CIFAR100(args.dataset_path)
+    elif args.dataset.name == 'CIFAR100_SIMCLR':
+        data = datasets.CIFAR100SimCLR(args.dataset_path)
     elif args.dataset.name == 'SVHN':
         data = datasets.SVHN(args.dataset_path)
+    elif args.dataset.name == 'SVHN_SIMCLR':
+        data = datasets.SVHNSimCLR(args.dataset_path)
     elif args.dataset.name == 'ImageNet':
         data = datasets.ImageNet(args.dataset_path)
     elif args.dataset.name == 'ImageNet50':
