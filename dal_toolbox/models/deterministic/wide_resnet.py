@@ -139,3 +139,33 @@ class WideResNet(nn.Module):
             labels = torch.cat(all_labels)
             return features, labels
         return features
+
+    @torch.inference_mode()
+    def get_grad_representations(self, dataloader, device):
+        self.eval()
+        self.to(device)
+        feature_dim = 640
+
+        embedding = []
+        for batch in dataloader:
+            inputs = batch[0]
+            embedding_batch = torch.empty([len(inputs), feature_dim * self.num_classes])
+            logits, features = self(inputs.to(device), return_features=True)
+            logits = logits.cpu()
+            features = features.cpu()
+
+            probas = logits.softmax(-1)
+            max_indices = probas.argmax(-1)
+
+            # TODO: optimize code
+            # for each sample in a batch and for each class, compute the gradient wrt to weights
+            for n in range(len(inputs)):
+                for c in range(self.num_classes):
+                    if c == max_indices[n]:
+                        embedding_batch[n, feature_dim * c: feature_dim * (c + 1)] = features[n] * (1 - probas[n, c])
+                    else:
+                        embedding_batch[n, feature_dim * c: feature_dim * (c + 1)] = features[n] * (-1 * probas[n, c])
+            embedding.append(embedding_batch)
+        # Concat all embeddings
+        embedding = torch.cat(embedding)
+        return embedding
