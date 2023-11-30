@@ -10,7 +10,7 @@
 
 date;hostname;pwd
 source /mnt/stud/home/ynagel/dal-toolbox/venv/bin/activate
-cd ~/dal-toolbox/experiments/active_learning/ || exit
+cd ~/dal-toolbox/baselines/active_learning/ || exit
 
 random_seed_array=(0 1 2)
 dataset_array=(CIFAR10_PLAIN CIFAR10_NO_NORM CIFAR10_SIMCLR)

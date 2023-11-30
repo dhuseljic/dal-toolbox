@@ -11,7 +11,7 @@
 
 date;hostname;pwd
 source /mnt/stud/home/ynagel/dal-toolbox/venv/bin/activate
-cd ~/dal-toolbox/experiments/active_learning/ || exit
+cd ~/dal-toolbox/baselines/active_learning/ || exit
 
 random_seed_array=(0 1 2 3 4)
 alpha_array=(1e-1 1e-2 1e-3 1e-4 1e-5 1e-6 1e-7 1e-8 1e-9 1e-10 1e-11 1e-12 1e-13 1e-14 1e-15 1e-16 1e-17 1e-18 1e-19 1e-20 0.0 mean quantile_0.1 quantile_0.25 quantile_0.33 median quantile_0.66 quantile_0.75 quantile_0.9)

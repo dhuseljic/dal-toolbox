@@ -9,7 +9,7 @@
 
 date;hostname;pwd
 source /mnt/stud/home/ynagel/dal-toolbox/venv/bin/activate
-cd ~/dal-toolbox/experiments/active_learning/ || exit
+cd ~/dal-toolbox/baselines/active_learning/ || exit
 
 model=pwc
 model_kernel_name=rbf
