@@ -59,6 +59,7 @@ class WideResNet(nn.Module):
         self.in_planes = 16
         self.depth = depth
         self.widen_factor = widen_factor
+        self.num_classes = num_classes
 
         assert ((self.depth - 4) % 6 == 0), 'Wide-resnet depth should be 6n+4'
         n = (self.depth - 4) / 6
@@ -108,6 +109,18 @@ class WideResNet(nn.Module):
             logits = self(samples.to(device))
             all_logits.append(logits)
         return torch.cat(all_logits)
+
+    @torch.inference_mode()
+    def get_logits(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_logits = []
+        for batch in dataloader:
+            inputs = batch[0]
+            logits = self(inputs.to(device))
+            all_logits.append(logits)
+        logits = torch.cat(all_logits)
+        return logits
 
     @torch.inference_mode()
     def get_probas(self, dataloader, device):
