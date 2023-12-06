@@ -44,6 +44,34 @@ class SVHNStandardTransforms(BaseTransforms):
         return transform
 
 
+class SVHNSimCLRTransforms(BaseTransforms):
+    def __init__(self, rotation_probability: float = 0.7):
+        super().__init__()
+        self.rotation_prob = rotation_probability
+
+    @property
+    def train_transform(self):
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.RandomApply([torchvision.transforms.RandomRotation(30)], self.rotation_prob),
+            torchvision.transforms.ToTensor(),
+        ])
+        return transform
+
+    @property
+    def eval_transform(self):
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.ToTensor(),
+        ])
+        return transform
+
+    @property
+    def query_transform(self):
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.ToTensor(),
+        ])
+        return transform
+
+
 class SVHN(BaseData):
     def __init__(
             self,
@@ -125,6 +153,11 @@ class SVHNContrastive(SVHN):
         super().__init__(dataset_path,
                          SVHNContrastiveTransforms(color_distortion_strength=cds, rotation_probability=r_prob),
                          val_split, seed)
+
+
+class SVHNSimCLR(SVHN):
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
+        super().__init__(dataset_path, SVHNSimCLRTransforms(), val_split, seed)
 
 
 def build_svhn(split, ds_path, mean=(0.4377, 0.4438, 0.4728), std=(0.1980, 0.2010, 0.1970), return_info=False):

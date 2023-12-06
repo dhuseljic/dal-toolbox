@@ -13,6 +13,62 @@ class CIFAR10Transforms(Enum):
     std: tuple = (0.247, 0.243, 0.262)
 
 
+class CIFAR10StandardTransformsWithoutNormalization(BaseTransforms):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def train_transform(self):
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.RandomCrop(32, padding=4),
+            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.ToTensor(),
+        ])
+        return transform
+
+    @property
+    def eval_transform(self):
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.ToTensor(),
+        ])
+        return transform
+
+    @property
+    def query_transform(self):
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.ToTensor(),
+        ])
+        return transform
+
+
+class CIFAR10SimCLRTransforms(BaseTransforms):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def train_transform(self):
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.RandomResizedCrop(size=32),
+            torchvision.transforms.RandomHorizontalFlip(p=0.5),
+            torchvision.transforms.ToTensor(),
+        ])
+        return transform
+
+    @property
+    def eval_transform(self):
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.ToTensor(),
+        ])
+        return transform
+
+    @property
+    def query_transform(self):
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.ToTensor(),
+        ])
+        return transform
+
+
 class CIFAR10StandardTransforms(BaseTransforms):
     def __init__(self):
         super().__init__()
@@ -87,6 +143,16 @@ class CIFAR10(BaseData):
 class CIFAR10Plain(CIFAR10):
     def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
         super().__init__(dataset_path, PlainTransforms(), val_split, seed)
+
+
+class CIFAR10WithoutNormalization(CIFAR10):
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
+        super().__init__(dataset_path, CIFAR10StandardTransformsWithoutNormalization(), val_split, seed)
+
+
+class CIFAR10SimCLR(CIFAR10):
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
+        super().__init__(dataset_path, CIFAR10SimCLRTransforms(), val_split, seed)
 
 
 class CIFAR10CTransforms(CIFAR10StandardTransforms):
@@ -224,6 +290,34 @@ class CIFAR100ContrastiveTransforms(CIFAR100StandardTransforms):
         return transform
 
 
+class CIFAR100SimCLRTransforms(BaseTransforms):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def train_transform(self):
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.RandomResizedCrop(size=32),
+            torchvision.transforms.RandomHorizontalFlip(p=0.5),
+            torchvision.transforms.ToTensor(),
+        ])
+        return transform
+
+    @property
+    def eval_transform(self):
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.ToTensor(),
+        ])
+        return transform
+
+    @property
+    def query_transform(self):
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.ToTensor(),
+        ])
+        return transform
+
+
 class CIFAR100(BaseData):
 
     def __init__(self,
@@ -261,6 +355,9 @@ class CIFAR100(BaseData):
     def test_dataset(self):
         return torchvision.datasets.CIFAR100(self.dataset_path, train=False, transform=self.eval_transform)
 
+class CIFAR100SimCLR(CIFAR100):
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
+        super().__init__(dataset_path, CIFAR100SimCLRTransforms(), val_split, seed)
 
 class CIFAR100Contrastive(CIFAR100):
     """
