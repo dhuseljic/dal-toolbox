@@ -36,9 +36,10 @@ See [Using precomputed features](#using-precomputed-features) for more details.
 
 The following models are implemented:
 
-| Model                    | Argument                 |
-|--------------------------|--------------------------|
-| ResNet18 [[1](#sources)] | `resnet18_deterministic` |
+| Model                          | Argument                       |
+|--------------------------------|--------------------------------|
+| ResNet18 [[1](#sources)]       | `resnet18_deterministic`       |
+| WideResNet2810 [[9](#sources)] | `wideresnet2810_deterministic` |
 
 Furthermore, the following hyperparameters can be adjusted for each model:
 
@@ -61,11 +62,17 @@ In addition, there are some hyperparameters, that
 
 The following datasets are implemented:
 
-| Dataset                  | Argument   |
-|--------------------------|------------|
-| CIFAR10 [[2](#sources)]  | `CIFAR10`  |
-| CIFAR100 [[2](#sources)] | `CIFAR100` |
-| SVHN  [[3](#sources)]    | `SVHN`     |
+| Dataset                     | Argument      |
+|-----------------------------|---------------|
+| CIFAR10 [[2](#sources)]     | `CIFAR10`     |
+| CIFAR100 [[2](#sources)]    | `CIFAR100`    |
+| SVHN  [[3](#sources)]       | `SVHN`        |
+| ImageNet [[7](#sources)]    | `ImageNet`    |
+| ImageNet50 [[8](#sources)]  | `ImageNet50`  |
+| ImageNet100 [[8](#sources)] | `ImageNet100` |
+| ImageNet200 [[8](#sources)] | `ImageNet200` |
+
+Keep in mind that ImageNet and its subsets are not automatically downloaded and have to be downloaded manually (See https://image-net.org/).
 
 #### Active learning strategies
 
@@ -128,5 +135,8 @@ Furthermore, TypiClust was not used in CIFAR100 experiments with budget 5000 and
 - [4] Sener, Ozan, and Silvio Savarese. “Active Learning for Convolutional Neural Networks: A Core-Set Approach.” In International Conference on Learning Representations, 2018. https://openreview.net/forum?id=H1aIuk-RW.
 - [5] Ash, Jordan T., Chicheng Zhang, Akshay Krishnamurthy, John Langford, and Alekh Agarwal. “Deep Batch Active Learning by Diverse, Uncertain Gradient Lower Bounds.” In International Conference on Learning Representations, 2020. https://openreview.net/forum?id=ryghZJBKPS.
 - [6] Hacohen, Guy, Avihu Dekel, and Daphna Weinshall. “Active Learning on a Budget: Opposite Strategies Suit High and Low Budgets.” In International Conference on Machine Learning, 8175–95. PMLR, 2022. http://arxiv.org/abs/2202.02794.
+- [7] Deng, Jia, Wei Dong, Richard Socher, Li-Jia Li, Kai Li, and Li Fei-Fei. “ImageNet: A Large-Scale Hierarchical Image Database.” In 2009 IEEE Conference on Computer Vision and Pattern Recognition, 248–55. Miami, USA: IEEE, 2009. https://doi.org/10.1109/CVPR.2009.5206848.
+- [8] Van Gansbeke, Wouter, Simon Vandenhende, Stamatios Georgoulis, Marc Proesmans, and Luc Van Gool. “SCAN: Learning to Classify Images without Labels.” In Computer Vision -- ECCV 2020, 12355:268–85. Lecture Notes in Computer Science. Glasgow, UK: Springer International Publishing, 2020. https://doi.org/10.1007/978-3-030-58607-2_16.
+- [9] Zagoruyko, Sergey, and Nikos Komodakis. “Wide Residual Networks.” In Proceedings of the British Machine Vision Conference 2016, 87.1-87.12. York, United Kingdom: BMVA, 2016. https://doi.org/10.5244/C.30.87.
 
 
