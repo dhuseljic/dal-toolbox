@@ -237,15 +237,23 @@ def build_finetunig_model(args, num_classes):
                                                               dropout_rate=args.model.dropout_rate,
                                                               imagenethead=("ImageNet" in args.dataset.name))
         encoder_output_dim = 640
+    elif args.model.name == "vits14":
+        encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14_reg')
+        encoder_output_dim = 384
     else:
         raise NotImplementedError(f"Model {args.model.name} not implemented.")
 
-    encoder.linear = nn.Identity()
-    encoder.load_state_dict(model_params)
-    encoder.linear = nn.Linear(encoder_output_dim, num_classes)
-
-    linear_params = [p for p in encoder.linear.parameters()]
-    base_params = [p[1] for p in encoder.named_parameters() if p[0] not in ["linear.weight", "linear.bias"]]
+    if args.model.name == "vits14":
+        encoder.load_state_dict(model_params)
+        encoder.head = nn.Linear(encoder_output_dim, num_classes)
+        linear_params = [p for p in encoder.head.parameters()]
+        base_params = [p[1] for p in encoder.named_parameters() if p[0] not in ["head.weight", "head.bias"]]
+    else:
+        encoder.linear = nn.Identity()
+        encoder.load_state_dict(model_params)
+        encoder.linear = nn.Linear(encoder_output_dim, num_classes)
+        linear_params = [p for p in encoder.linear.parameters()]
+        base_params = [p[1] for p in encoder.named_parameters() if p[0] not in ["linear.weight", "linear.bias"]]
 
     optimizer = torch.optim.SGD([
         {'params': base_params, 'lr': args.finetuning_lr},
@@ -409,6 +417,14 @@ def build_dataset(args):
         data = datasets.ImageNet100(args.dataset_path)
     elif args.dataset.name == 'ImageNet200':
         data = datasets.ImageNet200(args.dataset_path)
+    elif args.dataset.name == 'ImageNet_SIMCLR':
+        data = datasets.ImageNetSimCLR(args.dataset_path)
+    elif args.dataset.name == 'ImageNet50_SIMCLR':
+        data = datasets.ImageNet50SimCLR(args.dataset_path)
+    elif args.dataset.name == 'ImageNet100_SIMCLR':
+        data = datasets.ImageNet100SimCLR(args.dataset_path)
+    elif args.dataset.name == 'ImageNet200_SIMCLR':
+        data = datasets.ImageNet200SimCLR(args.dataset_path)
     else:
         raise NotImplementedError(f"Dataset {args.dataset.name} is not implemented!")
 

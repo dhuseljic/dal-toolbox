@@ -37,6 +37,35 @@ class ImageNetStandardTransforms(BaseTransforms):
         return transform
 
 
+class ImageNetSimCLRTransforms(BaseTransforms):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def train_transform(self):
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.RandomResizedCrop(size=224, scale=(0.32, 1.0), interpolation=torchvision.transforms.InterpolationMode.BICUBIC),
+            torchvision.transforms.RandomHorizontalFlip(p=0.5),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(mean=ImageNetTransforms.mean, std=ImageNetTransforms.std)
+        ])
+        return transform
+
+    @property
+    def eval_transform(self):
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.ToTensor(),
+        ])
+        return transform
+
+    @property
+    def query_transform(self):
+        transform = torchvision.transforms.Compose([
+            torchvision.transforms.ToTensor(),
+        ])
+        return transform
+
+
 class ImageNet(BaseData):
     def __init__(
             self,
@@ -86,6 +115,11 @@ class ImageNet(BaseData):
     @property
     def test_dataset(self):
         return datasets.ImageNet(self.dataset_path, split='val', transform=self.eval_transform)
+
+
+class ImageNetSimCLR(ImageNet):
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
+        super().__init__(dataset_path, ImageNetSimCLRTransforms(), val_split, seed)
 
 
 class ImageNetContrastiveTransforms(ImageNetStandardTransforms):

@@ -6,7 +6,7 @@ from PIL import Image
 
 from dal_toolbox.datasets import ImageNet
 from dal_toolbox.datasets.base import BaseTransforms
-from dal_toolbox.datasets.imagenet import ImageNetContrastiveTransforms
+from dal_toolbox.datasets.imagenet import ImageNetContrastiveTransforms, ImageNetSimCLRTransforms
 from dal_toolbox.datasets.utils import PlainTransforms
 
 
@@ -22,7 +22,8 @@ class ImageNetSubSetWrapper(ImageNet):
 
     @property
     def full_train_dataset(self):
-        return ImageNetSubset(imgs=self.trainset.imgs, class_names=self.trainset.classes, transform=self.train_transform)
+        return ImageNetSubset(imgs=self.trainset.imgs, class_names=self.trainset.classes,
+                              transform=self.train_transform)
 
     @property
     def full_train_dataset_eval_transforms(self):
@@ -30,7 +31,8 @@ class ImageNetSubSetWrapper(ImageNet):
 
     @property
     def full_train_dataset_query_transforms(self):
-        return ImageNetSubset(imgs=self.trainset.imgs, class_names=self.trainset.classes, transform=self.query_transform)
+        return ImageNetSubset(imgs=self.trainset.imgs, class_names=self.trainset.classes,
+                              transform=self.query_transform)
 
     @property
     def test_dataset(self):
@@ -59,6 +61,11 @@ class ImageNet50Contrastive(ImageNet50):
                          preload=preload)
 
 
+class ImageNet50SimCLR(ImageNet50):
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
+        super().__init__(dataset_path, ImageNetSimCLRTransforms(), val_split, seed)
+
+
 class ImageNet50Plain(ImageNet50):
     def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None, preload=False) -> None:
         super().__init__(dataset_path, PlainTransforms(resize=(224, 224)), val_split, seed, preload=preload)
@@ -72,6 +79,11 @@ class ImageNet100(ImageNetSubSetWrapper):
     @property
     def num_classes(self):
         return 100
+
+
+class ImageNet100SimCLR(ImageNet100):
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
+        super().__init__(dataset_path, ImageNetSimCLRTransforms(), val_split, seed)
 
 
 class ImageNet100Plain(ImageNet100):
@@ -101,6 +113,11 @@ class ImageNet200(ImageNetSubSetWrapper):
         return 200
 
 
+class ImageNet200SimCLR(ImageNet200):
+    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
+        super().__init__(dataset_path, ImageNetSimCLRTransforms(), val_split, seed)
+
+
 class ImageNet200Contrastive(ImageNet200):
     """
     Contrastive version of ImageNet200.
@@ -125,7 +142,7 @@ class ImageNetLoader:
         self.split = split
 
         print(f"Loading {split} split of ImageNet {subset_file}")
-        
+
         # Read the subset of classes to include (sorted)
         with open(os.path.join(os.path.dirname(__file__), subset_file), 'r') as f:
             result = f.read().splitlines()
