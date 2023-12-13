@@ -44,24 +44,28 @@ class ImageNetSimCLRTransforms(BaseTransforms):
     @property
     def train_transform(self):
         transform = torchvision.transforms.Compose([
-            torchvision.transforms.RandomResizedCrop(size=224, scale=(0.32, 1.0), interpolation=torchvision.transforms.InterpolationMode.BICUBIC),
+            torchvision.transforms.RandomResizedCrop(size=(224, 224), scale=(0.32, 1.0), interpolation=torchvision.transforms.InterpolationMode.BICUBIC),
             torchvision.transforms.RandomHorizontalFlip(p=0.5),
             torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(mean=ImageNetTransforms.mean, std=ImageNetTransforms.std)
+            torchvision.transforms.Normalize(mean=ImageNetTransforms.mean.value, std=ImageNetTransforms.std.value)
         ])
         return transform
 
     @property
     def eval_transform(self):
         transform = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(size=(224, 224)),
             torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(mean=ImageNetTransforms.mean.value, std=ImageNetTransforms.std.value)
         ])
         return transform
 
     @property
     def query_transform(self):
         transform = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(size=(224, 224)),
             torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(mean=ImageNetTransforms.mean.value, std=ImageNetTransforms.std.value)
         ])
         return transform
 
