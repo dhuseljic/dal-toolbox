@@ -37,7 +37,7 @@ class ImageNetStandardTransforms(BaseTransforms):
         return transform
 
 
-class ImageNetSimCLRTransforms(BaseTransforms):
+class ImageNetDINOTransforms(BaseTransforms):
     def __init__(self):
         super().__init__()
 
@@ -121,9 +121,9 @@ class ImageNet(BaseData):
         return datasets.ImageNet(self.dataset_path, split='val', transform=self.eval_transform)
 
 
-class ImageNetSimCLR(ImageNet):
+class ImageNetDINO(ImageNet):
     def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
-        super().__init__(dataset_path, ImageNetSimCLRTransforms(), val_split, seed)
+        super().__init__(dataset_path, ImageNetDINOTransforms(), val_split, seed)
 
 
 class ImageNetContrastiveTransforms(ImageNetStandardTransforms):

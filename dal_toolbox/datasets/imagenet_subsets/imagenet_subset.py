@@ -6,7 +6,7 @@ from PIL import Image
 
 from dal_toolbox.datasets import ImageNet
 from dal_toolbox.datasets.base import BaseTransforms
-from dal_toolbox.datasets.imagenet import ImageNetContrastiveTransforms, ImageNetSimCLRTransforms
+from dal_toolbox.datasets.imagenet import ImageNetContrastiveTransforms, ImageNetDINOTransforms
 from dal_toolbox.datasets.utils import PlainTransforms
 
 
@@ -61,9 +61,9 @@ class ImageNet50Contrastive(ImageNet50):
                          preload=preload)
 
 
-class ImageNet50SimCLR(ImageNet50):
+class ImageNet50DINO(ImageNet50):
     def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
-        super().__init__(dataset_path, ImageNetSimCLRTransforms(), val_split, seed)
+        super().__init__(dataset_path, ImageNetDINOTransforms(), val_split, seed)
 
 
 class ImageNet50Plain(ImageNet50):
@@ -81,9 +81,9 @@ class ImageNet100(ImageNetSubSetWrapper):
         return 100
 
 
-class ImageNet100SimCLR(ImageNet100):
+class ImageNet100DINO(ImageNet100):
     def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
-        super().__init__(dataset_path, ImageNetSimCLRTransforms(), val_split, seed)
+        super().__init__(dataset_path, ImageNetDINOTransforms(), val_split, seed)
 
 
 class ImageNet100Plain(ImageNet100):
@@ -113,9 +113,9 @@ class ImageNet200(ImageNetSubSetWrapper):
         return 200
 
 
-class ImageNet200SimCLR(ImageNet200):
+class ImageNet200DINO(ImageNet200):
     def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
-        super().__init__(dataset_path, ImageNetSimCLRTransforms(), val_split, seed)
+        super().__init__(dataset_path, ImageNetDINOTransforms(), val_split, seed)
 
 
 class ImageNet200Contrastive(ImageNet200):

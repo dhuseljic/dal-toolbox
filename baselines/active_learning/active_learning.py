@@ -417,14 +417,14 @@ def build_dataset(args):
         data = datasets.ImageNet100(args.dataset_path)
     elif args.dataset.name == 'ImageNet200':
         data = datasets.ImageNet200(args.dataset_path)
-    elif args.dataset.name == 'ImageNet_SIMCLR':
-        data = datasets.ImageNetSimCLR(args.dataset_path)
-    elif args.dataset.name == 'ImageNet50_SIMCLR':
-        data = datasets.ImageNet50SimCLR(args.dataset_path)
-    elif args.dataset.name == 'ImageNet100_SIMCLR':
-        data = datasets.ImageNet100SimCLR(args.dataset_path)
-    elif args.dataset.name == 'ImageNet200_SIMCLR':
-        data = datasets.ImageNet200SimCLR(args.dataset_path)
+    elif args.dataset.name == 'ImageNet__DINO':
+        data = datasets.ImageNetDINO(args.dataset_path)
+    elif args.dataset.name == 'ImageNet50_DINO':
+        data = datasets.ImageNet50DINO(args.dataset_path)
+    elif args.dataset.name == 'ImageNet100_DINO':
+        data = datasets.ImageNet100DINO(args.dataset_path)
+    elif args.dataset.name == 'ImageNet200_DINO':
+        data = datasets.ImageNet200DINO(args.dataset_path)
     else:
         raise NotImplementedError(f"Dataset {args.dataset.name} is not implemented!")
 
