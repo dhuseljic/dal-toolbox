@@ -417,7 +417,7 @@ def build_dataset(args):
         data = datasets.ImageNet100(args.dataset_path)
     elif args.dataset.name == 'ImageNet200':
         data = datasets.ImageNet200(args.dataset_path)
-    elif args.dataset.name == 'ImageNet__DINO':
+    elif args.dataset.name == 'ImageNet_DINO':
         data = datasets.ImageNetDINO(args.dataset_path)
     elif args.dataset.name == 'ImageNet50_DINO':
         data = datasets.ImageNet50DINO(args.dataset_path)
