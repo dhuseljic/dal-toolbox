@@ -326,7 +326,7 @@ def build_datasets(args):
     elif args.dataset == 'SVHN':
         data = datasets.svhn.SVHN(args.dataset_path)
     elif args.dataset == 'IMAGENET100':
-        data = datasets.ImageNet100(args.dataset_path)
+        data = datasets.ImageNet100(args.dataset_path, preload=args.dataset_preload)
     else:
         raise NotImplementedError('Dataset not available')
 
@@ -343,7 +343,7 @@ def build_ood_datasets(args, transforms):
         elif ds_name == 'SVHN':
             data = datasets.svhn.SVHN(args.dataset_path, transforms=transforms)
         elif ds_name == 'IMAGENET100':
-            data = datasets.ImageNet100(args.dataset_path, transforms=transforms)
+            data = datasets.ImageNet100(args.dataset_path, transforms=transforms, preload=args.dataset_preload)
         else:
             raise NotImplementedError(f'Dataset {ds_name} not implemented.')
         ood_datasets[ds_name] = data.test_dataset

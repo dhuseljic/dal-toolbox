@@ -12,6 +12,7 @@ al_cycle:
 
 dataset: CIFAR10
 dataset_path: ./data/
+dataset_preload: False # Only applicable to ImageNet and its subsets
 ood_datasets: null
 random_seed: 1
 val_every: 25
