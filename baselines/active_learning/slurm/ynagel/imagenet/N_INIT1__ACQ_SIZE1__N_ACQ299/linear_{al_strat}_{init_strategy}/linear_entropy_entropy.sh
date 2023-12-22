@@ -25,7 +25,7 @@ init_strategy=entropy
 subset_size=10000
 n_init=1
 acq_size=1
-n_acq=50
+n_acq=299
 
 random_seed=$SLURM_ARRAY_TASK_ID
 output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines/${dataset}/${model}/${al_strat}_${init_strategy}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/
