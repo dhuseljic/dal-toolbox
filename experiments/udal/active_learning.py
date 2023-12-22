@@ -201,7 +201,7 @@ def build_model(args, **kwargs):
     num_classes = kwargs['num_classes']
 
     if args.model.name == 'resnet18_deterministic':
-        model = deterministic.resnet.ResNet18(num_classes)
+        model = deterministic.resnet.ResNet18(num_classes, imagenethead=("IMAGENET" in args.dataset))
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.SGD(
             model.parameters(),
@@ -217,7 +217,7 @@ def build_model(args, **kwargs):
         )
         return model
     elif args.model.name == 'resnet18_labelsmoothing':
-        model = deterministic.resnet.ResNet18(num_classes)
+        model = deterministic.resnet.ResNet18(num_classes, imagenethead=("IMAGENET" in args.dataset))
         criterion = nn.CrossEntropyLoss(label_smoothing=args.model.label_smoothing)
         optimizer = torch.optim.SGD(
             model.parameters(),
@@ -232,7 +232,7 @@ def build_model(args, **kwargs):
             {'train_acc': metrics.Accuracy()}, {'val_acc': metrics.Accuracy()}
         )
     elif args.model.name == 'resnet18_mixup':
-        model = deterministic.resnet.ResNet18(num_classes)
+        model = deterministic.resnet.ResNet18(num_classes, imagenethead=("IMAGENET" in args.dataset))
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.SGD(
             model.parameters(),
@@ -247,7 +247,8 @@ def build_model(args, **kwargs):
             {'train_acc': metrics.Accuracy()}, {'val_acc': metrics.Accuracy()}
         )
     elif args.model.name == 'resnet18_mcdropout':
-        model = mc_dropout.resnet.DropoutResNet18(num_classes, args.model.n_passes, args.model.dropout_rate)
+        model = mc_dropout.resnet.DropoutResNet18(num_classes, args.model.n_passes, args.model.dropout_rate,
+                                                  imagenethead=("IMAGENET" in args.dataset))
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.SGD(
             model.parameters(),
@@ -264,7 +265,7 @@ def build_model(args, **kwargs):
     elif args.model.name == 'resnet18_ensemble':
         members, lr_scheduler_list, optimizer_list = [], [], []
         for _ in range(args.model.n_member):
-            mem = deterministic.resnet.ResNet18(num_classes)
+            mem = deterministic.resnet.ResNet18(num_classes, imagenethead=("IMAGENET" in args.dataset))
             opt = torch.optim.SGD(
                 mem.parameters(),
                 lr=args.model.optimizer.lr,
@@ -284,7 +285,7 @@ def build_model(args, **kwargs):
     elif args.model.name == 'resnet18_sngp':
         model = sngp.resnet.resnet18_sngp(
             num_classes=num_classes,
-            input_shape=(3, 32, 32),
+            input_shape=(3, 224, 224) if ("IMAGENET" in args.dataset) else (3, 32, 32),
             spectral_norm=args.model.spectral_norm.use_spectral_norm,
             norm_bound=args.model.spectral_norm.norm_bound,
             n_power_iterations=args.model.spectral_norm.n_power_iterations,
@@ -296,6 +297,7 @@ def build_model(args, **kwargs):
             mean_field_factor=args.model.gp.mean_field_factor,
             cov_momentum=args.model.gp.cov_momentum,
             ridge_penalty=args.model.gp.ridge_penalty,
+            imagenethead=("IMAGENET" in args.dataset)
         )
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.SGD(
