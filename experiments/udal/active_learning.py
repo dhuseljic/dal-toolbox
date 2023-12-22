@@ -323,6 +323,8 @@ def build_datasets(args):
         data = datasets.cifar.CIFAR100(args.dataset_path)
     elif args.dataset == 'SVHN':
         data = datasets.svhn.SVHN(args.dataset_path)
+    elif args.dataset == 'IMAGENET100':
+        data = datasets.ImageNet100(args.dataset_path)
     else:
         raise NotImplementedError('Dataset not available')
 
@@ -338,6 +340,8 @@ def build_ood_datasets(args, transforms):
             data = datasets.cifar.CIFAR100(args.dataset_path, transforms=transforms)
         elif ds_name == 'SVHN':
             data = datasets.svhn.SVHN(args.dataset_path, transforms=transforms)
+        elif ds_name == 'IMAGENET100':
+            data = datasets.ImageNet100(args.dataset_path, transforms=transforms)
         else:
             raise NotImplementedError(f'Dataset {ds_name} not implemented.')
         ood_datasets[ds_name] = data.test_dataset
