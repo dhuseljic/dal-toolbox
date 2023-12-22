@@ -1,23 +1,22 @@
-import os
 import json
 import logging
+import os
 
+import hydra
+import lightning as L
 import torch
 import torch.nn as nn
-import lightning as L
-import hydra
-
-from torch.utils.data import DataLoader
 from omegaconf import OmegaConf
+from torch.utils.data import DataLoader
 
+from dal_toolbox import datasets
+from dal_toolbox import metrics
+from dal_toolbox.active_learning import ActiveLearningDataModule
+from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
-from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.utils import seed_everything, is_running_on_slurm
-from dal_toolbox import metrics
-from dal_toolbox import datasets
-from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
@@ -84,7 +83,6 @@ def main(args):
             al_datamodule.update_annotations(indices)
             queried_indices[f'cycle{i_acq}'] = indices
 
-
         # Train
         model.reset_states(reset_model_parameters=args.al_cycle.cold_start)
         trainer = L.Trainer(
@@ -138,8 +136,6 @@ def main(args):
     logging.info("Saving model weights to %s.", file_name)
     torch.save(model.state_dict(), os.path.join(args.output_dir, 'lit_model_final.pth'))
     torch.save(model.model.state_dict(), os.path.join(args.output_dir, 'model_final.pth'))
-    
-
 
 
 def evaluate(logits, targets):
@@ -175,7 +171,7 @@ def build_query(args, **kwargs):
         query = random.RandomSampling()
     # Aleatoric
     elif args.al_strategy.name == "least_confident":
-        query = uncertainty.LeastConfidentSampling(subset_size=args.al_strategy.subset_size,)
+        query = uncertainty.LeastConfidentSampling(subset_size=args.al_strategy.subset_size, )
     elif args.al_strategy.name == "margin":
         query = uncertainty.MarginSampling(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == "entropy":
