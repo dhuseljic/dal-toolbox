@@ -3,10 +3,10 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --partition=main
-#SBATCH --nodelist=cpu-epyc-6
+#SBATCH --nodelist=cpu-epyc-3
 #SBATCH --array=1-10
 #SBATCH --job-name=al_baselines
-#SBATCH --output=/mnt/stud/home/ynagel/logs/al_baselines/%A_%a__%x.log
+#SBATCH --output=/mnt/stud/work/ynagel/logs/al_baselines/%A_%a__%x.log
 
 date;hostname;pwd
 source /mnt/stud/home/ynagel/dal-toolbox/venv/bin/activate
@@ -28,10 +28,10 @@ al_strat_kernel_gamma=calculate
 subset_size=10000
 n_init=1
 acq_size=1
-n_acq=50
+n_acq=299
 
 random_seed=$SLURM_ARRAY_TASK_ID
-output_dir=/mnt/stud/home/ynagel/dal-toolbox/results/al_baselines/${dataset}/${model}/${al_strat}_${init_strategy}_default/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/
+output_dir=/mnt/stud/work/ynagel/results/al_baselines/${dataset}/${model}/${al_strat}_${init_strategy}_default/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/
 
 srun python -u active_learning.py \
 	model=$model \

@@ -24,6 +24,7 @@ from dal_toolbox.datasets.utils import FeatureDataset, FeatureDatasetWrapper
 from dal_toolbox.metrics import ensemble_log_softmax
 from dal_toolbox.models import deterministic, mc_dropout
 from dal_toolbox.models.deterministic.linear import LinearModel
+from dal_toolbox.models.deterministic.vitswrapper import ViTsWrapper
 from dal_toolbox.models.parzen_window_classifier import PWCLightning
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything, is_running_on_slurm, kernels, _calculate_mean_gamma
@@ -237,13 +238,19 @@ def build_finetunig_model(args, num_classes):
                                                               dropout_rate=args.model.dropout_rate,
                                                               imagenethead=("ImageNet" in args.dataset.name))
         encoder_output_dim = 640
+    elif args.model.name == "vits14":
+        encoder_output_dim = 384
+        encoder = ViTsWrapper(encoder=torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14_reg'),
+                              encoder_output_dim=encoder_output_dim,
+                              model_params=model_params,
+                              num_classes=num_classes)
     else:
         raise NotImplementedError(f"Model {args.model.name} not implemented.")
 
-    encoder.linear = nn.Identity()
-    encoder.load_state_dict(model_params)
-    encoder.linear = nn.Linear(encoder_output_dim, num_classes)
-
+    if args.model.name != "vits14":
+        encoder.linear = nn.Identity()
+        encoder.load_state_dict(model_params)
+        encoder.linear = nn.Linear(encoder_output_dim, num_classes)
     linear_params = [p for p in encoder.linear.parameters()]
     base_params = [p[1] for p in encoder.named_parameters() if p[0] not in ["linear.weight", "linear.bias"]]
 
@@ -409,6 +416,14 @@ def build_dataset(args):
         data = datasets.ImageNet100(args.dataset_path)
     elif args.dataset.name == 'ImageNet200':
         data = datasets.ImageNet200(args.dataset_path)
+    elif args.dataset.name == 'ImageNet_DINO':
+        data = datasets.ImageNetDINO(args.dataset_path)
+    elif args.dataset.name == 'ImageNet50_DINO':
+        data = datasets.ImageNet50DINO(args.dataset_path)
+    elif args.dataset.name == 'ImageNet100_DINO':
+        data = datasets.ImageNet100DINO(args.dataset_path)
+    elif args.dataset.name == 'ImageNet200_DINO':
+        data = datasets.ImageNet200DINO(args.dataset_path)
     else:
         raise NotImplementedError(f"Dataset {args.dataset.name} is not implemented!")
 
