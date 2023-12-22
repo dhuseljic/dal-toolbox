@@ -13,7 +13,7 @@ cd /mnt/stud/home/ynagel/dal-toolbox/experiments/udal/
 
 model=resnet18_mcdropout
 dataset=IMAGENET100
-ood_datasets=\[CIFAR10,\ SVHN\]
+ood_datasets=\[CIFAR10,\ CIFAR100\]
 al_strat=variation_ratio
 n_init=2048
 acq_size=2048

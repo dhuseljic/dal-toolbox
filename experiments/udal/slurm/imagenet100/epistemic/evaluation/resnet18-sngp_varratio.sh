@@ -12,7 +12,7 @@ source /mnt/stud/home/ynagel/dal-toolbox/venv/bin/activate
 cd /mnt/stud/home/ynagel/dal-toolbox/experiments/udal/
 
 dataset=IMAGENET100
-ood_datasets=\[CIFAR10,\ SVHN\]
+ood_datasets=\[CIFAR10,\ CIFAR100\]
 model=resnet18_sngp
 al_strat=variation_ratio
 n_init=2048
