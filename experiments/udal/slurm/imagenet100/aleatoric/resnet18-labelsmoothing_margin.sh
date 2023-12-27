@@ -25,7 +25,7 @@ echo "Starting script. Writing results to ${output_dir}"
 srun python -u active_learning.py \
 	model=$model \
 	dataset=$dataset \
-	dataset_path=/mnt/datasets/imagenet/ILSVRC2012/ \ \
+	dataset_path=/mnt/datasets/imagenet/ILSVRC2012/ \
 	al_strategy=$al_strat \
 	al_cycle.n_init=$n_init \
 	al_cycle.init_pool_file=$init_pool_file \

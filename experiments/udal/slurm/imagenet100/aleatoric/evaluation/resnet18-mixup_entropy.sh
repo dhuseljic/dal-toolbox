@@ -25,7 +25,7 @@ echo "Starting script. Writing results to ${output_dir}"
 srun python -u evaluate.py \
 	model=resnet18 \
 	dataset=$dataset \
-	dataset_path=/mnt/datasets/imagenet/ILSVRC2012/ \ \
+	dataset_path=/mnt/datasets/imagenet/ILSVRC2012/ \
 	queried_indices_json=$queried_indices_json \
 	output_dir=$output_dir \
 	random_seed=$random_seed 
