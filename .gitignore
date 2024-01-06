@@ -19,4 +19,4 @@ build/
 *.ipynb_checkpoints
 .dev
 
-!experiments/active_learning/notebooks/learning_curves/**
+!baselines/active_learning/notebooks/learning_curves/**

@@ -7,6 +7,7 @@ import torch
 from dal_toolbox.active_learning.strategies import Query
 from dal_toolbox.active_learning.strategies.typiclust import kmeans
 from dal_toolbox.active_learning.strategies.xpal import xpal_gain
+from dal_toolbox.utils import kernels
 
 
 class XPALClust(Query):
@@ -49,7 +50,8 @@ class XPALClust(Query):
     MAX_NUM_CLUSTERS = 500
     K_NN = 20
 
-    def __init__(self, num_classes, S, alpha_c, alpha_x, subset_size=None, random_seed=None):
+    def __init__(self, num_classes, S, alpha_c, alpha_x, subset_size=None, random_seed=None, precomputed=True,
+                 gamma=1e-3, kernel="rbf"):
         super().__init__(random_seed)
 
         self.num_classes = num_classes
@@ -57,6 +59,9 @@ class XPALClust(Query):
         self.alpha_c_ = alpha_c
         self.alpha_x_ = alpha_x
         self.subset_size = subset_size
+        self.precomputed = precomputed
+        self.gamma = gamma
+        self.kernel = kernel
 
     def query(self, *, model, al_datamodule, acq_size, return_gains=False, **kwargs):
         """Compute score for each unlabeled sample. Score is to be maximized.
@@ -72,25 +77,47 @@ class XPALClust(Query):
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
         labeled_loader, labeled_indices = al_datamodule.labeled_dataloader()
 
-        if self.subset_size is None:
-            S_ = self.S
+        if self.precomputed:
+            if self.subset_size is None:
+                S_ = self.S
 
-            mapped_labeled_indices = labeled_indices
-            mapped_unlabeled_indices = unlabeled_indices
+                mapped_labeled_indices = labeled_indices
+                mapped_unlabeled_indices = unlabeled_indices
+            else:
+                # Deletes entries from S, that are not part of the labeled/unlabeled subset
+                existing_indices = np.concatenate([unlabeled_indices, labeled_indices])
+                indices_to_remove = np.arange(self.S.shape[0])
+                mask = np.equal.outer(indices_to_remove, existing_indices)
+                indices_to_remove = indices_to_remove[~np.logical_or.reduce(mask, axis=1)]
+
+                S_ = np.delete(self.S, indices_to_remove, 0)
+                S_ = np.delete(S_, indices_to_remove, 1)
+
+                # Remapping indices
+                mapping = np.argsort(np.argsort(existing_indices))
+                mapped_labeled_indices = mapping[len(unlabeled_indices):]
+                mapped_unlabeled_indices = mapping[:len(unlabeled_indices)]
         else:
-            # Deletes entries from S, that are not part of the labeled/unlabeled subset
-            existing_indices = np.concatenate([unlabeled_indices, labeled_indices])
-            indices_to_remove = np.arange(self.S.shape[0])
-            mask = np.equal.outer(indices_to_remove, existing_indices)
-            indices_to_remove = indices_to_remove[~np.logical_or.reduce(mask, axis=1)]
+            labeled_instances = []
+            for batch in labeled_loader:
+                labeled_instances.append(batch[0])
 
-            S_ = np.delete(self.S, indices_to_remove, 0)
-            S_ = np.delete(S_, indices_to_remove, 1)
+            if len(labeled_instances) > 0:
+                labeled_instances = torch.cat(labeled_instances)
+            mapped_labeled_indices = torch.arange(len(labeled_instances)).numpy()
 
-            # Remapping indices
-            mapping = np.argsort(np.argsort(existing_indices))
-            mapped_labeled_indices = mapping[len(unlabeled_indices):]
-            mapped_unlabeled_indices = mapping[:len(unlabeled_indices)]
+            unlabeled_instances = []
+            for batch in unlabeled_dataloader:
+                unlabeled_instances.append(batch[0])
+            unlabeled_instances = torch.cat(unlabeled_instances)
+            mapped_unlabeled_indices = torch.arange(start=len(labeled_instances),
+                                                    end=len(unlabeled_indices) + len(labeled_instances)).numpy()
+
+            if len(labeled_instances) > 0:
+                instances = torch.cat([labeled_instances, unlabeled_instances])  #
+            else:
+                instances = unlabeled_instances
+            S_ = kernels(X=instances, Y=instances, metric=self.kernel, gamma=self.gamma)
 
         y_labeled = []
 

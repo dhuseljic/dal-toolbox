@@ -1,0 +1,57 @@
+#!/usr/bin/zsh
+#SBATCH --mem=24gb
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
+#SBATCH --partition=main
+#SBATCH --gres=gpu:1
+#SBATCH --array=0-107
+#SBATCH --job-name=finetuning_hyperparams
+#SBATCH --output=/mnt/stud/work/ynagel/logs/finetuning/hyperparameters/%A_%a__%x.log
+
+date;hostname;pwd
+source /mnt/stud/home/ynagel/dal-toolbox/venv/bin/activate
+cd ~/dal-toolbox/baselines/active_learning/ || exit
+
+random_seed_array=(0 1 2)
+finetuning_lr_array=(0.1 0.01 0.001 0.0001 0.00001 0.000001)
+linear_lr_array=(0.1 0.01 0.001 0.0001 0.00001 0.000001)
+
+random_seed=${random_seed_array[$((SLURM_ARRAY_TASK_ID / 36 % 3)) + 1]}
+
+model=vits14
+model_optimizer_lr=${linear_lr_array[$((SLURM_ARRAY_TASK_ID % 6)) + 1]}
+model_optimizer_weight_decay=1e-4
+model_train_batch_size=128
+model_num_epochs=150
+finetuning_lr=${finetuning_lr_array[$((SLURM_ARRAY_TASK_ID / 6 % 6)) + 1]}
+
+dataset=ImageNet100_DINO
+
+al_strat=random
+init_strategy=random
+subset_size=10000
+n_init=100
+acq_size=100
+n_acq=14
+
+output_dir=/mnt/stud/work/ynagel/results/finetuning_hyperparameters/${dataset}/${model}_finetuned/${al_strat}_${init_strategy}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/${model_optimizer_lr}_${finetuning_lr}/seed${random_seed}/
+
+srun python -u active_learning.py \
+	model=$model \
+	model.optimizer.lr=$model_optimizer_lr \
+	model.optimizer.weight_decay=$model_optimizer_weight_decay \
+	model.train_batch_size=$model_train_batch_size \
+	model.num_epochs=$model_num_epochs \
+	finetuning_lr=$finetuning_lr \
+	dataset=$dataset \
+	dataset_path=/mnt/datasets/imagenet/ILSVRC2012/ \
+	al_strategy=$al_strat \
+	al_strategy.subset_size=$subset_size \
+	al_cycle.n_init=$n_init \
+	al_cycle.acq_size=$acq_size \
+	al_cycle.n_acq=$n_acq \
+	al_cycle.init_strategy=$init_strategy \
+	random_seed=$random_seed \
+	output_dir=$output_dir \
+	finetuning=True \
+	finetuning_dir=/mnt/stud/home/ynagel/data/vits14_reg_ImageNet100_norm.pth
