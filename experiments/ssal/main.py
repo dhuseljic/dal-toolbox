@@ -10,9 +10,12 @@ from dal_toolbox.active_learning.strategies import RandomSampling
 from dal_toolbox.models.deterministic import DeterministicModel
 from dal_toolbox.models.deterministic.linear import LinearModel
 from dal_toolbox.metrics import Accuracy
+from dal_toolbox.utils import seed_everything
 
 @hydra.main(version_base=None, config_path="./configs", config_name="config")
 def main(args):
+    seed_everything(42)
+
     dino_model_name = 'dinov2_vits14' # 21 M params - 384 dimensions
     # dino_model_name = 'dinov2_vitb14' # 86 M params
     # dino_model_name = 'dinov2_vitl14' # 300 M params
