@@ -111,7 +111,7 @@ class RandomFeatureGaussianProcess(nn.Module):
         self.recompute_covariance = True
         self.covariance_matrix = None
 
-    def forward(self, features, return_cov=False):
+    def forward(self, features, return_cov=False, return_random_features=False):
         if self.normalize_input:
             features = self.layer_norm(features)
 
@@ -121,9 +121,13 @@ class RandomFeatureGaussianProcess(nn.Module):
 
         if self.training:
             self.update_precision_matrix(phi, logits)
+        
         if return_cov:
             cov = self.compute_predictive_covariance(phi)
             return logits, cov
+        # TODO(dhuseljic)
+        if return_random_features:
+            return logits, phi
         return logits
 
     def reset_precision_matrix(self):
