@@ -43,7 +43,7 @@ class SNGPModel(BaseModule):
     def validation_step(self, batch, batch_idx):
         inputs, targets = batch
 
-        logits = self(inputs, mean_field=True)
+        logits = self.model.forward_mean_field(inputs)
         loss = self.loss_fn(logits, targets)
         self.log('val_loss', loss, prog_bar=True)
 
@@ -53,7 +53,7 @@ class SNGPModel(BaseModule):
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         inputs, targets = batch
 
-        logits = self(inputs, **self.predict_kwargs)
+        logits = self.model.forward_mean_field(inputs)
 
         logits = self._gather(logits)
         targets = self._gather(targets)
