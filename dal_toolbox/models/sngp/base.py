@@ -59,6 +59,11 @@ class SNGPModel(BaseModule):
         targets = self._gather(targets)
         return logits, targets
 
+    def set_mean_field_factor(self, mean_field_factor: float):
+        for m in self.model.modules():
+            if isinstance(m, RandomFeatureGaussianProcess):
+                m.mean_field_factor = mean_field_factor
+
     def _reset_precision_matrix(self):
         for m in self.model.modules():
             if isinstance(m, RandomFeatureGaussianProcess):
@@ -109,13 +114,38 @@ class SNGPModel(BaseModule):
         for m in self.model.modules():
             if isinstance(m, RandomFeatureGaussianProcess):
                 random_feature_gp = m
-
+        
+        # phis = (phis - phis.mean(0)) / phis.std(0)
+        # phis = phis * random_feature_gp.random_features.random_feature_scale
         mean = random_feature_gp.beta.weight.data.clone()
         cov = random_feature_gp.covariance_matrix.data.clone()
         targets_onehot = F.one_hot(targets, num_classes=num_classes)
 
-        for phi, target_onehot in zip(phis, targets_onehot):
-            for _ in range(lmb):
+        # slow update using the inverse
+        # precision = random_feature_gp.precision_matrix.data.clone()
+        # for _ in range(lmb):
+        #     for phi, target_onehot in zip(phis, targets_onehot):
+        #         # update precision
+        #         logits = F.linear(mean, phi)
+        #         probas = F.softmax(logits)
+        #         proba_max = probas.max(-1)[0]
+        #         new_precision = precision + proba_max * (1-proba_max) * torch.outer(phi, phi)
+        #         # new_precision = precision + torch.outer(phi, phi)
+        #         new_cov = torch.linalg.inv(new_precision)
+
+        #         # Update mean
+        #         grad = torch.matmul((probas - target_onehot).reshape(-1, 1), phi.reshape(1, -1))
+        #         mean -= F.linear(new_cov, grad).T
+
+        #         logits = F.linear(mean, phi)
+        #         probas = F.softmax(logits)
+        #         proba_max = probas.max(-1)[0]
+        #         precision += proba_max * (1-proba_max) * torch.outer(phi, phi)
+        #         # precision += torch.outer(phi, phi)
+        # cov = torch.linalg.inv(precision)
+
+        for _ in range(lmb):
+            for phi, target_onehot in zip(phis, targets_onehot):
                 tmp_1 = cov @ phi
                 tmp_2 = torch.outer(tmp_1, tmp_1)
 
@@ -155,6 +185,3 @@ class SNGPModel(BaseModule):
 
         random_feature_gp.beta.weight.data = mean
         random_feature_gp.covariance_matrix.data = cov
-        # model_reweighted = copy.deepcopy(model)
-        # model_reweighted.model.last.beta.weight.data = mean
-        # model_reweighted.model.last.covariance_matrix.data = cov

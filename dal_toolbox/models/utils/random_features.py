@@ -13,6 +13,7 @@ class RandomFourierFeatures(nn.Module):
                  in_features: int,
                  num_inducing: int = 1024,
                  kernel_scale: float = 1.,
+                 optimize_kernel_scale: bool = True,
                  scale_features: bool = True,
                  random_feature_type: str = 'orf',
                  std_init: float = None):
@@ -20,6 +21,8 @@ class RandomFourierFeatures(nn.Module):
 
         self.kernel_scale = kernel_scale
         self.input_scale = 1 / math.sqrt(self.kernel_scale)
+        if optimize_kernel_scale:
+            self.input_scale = nn.Parameter(torch.tensor(self.input_scale))
 
         self.scale_features = scale_features
         self.random_feature_scale = math.sqrt(2./float(num_inducing))
@@ -66,6 +69,7 @@ class RandomFeatureGaussianProcess(nn.Module):
                  normalize_input: bool = False,
                  random_feature_type: str = 'orf',
                  scale_random_features: bool = False,
+                 optimize_kernel_scale: bool = True,
                  mean_field_factor: float = math.pi/8,
                  mc_samples: int = 1000,
                  cov_momentum: float = -1,
@@ -79,6 +83,7 @@ class RandomFeatureGaussianProcess(nn.Module):
 
         # scale inputs
         self.kernel_scale = kernel_scale
+        self.optimize_kernel_scale = optimize_kernel_scale
         self.normalize_input = normalize_input
         if normalize_input:
             self.layer_norm = nn.LayerNorm(in_features)
@@ -98,6 +103,7 @@ class RandomFeatureGaussianProcess(nn.Module):
             in_features=self.in_features,
             num_inducing=self.num_inducing,
             kernel_scale=self.kernel_scale,
+            optimize_kernel_scale=self.optimize_kernel_scale,
             scale_features=self.scale_random_features,
             random_feature_type=random_feature_type,
         )
@@ -108,8 +114,8 @@ class RandomFeatureGaussianProcess(nn.Module):
         # precision matrix
         self.init_precision_matrix = torch.eye(num_inducing)*self.ridge_penalty
         self.register_buffer("precision_matrix", copy.deepcopy(self.init_precision_matrix))
+        self.register_buffer("covariance_matrix", torch.full(self.precision_matrix.shape, float('nan')))
         self.recompute_covariance = True
-        self.covariance_matrix = None
 
     def forward(self, features, return_cov=False, return_random_features=False):
         if self.normalize_input:
@@ -134,7 +140,8 @@ class RandomFeatureGaussianProcess(nn.Module):
         device = self.precision_matrix.device
         self.precision_matrix.data = copy.deepcopy(self.init_precision_matrix)
         self.precision_matrix.to(device)
-        self.covariance_matrix = None
+        self.recompute_covariance = True
+        self.covariance_matrix.data = torch.full(self.precision_matrix.shape, float('nan'))
 
     def synchronize_precision_matrix(self):
         if not is_dist_avail_and_initialized():
@@ -171,7 +178,7 @@ class RandomFeatureGaussianProcess(nn.Module):
         if self.recompute_covariance:
             # self.covariance_matrix  = torch.linalg.inv(self.precision_matrix.data)
             u = torch.linalg.cholesky(self.precision_matrix.data)
-            self.covariance_matrix = torch.cholesky_inverse(u)
+            self.covariance_matrix.data = torch.cholesky_inverse(u)
         covariance_matrix_feature = self.covariance_matrix.data
         out = torch.matmul(covariance_matrix_feature, phi.T) * self.ridge_penalty
         covariance_matrix_gp = torch.matmul(phi, out)
