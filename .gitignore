@@ -11,6 +11,7 @@ lightning_logs/
 output_glae/
 venv/
 build/
+mlruns/
 
 *.pdf
 *.png
