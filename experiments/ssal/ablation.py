@@ -1,36 +1,41 @@
+import os
 import hydra
 import torch
 import mlflow
 from lightning import Trainer
-from dal_toolbox.datasets import CIFAR10
+from dal_toolbox.datasets import CIFAR10, CIFAR100, SVHN
 from dal_toolbox.datasets.utils import PlainTransforms
 from dal_toolbox.models.sngp import RandomFeatureGaussianProcess, SNGPModel
-from dal_toolbox.metrics import Accuracy
+from dal_toolbox.metrics import Accuracy, AdaptiveCalibrationError, OODAUROC, OODAUPR, entropy_from_logits
 from dal_toolbox.utils import seed_everything
 from torch.utils.data import DataLoader, Subset
 from tqdm.auto import tqdm
 from omegaconf import OmegaConf
 
 
-
 @hydra.main(version_base=None, config_path="./configs", config_name="ablation")
 def main(args):
-    seed_everything(args.random_seed)
+    # First fixed seed for datasets to be identical
+    seed_everything(1)
 
+    mlflow.set_tracking_uri(uri="file://{}".format(os.path.abspath(args.mlflow_dir)))
     mlflow.set_experiment("Ablation")
     mlflow.start_run()
     mlflow.log_params(dict(args))
 
     # Setup
     dino_model = build_dino_model(args)
-    data = build_data(args)
-    train_ds = DinoFeatureDataset(
-        dino_model=dino_model, dataset=data.train_dataset, normalize_features=True)
-    test_ds = DinoFeatureDataset(
-        dino_model=dino_model, dataset=data.test_dataset, normalize_features=True)
 
-    model = build_model(
-        args, num_features=dino_model.norm.normalized_shape[0], num_classes=data.num_classes)
+    data = build_data(args)
+    ood_data = build_ood_data(args)
+
+    train_ds = DinoFeatureDataset(dino_model=dino_model, dataset=data.train_dataset, normalize_features=True, cache=True)
+    test_ds = DinoFeatureDataset(dino_model=dino_model, dataset=data.test_dataset, normalize_features=True,cache=True)
+    ood_ds = DinoFeatureDataset(dino_model=dino_model, dataset=ood_data.test_dataset, normalize_features=True, cache=True)
+
+    seed_everything(args.random_seed)
+
+    model = build_model(args, num_features=dino_model.norm.normalized_shape[0], num_classes=data.num_classes)
 
     # Train
     train_indices = torch.randperm(len(train_ds))[:args.num_train_samples]
@@ -48,13 +53,23 @@ def main(args):
     # Eval
     test_loader = DataLoader(test_ds, batch_size=256, shuffle=False)
     predictions = trainer.predict(model, test_loader)
-
     test_logits = torch.cat([pred[0] for pred in predictions])
     test_labels = torch.cat([pred[1] for pred in predictions])
+    test_entropies = entropy_from_logits(test_logits)
+
+    ood_loader = DataLoader(ood_ds, batch_size=256, shuffle=False)
+    predictions = trainer.predict(model, ood_loader)
+    ood_logits = torch.cat([pred[0] for pred in predictions])
+    ood_entropies = entropy_from_logits(ood_logits)
+
     test_stats = {
         'accuracy': Accuracy()(test_logits, test_labels).item(),
+        'ACE': AdaptiveCalibrationError()(test_logits, test_labels).item(),
+        'AUROC': OODAUROC()(test_entropies, ood_entropies).item(),
+        'AUPR': OODAUPR()(test_entropies, ood_entropies).item(),
     }
 
+    print(test_stats)
     mlflow.log_metrics(test_stats)
     mlflow.end_run()
 
@@ -69,6 +84,23 @@ def build_data(args):
     transforms = PlainTransforms(resize=(224, 224))
     if args.dataset_name == 'cifar10':
         data = CIFAR10(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'cifar100':
+        data = CIFAR100(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'svhn':
+        data = SVHN(args.dataset_path, transforms=transforms)
+    else:
+        raise NotImplementedError()
+    return data
+
+
+def build_ood_data(args):
+    transforms = PlainTransforms(resize=(224, 224))
+    if args.ood_dataset_name == 'cifar10':
+        data = CIFAR10(args.dataset_path, transforms=transforms)
+    elif args.ood_dataset_name == 'cifar100':
+        data = CIFAR100(args.dataset_path, transforms=transforms)
+    elif args.ood_dataset_name == 'svhn':
+        data = SVHN(args.dataset_path, transforms=transforms)
     else:
         raise NotImplementedError()
     return data
@@ -86,10 +118,15 @@ def build_model(args, **kwargs):
         optimize_kernel_scale=args.optimize_kernel_scale,
         mean_field_factor=args.mean_field_factor,
     )
-    optimizer = torch.optim.SGD(model.parameters(
-    ), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
-    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, args.num_epochs)
+    if args.optimizer.name == 'SGD':
+        optimizer = torch.optim.SGD(model.parameters(), lr=args.optimizer.lr, momentum=args.optimizer.momentum, weight_decay=args.optimizer.weight_decay)
+    elif args.optimizer.name == 'Adam':
+        optimizer = torch.optim.Adam(model.parameters(), lr=args.optimizer.lr, weight_decay=args.optimizer.weight_decay)
+    elif args.optimizer.name == 'AdamW':
+        optimizer = torch.optim.AdamW(model.parameters(), lr=args.optimizer.lr, weight_decay=args.optimizer.weight_decay)
+    else:
+        raise NotImplementedError()
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.num_epochs)
 
     train_metrics = {}
     val_metrics = {}
@@ -105,8 +142,23 @@ def build_model(args, **kwargs):
 
 class DinoFeatureDataset:
 
-    def __init__(self, dino_model, dataset, normalize_features=True, device='cuda'):
-        features, labels = self.get_dino_features(dino_model, dataset, device)
+    def __init__(self, dino_model, dataset, normalize_features=True, cache=False, device='cuda'):
+
+        if cache:
+            home_dir = os.path.expanduser('~')
+            dino_cache_dir = os.path.join(home_dir, '.cache', 'dino_features')
+            os.makedirs(dino_cache_dir, exist_ok=True)
+            hash = self.create_hash_based_on_dataset(dataset)
+            file_name = os.path.join(dino_cache_dir , hash + '.pth')
+            if os.path.exists(file_name):
+                print('Loading cached features from', file_name)
+                features, labels = torch.load(file_name, map_location='cpu')
+            else:
+                features, labels = self.get_dino_features(dino_model, dataset, device)
+                print('Saving features to cache file', file_name)
+                torch.save((features, labels), file_name)
+        else:
+            features, labels = self.get_dino_features(dino_model, dataset, device)
 
         if normalize_features:
             features_mean = features.mean(0)
@@ -115,6 +167,20 @@ class DinoFeatureDataset:
 
         self.features = features
         self.labels = labels
+
+    def create_hash_based_on_dataset(self, dataset, num_hash_samples=50):
+        import hashlib
+        hasher = hashlib.md5()
+
+        num_samples = len(dataset)
+        hasher.update(str(num_samples).encode())
+
+        indices_to_hash = range(0, num_samples, num_samples//num_hash_samples)
+        for idx in indices_to_hash:
+            sample = dataset[idx][0]
+            hasher.update(str(sample).encode())
+        return hasher.hexdigest()
+
 
     def __len__(self) -> int:
         return len(self.features)
@@ -125,7 +191,7 @@ class DinoFeatureDataset:
     @torch.no_grad()
     def get_dino_features(self, dino_model, dataset, device):
         print('Getting dino features..')
-        dataloader = DataLoader(dataset, batch_size=512, num_workers=4)
+        dataloader = DataLoader(dataset, batch_size=256, num_workers=4)
 
         features = []
         labels = []

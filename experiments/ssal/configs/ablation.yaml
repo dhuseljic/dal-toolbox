@@ -1,8 +1,10 @@
 num_train_samples: 10
 random_seed: 42
+mlflow_dir: ./mlruns
 
 # Data
 dataset_name: cifar10
+ood_dataset_name: cifar100
 dataset_path: /datasets
 
 # Dino model
@@ -20,9 +22,13 @@ kernel_scale: 1
 scale_random_features: False
 optimize_kernel_scale: True
 mean_field_factor: 10
-lr: 1e-3
-momentum: 0.9
-weight_decay: 1e-4
+
+# Optimizer
+optimizer: 
+  name: SGD
+  lr: 1e-2
+  momentum: 0.9
+  weight_decay: 1e-4
 
 output_dir: ./output/
 hydra:
