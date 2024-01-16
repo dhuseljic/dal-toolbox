@@ -178,7 +178,8 @@ class DinoFeatureDataset:
 
         num_samples = len(dataset)
         hasher.update(str(num_samples).encode())
-        hasher.update(str([p.data for p in dino_model.parameters()]).encode())
+        num_parameters = sum([p.numel() for p in dino_model.parameters()])
+        hasher.update(str(num_parameters).encode())
 
         indices_to_hash = range(0, num_samples, num_samples//num_hash_samples)
         for idx in indices_to_hash:
