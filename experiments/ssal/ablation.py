@@ -8,6 +8,7 @@ from dal_toolbox.datasets.utils import PlainTransforms
 from dal_toolbox.models.sngp import RandomFeatureGaussianProcess, SNGPModel
 from dal_toolbox.metrics import Accuracy, AdaptiveCalibrationError, OODAUROC, OODAUPR, entropy_from_logits
 from dal_toolbox.utils import seed_everything
+from dal_toolbox.models.utils.callbacks import MetricLogger
 from torch.utils.data import DataLoader, Subset
 from tqdm.auto import tqdm
 from omegaconf import OmegaConf, DictConfig
@@ -48,7 +49,12 @@ def main(args):
         drop_last=len(train_indices) > args.model.train_batch_size,
     )
     trainer = Trainer(
-        max_epochs=args.model.num_epochs
+        max_epochs=args.model.num_epochs,
+        default_root_dir=args.output_dir,
+        enable_checkpointing=False,
+        logger=False,
+        enable_progress_bar=False,
+        callbacks=[MetricLogger()],
     )
     trainer.fit(model, train_dataloaders=train_loader)
 
