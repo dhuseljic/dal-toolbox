@@ -15,23 +15,26 @@ from omegaconf import OmegaConf
 
 @hydra.main(version_base=None, config_path="./configs", config_name="ablation")
 def main(args):
-    # First fixed seed for datasets to be identical
-    seed_everything(1)
+    seed_everything(1)  # seed for val split being identical each time
 
+    # First fixed seed for datasets to be identical
     mlflow.set_tracking_uri(uri="file://{}".format(os.path.abspath(args.mlflow_dir)))
     mlflow.set_experiment("Ablation")
     mlflow.start_run()
-    mlflow.log_params(dict(args))
+    mlflow.log_params(dict(args))  # TODO: recursive logging for config
+
+    print(OmegaConf.to_yaml(args))
 
     # Setup
     dino_model = build_dino_model(args)
-
     data = build_data(args)
     ood_data = build_ood_data(args)
 
-    train_ds = DinoFeatureDataset(dino_model=dino_model, dataset=data.train_dataset, normalize_features=True, cache=True)
-    test_ds = DinoFeatureDataset(dino_model=dino_model, dataset=data.test_dataset, normalize_features=True,cache=True)
-    ood_ds = DinoFeatureDataset(dino_model=dino_model, dataset=ood_data.test_dataset, normalize_features=True, cache=True)
+    train_ds = DinoFeatureDataset(dino_model=dino_model, dataset=data.train_dataset,
+                                  normalize_features=True, cache=True)
+    test_ds = DinoFeatureDataset(dino_model=dino_model, dataset=data.test_dataset, normalize_features=True, cache=True)
+    ood_ds = DinoFeatureDataset(dino_model=dino_model, dataset=ood_data.test_dataset,
+                                normalize_features=True, cache=True)
 
     seed_everything(args.random_seed)
 
@@ -119,11 +122,13 @@ def build_model(args, **kwargs):
         mean_field_factor=args.mean_field_factor,
     )
     if args.optimizer.name == 'SGD':
-        optimizer = torch.optim.SGD(model.parameters(), lr=args.optimizer.lr, momentum=args.optimizer.momentum, weight_decay=args.optimizer.weight_decay)
+        optimizer = torch.optim.SGD(model.parameters(), lr=args.optimizer.lr,
+                                    momentum=args.optimizer.momentum, weight_decay=args.optimizer.weight_decay)
     elif args.optimizer.name == 'Adam':
         optimizer = torch.optim.Adam(model.parameters(), lr=args.optimizer.lr, weight_decay=args.optimizer.weight_decay)
     elif args.optimizer.name == 'AdamW':
-        optimizer = torch.optim.AdamW(model.parameters(), lr=args.optimizer.lr, weight_decay=args.optimizer.weight_decay)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=args.optimizer.lr,
+                                      weight_decay=args.optimizer.weight_decay)
     else:
         raise NotImplementedError()
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.num_epochs)
@@ -148,8 +153,8 @@ class DinoFeatureDataset:
             home_dir = os.path.expanduser('~')
             dino_cache_dir = os.path.join(home_dir, '.cache', 'dino_features')
             os.makedirs(dino_cache_dir, exist_ok=True)
-            hash = self.create_hash_based_on_dataset(dataset)
-            file_name = os.path.join(dino_cache_dir , hash + '.pth')
+            hash = self.create_hash_from_dataset_and_model(dataset, dino_model)
+            file_name = os.path.join(dino_cache_dir, hash + '.pth')
             if os.path.exists(file_name):
                 print('Loading cached features from', file_name)
                 features, labels = torch.load(file_name, map_location='cpu')
@@ -168,19 +173,19 @@ class DinoFeatureDataset:
         self.features = features
         self.labels = labels
 
-    def create_hash_based_on_dataset(self, dataset, num_hash_samples=50):
+    def create_hash_from_dataset_and_model(self, dataset, dino_model, num_hash_samples=50):
         import hashlib
         hasher = hashlib.md5()
 
         num_samples = len(dataset)
         hasher.update(str(num_samples).encode())
+        hasher.update(str([p.data for p in dino_model.parameters()]).encode())
 
         indices_to_hash = range(0, num_samples, num_samples//num_hash_samples)
         for idx in indices_to_hash:
             sample = dataset[idx][0]
             hasher.update(str(sample).encode())
         return hasher.hexdigest()
-
 
     def __len__(self) -> int:
         return len(self.features)
