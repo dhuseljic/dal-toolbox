@@ -1,6 +1,6 @@
 num_train_samples: 10
 random_seed: 42
-mlflow_dir: ./mlruns
+mlflow_dir: ./mlflow/ssal/ablation
 
 # Data
 dataset_name: cifar10
@@ -14,14 +14,16 @@ dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
 # dino_model_name: 'dinov2_vitg14' # 1100 M params - 1536 dimensions
 
 # model
-num_epochs: 50
-train_batch_size: 32
-predict_batch_size: 256
-num_inducing: 1024
-kernel_scale: 1
-scale_random_features: False
-optimize_kernel_scale: True
-mean_field_factor: 10
+model:
+  name: SNGP
+  num_epochs: 100
+  train_batch_size: 32
+  predict_batch_size: 256
+  num_inducing: 1024
+  kernel_scale: 1
+  scale_random_features: False
+  optimize_kernel_scale: True
+  mean_field_factor: 10
 
 # Optimizer
 optimizer: 

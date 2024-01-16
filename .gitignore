@@ -12,6 +12,7 @@ output_glae/
 venv/
 build/
 mlruns/
+mlflow/
 
 *.pdf
 *.png

@@ -10,7 +10,7 @@ from dal_toolbox.metrics import Accuracy, AdaptiveCalibrationError, OODAUROC, OO
 from dal_toolbox.utils import seed_everything
 from torch.utils.data import DataLoader, Subset
 from tqdm.auto import tqdm
-from omegaconf import OmegaConf
+from omegaconf import OmegaConf, DictConfig
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="ablation")
@@ -21,8 +21,7 @@ def main(args):
     mlflow.set_tracking_uri(uri="file://{}".format(os.path.abspath(args.mlflow_dir)))
     mlflow.set_experiment("Ablation")
     mlflow.start_run()
-    mlflow.log_params(dict(args))  # TODO: recursive logging for config
-
+    mlflow.log_params(flatten_cfg(args))
     print(OmegaConf.to_yaml(args))
 
     # Setup
@@ -44,23 +43,23 @@ def main(args):
     train_indices = torch.randperm(len(train_ds))[:args.num_train_samples]
     train_loader = DataLoader(
         Subset(train_ds, indices=train_indices),
-        batch_size=args.train_batch_size,
+        batch_size=args.model.train_batch_size,
         shuffle=True,
-        drop_last=len(train_indices) > args.train_batch_size,
+        drop_last=len(train_indices) > args.model.train_batch_size,
     )
     trainer = Trainer(
-        max_epochs=args.num_epochs
+        max_epochs=args.model.num_epochs
     )
     trainer.fit(model, train_dataloaders=train_loader)
 
     # Eval
-    test_loader = DataLoader(test_ds, batch_size=256, shuffle=False)
+    test_loader = DataLoader(test_ds, batch_size=args.model.predict_batch_size, shuffle=False)
     predictions = trainer.predict(model, test_loader)
     test_logits = torch.cat([pred[0] for pred in predictions])
     test_labels = torch.cat([pred[1] for pred in predictions])
     test_entropies = entropy_from_logits(test_logits)
 
-    ood_loader = DataLoader(ood_ds, batch_size=256, shuffle=False)
+    ood_loader = DataLoader(ood_ds, batch_size=args.model.predict_batch_size, shuffle=False)
     predictions = trainer.predict(model, ood_loader)
     ood_logits = torch.cat([pred[0] for pred in predictions])
     ood_entropies = entropy_from_logits(ood_logits)
@@ -115,11 +114,11 @@ def build_model(args, **kwargs):
     model = RandomFeatureGaussianProcess(
         in_features=num_features,
         out_features=num_classes,
-        num_inducing=args.num_inducing,
-        kernel_scale=args.kernel_scale,
-        scale_random_features=args.scale_random_features,
-        optimize_kernel_scale=args.optimize_kernel_scale,
-        mean_field_factor=args.mean_field_factor,
+        num_inducing=args.model.num_inducing,
+        kernel_scale=args.model.kernel_scale,
+        scale_random_features=args.model.scale_random_features,
+        optimize_kernel_scale=args.model.optimize_kernel_scale,
+        mean_field_factor=args.model.mean_field_factor,
     )
     if args.optimizer.name == 'SGD':
         optimizer = torch.optim.SGD(model.parameters(), lr=args.optimizer.lr,
@@ -131,7 +130,7 @@ def build_model(args, **kwargs):
                                       weight_decay=args.optimizer.weight_decay)
     else:
         raise NotImplementedError()
-    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.num_epochs)
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.model.num_epochs)
 
     train_metrics = {}
     val_metrics = {}
@@ -207,6 +206,17 @@ class DinoFeatureDataset:
         features = torch.cat(features)
         labels = torch.cat(labels)
         return features, labels
+
+
+def flatten_cfg(cfg, parent_key='', sep='.'):
+    items = []
+    for k, v in cfg.items():
+        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+        if isinstance(v, (dict, DictConfig)):
+            items.extend(flatten_cfg(v, new_key, sep=sep).items())
+        else:
+            items.append((new_key, v))
+    return dict(items)
 
 
 if __name__ == '__main__':
