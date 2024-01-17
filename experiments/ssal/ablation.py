@@ -2,9 +2,11 @@ import os
 import hydra
 import torch
 import mlflow
+
 from lightning import Trainer
 from dal_toolbox.datasets import CIFAR10, CIFAR100, SVHN
 from dal_toolbox.datasets.utils import PlainTransforms
+from dal_toolbox.models.deterministic import DeterministicModel
 from dal_toolbox.models.sngp import RandomFeatureGaussianProcess, SNGPModel
 from dal_toolbox.metrics import Accuracy, AdaptiveCalibrationError, OODAUROC, OODAUPR, entropy_from_logits
 from dal_toolbox.utils import seed_everything
@@ -117,15 +119,21 @@ def build_ood_data(args):
 def build_model(args, **kwargs):
     num_features = kwargs['num_features']
     num_classes = kwargs['num_classes']
-    model = RandomFeatureGaussianProcess(
-        in_features=num_features,
-        out_features=num_classes,
-        num_inducing=args.model.num_inducing,
-        kernel_scale=args.model.kernel_scale,
-        scale_random_features=args.model.scale_random_features,
-        optimize_kernel_scale=args.model.optimize_kernel_scale,
-        mean_field_factor=args.model.mean_field_factor,
-    )
+    if args.model.name == 'sngp':
+        model = RandomFeatureGaussianProcess(
+            in_features=num_features,
+            out_features=num_classes,
+            num_inducing=args.model.num_inducing,
+            kernel_scale=args.model.kernel_scale,
+            scale_random_features=args.model.scale_random_features,
+            optimize_kernel_scale=args.model.optimize_kernel_scale,
+            mean_field_factor=args.model.mean_field_factor,
+        )
+    elif args.model.name == 'linear':
+        model = torch.nn.Linear(num_features, num_classes)
+    else:
+        raise NotImplementedError()
+
     if args.optimizer.name == 'SGD':
         optimizer = torch.optim.SGD(model.parameters(), lr=args.optimizer.lr,
                                     momentum=args.optimizer.momentum, weight_decay=args.optimizer.weight_decay)
@@ -136,17 +144,16 @@ def build_model(args, **kwargs):
                                       weight_decay=args.optimizer.weight_decay)
     else:
         raise NotImplementedError()
+
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.model.num_epochs)
 
-    train_metrics = {}
-    val_metrics = {}
-    model = SNGPModel(
-        model,
-        optimizer=optimizer,
-        lr_scheduler=lr_scheduler,
-        train_metrics=train_metrics,
-        val_metrics=val_metrics
-    )
+    if args.model.name == 'sngp':
+        model = SNGPModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
+    elif args.model.name == 'linear':
+        model = DeterministicModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
+    else:
+        raise NotImplementedError()
+
     return model
 
 

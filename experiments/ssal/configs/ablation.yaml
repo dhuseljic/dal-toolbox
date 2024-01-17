@@ -15,7 +15,7 @@ dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
 
 # model
 model:
-  name: SNGP
+  name: sngp
   num_epochs: 100
   train_batch_size: 32
   predict_batch_size: 256
