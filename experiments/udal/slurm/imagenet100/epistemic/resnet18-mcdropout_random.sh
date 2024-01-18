@@ -18,6 +18,7 @@ al_strat=random
 n_init=2048
 acq_size=2048
 n_acq=9
+predict_batch_size=128
 random_seed=$SLURM_ARRAY_TASK_ID
 init_pool_file=/mnt/stud/home/ynagel/dal-toolbox/experiments/udal/initial_pools/${dataset}/random_${n_init}_seed${random_seed}.json
 output_dir=/mnt/stud/work/ynagel/results/udal/active_learning/${dataset}/${model}/${al_strat}/N_INIT${n_init}__ACQ_SIZE${acq_size}__N_ACQ${n_acq}/seed${random_seed}/
@@ -25,6 +26,7 @@ output_dir=/mnt/stud/work/ynagel/results/udal/active_learning/${dataset}/${model
 echo "Starting script. Writing results to ${output_dir}"
 srun python -u active_learning.py \
 	model=$model \
+    model.predict_batch_size=$predict_batch_size \
 	dataset=$dataset \
 	ood_datasets=$ood_datasets \
 	dataset_path=/mnt/datasets/imagenet/ILSVRC2012/ \
