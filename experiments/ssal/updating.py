@@ -1,4 +1,5 @@
 import os
+import copy
 import hydra
 import torch
 import mlflow
@@ -16,13 +17,13 @@ from torch.utils.data import DataLoader, Subset
 from utils import DinoFeatureDataset, flatten_cfg
 
 
-@hydra.main(version_base=None, config_path="./configs", config_name="ablation")
+@hydra.main(version_base=None, config_path="./configs", config_name="updating")
 def main(args):
-    seed_everything(1)  # seed for val split being identical each time
+    seed_everything(42)  # seed for val split being identical each time
 
     # First fixed seed for datasets to be identical
     mlflow.set_tracking_uri(uri="file://{}".format(os.path.abspath(args.mlflow_dir)))
-    mlflow.set_experiment("Ablation")
+    mlflow.set_experiment("Bayesian Updating")
     mlflow.start_run()
     mlflow.log_params(flatten_cfg(args))
     print(OmegaConf.to_yaml(args))
@@ -39,11 +40,16 @@ def main(args):
                                 normalize_features=True, cache=True)
 
     seed_everything(args.random_seed)
-
-    model = build_model(args, num_features=dino_model.norm.normalized_shape[0], num_classes=data.num_classes)
+    init_model = build_model(args, num_features=dino_model.norm.normalized_shape[0], num_classes=data.num_classes)
+    
+    # Define indices for training, updating and retraining
+    rnd_indices = torch.randperm(len(train_ds))
+    train_indices = rnd_indices[:args.num_init_samples]
+    new_indices = rnd_indices[args.num_init_samples:args.num_init_samples+args.num_new_samples]
+    retrain_indices = rnd_indices[:args.num_init_samples+args.num_new_samples]
 
     # Train
-    train_indices = torch.randperm(len(train_ds))[:args.num_train_samples]
+    model = copy.deepcopy(init_model)
     train_loader = DataLoader(
         Subset(train_ds, indices=train_indices),
         batch_size=args.model.train_batch_size,
@@ -59,15 +65,68 @@ def main(args):
         callbacks=[MetricLogger()],
     )
     trainer.fit(model, train_dataloaders=train_loader)
+    test_stats_original = evaluate(
+        model=model,
+        trainer=trainer,
+        test_ds=test_ds,
+        ood_ds=ood_ds,
+        batch_size=args.model.predict_batch_size
+    )
 
-    # Eval
-    test_loader = DataLoader(test_ds, batch_size=args.model.predict_batch_size, shuffle=False)
+    # Updating
+    update_model = copy.deepcopy(model)
+    update_loader = DataLoader(Subset(train_ds, indices=new_indices), batch_size=args.model.train_batch_size,)
+    update_model.update_posterior(update_loader, lmb=args.update_lmb, gamma=args.update_gamma)
+
+    test_stats_updating = evaluate(
+        model=update_model,
+        trainer=trainer,
+        test_ds=test_ds,
+        ood_ds=ood_ds,
+        batch_size=args.model.predict_batch_size
+    )
+
+    # Retraining
+    retrain_model = copy.deepcopy(init_model)
+    train_loader = DataLoader(
+        Subset(train_ds, indices=retrain_indices),
+        batch_size=args.model.train_batch_size,
+        shuffle=True,
+        drop_last=len(train_indices) > args.model.train_batch_size,
+    )
+    trainer = Trainer(
+        max_epochs=args.model.num_epochs,
+        default_root_dir=args.output_dir,
+        enable_checkpointing=False,
+        logger=False,
+        enable_progress_bar=False,
+        callbacks=[MetricLogger()],
+    )
+    trainer.fit(retrain_model, train_dataloaders=train_loader)
+
+    test_stats_retraining = evaluate(
+        model=retrain_model,
+        trainer=trainer,
+        test_ds=test_ds,
+        ood_ds=ood_ds,
+        batch_size=args.model.predict_batch_size
+    )
+    print('Original model:', test_stats_original)
+    print('Updated model:', test_stats_updating)
+    print('Retrained model:', test_stats_retraining)
+
+    # mlflow.log_metrics(test_stats)
+    mlflow.end_run()
+
+
+def evaluate(model, trainer, test_ds, ood_ds, batch_size):
+    test_loader = DataLoader(test_ds, batch_size=batch_size, shuffle=False)
     predictions = trainer.predict(model, test_loader)
     test_logits = torch.cat([pred[0] for pred in predictions])
     test_labels = torch.cat([pred[1] for pred in predictions])
     test_entropies = entropy_from_logits(test_logits)
 
-    ood_loader = DataLoader(ood_ds, batch_size=args.model.predict_batch_size, shuffle=False)
+    ood_loader = DataLoader(ood_ds, batch_size=batch_size, shuffle=False)
     predictions = trainer.predict(model, ood_loader)
     ood_logits = torch.cat([pred[0] for pred in predictions])
     ood_entropies = entropy_from_logits(ood_logits)
@@ -78,15 +137,11 @@ def main(args):
         'AUROC': OODAUROC()(test_entropies, ood_entropies).item(),
         'AUPR': OODAUPR()(test_entropies, ood_entropies).item(),
     }
-
-    print(test_stats)
-    mlflow.log_metrics(test_stats)
-    mlflow.end_run()
+    return test_stats
 
 
 def build_dino_model(args):
-    dino_model = torch.hub.load(
-        'facebookresearch/dinov2', args.dino_model_name)
+    dino_model = torch.hub.load('facebookresearch/dinov2', args.dino_model_name)
     return dino_model
 
 
@@ -142,6 +197,8 @@ def build_model(args, **kwargs):
     elif args.optimizer.name == 'AdamW':
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.optimizer.lr,
                                       weight_decay=args.optimizer.weight_decay)
+    elif args.optimizer.name == 'RAdam':
+        optimizer = torch.optim.RAdam(model.parameters(), lr=args.optimizer.lr, weight_decay=args.optimizer.weight_decay)
     else:
         raise NotImplementedError()
 

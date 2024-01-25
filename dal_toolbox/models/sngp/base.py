@@ -89,7 +89,7 @@ class SNGPModel(BaseModule):
         lml = log_likelihood - complexity_term
         return lml.sum()
 
-    def update_posterior(self, dataloader, lmb=1):
+    def update_posterior(self, dataloader, lmb=1, gamma=1):
         # TODO(dhuseljic): what to do, when scale features is False, is the updating still correct?
         self.eval()
 
@@ -163,7 +163,7 @@ class SNGPModel(BaseModule):
                 cov -= cov_update
 
                 # Update mean.
-                tmp_3 = F.linear(cov, phi)
+                tmp_3 = F.linear(gamma*cov, phi)
                 tmp_4 = (target_onehot - probas)
                 mean += torch.outer(tmp_4, tmp_3)
 
