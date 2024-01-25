@@ -223,10 +223,11 @@ class RandomFeatureGaussianProcess(nn.Module):
 def orthogonal_random_(tensor, std=1):
     def sample_ortho(shape, gain=1):
         # https://github.com/keras-team/keras/blob/v2.10.0/keras/initializers/initializers_v2.py#L761-L770
-        q, r = torch.linalg.qr(torch.randn(*shape))
+        q, r = torch.linalg.qr(torch.randn(*shape[::-1]))
         d = torch.diag(r)
         q = q * torch.sign(d)
-        return gain * q
+        q = gain * q
+        return q.T
 
     # https://github.com/google/edward2/blob/5338ae3244b90f3fdd0cf10094937c09eb40fab9/edward2/tensorflow/initializers.py#L786-L821
     num_rows, num_cols = tensor.shape
