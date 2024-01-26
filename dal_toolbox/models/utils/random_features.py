@@ -127,7 +127,7 @@ class RandomFeatureGaussianProcess(nn.Module):
 
         if self.training:
             self.update_precision_matrix(phi, logits)
-        
+
         if return_cov:
             cov = self.compute_predictive_covariance(phi)
             return logits, cov
@@ -220,29 +220,63 @@ class RandomFeatureGaussianProcess(nn.Module):
         # return mc_logits
 
 
+# def orthogonal_random_(tensor, std=1):
+#     def sample_ortho(shape, gain=1):
+#         # https://github.com/keras-team/keras/blob/v2.10.0/keras/initializers/initializers_v2.py#L761-L770
+#         q, r = torch.linalg.qr(torch.randn(*shape[::-1]))
+#         d = torch.diag(r)
+#         q = q * torch.sign(d)
+#         q = gain * q
+#         return q.T
+
+#     # https://github.com/google/edward2/blob/5338ae3244b90f3fdd0cf10094937c09eb40fab9/edward2/tensorflow/initializers.py#L786-L821
+#     num_rows, num_cols = tensor.shape
+#     if num_rows > num_cols:
+#         ortho_mat_list = []
+#         num_rows_sampled = 0
+#         while num_rows_sampled < num_rows:
+#             ortho_mat_square = sample_ortho((num_cols, num_cols), gain=std)
+#             ortho_mat_list.append(ortho_mat_square)
+#             num_rows_sampled += num_cols
+#         ortho_mat = torch.cat(ortho_mat_list, dim=0)
+#         ortho_mat = ortho_mat[:num_rows]
+#     else:
+#         ortho_mat = sample_ortho((num_rows, num_cols), gain=std)
+
+#     # scale for gaussian-like row norms
+#     feature_norms_square = torch.randn(ortho_mat.shape)**2
+#     feature_norms = torch.sum(feature_norms_square, dim=1).sqrt()
+#     ortho_mat = feature_norms.unsqueeze(-1) * ortho_mat
+#     tensor.data = ortho_mat
+
 def orthogonal_random_(tensor, std=1):
     def sample_ortho(shape, gain=1):
         # https://github.com/keras-team/keras/blob/v2.10.0/keras/initializers/initializers_v2.py#L761-L770
-        q, r = torch.linalg.qr(torch.randn(*shape[::-1]))
+        g = torch.randn(*shape)
+        q, r = torch.linalg.qr(g)
         d = torch.diag(r)
-        q = q * torch.sign(d)
+        q = q * torch.sign(d).view(-1, 1)  # view because our rows should be orthogonal
         q = gain * q
-        return q.T
+        return q
 
+    # https://arxiv.org/pdf/1610.09072.pdf
     # https://github.com/google/edward2/blob/5338ae3244b90f3fdd0cf10094937c09eb40fab9/edward2/tensorflow/initializers.py#L786-L821
-    num_rows, num_cols = tensor.shape
-    if num_rows > num_cols:
+    D, d = tensor.shape
+    if D > d:
+        # When D > d, we use multiple independently generated random features and concatenate the results.
         ortho_mat_list = []
         num_rows_sampled = 0
-        while num_rows_sampled < num_rows:
-            ortho_mat_square = sample_ortho((num_cols, num_cols), gain=std)
+        while num_rows_sampled < D:
+            ortho_mat_square = sample_ortho((d, d), gain=std)
             ortho_mat_list.append(ortho_mat_square)
-            num_rows_sampled += num_cols
+            num_rows_sampled += d
         ortho_mat = torch.cat(ortho_mat_list, dim=0)
-        ortho_mat = ortho_mat[:num_rows]
+        ortho_mat = ortho_mat[:D]
     else:
-        ortho_mat = sample_ortho((num_rows, num_cols), gain=std)
+        ortho_mat = sample_ortho((d, d), gain=std)
+        ortho_mat = ortho_mat[:D]  # When D < d, we simply use the first D dimensions of the result.
 
+    # scale for gaussian-like row norms
     feature_norms_square = torch.randn(ortho_mat.shape)**2
     feature_norms = torch.sum(feature_norms_square, dim=1).sqrt()
     ortho_mat = feature_norms.unsqueeze(-1) * ortho_mat
