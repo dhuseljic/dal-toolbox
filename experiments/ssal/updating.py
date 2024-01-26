@@ -215,7 +215,6 @@ def build_model(args, **kwargs):
         model = DeterministicModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
     else:
         raise NotImplementedError()
-
     return model
 
 
