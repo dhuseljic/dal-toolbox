@@ -1,10 +1,10 @@
-num_init_samples: 100
+num_init_samples: 10
 num_new_samples: 10
 random_seed: 42
 mlflow_dir: ./mlflow/ssal/updating
 
 update_lmb: 1
-update_gamma: 10
+update_gamma: 1
 
 # Data
 dataset_name: cifar10
@@ -14,8 +14,8 @@ dataset_path: /datasets
 # Dino model
 # dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
 # dino_model_name: 'dinov2_vitb14' # 86 M params - 768 dimensions
-# dino_model_name: 'dinov2_vitl14' # 300 M params - 1024 dimensions
-dino_model_name: 'dinov2_vitg14' # 1100 M params - 1536 dimensions
+dino_model_name: 'dinov2_vitl14' # 300 M params - 1024 dimensions
+# dino_model_name: 'dinov2_vitg14' # 1100 M params - 1536 dimensions
 
 # model
 model:
