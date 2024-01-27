@@ -75,6 +75,12 @@ def main(args):
     test_stats_base = evaluate(predictions_base, ood_predictions_base)
     y_pred_original = torch.cat([pred[0] for pred in predictions_base]).argmax(-1)
 
+    if args.model.name == 'deterministic':
+        print('Base model:', test_stats_base)
+        mlflow.log_metrics({f'base_{k}': v for k, v in test_stats_base.items()})
+        mlflow.end_run()
+        return
+
     # Updating
     update_model = copy.deepcopy(base_model)
     update_loader = DataLoader(Subset(train_ds, indices=new_indices), batch_size=args.model.train_batch_size,)
@@ -191,6 +197,8 @@ def build_model(args, **kwargs):
         )
     elif args.model.name == 'laplace':
         model = LaplaceLayer(num_features, num_classes, mean_field_factor=args.model.mean_field_factor)
+    elif args.model.name == 'deterministic':
+        model = torch.nn.Linear(num_features, num_classes)
     else:
         raise NotImplementedError()
 
@@ -214,6 +222,8 @@ def build_model(args, **kwargs):
         model = SNGPModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
     elif args.model.name == 'laplace':
         model = LaplaceModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
+    elif args.model.name == 'deterministic':
+        model = DeterministicModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
     else:
         raise NotImplementedError()
     return model
