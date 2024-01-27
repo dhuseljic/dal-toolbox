@@ -11,6 +11,7 @@ from dal_toolbox.datasets import CIFAR10, CIFAR100, SVHN
 from dal_toolbox.datasets.utils import PlainTransforms
 from dal_toolbox.models.deterministic import DeterministicModel
 from dal_toolbox.models.sngp import RandomFeatureGaussianProcess, SNGPModel
+from dal_toolbox.models.laplace import LaplaceLayer, LaplaceModel
 from dal_toolbox.metrics import Accuracy, AdaptiveCalibrationError, OODAUROC, OODAUPR, entropy_from_logits
 from dal_toolbox.utils import seed_everything
 from dal_toolbox.models.utils.callbacks import MetricLogger
@@ -188,8 +189,8 @@ def build_model(args, **kwargs):
             optimize_kernel_scale=args.model.optimize_kernel_scale,
             mean_field_factor=args.model.mean_field_factor,
         )
-    elif args.model.name == 'linear':
-        model = torch.nn.Linear(num_features, num_classes)
+    elif args.model.name == 'laplace':
+        model = LaplaceLayer(num_features, num_classes, mean_field_factor=args.model.mean_field_factor)
     else:
         raise NotImplementedError()
 
@@ -211,8 +212,8 @@ def build_model(args, **kwargs):
 
     if args.model.name == 'sngp':
         model = SNGPModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
-    elif args.model.name == 'linear':
-        model = DeterministicModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
+    elif args.model.name == 'laplace':
+        model = LaplaceModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
     else:
         raise NotImplementedError()
     return model
