@@ -7,7 +7,7 @@ import mlflow
 
 from lightning import Trainer
 from omegaconf import OmegaConf
-from dal_toolbox.datasets import CIFAR10, CIFAR100, SVHN
+from dal_toolbox.datasets import CIFAR10, CIFAR100, SVHN, Food101
 from dal_toolbox.datasets.utils import PlainTransforms
 from dal_toolbox.models.deterministic import DeterministicModel
 from dal_toolbox.models.sngp import RandomFeatureGaussianProcess, SNGPModel
@@ -164,6 +164,8 @@ def build_data(args):
         data = CIFAR100(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'svhn':
         data = SVHN(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'food101':
+        data = SVHN(args.dataset_path, transforms=transforms)
     else:
         raise NotImplementedError()
     return data
@@ -176,6 +178,8 @@ def build_ood_data(args):
     elif args.ood_dataset_name == 'cifar100':
         data = CIFAR100(args.dataset_path, transforms=transforms)
     elif args.ood_dataset_name == 'svhn':
+        data = SVHN(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'food101':
         data = SVHN(args.dataset_path, transforms=transforms)
     else:
         raise NotImplementedError()

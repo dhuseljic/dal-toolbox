@@ -6,6 +6,7 @@ from . import imagenet
 from . import imagenet_subsets
 # TODO(dhuseljic): from . import tiny_imagenet
 
+from .food import Food101
 from .mnist import build_mnist
 from .fashion_mnist import build_fashionmnist
 from .cifar import CIFAR10, CIFAR100, CIFAR10C, CIFAR10Contrastive, CIFAR10Plain, CIFAR100Contrastive, CIFAR100Plain, \
