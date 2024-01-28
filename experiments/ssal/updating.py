@@ -165,7 +165,7 @@ def build_data(args):
     elif args.dataset_name == 'svhn':
         data = SVHN(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'food101':
-        data = SVHN(args.dataset_path, transforms=transforms)
+        data = Food101(args.dataset_path, transforms=transforms)
     else:
         raise NotImplementedError()
     return data
@@ -180,7 +180,7 @@ def build_ood_data(args):
     elif args.ood_dataset_name == 'svhn':
         data = SVHN(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'food101':
-        data = SVHN(args.dataset_path, transforms=transforms)
+        data = Food101(args.dataset_path, transforms=transforms)
     else:
         raise NotImplementedError()
     return data
