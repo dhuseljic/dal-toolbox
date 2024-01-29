@@ -85,7 +85,7 @@ def main(args):
     update_model = copy.deepcopy(base_model)
     update_loader = DataLoader(Subset(train_ds, indices=new_indices), batch_size=args.model.train_batch_size,)
     start_time = time.time()
-    update_model.update_posterior(update_loader, lmb=args.update_lmb, gamma=args.update_gamma)
+    update_model.update_posterior(update_loader, lmb=args.update_lmb, gamma=args.update_gamma, likelihood=args.likelihood)
     updating_time = time.time() - start_time
 
     predictions_updated = trainer.predict(update_model, test_loader)
