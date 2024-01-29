@@ -73,8 +73,7 @@ class LaplaceModel(BaseModule):
             if isinstance(m, LaplaceLayer):
                 m.synchronize_precision_matrix()
 
-    def update_posterior(self, dataloader, lmb=1, gamma=1):
-        # TODO(dhuseljic): what to do, when scale features is False, is the updating still correct?
+    def update_posterior(self, dataloader, lmb=1, gamma=1, likelihood='gaussian'):
         self.eval()
 
         # check if return_features is in forward_kwargs
@@ -103,44 +102,65 @@ class LaplaceModel(BaseModule):
         cov = laplace_layer.covariance_matrix.data.clone()
         targets_onehot = F.one_hot(targets, num_classes=num_classes)
 
-        for _ in range(lmb):
-            for phi, target_onehot in zip(phis, targets_onehot):
-                tmp_1 = cov @ phi
-                tmp_2 = torch.outer(tmp_1, tmp_1)
+        if likelihood == 'gaussian':
+            for _ in range(lmb):
+                for phi, target_onehot in zip(phis, targets_onehot):
+                    # Compute new cov with woodbury identity
+                    tmp_1 = torch.matmul(cov, phi)
+                    tmp_2 = torch.outer(tmp_1, tmp_1)
+                    var = torch.matmul(phi, tmp_1)
 
-                # Compute new prediction.
-                var = F.linear(phi, tmp_1)
-                logits = F.linear(phi, mean)
-                probas = logits.softmax(-1)
-                probas_max = probas.max()
+                    cov_update = tmp_2 / (1 + var)
+                    cov -= cov_update
 
-                # Update covariance matrix.
-                num = probas_max * (1-probas_max)
-                denom = 1 + num * var
-                factor = num / denom
-                cov_update = factor * tmp_2
-                cov -= cov_update
+                    # Update mean
+                    logits = F.linear(phi, mean)
+                    probas = logits.softmax(-1)
 
-                # Update mean.
-                tmp_3 = F.linear(gamma*cov, phi)
-                tmp_4 = (target_onehot - probas)
-                mean += torch.outer(tmp_4, tmp_3)
+                    tmp_3 = F.linear(gamma*cov, phi)
+                    tmp_4 = (target_onehot - probas)
+                    mean += torch.outer(tmp_4, tmp_3)
 
-                # Undo cov update.
-                cov += cov_update
+        elif likelihood == 'categorical':
+            for _ in range(lmb):
+                for phi, target_onehot in zip(phis, targets_onehot):
+                    tmp_1 = cov @ phi
+                    tmp_2 = torch.outer(tmp_1, tmp_1)
 
-                # Compute new prediction.
-                var = F.linear(phi, tmp_1)
-                logits = F.linear(phi, mean)
-                probas = logits.softmax(-1)
-                probas_max = probas.max()
+                    # Compute new prediction.
+                    var = F.linear(phi, tmp_1)
+                    logits = F.linear(phi, mean)
+                    probas = logits.softmax(-1)
+                    probas_max = probas.max()
 
-                # Update covariance matrix.
-                num = probas_max * (1 - probas_max)
-                denom = 1 + num * var
-                factor = num / denom
-                cov_update = factor * tmp_2
-                cov -= cov_update
+                    # Update covariance matrix.
+                    num = probas_max * (1-probas_max)
+                    denom = 1 + num * var
+                    factor = num / denom
+                    cov_update = factor * tmp_2
+                    cov -= cov_update
+
+                    # Update mean.
+                    tmp_3 = F.linear(gamma*cov, phi)
+                    tmp_4 = (target_onehot - probas)
+                    mean += torch.outer(tmp_4, tmp_3)
+
+                    # Undo cov update.
+                    cov += cov_update
+
+                    # Compute new prediction.
+                    logits = F.linear(phi, mean)
+                    probas = logits.softmax(-1)
+                    probas_max = probas.max()
+
+                    # Update covariance matrix.
+                    num = probas_max * (1 - probas_max)
+                    denom = 1 + num * var
+                    factor = num / denom
+                    cov_update = factor * tmp_2
+                    cov -= cov_update
+        else:
+            raise NotImplementedError()
 
         laplace_layer.layer.weight.data = mean
         laplace_layer.covariance_matrix.data = cov

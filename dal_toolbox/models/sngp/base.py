@@ -89,7 +89,7 @@ class SNGPModel(BaseModule):
         lml = log_likelihood - complexity_term
         return lml.sum()
 
-    def update_posterior(self, dataloader, lmb=1, gamma=1):
+    def update_posterior(self, dataloader, lmb=1, gamma=1, likelihood='gaussian'):
         # TODO(dhuseljic): what to do, when scale features is False, is the updating still correct?
         self.eval()
 
@@ -114,74 +114,72 @@ class SNGPModel(BaseModule):
         for m in self.model.modules():
             if isinstance(m, RandomFeatureGaussianProcess):
                 random_feature_gp = m
-        
+
         # phis = (phis - phis.mean(0)) / phis.std(0)
         # phis = phis * random_feature_gp.random_features.random_feature_scale
         mean = random_feature_gp.beta.weight.data.clone()
         cov = random_feature_gp.covariance_matrix.data.clone()
         targets_onehot = F.one_hot(targets, num_classes=num_classes)
+    
+        if likelihood == 'gaussian':
+            for _ in range(lmb):
+                for phi, target_onehot in zip(phis, targets_onehot):
+                    # Compute new cov with woodbury identity
+                    tmp_1 = torch.matmul(cov, phi)
+                    tmp_2 = torch.outer(tmp_1, tmp_1)
+                    var = torch.matmul(phi, tmp_1)
 
-        # slow update using the inverse
-        # precision = random_feature_gp.precision_matrix.data.clone()
-        # for _ in range(lmb):
-        #     for phi, target_onehot in zip(phis, targets_onehot):
-        #         # update precision
-        #         logits = F.linear(mean, phi)
-        #         probas = F.softmax(logits)
-        #         proba_max = probas.max(-1)[0]
-        #         new_precision = precision + proba_max * (1-proba_max) * torch.outer(phi, phi)
-        #         # new_precision = precision + torch.outer(phi, phi)
-        #         new_cov = torch.linalg.inv(new_precision)
+                    cov_update = tmp_2 / (1 + var)
+                    cov -= cov_update
+                    
+                    # Update mean
+                    logits = F.linear(phi, mean)
+                    probas = logits.softmax(-1)
 
-        #         # Update mean
-        #         grad = torch.matmul((probas - target_onehot).reshape(-1, 1), phi.reshape(1, -1))
-        #         mean -= F.linear(new_cov, grad).T
+                    tmp_3 = F.linear(gamma*cov, phi)
+                    tmp_4 = (target_onehot - probas)
+                    mean += torch.outer(tmp_4, tmp_3)
 
-        #         logits = F.linear(mean, phi)
-        #         probas = F.softmax(logits)
-        #         proba_max = probas.max(-1)[0]
-        #         precision += proba_max * (1-proba_max) * torch.outer(phi, phi)
-        #         # precision += torch.outer(phi, phi)
-        # cov = torch.linalg.inv(precision)
+        elif likelihood == 'categorical':
+            for _ in range(lmb):
+                for phi, target_onehot in zip(phis, targets_onehot):
+                    tmp_1 = cov @ phi
+                    tmp_2 = torch.outer(tmp_1, tmp_1)
 
-        for _ in range(lmb):
-            for phi, target_onehot in zip(phis, targets_onehot):
-                tmp_1 = cov @ phi
-                tmp_2 = torch.outer(tmp_1, tmp_1)
+                    # Compute new prediction.
+                    var = F.linear(phi, tmp_1)
+                    logits = F.linear(phi, mean)
+                    probas = logits.softmax(-1)
+                    probas_max = probas.max()
 
-                # Compute new prediction.
-                var = F.linear(phi, tmp_1)
-                logits = F.linear(phi, mean)
-                probas = logits.softmax(-1)
-                probas_max = probas.max()
+                    # Update covariance matrix.
+                    num = probas_max * (1-probas_max)
+                    denom = 1 + num * var
+                    factor = num / denom
+                    cov_update = factor * tmp_2
+                    cov -= cov_update
 
-                # Update covariance matrix.
-                num = probas_max * (1-probas_max)
-                denom = 1 + num * var
-                factor = num / denom
-                cov_update = factor * tmp_2
-                cov -= cov_update
+                    # Update mean.
+                    tmp_3 = F.linear(gamma*cov, phi)
+                    tmp_4 = (target_onehot - probas)
+                    mean += torch.outer(tmp_4, tmp_3)
 
-                # Update mean.
-                tmp_3 = F.linear(gamma*cov, phi)
-                tmp_4 = (target_onehot - probas)
-                mean += torch.outer(tmp_4, tmp_3)
+                    # Undo cov update.
+                    cov += cov_update
 
-                # Undo cov update.
-                cov += cov_update
+                    # Compute new prediction.
+                    logits = F.linear(phi, mean)
+                    probas = logits.softmax(-1)
+                    probas_max = probas.max()
 
-                # Compute new prediction.
-                var = F.linear(phi, tmp_1)
-                logits = F.linear(phi, mean)
-                probas = logits.softmax(-1)
-                probas_max = probas.max()
-
-                # Update covariance matrix.
-                num = probas_max * (1 - probas_max)
-                denom = 1 + num * var
-                factor = num / denom
-                cov_update = factor * tmp_2
-                cov -= cov_update
+                    # Update covariance matrix.
+                    num = probas_max * (1 - probas_max)
+                    denom = 1 + num * var
+                    factor = num / denom
+                    cov_update = factor * tmp_2
+                    cov -= cov_update
+        else:
+            raise NotImplementedError()
 
         random_feature_gp.beta.weight.data = mean
         random_feature_gp.covariance_matrix.data = cov
