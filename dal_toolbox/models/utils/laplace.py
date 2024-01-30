@@ -14,9 +14,10 @@ class LaplaceLayer(nn.Module):
                  out_features: int,
                  mean_field_factor: float = math.pi/8,
                  mc_samples: int = 1000,
+                 cov_likelihood: str = 'gaussian',
                  cov_momentum: float = -1,
                  ridge_penalty: float = 1,
-                 bias: bool = True,
+                 bias: bool = False,
                  ):
         super().__init__()
 
@@ -28,6 +29,7 @@ class LaplaceLayer(nn.Module):
 
         self.cov_momentum = cov_momentum
         self.ridge_penalty = ridge_penalty
+        self.cov_likelihood = cov_likelihood
 
         self.layer = nn.Linear(in_features, out_features, bias=bias)
 
@@ -71,11 +73,15 @@ class LaplaceLayer(nn.Module):
 
     @torch.no_grad()
     def update_precision_matrix(self, inputs, logits):
-        # probas = logits.softmax(-1)
-        # probas_max = probas.max(1)[0]
-        # multiplier = probas_max * (1-probas_max)
-        # we assume a gaussian likelihood like google
-        multiplier = 1
+        if self.cov_likelihood == 'gaussian':
+            multiplier = 1
+        elif self.cov_likelihood == 'categorical':
+            probas = logits.softmax(-1)
+            probas_max = probas.max(1)[0]
+            multiplier = probas_max * (1-probas_max)
+        else:
+            raise NotImplementedError('Covariance likelihood not implemented.')
+
         self.precision_matrix = self.precision_matrix.to(inputs)
         precision_matrix_minibatch = torch.matmul(multiplier*inputs.T, inputs)
         if self.cov_momentum > 0:

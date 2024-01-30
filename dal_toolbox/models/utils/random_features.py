@@ -74,6 +74,7 @@ class RandomFeatureGaussianProcess(nn.Module):
                  mc_samples: int = 1000,
                  cov_momentum: float = -1,
                  ridge_penalty: float = 1,
+                 cov_likelihood: str = 'gaussian',
                  ):
         super().__init__()
 
@@ -98,6 +99,7 @@ class RandomFeatureGaussianProcess(nn.Module):
         # Covariance computation
         self.ridge_penalty = ridge_penalty
         self.cov_momentum = cov_momentum
+        self.cov_likelihood = cov_likelihood
 
         self.random_features = RandomFourierFeatures(
             in_features=self.in_features,
@@ -156,11 +158,15 @@ class RandomFeatureGaussianProcess(nn.Module):
 
     @torch.no_grad()
     def update_precision_matrix(self, phi, logits):
-        # probas = logits.softmax(-1)
-        # probas_max = probas.max(1)[0]
-        # multiplier = probas_max * (1-probas_max)
-        # gaussian likelihood
-        multiplier = 1
+        if self.cov_likelihood == 'gaussian':
+            multiplier = 1
+        elif self.cov_likelihood == 'categorical':
+            probas = logits.softmax(-1)
+            probas_max = probas.max(1)[0]
+            multiplier = probas_max * (1-probas_max)
+        else:
+            raise NotImplementedError('Covariance likelihood not implemented.')
+
         self.precision_matrix = self.precision_matrix.to(phi)
         precision_matrix_minibatch = torch.matmul(multiplier*phi.T, phi)
         if self.cov_momentum > 0:
