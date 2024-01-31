@@ -11,7 +11,7 @@ likelihood: gaussian
 dataset_path: /datasets
 dataset_name: cifar10
 ood_dataset_name: cifar100
-num_ood_subsets: 100
+num_ood_subsets: 10
 
 # Dino model
 # dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
