@@ -11,7 +11,7 @@ likelihood: gaussian
 dataset_path: /datasets
 dataset_name: cifar10
 ood_dataset_name: cifar100
-num_ood_subsets: 10
+num_ood_samples: 1000
 
 # Dino model
 # dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
@@ -21,7 +21,7 @@ dino_model_name: 'dinov2_vitl14' # 300 M params - 1024 dimensions
 
 # model
 model:
-  name: laplace
+  name: sngp
   num_epochs: 200
   train_batch_size: 32
   predict_batch_size: 256

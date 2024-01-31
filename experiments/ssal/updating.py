@@ -55,12 +55,12 @@ def main(args):
     retrain_indices = rnd_indices[:args.num_init_samples+args.num_new_samples]
 
     # OOD eval datasets
-    all_ood_indices = [torch.randperm(len(ood_ds))[:len(train_indices)] for _ in range(args.num_ood_subsets)]
-    # id_indices = pairwise_distances(train_ds.features[train_indices], train_ds.features).argmin(axis=-1)
-    id_indices = train_indices
+    num_samples_per_init = args.num_ood_samples // args.num_init_samples
+    dist = pairwise_distances(train_ds.features[train_indices], train_ds.features)
+    id_indices = dist.argsort(axis=-1)[:, 1:num_samples_per_init+1].flatten()
+    ood_indices = range(len(id_indices))
     id_loader = DataLoader(train_ds, sampler=id_indices, batch_size=args.model.train_batch_size)
-    ood_loaders = [DataLoader(ood_ds, batch_size=args.model.train_batch_size,
-                              sampler=ood_indices) for ood_indices in all_ood_indices]
+    ood_loader = DataLoader(ood_ds, sampler=ood_indices, batch_size=args.model.train_batch_size)
 
     # Train
     base_model = copy.deepcopy(init_model)
@@ -86,8 +86,8 @@ def main(args):
     y_pred_original = torch.cat([pred[0] for pred in predictions_base]).argmax(-1)
 
     id_predictions = trainer.predict(base_model, id_loader)
-    all_ood_predictions = [trainer.predict(base_model, ood_loader) for ood_loader in ood_loaders]
-    ood_stats = evaluate_ood(id_predictions, all_ood_predictions)
+    ood_predictions = trainer.predict(base_model, ood_loader)
+    ood_stats = evaluate_ood(id_predictions, ood_predictions)
     test_stats_base.update(ood_stats)
 
     if args.model.name == 'deterministic':
@@ -108,8 +108,8 @@ def main(args):
     test_stats_updating = evaluate(predictions_updated)
 
     id_predictions = trainer.predict(update_model, id_loader)
-    all_ood_predictions = [trainer.predict(update_model, ood_loader) for ood_loader in ood_loaders]
-    ood_stats = evaluate_ood(id_predictions, all_ood_predictions)
+    ood_predictions = trainer.predict(update_model, ood_loader)
+    ood_stats = evaluate_ood(id_predictions, ood_predictions)
     test_stats_updating.update(ood_stats)
 
     y_pred_updated = torch.cat([pred[0] for pred in predictions_updated]).argmax(-1)
@@ -139,10 +139,9 @@ def main(args):
     predictions_retrained = trainer.predict(retrain_model, test_loader)
     test_stats_retraining = evaluate(predictions_retrained)
 
-    id_loader = DataLoader(train_ds, sampler=train_indices, batch_size=args.model.train_batch_size)
     id_predictions = trainer.predict(retrain_model, id_loader)
-    all_ood_predictions = [trainer.predict(retrain_model, ood_loader) for ood_loader in ood_loaders]
-    ood_stats = evaluate_ood(id_predictions, all_ood_predictions)
+    ood_predictions = trainer.predict(retrain_model, ood_loader)
+    ood_stats = evaluate_ood(id_predictions, ood_predictions)
     test_stats_retraining.update(ood_stats)
 
     y_pred_retrained = torch.cat([pred[0] for pred in predictions_retrained]).argmax(-1)
@@ -171,17 +170,14 @@ def evaluate(predictions):
     return test_stats
 
 
-def evaluate_ood(id_predictions, all_ood_predictions):
+def evaluate_ood(id_predictions, ood_predictions):
     id_entropy = metrics.entropy_from_logits(torch.cat([pred[0] for pred in id_predictions]))
+    ood_entropy = metrics.entropy_from_logits(torch.cat([pred[0] for pred in ood_predictions]))
 
-    auroc, aupr = 0, 0
-    for ood_predictions in all_ood_predictions:
-        ood_entropy = metrics.entropy_from_logits(torch.cat([pred[0] for pred in ood_predictions]))
-        auroc += metrics.OODAUROC()(id_entropy, ood_entropy).item()
-        aupr += metrics.OODAUPR()(id_entropy, ood_entropy).item()
-    auroc /= len(all_ood_predictions)
-    aupr /= len(all_ood_predictions)
-    ood_stats = {'AUROC': auroc, 'AUPR': aupr}
+    ood_stats = {
+        'AUROC': metrics.OODAUROC()(id_entropy, ood_entropy).item(),
+        'AUPR': metrics.OODAUPR()(id_entropy, ood_entropy).item()
+    }
     return ood_stats
 
 
