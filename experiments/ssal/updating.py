@@ -176,15 +176,11 @@ def evaluate_ood(id_predictions, all_ood_predictions):
     auroc, aupr = 0, 0
     for ood_predictions in all_ood_predictions:
         ood_entropy = metrics.entropy_from_logits(torch.cat([pred[0] for pred in ood_predictions]))
-
         auroc += metrics.OODAUROC()(id_entropy, ood_entropy).item()
         aupr += metrics.OODAUPR()(id_entropy, ood_entropy).item()
     auroc /= len(all_ood_predictions)
     aupr /= len(all_ood_predictions)
-    ood_stats = {
-        'AUROC': auroc,
-        'AUPR': aupr
-    }
+    ood_stats = {'AUROC': auroc, 'AUPR': aupr}
     return ood_stats
 
 
