@@ -4,7 +4,6 @@ import time
 import hydra
 import torch
 import mlflow
-import logging
 
 from lightning import Trainer
 from omegaconf import OmegaConf
@@ -17,6 +16,7 @@ from dal_toolbox import metrics
 from dal_toolbox.utils import seed_everything
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from torch.utils.data import DataLoader, Subset
+from sklearn.metrics import pairwise_distances
 from utils import DinoFeatureDataset, flatten_cfg
 
 
@@ -43,7 +43,6 @@ def main(args):
     ood_ds = DinoFeatureDataset(dino_model=dino_model, dataset=ood_data.test_dataset,
                                 normalize_features=True, cache=True)
     test_loader = DataLoader(test_ds, batch_size=args.model.predict_batch_size, shuffle=False)
-    ood_loader = DataLoader(ood_ds, batch_size=args.model.predict_batch_size, shuffle=False)
 
     seed_everything(args.random_seed)
     init_model = build_model(
@@ -57,7 +56,9 @@ def main(args):
 
     # OOD eval datasets
     all_ood_indices = [torch.randperm(len(ood_ds))[:len(train_indices)] for _ in range(args.num_ood_subsets)]
-    id_loader = DataLoader(train_ds, sampler=train_indices, batch_size=args.model.train_batch_size)
+    # id_indices = pairwise_distances(train_ds.features[train_indices], train_ds.features).argmin(axis=-1)
+    id_indices = train_indices
+    id_loader = DataLoader(train_ds, sampler=id_indices, batch_size=args.model.train_batch_size)
     ood_loaders = [DataLoader(ood_ds, batch_size=args.model.train_batch_size,
                               sampler=ood_indices) for ood_indices in all_ood_indices]
 
