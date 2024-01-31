@@ -8,9 +8,10 @@ update_gamma: 1
 likelihood: gaussian
 
 # Data
+dataset_path: /datasets
 dataset_name: cifar10
 ood_dataset_name: cifar100
-dataset_path: /datasets
+num_ood_subsets: 100
 
 # Dino model
 # dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
@@ -20,7 +21,7 @@ dino_model_name: 'dinov2_vitl14' # 300 M params - 1024 dimensions
 
 # model
 model:
-  name: deterministic
+  name: laplace
   num_epochs: 200
   train_batch_size: 32
   predict_batch_size: 256

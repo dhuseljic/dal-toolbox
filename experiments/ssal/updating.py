@@ -4,6 +4,7 @@ import time
 import hydra
 import torch
 import mlflow
+import logging
 
 from lightning import Trainer
 from omegaconf import OmegaConf
@@ -12,7 +13,7 @@ from dal_toolbox.datasets.utils import PlainTransforms
 from dal_toolbox.models.deterministic import DeterministicModel
 from dal_toolbox.models.sngp import RandomFeatureGaussianProcess, SNGPModel
 from dal_toolbox.models.laplace import LaplaceLayer, LaplaceModel
-from dal_toolbox.metrics import Accuracy, AdaptiveCalibrationError, OODAUROC, OODAUPR, entropy_from_logits
+from dal_toolbox import metrics
 from dal_toolbox.utils import seed_everything
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from torch.utils.data import DataLoader, Subset
@@ -37,20 +38,28 @@ def main(args):
 
     train_ds = DinoFeatureDataset(dino_model=dino_model, dataset=data.train_dataset,
                                   normalize_features=True, cache=True)
-    test_ds = DinoFeatureDataset(dino_model=dino_model, dataset=data.test_dataset, normalize_features=True, cache=True)
+    test_ds = DinoFeatureDataset(dino_model=dino_model, dataset=data.test_dataset,
+                                 normalize_features=True, cache=True)
     ood_ds = DinoFeatureDataset(dino_model=dino_model, dataset=ood_data.test_dataset,
                                 normalize_features=True, cache=True)
     test_loader = DataLoader(test_ds, batch_size=args.model.predict_batch_size, shuffle=False)
     ood_loader = DataLoader(ood_ds, batch_size=args.model.predict_batch_size, shuffle=False)
 
     seed_everything(args.random_seed)
-    init_model = build_model(args, num_features=dino_model.norm.normalized_shape[0], num_classes=data.num_classes)
+    init_model = build_model(
+        args, num_features=dino_model.norm.normalized_shape[0], num_classes=data.num_classes)
 
     # Define indices for training, updating and retraining
     rnd_indices = torch.randperm(len(train_ds))
     train_indices = rnd_indices[:args.num_init_samples]
     new_indices = rnd_indices[args.num_init_samples:args.num_init_samples+args.num_new_samples]
     retrain_indices = rnd_indices[:args.num_init_samples+args.num_new_samples]
+
+    # OOD eval datasets
+    all_ood_indices = [torch.randperm(len(ood_ds))[:len(train_indices)] for _ in range(args.num_ood_subsets)]
+    id_loader = DataLoader(train_ds, sampler=train_indices, batch_size=args.model.train_batch_size)
+    ood_loaders = [DataLoader(ood_ds, batch_size=args.model.train_batch_size,
+                              sampler=ood_indices) for ood_indices in all_ood_indices]
 
     # Train
     base_model = copy.deepcopy(init_model)
@@ -70,10 +79,15 @@ def main(args):
     )
     trainer.fit(base_model, train_dataloaders=train_loader)
 
+    # Evaluate
     predictions_base = trainer.predict(base_model, test_loader)
-    ood_predictions_base = trainer.predict(base_model, ood_loader)
-    test_stats_base = evaluate(predictions_base, ood_predictions_base)
+    test_stats_base = evaluate(predictions_base)
     y_pred_original = torch.cat([pred[0] for pred in predictions_base]).argmax(-1)
+
+    id_predictions = trainer.predict(base_model, id_loader)
+    all_ood_predictions = [trainer.predict(base_model, ood_loader) for ood_loader in ood_loaders]
+    ood_stats = evaluate_ood(id_predictions, all_ood_predictions)
+    test_stats_base.update(ood_stats)
 
     if args.model.name == 'deterministic':
         print('Base model:', test_stats_base)
@@ -85,16 +99,21 @@ def main(args):
     update_model = copy.deepcopy(base_model)
     update_loader = DataLoader(Subset(train_ds, indices=new_indices), batch_size=args.model.train_batch_size,)
     start_time = time.time()
-    update_model.update_posterior(update_loader, lmb=args.update_lmb, gamma=args.update_gamma, likelihood=args.likelihood)
+    update_model.update_posterior(update_loader, lmb=args.update_lmb,
+                                  gamma=args.update_gamma, likelihood=args.likelihood)
     updating_time = time.time() - start_time
 
     predictions_updated = trainer.predict(update_model, test_loader)
-    ood_predictions_updated = trainer.predict(update_model, ood_loader)
-    test_stats_updating = evaluate(predictions_updated, ood_predictions_updated)
-    test_stats_updating['updating_time'] = updating_time
+    test_stats_updating = evaluate(predictions_updated)
+
+    id_predictions = trainer.predict(update_model, id_loader)
+    all_ood_predictions = [trainer.predict(update_model, ood_loader) for ood_loader in ood_loaders]
+    ood_stats = evaluate_ood(id_predictions, all_ood_predictions)
+    test_stats_updating.update(ood_stats)
 
     y_pred_updated = torch.cat([pred[0] for pred in predictions_updated]).argmax(-1)
     test_stats_updating['decision_flips'] = torch.sum(y_pred_original != y_pred_updated).item()
+    test_stats_updating['updating_time'] = updating_time
 
     # Retraining
     retrain_model = copy.deepcopy(init_model)
@@ -117,12 +136,17 @@ def main(args):
     retraining_time = time.time() - start_time
 
     predictions_retrained = trainer.predict(retrain_model, test_loader)
-    ood_predictions_retrained = trainer.predict(retrain_model, ood_loader)
-    test_stats_retraining = evaluate(predictions_retrained, ood_predictions_retrained)
-    test_stats_retraining['retraining_time'] = retraining_time
+    test_stats_retraining = evaluate(predictions_retrained)
+
+    id_loader = DataLoader(train_ds, sampler=train_indices, batch_size=args.model.train_batch_size)
+    id_predictions = trainer.predict(retrain_model, id_loader)
+    all_ood_predictions = [trainer.predict(retrain_model, ood_loader) for ood_loader in ood_loaders]
+    ood_stats = evaluate_ood(id_predictions, all_ood_predictions)
+    test_stats_retraining.update(ood_stats)
 
     y_pred_retrained = torch.cat([pred[0] for pred in predictions_retrained]).argmax(-1)
     test_stats_retraining['decision_flips'] = torch.sum(y_pred_original != y_pred_retrained).item()
+    test_stats_retraining['retraining_time'] = retraining_time
 
     print('Base model:', test_stats_base)
     print('Updated model:', test_stats_updating)
@@ -134,21 +158,34 @@ def main(args):
     mlflow.end_run()
 
 
-def evaluate(predictions, ood_predictions):
+def evaluate(predictions):
     test_logits = torch.cat([pred[0] for pred in predictions])
     test_labels = torch.cat([pred[1] for pred in predictions])
-    test_entropies = entropy_from_logits(test_logits)
-
-    ood_logits = torch.cat([pred[0] for pred in ood_predictions])
-    ood_entropies = entropy_from_logits(ood_logits)
 
     test_stats = {
-        'accuracy': Accuracy()(test_logits, test_labels).item(),
-        'ACE': AdaptiveCalibrationError()(test_logits, test_labels).item(),
-        'AUROC': OODAUROC()(test_entropies, ood_entropies).item(),
-        'AUPR': OODAUPR()(test_entropies, ood_entropies).item(),
+        'accuracy': metrics.Accuracy()(test_logits, test_labels).item(),
+        'ECE': metrics.ExpectedCalibrationError()(test_logits, test_labels).item(),
+        'ACE': metrics.AdaptiveCalibrationError()(test_logits, test_labels).item(),
     }
     return test_stats
+
+
+def evaluate_ood(id_predictions, all_ood_predictions):
+    id_entropy = metrics.entropy_from_logits(torch.cat([pred[0] for pred in id_predictions]))
+
+    auroc, aupr = 0, 0
+    for ood_predictions in all_ood_predictions:
+        ood_entropy = metrics.entropy_from_logits(torch.cat([pred[0] for pred in ood_predictions]))
+
+        auroc += metrics.OODAUROC()(id_entropy, ood_entropy).item()
+        aupr += metrics.OODAUPR()(id_entropy, ood_entropy).item()
+    auroc /= len(all_ood_predictions)
+    aupr /= len(all_ood_predictions)
+    ood_stats = {
+        'AUROC': auroc,
+        'AUPR': aupr
+    }
+    return ood_stats
 
 
 def build_dino_model(args):
@@ -210,7 +247,8 @@ def build_model(args, **kwargs):
         optimizer = torch.optim.SGD(model.parameters(), lr=args.optimizer.lr,
                                     momentum=args.optimizer.momentum, weight_decay=args.optimizer.weight_decay)
     elif args.optimizer.name == 'Adam':
-        optimizer = torch.optim.Adam(model.parameters(), lr=args.optimizer.lr, weight_decay=args.optimizer.weight_decay)
+        optimizer = torch.optim.Adam(model.parameters(), lr=args.optimizer.lr,
+                                     weight_decay=args.optimizer.weight_decay)
     elif args.optimizer.name == 'AdamW':
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.optimizer.lr,
                                       weight_decay=args.optimizer.weight_decay)
