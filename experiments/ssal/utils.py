@@ -78,6 +78,17 @@ class LaplaceNet(LaplaceLayer):
         logits = torch.cat(all_logits)
         return logits
 
+    @torch.no_grad()
+    def get_representations(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_representations = []
+        for batch in dataloader:
+            inputs = batch[0]
+            all_representations.append(inputs)
+        representations = torch.cat(all_representations)
+        return representations
+
 class DeterministcNet(nn.Linear):
     @torch.no_grad()
     def get_logits(self, dataloader, device):
@@ -90,6 +101,17 @@ class DeterministcNet(nn.Linear):
             all_logits.append(logits)
         logits = torch.cat(all_logits)
         return logits
+
+    @torch.no_grad()
+    def get_representations(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_representations = []
+        for batch in dataloader:
+            inputs = batch[0]
+            all_representations.append(inputs)
+        representations = torch.cat(all_representations)
+        return representations
 
 
 def build_model(args, **kwargs):
@@ -105,9 +127,7 @@ def build_model(args, **kwargs):
             optimize_kernel_scale=args.model.optimize_kernel_scale,
             mean_field_factor=args.model.mean_field_factor,
         )
-
     elif args.model.name == 'laplace':
-        # model = LaplaceLayer(num_features, num_classes, mean_field_factor=args.model.mean_field_factor)
         model = LaplaceNet(num_features, num_classes, mean_field_factor=args.model.mean_field_factor)
     elif args.model.name == 'deterministic':
         model = DeterministcNet(num_features, num_classes)

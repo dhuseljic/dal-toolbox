@@ -8,7 +8,7 @@ from lightning import Trainer
 
 from dal_toolbox import metrics
 from dal_toolbox.active_learning import ActiveLearningDataModule
-from dal_toolbox.active_learning.strategies import RandomSampling, EntropySampling, Query
+from dal_toolbox.active_learning.strategies import RandomSampling, EntropySampling, TypiClust, Query
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything
 from utils import DinoFeatureDataset, flatten_cfg, build_data, build_model, build_dino_model
@@ -92,6 +92,8 @@ def build_al_strategy(args):
         al_strategy = RandomSampling()
     elif args.al.strategy == 'entropy':
         al_strategy = EntropySampling()
+    elif args.al.strategy == 'typiclust':
+        al_strategy = TypiClust()
     elif args.al.strategy == 'pseudo_entropy':
         al_strategy = PseudoBatch(al_strategy=EntropySampling())
     else:
