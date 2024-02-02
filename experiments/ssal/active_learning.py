@@ -66,7 +66,7 @@ def main(args):
 
         predictions = trainer.predict(model, dataloaders=al_datamodule.test_dataloader())
         test_stats = evaluate(predictions)
-        print(test_stats)
+        print(f'Cycle {i_acq}:', test_stats)
         mlflow.log_metrics(test_stats, step=i_acq)
 
     mlflow.end_run()
