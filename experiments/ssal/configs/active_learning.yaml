@@ -15,6 +15,7 @@ dataset_name: cifar10
 # dino_model_name: 'dinov2_vitb14' # 86 M params - 768 dimensions
 dino_model_name: 'dinov2_vitl14' # 300 M params - 1024 dimensions
 # dino_model_name: 'dinov2_vitg14' # 1100 M params - 1536 dimensions
+dino_cache_dir: null
 
 al:
   strategy: random
@@ -23,7 +24,7 @@ al:
   acq_size: 10
 
 model:
-  name: laplace
+  name: deterministic
   num_epochs: 200
   train_batch_size: 32
   predict_batch_size: 256

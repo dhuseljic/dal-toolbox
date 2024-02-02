@@ -27,8 +27,10 @@ def main(args):
     dino_model = build_dino_model(args)
     data = build_data(args)
 
-    train_ds = DinoFeatureDataset(dino_model, dataset=data.train_dataset, normalize_features=True, cache=True)
-    test_ds = DinoFeatureDataset(dino_model, dataset=data.val_dataset, normalize_features=True, cache=True)
+    train_ds = DinoFeatureDataset(dino_model, dataset=data.train_dataset,
+                                  normalize_features=True, cache=True, cache_dir=args.cache_dir)
+    test_ds = DinoFeatureDataset(dino_model, dataset=data.val_dataset,
+                                 normalize_features=True, cache=True, cache_dir=args.cache_dir)
     # TODO: use test_ds only at the end
     # test_ds = DinoFeatureDataset(dino_model, dataset=data.test_dataset, normalize_features=True, cache=True)
 

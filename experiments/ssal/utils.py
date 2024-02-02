@@ -18,6 +18,12 @@ from dal_toolbox.datasets.utils import PlainTransforms
 
 def build_dino_model(args):
     dino_model = torch.hub.load('facebookresearch/dinov2', args.dino_model_name)
+
+    #  simclr_checkpoint = torch.load(path / 'wide_resnet_28_10_CIFAR10_0.907.pth', map_location='cpu')
+    #  encoder = wide_resnet.wide_resnet_28_10(num_classes=1, dropout_rate=0.3)
+    #  encoder.linear = nn.Identity()
+    #  encoder.load_state_dict(simclr_checkpoint['model'])
+    #  encoder.requires_grad_(False)
     return dino_model
 
 
@@ -64,6 +70,18 @@ class SNGPNet(RandomFeatureGaussianProcess):
         logits = torch.cat(all_logits)
         return logits
 
+    @torch.no_grad()
+    def get_representations(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_representations = []
+        for batch in dataloader:
+            inputs = batch[0]
+            # TODO: which representation to use? RFF or input
+            all_representations.append(inputs)
+        representations = torch.cat(all_representations)
+        return representations
+
 
 class LaplaceNet(LaplaceLayer):
     @torch.no_grad()
@@ -88,6 +106,7 @@ class LaplaceNet(LaplaceLayer):
             all_representations.append(inputs)
         representations = torch.cat(all_representations)
         return representations
+
 
 class DeterministcNet(nn.Linear):
     @torch.no_grad()
@@ -175,14 +194,15 @@ def flatten_cfg(cfg, parent_key='', sep='.'):
 
 class DinoFeatureDataset:
 
-    def __init__(self, dino_model, dataset, normalize_features=True, cache=False, device='cuda'):
+    def __init__(self, dino_model, dataset, normalize_features=True, cache=False, cache_dir=None, device='cuda'):
 
         if cache:
-            home_dir = os.path.expanduser('~')
-            dino_cache_dir = os.path.join(home_dir, '.cache', 'dino_features')
-            os.makedirs(dino_cache_dir, exist_ok=True)
+            if cache_dir is None:
+                home_dir = os.path.expanduser('~')
+                cache_dir = os.path.join(home_dir, '.cache', 'dino_features')
+            os.makedirs(cache_dir, exist_ok=True)
             hash = self.create_hash_from_dataset_and_model(dataset, dino_model)
-            file_name = os.path.join(dino_cache_dir, hash + '.pth')
+            file_name = os.path.join(cache_dir, hash + '.pth')
             if os.path.exists(file_name):
                 print('Loading cached features from', file_name)
                 features, labels = torch.load(file_name, map_location='cpu')
