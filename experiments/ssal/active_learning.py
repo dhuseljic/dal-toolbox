@@ -28,7 +28,9 @@ def main(args):
     data = build_data(args)
 
     train_ds = DinoFeatureDataset(dino_model, dataset=data.train_dataset, normalize_features=True, cache=True)
-    test_ds = DinoFeatureDataset(dino_model, dataset=data.test_dataset, normalize_features=True, cache=True)
+    test_ds = DinoFeatureDataset(dino_model, dataset=data.val_dataset, normalize_features=True, cache=True)
+    # TODO: use test_ds only at the end
+    # test_ds = DinoFeatureDataset(dino_model, dataset=data.test_dataset, normalize_features=True, cache=True)
 
     seed_everything(args.random_seed)
     al_datamodule = ActiveLearningDataModule(

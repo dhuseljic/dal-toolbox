@@ -17,7 +17,7 @@ dino_model_name: 'dinov2_vitl14' # 300 M params - 1024 dimensions
 # dino_model_name: 'dinov2_vitg14' # 1100 M params - 1536 dimensions
 
 al:
-  strategy: entropy
+  strategy: random
   num_init_samples: 10
   num_acq: 10
   acq_size: 10
@@ -27,11 +27,11 @@ model:
   num_epochs: 200
   train_batch_size: 32
   predict_batch_size: 256
+  mean_field_factor: 10
   num_inducing: 1024
-  kernel_scale: 100
+  kernel_scale: 10
   scale_random_features: True
   optimize_kernel_scale: True
-  mean_field_factor: 10
 
 # Optimizer
 optimizer: 
