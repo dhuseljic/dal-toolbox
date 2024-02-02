@@ -17,10 +17,10 @@ dino_model_name: 'dinov2_vitl14' # 300 M params - 1024 dimensions
 # dino_model_name: 'dinov2_vitg14' # 1100 M params - 1536 dimensions
 
 al:
+  strategy: 'random'
   num_init_samples: 10
   num_acq: 10
   acq_size: 10
-  strategy: 'random'
 
 model:
   name: laplace
