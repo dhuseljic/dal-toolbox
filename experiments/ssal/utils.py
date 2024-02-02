@@ -51,17 +51,7 @@ def build_ood_data(args):
     return data
 
 
-class SNGPNet(nn.Module):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__()
-        self.layer = RandomFeatureGaussianProcess(*args, **kwargs)
-
-    def forward(self, *args, **kwargs):
-        return self.layer(*args, **kwargs)
-
-    def forward_mean_field(self, x):
-        return self.layer.forward_mean_field(x)
-
+class SNGPNet(RandomFeatureGaussianProcess):
     @torch.no_grad()
     def get_logits(self, dataloader, device):
         self.to(device)
@@ -75,17 +65,7 @@ class SNGPNet(nn.Module):
         return logits
 
 
-class LaplaceNet(nn.Module):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__()
-        self.layer = LaplaceLayer(*args, **kwargs)
-
-    def forward(self, *args, **kwargs):
-        return self.layer(*args, **kwargs)
-
-    def forward_mean_field(self, x):
-        return self.layer.forward_mean_field(x)
-
+class LaplaceNet(LaplaceLayer):
     @torch.no_grad()
     def get_logits(self, dataloader, device):
         self.to(device)
@@ -94,6 +74,19 @@ class LaplaceNet(nn.Module):
         for batch in dataloader:
             inputs = batch[0]
             logits = self.forward_mean_field(inputs.to(device))
+            all_logits.append(logits)
+        logits = torch.cat(all_logits)
+        return logits
+
+class DeterministcNet(nn.Linear):
+    @torch.no_grad()
+    def get_logits(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_logits = []
+        for batch in dataloader:
+            inputs = batch[0]
+            logits = self(inputs.to(device))
             all_logits.append(logits)
         logits = torch.cat(all_logits)
         return logits
@@ -117,7 +110,7 @@ def build_model(args, **kwargs):
         # model = LaplaceLayer(num_features, num_classes, mean_field_factor=args.model.mean_field_factor)
         model = LaplaceNet(num_features, num_classes, mean_field_factor=args.model.mean_field_factor)
     elif args.model.name == 'deterministic':
-        model = torch.nn.Linear(num_features, num_classes)
+        model = DeterministcNet(num_features, num_classes)
     else:
         raise NotImplementedError()
 
