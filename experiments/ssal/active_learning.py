@@ -31,7 +31,6 @@ def main(args):
     test_ds = DinoFeatureDataset(dino_model, dataset=data.test_dataset, normalize_features=True, cache=True)
 
     seed_everything(args.random_seed)
-
     al_datamodule = ActiveLearningDataModule(
         train_dataset=train_ds,
         query_dataset=train_ds,
@@ -90,18 +89,19 @@ def build_al_strategy(args):
         al_strategy = RandomSampling()
     elif args.al.strategy == 'entropy':
         al_strategy = EntropySampling()
+    elif args.al.strategy == 'pseudo_entropy':
+        al_strategy = PseudoBatch(al_strategy=EntropySampling())
     else:
         raise NotImplementedError()
     return al_strategy
 
 
 class PseudoBatch(Query):
-    def __init__(self, subset_size=None, random_seed=None):
+    def __init__(self, al_strategy, gamma=1, subset_size=None, random_seed=None):
         super().__init__(random_seed=random_seed)
         self.subset_size = subset_size
-        self.gamma = 1
-        self.lmb = 1
-        self.query_strat = EntropySampling()
+        self.al_strategy = al_strategy
+        self.gamma = gamma
 
     @torch.no_grad()
     def query(self, *, model, al_datamodule, acq_size, return_utilities=False, **kwargs):
@@ -109,9 +109,9 @@ class PseudoBatch(Query):
             subset_size=self.subset_size)
 
         indices = []
-        for i_acq in range(acq_size):
+        for _ in range(acq_size):
             # Sample via simple strategy
-            idx = self.query_strat.query(model=model, al_datamodule=al_datamodule, acq_size=1)[0]
+            idx = self.al_strategy.query(model=model, al_datamodule=al_datamodule, acq_size=1)[0]
 
             # Get the element and label from the dataloader
             data = unlabeled_dataloader.dataset[idx]
@@ -120,10 +120,8 @@ class PseudoBatch(Query):
 
             # Update the model
             model.cpu()
-            model.update_posterior(zip([sample], [target]), lmb=self.lmb, gamma=self.gamma)
+            model.update_posterior(zip([sample], [target]), gamma=self.gamma)
             indices.append(idx)
-            # plot_decision_boundary(model, trainer, X, y, indices)
-        # [unlabeled_indices[i] for i in indices]
         actual_indices = indices
         return actual_indices
 
