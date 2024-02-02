@@ -7,7 +7,7 @@
 #SBATCH --mem=32gb
 #SBATCH --gres=gpu:0
 #SBATCH --exclude=gpu-a100-[1-5],gpu-v100-[1-4]
-#SBATCH --array=1-100
+#SBATCH --array=2-100
 
 source /mnt/home/dhuseljic/envs/dal-toolbox/bin/activate
 
@@ -31,7 +31,7 @@ SEED=$SLURM_ARRAY_TASK_ID
 mlflow_dir=/mnt/work/dhuseljic/mlflow/ssal/al_${DATASET}
 
 cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/ssal/
-srun python updating.py \
+srun python active_learning.py \
 	dataset_name=$DATASET \
 	dataset_path=/mnt/work/dhuseljic/datasets \
 	dino_model_name=$DINO_MODEL \
