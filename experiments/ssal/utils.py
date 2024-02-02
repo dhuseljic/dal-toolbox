@@ -1,11 +1,102 @@
+import os
 import math
 
-import os
 import torch
-from tqdm.auto import tqdm
 from torch.utils.data import DataLoader
-from torch.optim.optimizer import Optimizer, required
+
+from tqdm.auto import tqdm
 from omegaconf import DictConfig
+
+from dal_toolbox.models.deterministic import DeterministicModel
+from dal_toolbox.models.sngp import RandomFeatureGaussianProcess, SNGPModel
+from dal_toolbox.models.laplace import LaplaceLayer, LaplaceModel
+
+from dal_toolbox.datasets import CIFAR10, CIFAR100, SVHN, Food101
+from dal_toolbox.datasets.utils import PlainTransforms
+
+
+
+def build_dino_model(args):
+    dino_model = torch.hub.load('facebookresearch/dinov2', args.dino_model_name)
+    return dino_model
+
+
+def build_data(args):
+    transforms = PlainTransforms(resize=(224, 224))
+    if args.dataset_name == 'cifar10':
+        data = CIFAR10(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'cifar100':
+        data = CIFAR100(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'svhn':
+        data = SVHN(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'food101':
+        data = Food101(args.dataset_path, transforms=transforms)
+    else:
+        raise NotImplementedError()
+    return data
+
+
+def build_ood_data(args):
+    transforms = PlainTransforms(resize=(224, 224))
+    if args.ood_dataset_name == 'cifar10':
+        data = CIFAR10(args.dataset_path, transforms=transforms)
+    elif args.ood_dataset_name == 'cifar100':
+        data = CIFAR100(args.dataset_path, transforms=transforms)
+    elif args.ood_dataset_name == 'svhn':
+        data = SVHN(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'food101':
+        data = Food101(args.dataset_path, transforms=transforms)
+    else:
+        raise NotImplementedError()
+    return data
+
+
+def build_model(args, **kwargs):
+    num_features = kwargs['num_features']
+    num_classes = kwargs['num_classes']
+    if args.model.name == 'sngp':
+        model = RandomFeatureGaussianProcess(
+            in_features=num_features,
+            out_features=num_classes,
+            num_inducing=args.model.num_inducing,
+            kernel_scale=args.model.kernel_scale,
+            scale_random_features=args.model.scale_random_features,
+            optimize_kernel_scale=args.model.optimize_kernel_scale,
+            mean_field_factor=args.model.mean_field_factor,
+        )
+    elif args.model.name == 'laplace':
+        model = LaplaceLayer(num_features, num_classes, mean_field_factor=args.model.mean_field_factor)
+    elif args.model.name == 'deterministic':
+        model = torch.nn.Linear(num_features, num_classes)
+    else:
+        raise NotImplementedError()
+
+    if args.optimizer.name == 'SGD':
+        optimizer = torch.optim.SGD(model.parameters(), lr=args.optimizer.lr,
+                                    momentum=args.optimizer.momentum, weight_decay=args.optimizer.weight_decay)
+    elif args.optimizer.name == 'Adam':
+        optimizer = torch.optim.Adam(model.parameters(), lr=args.optimizer.lr,
+                                     weight_decay=args.optimizer.weight_decay)
+    elif args.optimizer.name == 'AdamW':
+        optimizer = torch.optim.AdamW(model.parameters(), lr=args.optimizer.lr,
+                                      weight_decay=args.optimizer.weight_decay)
+    elif args.optimizer.name == 'RAdam':
+        optimizer = torch.optim.RAdam(model.parameters(), lr=args.optimizer.lr,
+                                      weight_decay=args.optimizer.weight_decay)
+    else:
+        raise NotImplementedError()
+
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.model.num_epochs)
+
+    if args.model.name == 'sngp':
+        model = SNGPModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
+    elif args.model.name == 'laplace':
+        model = LaplaceModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
+    elif args.model.name == 'deterministic':
+        model = DeterministicModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
+    else:
+        raise NotImplementedError()
+    return model
 
 
 def flatten_cfg(cfg, parent_key='', sep='.'):
@@ -82,3 +173,4 @@ class DinoFeatureDataset:
         features = torch.cat(features)
         labels = torch.cat(labels)
         return features, labels
+

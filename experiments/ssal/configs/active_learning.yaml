@@ -1,7 +1,6 @@
-num_init_samples: 10
-num_new_samples: 10
 random_seed: 42
 mlflow_dir: ./mlflow/ssal/updating
+output_dir: ./output/
 
 update_lmb: 1
 update_gamma: 1
@@ -10,8 +9,6 @@ likelihood: gaussian
 # Data
 dataset_path: /datasets
 dataset_name: cifar10
-ood_dataset_name: cifar100
-num_ood_samples: 1000
 
 # Dino model
 # dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
@@ -19,7 +16,12 @@ num_ood_samples: 1000
 dino_model_name: 'dinov2_vitl14' # 300 M params - 1024 dimensions
 # dino_model_name: 'dinov2_vitg14' # 1100 M params - 1536 dimensions
 
-# model
+al:
+  num_init_samples: 10
+  num_acq: 10
+  acq_size: 10
+  strategy: 'random'
+
 model:
   name: laplace
   num_epochs: 200
@@ -38,7 +40,6 @@ optimizer:
   weight_decay: 1e-4
   momentum: 0.9
 
-output_dir: ./output/
 hydra:
   run:
     dir: ${output_dir}
