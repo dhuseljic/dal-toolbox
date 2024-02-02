@@ -2,6 +2,7 @@ import os
 import math
 
 import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader
 
 from tqdm.auto import tqdm
@@ -13,7 +14,6 @@ from dal_toolbox.models.laplace import LaplaceLayer, LaplaceModel
 
 from dal_toolbox.datasets import CIFAR10, CIFAR100, SVHN, Food101
 from dal_toolbox.datasets.utils import PlainTransforms
-
 
 
 def build_dino_model(args):
@@ -51,11 +51,59 @@ def build_ood_data(args):
     return data
 
 
+class SNGPNet(nn.Module):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__()
+        self.layer = RandomFeatureGaussianProcess(*args, **kwargs)
+
+    def forward(self, *args, **kwargs):
+        return self.layer(*args, **kwargs)
+
+    def forward_mean_field(self, x):
+        return self.layer.forward_mean_field(x)
+
+    @torch.no_grad()
+    def get_logits(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_logits = []
+        for batch in dataloader:
+            inputs = batch[0]
+            logits = self.forward_mean_field(inputs.to(device))
+            all_logits.append(logits)
+        logits = torch.cat(all_logits)
+        return logits
+
+
+class LaplaceNet(nn.Module):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__()
+        self.layer = LaplaceLayer(*args, **kwargs)
+
+    def forward(self, *args, **kwargs):
+        return self.layer(*args, **kwargs)
+
+    def forward_mean_field(self, x):
+        return self.layer.forward_mean_field(x)
+
+    @torch.no_grad()
+    def get_logits(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_logits = []
+        for batch in dataloader:
+            inputs = batch[0]
+            logits = self.forward_mean_field(inputs.to(device))
+            all_logits.append(logits)
+        logits = torch.cat(all_logits)
+        return logits
+
+
 def build_model(args, **kwargs):
     num_features = kwargs['num_features']
     num_classes = kwargs['num_classes']
     if args.model.name == 'sngp':
-        model = RandomFeatureGaussianProcess(
+        model = SNGPNet(
             in_features=num_features,
             out_features=num_classes,
             num_inducing=args.model.num_inducing,
@@ -64,8 +112,10 @@ def build_model(args, **kwargs):
             optimize_kernel_scale=args.model.optimize_kernel_scale,
             mean_field_factor=args.model.mean_field_factor,
         )
+
     elif args.model.name == 'laplace':
-        model = LaplaceLayer(num_features, num_classes, mean_field_factor=args.model.mean_field_factor)
+        # model = LaplaceLayer(num_features, num_classes, mean_field_factor=args.model.mean_field_factor)
+        model = LaplaceNet(num_features, num_classes, mean_field_factor=args.model.mean_field_factor)
     elif args.model.name == 'deterministic':
         model = torch.nn.Linear(num_features, num_classes)
     else:
@@ -173,4 +223,3 @@ class DinoFeatureDataset:
         features = torch.cat(features)
         labels = torch.cat(labels)
         return features, labels
-
