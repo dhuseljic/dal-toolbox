@@ -93,11 +93,11 @@ def build_al_strategy(args):
     if args.al.strategy == 'random':
         al_strategy = RandomSampling()
     elif args.al.strategy == 'entropy':
-        al_strategy = EntropySampling(subset_size=args.subset_size)
+        al_strategy = EntropySampling(subset_size=args.al.subset_size)
     elif args.al.strategy == 'typiclust':
-        al_strategy = TypiClust(subset_size=args.subset_size)
+        al_strategy = TypiClust(subset_size=args.al.subset_size)
     elif args.al.strategy == 'pseudo_entropy':
-        al_strategy = PseudoBatch(al_strategy=EntropySampling(), gamma=args.update_gamma, subset_size=args.subset_size)
+        al_strategy = PseudoBatch(al_strategy=EntropySampling(), gamma=args.update_gamma, subset_size=args.al.subset_size)
     else:
         raise NotImplementedError()
     return al_strategy
