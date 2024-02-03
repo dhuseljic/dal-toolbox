@@ -93,22 +93,23 @@ def build_al_strategy(args):
     if args.al.strategy == 'random':
         al_strategy = RandomSampling()
     elif args.al.strategy == 'entropy':
-        al_strategy = EntropySampling()
+        al_strategy = EntropySampling(subset_size=args.subset_size)
     elif args.al.strategy == 'typiclust':
-        al_strategy = TypiClust()
+        al_strategy = TypiClust(subset_size=args.subset_size)
     elif args.al.strategy == 'pseudo_entropy':
-        al_strategy = PseudoBatch(al_strategy=EntropySampling())
+        al_strategy = PseudoBatch(al_strategy=EntropySampling(), gamma=args.update_gamma, subset_size=args.subset_size)
     else:
         raise NotImplementedError()
     return al_strategy
 
 
 class PseudoBatch(Query):
-    def __init__(self, al_strategy, gamma=1, subset_size=None, random_seed=None):
+    def __init__(self, al_strategy, gamma=1, lmb=1, subset_size=None, random_seed=None):
         super().__init__(random_seed=random_seed)
         self.subset_size = subset_size
         self.al_strategy = al_strategy
         self.gamma = gamma
+        self.lmb = lmb
 
     @torch.no_grad()
     def query(self, *, model, al_datamodule, acq_size, return_utilities=False, **kwargs):
@@ -127,7 +128,7 @@ class PseudoBatch(Query):
 
             # Update the model
             model.cpu()
-            model.update_posterior(zip([sample], [target]), gamma=self.gamma)
+            model.update_posterior(zip([sample], [target]), gamma=self.gamma, lmb=self.lmb)
             indices.append(idx)
         actual_indices = indices
         return actual_indices
