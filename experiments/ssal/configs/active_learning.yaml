@@ -3,7 +3,7 @@ mlflow_dir: ./mlflow/ssal/updating
 output_dir: ./output/
 
 update_lmb: 1
-update_gamma: 1
+update_gamma: 10
 likelihood: gaussian
 
 # Data
@@ -25,7 +25,7 @@ al:
   acq_size: 10
 
 model:
-  name: deterministic
+  name: laplace
   num_epochs: 200
   train_batch_size: 32
   predict_batch_size: 256

@@ -107,6 +107,37 @@ class LaplaceNet(LaplaceLayer):
         representations = torch.cat(all_representations)
         return representations
 
+    @torch.inference_mode()
+    def get_grad_representations(self, dataloader, device):
+        self.eval()
+        self.to(device)
+
+        embedding = []
+        for batch in dataloader:
+            inputs = batch[0]
+            logits = self.forward(inputs.to(device))
+
+            features = inputs.cpu()
+            logits = logits.cpu()
+            probas = logits.softmax(-1)
+            max_indices = probas.argmax(-1)
+
+            num_samples, feature_dim = inputs.shape
+            num_classes = logits.size(-1)
+
+            # for each sample in a batch and for each class, compute the gradient wrt to weights
+            embedding_batch = torch.empty([num_samples, feature_dim * num_classes])
+            for n in range(len(inputs)):
+                for c in range(num_classes):
+                    if c == max_indices[n]:
+                        embedding_batch[n, feature_dim * c: feature_dim * (c + 1)] = features[n] * (1 - probas[n, c])
+                    else:
+                        embedding_batch[n, feature_dim * c: feature_dim * (c + 1)] = features[n] * (-1 * probas[n, c])
+            embedding.append(embedding_batch)
+        # Concat all embeddings
+        embedding = torch.cat(embedding)
+        return embedding
+
 
 class DeterministcNet(nn.Linear):
     @torch.no_grad()

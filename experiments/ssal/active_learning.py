@@ -8,7 +8,7 @@ from lightning import Trainer
 
 from dal_toolbox import metrics
 from dal_toolbox.active_learning import ActiveLearningDataModule
-from dal_toolbox.active_learning.strategies import RandomSampling, EntropySampling, TypiClust, Query
+from dal_toolbox.active_learning.strategies import RandomSampling, EntropySampling, TypiClust, Query, Badge
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything
 from utils import DinoFeatureDataset, flatten_cfg, build_data, build_model, build_dino_model
@@ -70,7 +70,6 @@ def main(args):
         test_stats = evaluate(predictions)
         print(f'Cycle {i_acq}:', test_stats)
         mlflow.log_metrics(test_stats, step=i_acq)
-
     mlflow.end_run()
 
 
@@ -98,6 +97,10 @@ def build_al_strategy(args):
         al_strategy = TypiClust(subset_size=args.al.subset_size)
     elif args.al.strategy == 'pseudo_entropy':
         al_strategy = PseudoBatch(al_strategy=EntropySampling(), gamma=args.update_gamma, subset_size=args.al.subset_size)
+    elif args.al.strategy == 'badge':
+        al_strategy = Badge(subset_size=args.al.subset_size)
+    elif args.al.strategy == 'pseudo_badge':
+        al_strategy = PseudoBatch(al_strategy=Badge(), gamma=args.update_gamma, subset_size=args.al.subset_size)
     else:
         raise NotImplementedError()
     return al_strategy
