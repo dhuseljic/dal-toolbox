@@ -3,6 +3,7 @@ import math
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 from tqdm.auto import tqdm
@@ -118,29 +119,34 @@ class LaplaceNet(LaplaceLayer):
 
         embedding = []
         for batch in dataloader:
-            inputs = batch[0]
-            logits = self.forward(inputs.to(device))
+            inputs = batch[0].to(device)
+            logits = self.forward(inputs)
 
-            features = inputs.cpu()
-            logits = logits.cpu()
+            features = inputs
             probas = logits.softmax(-1)
             max_indices = probas.argmax(-1)
-
-            num_samples, feature_dim = inputs.shape
             num_classes = logits.size(-1)
 
+            # Slow original implementation
             # for each sample in a batch and for each class, compute the gradient wrt to weights
-            embedding_batch = torch.empty([num_samples, feature_dim * num_classes])
-            for n in range(len(inputs)):
-                for c in range(num_classes):
-                    if c == max_indices[n]:
-                        embedding_batch[n, feature_dim * c: feature_dim * (c + 1)] = features[n] * (1 - probas[n, c])
-                    else:
-                        embedding_batch[n, feature_dim * c: feature_dim * (c + 1)] = features[n] * (-1 * probas[n, c])
+            # num_samples, feature_dim = inputs.shape
+            # embedding_batch = torch.empty([num_samples, feature_dim * num_classes])
+            # for n in range(len(inputs)):
+            #     for c in range(num_classes):
+            #         if c == max_indices[n]:
+            #             embedding_batch[n, feature_dim * c: feature_dim * (c + 1)] = features[n] * (1 - probas[n, c])
+            #         else:
+            #             embedding_batch[n, feature_dim * c: feature_dim * (c + 1)] = features[n] * (-1 * probas[n, c])
+            # embedding_batch
+
+            # Fast implementation
+            factor = F.one_hot(max_indices, num_classes=num_classes) - probas
+            embedding_batch = (factor[:, :, None] * features[:, None, :]).flatten(-2)
+
             embedding.append(embedding_batch)
         # Concat all embeddings
         embedding = torch.cat(embedding)
-        return embedding
+        return embedding.cpu()
 
 
 class DeterministcNet(nn.Linear):
