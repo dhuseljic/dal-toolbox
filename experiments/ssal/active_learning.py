@@ -120,7 +120,8 @@ class PseudoBatch(Query):
             subset_size=self.subset_size)
 
         indices = []
-        for _ in range(acq_size):
+        from tqdm.auto import tqdm
+        for _ in tqdm(range(acq_size)):
             # Sample via simple strategy
             idx = self.al_strategy.query(model=model, al_datamodule=al_datamodule, acq_size=1)[0]
 
