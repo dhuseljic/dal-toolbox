@@ -48,6 +48,7 @@ def main(args):
     model = build_model(args, num_features=dino_model.norm.normalized_shape[0], num_classes=data.num_classes)
     for i_acq in range(0, args.al.num_acq+1):
         if i_acq != 0:
+            print('Querying..')
             indices = al_strategy.query(
                 model=model,
                 al_datamodule=al_datamodule,
@@ -68,7 +69,7 @@ def main(args):
 
         predictions = trainer.predict(model, dataloaders=al_datamodule.test_dataloader())
         test_stats = evaluate(predictions)
-        print(f'Cycle {i_acq}:', test_stats)
+        print(f'Cycle {i_acq}:', test_stats, flush=True)
         mlflow.log_metrics(test_stats, step=i_acq)
     mlflow.end_run()
 
@@ -120,8 +121,7 @@ class PseudoBatch(Query):
             subset_size=self.subset_size)
 
         indices = []
-        from tqdm.auto import tqdm
-        for _ in tqdm(range(acq_size)):
+        for _ in range(acq_size):
             # Sample via simple strategy
             idx = self.al_strategy.query(model=model, al_datamodule=al_datamodule, acq_size=1)[0]
 
