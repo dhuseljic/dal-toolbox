@@ -89,6 +89,7 @@ class SNGPNet(RandomFeatureGaussianProcess):
 
 
 class LaplaceNet(LaplaceLayer):
+    use_mean_field = True
 
     @torch.no_grad()
     def get_logits(self, dataloader, device):
@@ -97,8 +98,10 @@ class LaplaceNet(LaplaceLayer):
         all_logits = []
         for batch in dataloader:
             inputs = batch[0]
-            logits = self.forward_mean_field(inputs.to(device))
-            # logits = self.forward_monte_carlo(inputs.to(device))
+            if LaplaceNet.use_mean_field:
+                logits = self.forward_mean_field(inputs.to(device))
+            else:
+                logits = self.forward_monte_carlo(inputs.to(device))
             all_logits.append(logits)
         logits = torch.cat(all_logits)
         return logits
@@ -192,6 +195,8 @@ def build_model(args, **kwargs):
     elif args.model.name == 'laplace':
         model = LaplaceNet(num_features, num_classes,
                            mean_field_factor=args.model.mean_field_factor, mc_samples=args.model.mc_samples)
+        if args.al.strategy in ['bald', 'pseudo_bald']:
+            LaplaceNet.use_mean_field = False
     elif args.model.name == 'deterministic':
         model = DeterministcNet(num_features, num_classes)
     else:
