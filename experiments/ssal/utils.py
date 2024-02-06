@@ -12,7 +12,7 @@ from dal_toolbox.models.deterministic import DeterministicModel
 from dal_toolbox.models.sngp import RandomFeatureGaussianProcess, SNGPModel
 from dal_toolbox.models.laplace import LaplaceLayer, LaplaceModel
 
-from dal_toolbox.datasets import CIFAR10, CIFAR100, SVHN, Food101
+from dal_toolbox.datasets import CIFAR10, CIFAR100, SVHN, Food101, STL10
 from dal_toolbox.datasets.utils import PlainTransforms
 
 
@@ -37,6 +37,8 @@ def build_data(args):
         data = SVHN(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'food101':
         data = Food101(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'stl10':
+        data = STL10(args.dataset_path, transforms=transforms)
     else:
         raise NotImplementedError()
     return data
@@ -52,6 +54,8 @@ def build_ood_data(args):
         data = SVHN(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'food101':
         data = Food101(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'stl10':
+        data = STL10(args.dataset_path, transforms=transforms)
     else:
         raise NotImplementedError()
     return data

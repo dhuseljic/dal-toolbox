@@ -4,8 +4,10 @@ from . import cifar
 from . import svhn
 from . import imagenet
 from . import imagenet_subsets
+from . import stl10
 # TODO(dhuseljic): from . import tiny_imagenet
 
+from .stl10 import STL10
 from .food import Food101
 from .mnist import build_mnist
 from .fashion_mnist import build_fashionmnist
