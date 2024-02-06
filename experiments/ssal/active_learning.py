@@ -8,7 +8,7 @@ from lightning import Trainer
 
 from dal_toolbox import metrics
 from dal_toolbox.active_learning import ActiveLearningDataModule
-from dal_toolbox.active_learning.strategies import RandomSampling, EntropySampling, TypiClust, Query, Badge
+from dal_toolbox.active_learning.strategies import RandomSampling, EntropySampling, TypiClust, Query, Badge, BALDSampling
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything
 from utils import DinoFeatureDataset, flatten_cfg, build_data, build_model, build_dino_model
@@ -92,16 +92,24 @@ def evaluate(predictions):
 def build_al_strategy(args):
     if args.al.strategy == 'random':
         al_strategy = RandomSampling()
-    elif args.al.strategy == 'typiclust':
-        al_strategy = TypiClust(subset_size=args.al.subset_size)
     elif args.al.strategy == 'entropy':
         al_strategy = EntropySampling(subset_size=args.al.subset_size)
-    elif args.al.strategy == 'pseudo_entropy':
-        al_strategy = PseudoBatch(al_strategy=EntropySampling(), gamma=args.update_gamma, subset_size=args.al.subset_size)
     elif args.al.strategy == 'badge':
         al_strategy = Badge(subset_size=args.al.subset_size)
+    elif args.al.strategy == 'bald':
+        al_strategy = BALDSampling(subset_size=args.al.subset_size)
+    elif args.al.strategy == 'typiclust':
+        al_strategy = TypiClust(subset_size=args.al.subset_size)
+    elif args.al.strategy == 'pseudo_entropy':
+        # TODO check subset size for pseudo batch algo
+        strat = EntropySampling(subset_size=args.al.subset_size)
+        al_strategy = PseudoBatch(al_strategy=strat, gamma=args.update_gamma, subset_size=args.al.subset_size)
     elif args.al.strategy == 'pseudo_badge':
-        al_strategy = PseudoBatch(al_strategy=Badge(), gamma=args.update_gamma, subset_size=args.al.subset_size)
+        strat = Badge(subset_size=args.al.subset_size)
+        al_strategy = PseudoBatch(al_strategy=strat, gamma=args.update_gamma, subset_size=args.al.subset_size)
+    elif args.al.strategy == 'pseudo_bald':
+        strat = BALDSampling(subset_size=args.al.subset_size)
+        al_strategy = PseudoBatch(al_strategy=strat, gamma=args.update_gamma, subset_size=args.al.subset_size)
     else:
         raise NotImplementedError()
     return al_strategy
