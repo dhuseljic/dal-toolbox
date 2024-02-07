@@ -24,8 +24,9 @@ class UncertaintySampling(Query, ABC):
         # forward_kwargs: dict = None, TODO
         **kwargs
     ):
-        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
-        logits = model.get_logits(unlabeled_dataloader) # , **forward_kwargs)
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(
+            subset_size=self.subset_size)
+        logits = model.get_logits(unlabeled_dataloader)  # , **forward_kwargs)
         scores = self.get_utilities(logits)
         _, indices = scores.topk(acq_size)
 
@@ -139,25 +140,3 @@ class VariationRatioSampling(UncertaintySampling):
         var_ratio = num_diff.float() / ensemble_size
 
         return var_ratio
-
-
-class BALDSampling(UncertaintySampling):
-    def get_utilities(self, logits):
-        if logits.ndim != 3:
-            raise ValueError(f"Input probas tensor must be 3-dimensional, got shape {logits.shape}")
-        scores = self.bald_score(logits)
-        return scores
-
-    def bald_score(self, logits):
-        # TODO(dhuseljic): implement bald from logits
-        # probas = logits.softmax(-1)
-        # ensemble_probas = torch.mean(probas, dim=1)
-        # ensemble_entropy = entropy_from_probas(ensemble_probas)
-        # mean_entropy = entropy_from_probas(probas).mean(dim=1)
-        # score = ensemble_entropy - mean_entropy
-
-        ensemble_entropy = ensemble_entropy_from_logits(logits)
-        mean_entropy = entropy_from_probas(logits.softmax(-1)).mean(dim=1)
-        score = ensemble_entropy - mean_entropy
-
-        return score

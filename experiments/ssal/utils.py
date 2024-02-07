@@ -195,7 +195,7 @@ def build_model(args, **kwargs):
     elif args.model.name == 'laplace':
         model = LaplaceNet(num_features, num_classes,
                            mean_field_factor=args.model.mean_field_factor, mc_samples=args.model.mc_samples)
-        if args.al.strategy in ['bald', 'pseudo_bald']:
+        if args.al.strategy in ['bald', 'pseudo_bald', 'batch_bald']:
             LaplaceNet.use_mean_field = False
     elif args.model.name == 'deterministic':
         model = DeterministcNet(num_features, num_classes)
