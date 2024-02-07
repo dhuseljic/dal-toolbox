@@ -11,9 +11,9 @@ dataset_path: /datasets
 dataset_name: cifar10
 
 # Dino model
-# dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
+dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
 # dino_model_name: 'dinov2_vitb14' # 86 M params - 768 dimensions
-dino_model_name: 'dinov2_vitl14' # 300 M params - 1024 dimensions
+# dino_model_name: 'dinov2_vitl14' # 300 M params - 1024 dimensions
 # dino_model_name: 'dinov2_vitg14' # 1100 M params - 1536 dimensions
 dino_cache_dir: null
 
@@ -30,6 +30,7 @@ model:
   train_batch_size: 32
   predict_batch_size: 256
   mean_field_factor: 10
+  mc_samples: 100
   num_inducing: 1024
   kernel_scale: 10
   scale_random_features: True
