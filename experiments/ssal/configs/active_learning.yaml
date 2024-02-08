@@ -19,7 +19,7 @@ dino_cache_dir: null
 
 al:
   strategy: random
-  subset_size: null
+  subset_size: 1000
   num_init_samples: 10
   num_acq: 10
   acq_size: 10

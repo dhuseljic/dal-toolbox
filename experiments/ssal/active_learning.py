@@ -106,7 +106,6 @@ def build_al_strategy(args):
     elif args.al.strategy == 'typiclust':
         al_strategy = strategies.TypiClust(subset_size=args.al.subset_size)
     elif args.al.strategy == 'pseudo_entropy':
-        # TODO check subset size for pseudo batch algo
         strat = strategies.EntropySampling(subset_size=args.al.subset_size)
         al_strategy = PseudoBatch(al_strategy=strat, gamma=args.update_gamma, subset_size=args.al.subset_size)
     elif args.al.strategy == 'pseudo_badge':
