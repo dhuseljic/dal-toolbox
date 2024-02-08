@@ -4,4 +4,5 @@ from .uncertainty import *
 from .bald import *
 from .coreset import *
 from .badge import *
+from .bait import *
 from .typiclust import *

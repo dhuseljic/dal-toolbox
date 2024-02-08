@@ -132,19 +132,6 @@ class LaplaceNet(LaplaceLayer):
             max_indices = probas.argmax(-1)
             num_classes = logits.size(-1)
 
-            # Slow original implementation
-            # for each sample in a batch and for each class, compute the gradient wrt to weights
-            # num_samples, feature_dim = inputs.shape
-            # embedding_batch = torch.empty([num_samples, feature_dim * num_classes])
-            # for n in range(len(inputs)):
-            #     for c in range(num_classes):
-            #         if c == max_indices[n]:
-            #             embedding_batch[n, feature_dim * c: feature_dim * (c + 1)] = features[n] * (1 - probas[n, c])
-            #         else:
-            #             embedding_batch[n, feature_dim * c: feature_dim * (c + 1)] = features[n] * (-1 * probas[n, c])
-            # embedding_batch
-
-            # Fast implementation
             factor = F.one_hot(max_indices, num_classes=num_classes) - probas
             embedding_batch = (factor[:, :, None] * features[:, None, :]).flatten(-2)
 
@@ -152,6 +139,32 @@ class LaplaceNet(LaplaceLayer):
         # Concat all embeddings
         embedding = torch.cat(embedding)
         return embedding.cpu()
+
+    @torch.no_grad()
+    def get_exp_grad_representations(self, dataloader, device):
+        self.eval()
+        self.to(device)
+
+        embedding = []
+        for batch in dataloader:
+            inputs = batch[0].to(device)
+            logits = self(inputs)
+
+            features = inputs
+            probas = logits.softmax(-1)
+            feature_dim = features.size(-1)
+            num_classes = logits.size(-1)
+
+            embedding_batch = torch.zeros([len(inputs), num_classes, feature_dim * num_classes]).to(device)
+            for ind in range(num_classes):
+                one_hot = torch.nn.functional.one_hot(torch.tensor(ind), num_classes=num_classes).to(device)
+                factor = one_hot - probas
+                embedding_batch[:, ind] = (factor[:, :, None] * features[:, None, :]).flatten(-2)
+                embedding_batch[:, ind] =  embedding_batch[:, ind] * torch.sqrt(probas[:, ind].view(-1, 1))
+            embedding.append(embedding_batch)
+        embedding = torch.cat(embedding)
+        return embedding.cpu()
+
 
 
 class DeterministcNet(nn.Linear):

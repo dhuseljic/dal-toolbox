@@ -99,6 +99,8 @@ def build_al_strategy(args):
         al_strategy = strategies.EntropySampling(subset_size=args.al.subset_size)
     elif args.al.strategy == 'badge':
         al_strategy = strategies.Badge(subset_size=args.al.subset_size)
+    elif args.al.strategy == 'bait':
+        al_strategy = strategies.BaitSampling(subset_size=args.al.subset_size, lmb=1)
     elif args.al.strategy == 'bald':
         al_strategy = strategies.BALDSampling(subset_size=args.al.subset_size)
     elif args.al.strategy == 'batch_bald':
