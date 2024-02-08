@@ -17,11 +17,6 @@ from utils import DinoFeatureDataset, flatten_cfg, build_data, build_model, buil
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
 def main(args):
     seed_everything(42)
-
-    mlflow.set_tracking_uri(uri="file://{}".format(os.path.abspath(args.mlflow_dir)))
-    mlflow.set_experiment("Active Learning")
-    mlflow.start_run()
-    mlflow.log_params(flatten_cfg(args))
     print(OmegaConf.to_yaml(args))
 
     dino_model = build_dino_model(args)
@@ -45,6 +40,7 @@ def main(args):
     al_datamodule.random_init(n_samples=args.al.num_init_samples)
     al_strategy = build_al_strategy(args)
 
+    history = []
     model = build_model(args, num_features=dino_model.norm.normalized_shape[0], num_classes=data.num_classes)
     for i_acq in range(0, args.al.num_acq+1):
         if i_acq != 0:
@@ -70,6 +66,13 @@ def main(args):
         predictions = trainer.predict(model, dataloaders=al_datamodule.test_dataloader())
         test_stats = evaluate(predictions)
         print(f'Cycle {i_acq}:', test_stats, flush=True)
+        history.append(test_stats)
+
+    mlflow.set_tracking_uri(uri="file://{}".format(os.path.abspath(args.mlflow_dir)))
+    mlflow.set_experiment("Active Learning")
+    mlflow.start_run()
+    mlflow.log_params(flatten_cfg(args))
+    for i_acq, test_stats in enumerate(history):
         mlflow.log_metrics(test_stats, step=i_acq)
     mlflow.end_run()
 
