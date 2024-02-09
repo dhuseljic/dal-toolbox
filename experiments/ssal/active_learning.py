@@ -113,6 +113,9 @@ def build_al_strategy(args):
     elif args.al.strategy == 'pseudo_badge':
         strat = strategies.Badge(subset_size=args.al.subset_size)
         al_strategy = PseudoBatch(al_strategy=strat, gamma=args.update_gamma, subset_size=args.al.subset_size)
+    elif args.al.strategy == 'pseudo_bait':
+        strat = strategies.BaitSampling(subset_size=args.al.subset_size, lmb=1)
+        al_strategy = PseudoBatch(al_strategy=strat, gamma=args.update_gamma, subset_size=args.al.subset_size)
     elif args.al.strategy == 'pseudo_bald':
         strat = strategies.BALDSampling(subset_size=args.al.subset_size)
         al_strategy = PseudoBatch(al_strategy=strat, gamma=args.update_gamma, subset_size=args.al.subset_size)
