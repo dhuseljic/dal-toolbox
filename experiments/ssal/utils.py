@@ -161,10 +161,10 @@ class LaplaceNet(LaplaceLayer):
                 factor = one_hot - probas
                 embedding_batch[:, ind] = (factor[:, :, None] * features[:, None, :]).flatten(-2)
                 embedding_batch[:, ind] = embedding_batch[:, ind] * torch.sqrt(probas[:, ind].view(-1, 1))
-            embedding.append(embedding_batch)
+            embedding.append(embedding_batch.cpu())
         embedding = torch.cat(embedding)
 
-        return embedding.cpu()
+        return embedding
 
 
 class DeterministcNet(nn.Linear):

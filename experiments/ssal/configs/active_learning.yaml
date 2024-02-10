@@ -23,12 +23,14 @@ al:
   num_init_samples: 10
   num_acq: 10
   acq_size: 10
+  fisher_batch_size: 10
+  device: cpu
 
 model:
   name: laplace
   num_epochs: 200
   train_batch_size: 32
-  predict_batch_size: 256
+  predict_batch_size: 128
   mean_field_factor: 10
   mc_samples: 100
   num_inducing: 1024

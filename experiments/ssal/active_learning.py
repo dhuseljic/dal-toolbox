@@ -100,7 +100,9 @@ def build_al_strategy(args):
     elif args.al.strategy == 'badge':
         al_strategy = strategies.Badge(subset_size=args.al.subset_size)
     elif args.al.strategy == 'bait':
-        al_strategy = strategies.BaitSampling(subset_size=args.al.subset_size, lmb=1)
+        al_strategy = strategies.BaitSampling(subset_size=args.al.subset_size,
+                                              fisher_batch_size=args.al.fisher_batch_size,
+                                              device=args.al.device)
     elif args.al.strategy == 'bald':
         al_strategy = strategies.BALDSampling(subset_size=args.al.subset_size)
     elif args.al.strategy == 'batch_bald':

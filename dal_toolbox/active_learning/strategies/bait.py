@@ -2,14 +2,13 @@ import torch
 import numpy as np
 from .query import Query
 
-import gc
 from copy import copy as copy
 from copy import deepcopy as deepcopy
 from torch.utils.data import TensorDataset, DataLoader
 
 
 class BaitSampling(Query):
-    def __init__(self, lmb, fisher_batch_size=32, device='cpu', subset_size=None):
+    def __init__(self, lmb=1, fisher_batch_size=32, device='cpu', subset_size=None):
         super().__init__()
         self.subset_size = subset_size
         self.lmb = lmb
