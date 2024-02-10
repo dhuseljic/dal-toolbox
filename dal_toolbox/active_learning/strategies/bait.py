@@ -14,10 +14,11 @@ class BaitSampling(Query):
         self.subset_size = subset_size
         self.lmb = lmb
         self.fisher_batch_size = fisher_batch_size
-        self.device = device # matrix multiplications are really heavy in bait
+        self.device = device
 
     def query(self, *, model, al_datamodule, acq_size, **kwargs):
-        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(
+            subset_size=self.subset_size)
         labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
 
         # Use all data
@@ -33,7 +34,7 @@ class BaitSampling(Query):
             fisher += torch.sum(term, dim=0)
 
         init = torch.zeros(repr_all.size(-1), repr_all.size(-1)).to(self.device)
-        dl = DataLoader(TensorDataset(repr_labeled), batch_size=self.fisher_batch_size, shuffle=False)
+
         for batch in dl:
             repr_batch = batch[0].to(self.device)
             term = torch.matmul(repr_batch.transpose(1, 2), repr_batch) / len(repr_batch)
@@ -41,7 +42,7 @@ class BaitSampling(Query):
 
         chosen = select(repr_unlabeled, acq_size, fisher, init, lamb=self.lmb, nLabeled=len(labeled_indices))
         return [unlabeled_indices[idx] for idx in chosen]
-        
+
 
 @torch.no_grad()
 def select(X, K, fisher, iterates, lamb=1, nLabeled=0, device='cpu'):
@@ -50,7 +51,8 @@ def select(X, K, fisher, iterates, lamb=1, nLabeled=0, device='cpu'):
     dim = X.shape[-1]
     rank = X.shape[-2]
 
-    currentInv = torch.inverse(lamb * torch.eye(dim).to(device) + iterates.to(device) * nLabeled / (nLabeled + K))
+    currentInv = torch.inverse(lamb * torch.eye(dim).to(device) +
+                               iterates.to(device) * nLabeled / (nLabeled + K))
     X = X * np.sqrt(K / (nLabeled + K))
     fisher = fisher.to(device)
 

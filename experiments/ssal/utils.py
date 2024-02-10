@@ -125,7 +125,7 @@ class LaplaceNet(LaplaceLayer):
         embedding = []
         for batch in dataloader:
             inputs = batch[0].to(device)
-            logits = self.forward(inputs)
+            logits = self.forward_mean_field(inputs)
 
             features = inputs
             probas = logits.softmax(-1)
@@ -148,7 +148,7 @@ class LaplaceNet(LaplaceLayer):
         embedding = []
         for batch in dataloader:
             inputs = batch[0].to(device)
-            logits = self(inputs)
+            logits = self.forward_mean_field(inputs)
 
             features = inputs
             probas = logits.softmax(-1)
@@ -163,6 +163,7 @@ class LaplaceNet(LaplaceLayer):
                 embedding_batch[:, ind] = embedding_batch[:, ind] * torch.sqrt(probas[:, ind].view(-1, 1))
             embedding.append(embedding_batch)
         embedding = torch.cat(embedding)
+
         return embedding.cpu()
 
 
