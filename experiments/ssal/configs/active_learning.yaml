@@ -18,6 +18,7 @@ dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
 dino_cache_dir: null
 
 al:
+  init_method: diversity_density
   strategy: random
   subset_size: 1000
   num_init_samples: 10

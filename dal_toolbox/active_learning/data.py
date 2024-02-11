@@ -1,5 +1,5 @@
-
 import torch
+import torch.nn as nn
 import numpy as np
 import lightning as L
 
@@ -7,6 +7,9 @@ from torch.utils.data import Subset, RandomSampler, DataLoader, Dataset
 
 from lightning.pytorch.utilities import rank_zero_warn
 from lightning.pytorch.utilities.exceptions import MisconfigurationException
+
+from sklearn.cluster import KMeans
+from sklearn.neighbors import NearestNeighbors
 
 from ..utils import setup_rng
 
@@ -23,7 +26,7 @@ class ActiveLearningDataModule(L.LightningDataModule):
             predict_batch_size: int = 256,
             seed: int = None,
             fill_train_loader_batch: bool = True,
-            collator = None
+            collator=None
     ):
         super().__init__()
         self.train_dataset = train_dataset
@@ -62,7 +65,8 @@ class ActiveLearningDataModule(L.LightningDataModule):
             num_samples = None
 
         sampler = RandomSampler(labeled_dataset, num_samples=num_samples)
-        train_loader = DataLoader(labeled_dataset, batch_size=self.train_batch_size, sampler=sampler, collate_fn=self.collator)
+        train_loader = DataLoader(labeled_dataset, batch_size=self.train_batch_size,
+                                  sampler=sampler, collate_fn=self.collator)
         return train_loader
 
     def unlabeled_dataloader(self, subset_size=None):
@@ -71,7 +75,8 @@ class ActiveLearningDataModule(L.LightningDataModule):
         if subset_size is not None:
             unlabeled_indices = self.rng.choice(unlabeled_indices, size=subset_size, replace=False)
             unlabeled_indices = unlabeled_indices.tolist()
-        loader = DataLoader(self.query_dataset, batch_size=self.predict_batch_size, sampler=unlabeled_indices, collate_fn=self.collator)
+        loader = DataLoader(self.query_dataset, batch_size=self.predict_batch_size,
+                            sampler=unlabeled_indices, collate_fn=self.collator)
         return loader, unlabeled_indices
 
     def labeled_dataloader(self, subset_size=None):
@@ -80,7 +85,8 @@ class ActiveLearningDataModule(L.LightningDataModule):
         if subset_size is not None:
             labeled_indices = self.rng.choice(labeled_indices, size=subset_size, replace=False)
             labeled_indices = labeled_indices.tolist()
-        loader = DataLoader(self.query_dataset, batch_size=self.predict_batch_size, sampler=labeled_indices, collate_fn=self.collator)
+        loader = DataLoader(self.query_dataset, batch_size=self.predict_batch_size,
+                            sampler=labeled_indices, collate_fn=self.collator)
         return loader, labeled_indices
 
     def state_dict(self):
@@ -133,10 +139,40 @@ class ActiveLearningDataModule(L.LightningDataModule):
             indices = indices.tolist()
         self.update_annotations(indices)
 
+    def diverse_init(self, n_samples: int, model: nn.Module = None, num_neighbors=20):
+        if len(self.labeled_indices) != 0:
+            raise ValueError('Pools already initialized.')
+
+        # Get features
+        dataloader, unlabeled_indices = self.unlabeled_dataloader()
+        features = []
+        for batch in dataloader:
+            if model is None:
+                feature = batch[0]
+            else:
+                feature = model(batch[0])
+            features.append(feature)
+        features = torch.cat(features)
+        features = features.numpy()
+
+        kmeans = KMeans(n_clusters=n_samples, n_init='auto')
+        clusters = kmeans.fit_predict(features)
+
+        indices = []
+        for cluster in np.unique(clusters):
+            features_cluster = features[clusters == cluster]
+            indices_cluster = np.array(unlabeled_indices)[clusters == cluster]
+
+            neighbors = NearestNeighbors(n_neighbors=num_neighbors+1, metric='sqeuclidean', n_jobs=-1).fit(features)
+            distances, _ = neighbors.kneighbors(features_cluster)
+            idx = distances.sum(-1).argmin()
+            indices.append(indices_cluster[idx])
+        self.update_annotations(indices)
+
 
 class QueryDataset(Dataset):
     """A helper class which returns also the index along with the instances and targets."""
-    #problem with dictionary output of dataset
+    # problem with dictionary output of dataset
 
     def __init__(self, dataset):
         super().__init__()
@@ -147,8 +183,8 @@ class QueryDataset(Dataset):
         data = self.dataset.__getitem__(index)
         if isinstance(data, dict):
             instance = {
-                'input_ids': data['input_ids'], 
-                'attention_mask': data['attention_mask'], 
+                'input_ids': data['input_ids'],
+                'attention_mask': data['attention_mask'],
                 'label': data['label'],
                 'index': index
             }
@@ -156,7 +192,7 @@ class QueryDataset(Dataset):
         else:
             instance, target = self.dataset.__getitem__(index)
             return instance, target, index
-    
+
     def __len__(self):
         return len(self.dataset)
 
