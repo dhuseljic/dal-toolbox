@@ -139,7 +139,7 @@ class ActiveLearningDataModule(L.LightningDataModule):
             indices = indices.tolist()
         self.update_annotations(indices)
 
-    def diverse_init(self, n_samples: int, model: nn.Module = None, num_neighbors=20):
+    def diverse_dense_init(self, n_samples: int, model: nn.Module = None, num_neighbors=20):
         if len(self.labeled_indices) != 0:
             raise ValueError('Pools already initialized.')
 
@@ -160,13 +160,14 @@ class ActiveLearningDataModule(L.LightningDataModule):
 
         indices = []
         for cluster in np.unique(clusters):
-            features_cluster = features[clusters == cluster]
-            indices_cluster = np.array(unlabeled_indices)[clusters == cluster]
+            cluster_indices = np.where(clusters == cluster)[0]
+            features_cluster = features[cluster_indices]
 
-            neighbors = NearestNeighbors(n_neighbors=num_neighbors+1, metric='sqeuclidean', n_jobs=-1).fit(features)
+            neighbors = NearestNeighbors(n_neighbors=num_neighbors+1, metric='sqeuclidean', n_jobs=-1)
+            neighbors.fit(features_cluster)
             distances, _ = neighbors.kneighbors(features_cluster)
             idx = distances.sum(-1).argmin()
-            indices.append(indices_cluster[idx])
+            indices.append(cluster_indices[idx])
         self.update_annotations(indices)
 
 
