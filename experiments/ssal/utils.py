@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
+from torchvision import transforms
 
 from tqdm.auto import tqdm
 from omegaconf import DictConfig
@@ -28,8 +29,36 @@ def build_dino_model(args):
     return dino_model
 
 
+class DinoTransforms():
+    def __init__(self, size=None, center_crop_size=224):
+        if size:
+            # https://github.com/facebookresearch/dino/blob/main/eval_linear.py#L65-L70
+            dino_mean = (0.485, 0.456, 0.406)
+            dino_std = (0.229, 0.224, 0.225)
+            self.transform = transforms.Compose([
+                transforms.Resize(size, interpolation=3),
+                transforms.CenterCrop(center_crop_size),
+                transforms.ToTensor(),
+                transforms.Normalize(dino_mean, dino_std)
+            ])
+        else:
+            self.transform = transforms.Compose([transforms.ToTensor()])
+
+    @property
+    def train_transform(self):
+        return self.transform
+
+    @property
+    def query_transform(self):
+        return self.transform
+
+    @property
+    def eval_transform(self):
+        return self.transform
+
 def build_data(args):
-    transforms = PlainTransforms(resize=(224, 224))
+    # transforms = PlainTransforms(resize=(224, 224))
+    transforms = DinoTransforms(size=(256, 256))
     if args.dataset_name == 'cifar10':
         data = CIFAR10(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'cifar100':
@@ -46,7 +75,7 @@ def build_data(args):
 
 
 def build_ood_data(args):
-    transforms = PlainTransforms(resize=(224, 224))
+    transforms = DinoTransforms(size=(256, 256))
     if args.ood_dataset_name == 'cifar10':
         data = CIFAR10(args.dataset_path, transforms=transforms)
     elif args.ood_dataset_name == 'cifar100':
@@ -256,7 +285,7 @@ def flatten_cfg(cfg, parent_key='', sep='.'):
 
 class DinoFeatureDataset:
 
-    def __init__(self, dino_model, dataset, normalize_features=True, cache=False, cache_dir=None, device='cuda'):
+    def __init__(self, dino_model, dataset, cache=False, cache_dir=None, device='cuda'):
 
         if cache:
             if cache_dir is None:
@@ -274,11 +303,6 @@ class DinoFeatureDataset:
                 torch.save((features, labels), file_name)
         else:
             features, labels = self.get_dino_features(dino_model, dataset, device)
-
-        if normalize_features:
-            features_mean = features.mean(0)
-            features_std = features.std(0) + 1e-9
-            features = (features - features_mean) / features_std
 
         self.features = features
         self.labels = labels
@@ -311,6 +335,7 @@ class DinoFeatureDataset:
 
         features = []
         labels = []
+        dino_model.eval()
         dino_model.to(device)
         for batch in tqdm(dataloader):
             features.append(dino_model(batch[0].to(device)).to('cpu'))
