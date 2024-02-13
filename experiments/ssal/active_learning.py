@@ -133,7 +133,7 @@ def build_al_strategy(args):
 
 
 class PseudoBatch(strategies.Query):
-    def __init__(self, al_strategy, gamma=1, lmb=1, subset_size=None, random_seed=None):
+    def __init__(self, al_strategy, gamma=10, lmb=1, subset_size=None, random_seed=None):
         super().__init__(random_seed=random_seed)
         self.subset_size = subset_size
         self.al_strategy = al_strategy

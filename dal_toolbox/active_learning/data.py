@@ -55,18 +55,20 @@ class ActiveLearningDataModule(L.LightningDataModule):
         if len(self.labeled_indices) == 0:
             raise ValueError('No instances labeled yet. Initialize the labeled pool first.')
 
-        # TODO(dhuseljic): Add support for semi-supervised learning loaders.
         labeled_dataset = Subset(self.train_dataset, indices=self.labeled_indices)
 
         if self.fill_train_loader_batch:
-            iter_per_epoch = len(labeled_dataset) // self.train_batch_size + 1
+            iter_per_epoch = len(labeled_dataset) // self.train_batch_size
+            if len(labeled_dataset) % self.train_batch_size != 0:
+                iter_per_epoch += 1
             num_samples = (iter_per_epoch * self.train_batch_size)
         else:
             num_samples = None
 
         sampler = RandomSampler(labeled_dataset, num_samples=num_samples)
+        # TODO: hotfix
         train_loader = DataLoader(labeled_dataset, batch_size=self.train_batch_size,
-                                  sampler=sampler, collate_fn=self.collator)
+                                  drop_last=True, collate_fn=self.collator)
         return train_loader
 
     def unlabeled_dataloader(self, subset_size=None):
