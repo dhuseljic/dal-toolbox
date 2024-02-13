@@ -66,9 +66,8 @@ class ActiveLearningDataModule(L.LightningDataModule):
             num_samples = None
 
         sampler = RandomSampler(labeled_dataset, num_samples=num_samples)
-        # TODO: hotfix
         train_loader = DataLoader(labeled_dataset, batch_size=self.train_batch_size,
-                                  drop_last=True, collate_fn=self.collator)
+                                  sampler=sampler, collate_fn=self.collator)
         return train_loader
 
     def unlabeled_dataloader(self, subset_size=None):
