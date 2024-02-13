@@ -32,7 +32,7 @@ model:
   num_epochs: 200
   train_batch_size: 32
   predict_batch_size: 128
-  mean_field_factor: 10
+  mean_field_factor: 0.4
   mc_samples: 100
   num_inducing: 1024
   kernel_scale: 10
