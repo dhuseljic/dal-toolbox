@@ -6,39 +6,42 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=32gb
 #SBATCH --gres=gpu:0
+#SBATCH --array=1-50
 #SBATCH --exclude=gpu-a100-[1-5],gpu-v100-[1-4]
-#SBATCH --array=2-100
-
 source /mnt/home/dhuseljic/envs/dal-toolbox/bin/activate
 
-DATASET=cifar10
-DINO_MODEL=dinov2_vitl14
+DATASET=cifar100
+DINO_MODEL=dinov2_vits14
 
-STRAT=random
-NUM_INIT=10
-NUM_ACQ=10
-ACQ_SIZE=10
+INIT_METHOD=diverse_dense
+STRAT=typiclust
+NUM_INIT=100
+NUM_ACQ=20
+ACQ_SIZE=100
+SUBSET_SIZE=10000
 
 MODEL=laplace
 NUM_EPOCHS=200
 SCALE_FEATURES=True
-
 LIKELIHOOD=gaussian
 LMB=1
-GAMMA=1
+GAMMA=10
 SEED=$SLURM_ARRAY_TASK_ID
 
-mlflow_dir=/mnt/work/dhuseljic/mlflow/ssal/al_${DATASET}
+mlflow_dir=/mnt/work/dhuseljic/mlflow/ssal/al/${DATASET}
 
 cd /mnt/home/dhuseljic/projects/dal-toolbox/experiments/ssal/
 srun python active_learning.py \
 	dataset_name=$DATASET \
 	dataset_path=/mnt/work/dhuseljic/datasets \
 	dino_model_name=$DINO_MODEL \
+	dino_cache_dir=/mnt/work/dhuseljic/datasets \
 	al.strategy=$STRAT \
+	al.init_method=$INIT_METHOD \
 	al.num_init_samples=$NUM_INIT \
 	al.num_acq=$NUM_ACQ \
 	al.acq_size=$ACQ_SIZE \
+	al.subset_size=$SUBSET_SIZE \
 	model.name=$MODEL \
 	model.num_epochs=$NUM_EPOCHS \
 	model.scale_random_features=$SCALE_FEATURES \
