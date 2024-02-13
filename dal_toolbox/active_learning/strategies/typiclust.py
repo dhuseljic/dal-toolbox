@@ -41,7 +41,7 @@ def kmeans(features, num_clusters):
         km = KMeans(n_clusters=num_clusters, n_init='auto')
         km.fit_predict(features)
     else:
-        km = MiniBatchKMeans(n_clusters=num_clusters, batch_size=5000)
+        km = MiniBatchKMeans(n_clusters=num_clusters, batch_size=5000, reassignment_ratio=0.0)
         km.fit_predict(features)
     return km.labels_
 
