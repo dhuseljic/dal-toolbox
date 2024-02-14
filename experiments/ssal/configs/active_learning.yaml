@@ -24,6 +24,7 @@ al:
   num_init_samples: 10
   num_acq: 10
   acq_size: 10
+  update_every: 1
   fisher_batch_size: 10
   device: cpu
 

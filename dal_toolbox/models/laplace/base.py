@@ -73,6 +73,7 @@ class LaplaceModel(BaseModule):
             if isinstance(m, LaplaceLayer):
                 m.synchronize_precision_matrix()
 
+    @torch.no_grad()
     def update_posterior(self, dataloader, lmb=1, gamma=1, likelihood='gaussian'):
         self.eval()
 
@@ -81,14 +82,13 @@ class LaplaceModel(BaseModule):
         if 'return_features' not in forward_kwargs:
             raise ValueError('Define the kwarg `return_features` in the forward method of your model.')
 
-        # get rff features
+        # get features
         phis_list = []
         targets_list = []
-        with torch.no_grad():
-            for inputs, targets in dataloader:
-                logits, phis = self.model(inputs, return_features=True)
-                phis_list.append(phis)
-                targets_list.append(targets)
+        for inputs, targets in dataloader:
+            logits, phis = self.model(inputs, return_features=True)
+            phis_list.append(phis)
+            targets_list.append(targets)
         phis = torch.cat(phis_list)
         targets = torch.cat(targets_list)
         num_classes = logits.size(-1)

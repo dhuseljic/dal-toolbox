@@ -110,56 +110,53 @@ def build_al_strategy(args):
         al_strategy = strategies.TypiClust(subset_size=args.al.subset_size)
     elif args.al.strategy == 'pseudo_margin':
         strat = strategies.MarginSampling(subset_size=args.al.subset_size)
-        al_strategy = PseudoBatch(al_strategy=strat, gamma=args.update_gamma, subset_size=args.al.subset_size)
+        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.al.update_every,
+                                  gamma=args.update_gamma, subset_size=args.al.subset_size)
     elif args.al.strategy == 'pseudo_badge':
         strat = strategies.Badge(subset_size=args.al.subset_size)
-        al_strategy = PseudoBatch(al_strategy=strat, gamma=args.update_gamma, subset_size=args.al.subset_size)
+        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.al.update_every,
+                                  gamma=args.update_gamma, subset_size=args.al.subset_size)
     elif args.al.strategy == 'pseudo_bald':
         strat = strategies.BALDSampling(subset_size=args.al.subset_size)
-        al_strategy = PseudoBatch(al_strategy=strat, gamma=args.update_gamma, subset_size=args.al.subset_size)
-    # TODO remove?
-    elif args.al.strategy == 'bait':
-        al_strategy = strategies.BaitSampling(subset_size=args.al.subset_size,
-                                              fisher_batch_size=args.al.fisher_batch_size,
-                                              device=args.al.device)
-    elif args.al.strategy == 'pseudo_bait':
-        strat = strategies.BaitSampling(subset_size=args.al.subset_size)
-        al_strategy = PseudoBatch(al_strategy=strat, gamma=args.update_gamma, subset_size=args.al.subset_size)
-    elif args.al.strategy == 'bald':
-        al_strategy = strategies.BALDSampling(subset_size=args.al.subset_size)
+        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.al.update_every,
+                                  gamma=args.update_gamma, subset_size=args.al.subset_size)
     else:
         raise NotImplementedError()
     return al_strategy
 
 
 class PseudoBatch(strategies.Query):
-    def __init__(self, al_strategy, gamma=10, lmb=1, subset_size=None, random_seed=None):
+    def __init__(self, al_strategy, update_every=1, gamma=10, lmb=1, subset_size=None, random_seed=None):
         super().__init__(random_seed=random_seed)
         self.subset_size = subset_size
         self.al_strategy = al_strategy
         self.gamma = gamma
         self.lmb = lmb
+        self.update_every = update_every
 
     @torch.no_grad()
     def query(self, *, model, al_datamodule, acq_size, return_utilities=False, **kwargs):
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(
             subset_size=self.subset_size)
 
+        if acq_size % self.update_every != 0:
+            raise ValueError('Acquisition size must be divisible by `update_every`.')
+
         indices = []
         from tqdm.auto import tqdm
-        for _ in tqdm(range(acq_size)):
+        for _ in tqdm(range(acq_size // self.update_every)):
             # Sample via simple strategy
-            idx = self.al_strategy.query(model=model, al_datamodule=al_datamodule, acq_size=1)[0]
+            idx = self.al_strategy.query(model=model, al_datamodule=al_datamodule, acq_size=self.update_every)
 
             # Get the element and label from the dataloader
             data = unlabeled_dataloader.dataset[idx]
-            sample = data[0].view(1, -1)
-            target = data[1].view(-1)
+            sample = data[0]
+            target = data[1]
 
             # Update the model
             model.cpu()
             model.update_posterior(zip([sample], [target]), gamma=self.gamma, lmb=self.lmb)
-            indices.append(idx)
+            indices.extend(idx)
         actual_indices = indices
         return actual_indices
 
