@@ -2,6 +2,7 @@ import os
 import hydra
 import torch
 import mlflow
+import copy
 
 from omegaconf import OmegaConf
 from lightning import Trainer
@@ -136,6 +137,8 @@ class PseudoBatch(strategies.Query):
 
     @torch.no_grad()
     def query(self, *, model, al_datamodule, acq_size, return_utilities=False, **kwargs):
+        # Copy data module to avoid querying the same instances
+        al_datamodule_batch = copy.deepcopy(al_datamodule)
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(
             subset_size=self.subset_size)
 
@@ -146,7 +149,11 @@ class PseudoBatch(strategies.Query):
         from tqdm.auto import tqdm
         for _ in tqdm(range(acq_size // self.update_every)):
             # Sample via simple strategy
-            idx = self.al_strategy.query(model=model, al_datamodule=al_datamodule, acq_size=self.update_every)
+            idx = self.al_strategy.query(
+                model=model,
+                al_datamodule=al_datamodule_batch,
+                acq_size=self.update_every
+            )
 
             # Get the element and label from the dataloader
             data = unlabeled_dataloader.dataset[idx]
@@ -156,6 +163,7 @@ class PseudoBatch(strategies.Query):
             # Update the model
             model.cpu()
             model.update_posterior(zip([sample], [target]), gamma=self.gamma, lmb=self.lmb)
+            al_datamodule_batch.update_annotations(idx)
             indices.extend(idx)
         actual_indices = indices
         return actual_indices
