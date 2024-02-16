@@ -19,11 +19,6 @@ from utils import DinoFeatureDataset, flatten_cfg, build_data, build_model, buil
 def main(args):
     seed_everything(42)  # seed for val split being identical each time
 
-    # First fixed seed for datasets to be identical
-    mlflow.set_tracking_uri(uri="file://{}".format(os.path.abspath(args.mlflow_dir)))
-    mlflow.set_experiment("Bayesian Updating")
-    mlflow.start_run()
-    mlflow.log_params(flatten_cfg(args))
     print(OmegaConf.to_yaml(args))
 
     # Setup
@@ -81,12 +76,7 @@ def main(args):
     # ood_stats = evaluate_ood(id_predictions, ood_predictions)
     # test_stats_base.update(ood_stats)
 
-    if args.model.name == 'deterministic':
-        print('Base model:', test_stats_base)
-        mlflow.log_metrics({f'base_{k}': v for k, v in test_stats_base.items()})
-        mlflow.end_run()
-        return
-
+    results = {}
     for num_new in args.num_new_samples:
         # Updating
         update_model = copy.deepcopy(base_model)
@@ -101,7 +91,7 @@ def main(args):
         test_stats_updating = evaluate(predictions_updated)
         y_pred_updated = torch.cat([pred[0] for pred in predictions_updated]).argmax(-1)
         test_stats_updating['decision_flips'] = torch.sum(y_pred_original != y_pred_updated).item()
-        test_stats_updating['updating_time'] = updating_time
+        test_stats_updating['time'] = updating_time
         # id_predictions = trainer.predict(update_model, id_loader)
         # ood_predictions = trainer.predict(update_model, ood_loader)
         # ood_stats = evaluate_ood(id_predictions, ood_predictions)
@@ -129,22 +119,43 @@ def main(args):
         test_stats_retraining = evaluate(predictions_retrained)
         y_pred_retrained = torch.cat([pred[0] for pred in predictions_retrained]).argmax(-1)
         test_stats_retraining['decision_flips'] = torch.sum(y_pred_original != y_pred_retrained).item()
-        test_stats_retraining['retraining_time'] = retraining_time
+        test_stats_retraining['time'] = retraining_time
 
         # id_predictions = trainer.predict(retrain_model, id_loader)
         # ood_predictions = trainer.predict(retrain_model, ood_loader)
         # ood_stats = evaluate_ood(id_predictions, ood_predictions)
         # test_stats_retraining.update(ood_stats)
+        print('Number of new samples:', num_new)
+        print('Base model:', test_stats_base)
+        print('Updated model:', test_stats_updating)
+        print('Retrained model:', test_stats_retraining)
+        print('=' * 20)
+        results[num_new] = {
+            'base': test_stats_base,
+            'updated': test_stats_updating,
+            'retrained': test_stats_retraining
+        }
+
+    # Logging
+    mlflow.set_tracking_uri(uri="file://{}".format(os.path.abspath(args.mlflow_dir)))
+    mlflow.set_experiment("Updating")
+    mlflow.start_run()
+    mlflow.log_params(flatten_cfg(args))
+    for num_new in results:
+        res_dict = results[num_new]
+        test_stats_base = res_dict['base']
+        test_stats_updating = res_dict['updated']
+        test_stats_retraining = res_dict['retrained']
+
+        mlflow.log_metrics({f'base_{k}': v for k, v in test_stats_base.items()}, step=num_new)
+        mlflow.log_metrics({f'updated_{k}': v for k, v in test_stats_updating.items()}, step=num_new)
+        mlflow.log_metrics({f'retrained_{k}': v for k, v in test_stats_retraining.items()}, step=num_new)
 
         print('Number of new samples:', num_new)
         print('Base model:', test_stats_base)
         print('Updated model:', test_stats_updating)
         print('Retrained model:', test_stats_retraining)
         print('=' * 20)
-
-    mlflow.log_metrics({f'base_{k}': v for k, v in test_stats_base.items()})
-    mlflow.log_metrics({f'updated_{k}': v for k, v in test_stats_updating.items()})
-    mlflow.log_metrics({f'retrained_{k}': v for k, v in test_stats_retraining.items()})
     mlflow.end_run()
 
 
