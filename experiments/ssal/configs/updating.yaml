@@ -30,7 +30,7 @@ model:
   scale_random_features: True
   optimize_kernel_scale: True
   mean_field_factor: .4
-  mc_samples: 100
+  mc_samples: 1_000
 
 # Optimizer
 optimizer: 
