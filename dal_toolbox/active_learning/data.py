@@ -109,6 +109,9 @@ class ActiveLearningDataModule(L.LightningDataModule):
                 buy_idx (list): List of indices which identify samples of the unlabeled pool that should be
                                 transfered to the labeld pool.
         """
+        # Check if buy_idx has duplicate indices
+        if len(buy_idx) != len(set(buy_idx)):
+            raise ValueError('The `buy_idx` has duplicate annotations.')
         self.labeled_indices = list_union(self.labeled_indices, buy_idx)
         self.unlabeled_indices = list_diff(self.unlabeled_indices, buy_idx)
 
