@@ -57,10 +57,10 @@ def kmeans(rr, k):
 
 
 class BayesianEstimateSampling(Query, ABC):
-    def __init__(self, subset_size=None, random_seed=None):
+    def __init__(self, estimation_pool_size, T_fraction, subset_size=None, random_seed=None):
         super().__init__(random_seed=random_seed)
         self.subset_size = subset_size
-        self.estimation_pool_size, self.T = 0.1, 0.1
+        self.estimation_pool_size, self.T = estimation_pool_size, T_fraction
 
     @torch.no_grad()
     def query(
@@ -78,9 +78,8 @@ class BayesianEstimateSampling(Query, ABC):
         if logits.ndim != 3:
             raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
         probas = torch.softmax(logits, dim=-1)
-        probas_T = probas.transpose(0, 1)
-        pr_YhThetaXp_X_Y_Xp_E_Yh, pr_Yhat_X_Y_Xp_E_Yh, pr_YThetaX_X_Y_E, pr_YhThetaXp_Xp_E_Yh = self.calculate_stuff(probas=probas_T)
-        indices = self.get_utilities(probas_T, pr_YhThetaXp_X_Y_Xp_E_Yh, pr_Yhat_X_Y_Xp_E_Yh, pr_YThetaX_X_Y_E, pr_YhThetaXp_Xp_E_Yh, acq_size)
+        pr_YhThetaXp_X_Y_Xp_E_Yh, pr_Yhat_X_Y_Xp_E_Yh, pr_YThetaX_X_Y_E, pr_YhThetaXp_Xp_E_Yh = self.calculate_stuff(probas=probas)
+        indices = self.get_utilities(probas, pr_YhThetaXp_X_Y_Xp_E_Yh, pr_Yhat_X_Y_Xp_E_Yh, pr_YThetaX_X_Y_E, pr_YhThetaXp_Xp_E_Yh, acq_size)
 
         actual_indices = [unlabeled_indices[i] for i in indices]
         return actual_indices
