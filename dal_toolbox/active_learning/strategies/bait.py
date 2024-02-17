@@ -33,12 +33,11 @@ class BaitSampling(Query):
             fisher += torch.sum(term, dim=0)
 
         init = torch.zeros(repr_all.size(-1), repr_all.size(-1)).to(self.device)
-
+        dl = DataLoader(TensorDataset(repr_labeled), batch_size=self.fisher_batch_size, shuffle=False)
         for batch in dl:
             repr_batch = batch[0].to(self.device)
             term = torch.matmul(repr_batch.transpose(1, 2), repr_batch) / len(repr_batch)
             init += torch.sum(term, dim=0)
-
         chosen = select(repr_unlabeled, acq_size, fisher, init, lamb=self.lmb, nLabeled=len(labeled_indices))
         return [unlabeled_indices[idx] for idx in chosen]
 
