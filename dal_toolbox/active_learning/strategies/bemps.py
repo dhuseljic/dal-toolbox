@@ -77,7 +77,7 @@ class BayesianEstimateSampling(Query, ABC):
         logits = model.get_logits(unlabeled_dataloader) # , **forward_kwargs)
         if logits.ndim != 3:
             raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
-        probas = torch.softmax(logits, dim=-1)
+        probas = torch.softmax(logits, dim=-1) # Probas are required to be in the shape (N Samples, N Ensemble Members, N Classes)
         pr_YhThetaXp_X_Y_Xp_E_Yh, pr_Yhat_X_Y_Xp_E_Yh, pr_YThetaX_X_Y_E, pr_YhThetaXp_Xp_E_Yh = self.calculate_stuff(probas=probas)
         indices = self.get_utilities(probas, pr_YhThetaXp_X_Y_Xp_E_Yh, pr_Yhat_X_Y_Xp_E_Yh, pr_YThetaX_X_Y_E, pr_YhThetaXp_Xp_E_Yh, acq_size)
 
