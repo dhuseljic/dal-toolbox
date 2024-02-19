@@ -162,9 +162,13 @@ class LaplaceNet(LaplaceLayer):
             max_indices = probas.argmax(-1)
             num_classes = logits.size(-1)
 
-            factor = F.one_hot(max_indices, num_classes=num_classes) - probas
-            embedding_batch = (factor[:, :, None] * features[:, None, :]).flatten(-2)
+            # Exact gradient computation
+            # factor = F.one_hot(max_indices, num_classes=num_classes) - probas
+            # embedding_batch = (factor[:, :, None] * features[:, None, :]).flatten(-2)
 
+            # Approx:for high number of classes. This only considers the gradient of the most likely label
+            embedding_batch = ((1 - probas.max(-1).values)[:, None] * features)
+            
             embedding.append(embedding_batch)
         # Concat all embeddings
         embedding = torch.cat(embedding)
