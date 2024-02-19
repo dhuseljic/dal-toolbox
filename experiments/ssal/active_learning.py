@@ -122,7 +122,7 @@ def build_al_strategy(args):
     elif args.al.strategy == 'typiclust':
         al_strategy = strategies.TypiClust(subset_size=args.al.subset_size)
     elif args.al.strategy == 'bait':
-        al_strategy= strategies.BaitSampling(subset_size=args.al.subset_size)
+        al_strategy= strategies.BaitSampling(subset_size=args.al.subset_size, fisher_approx=args.al.fisher_approximation)
     elif args.al.strategy == 'decision_flip':
         al_strategy = DecisionFlipSampling(subset_size=args.al.subset_size)
     else:

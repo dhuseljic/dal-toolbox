@@ -8,11 +8,12 @@ from torch.utils.data import TensorDataset, DataLoader
 
 
 class BaitSampling(Query):
-    def __init__(self, lmb=1, fisher_batch_size=32, device='cpu', subset_size=None):
+    def __init__(self, lmb=1, fisher_approx='max_pred', fisher_batch_size=32, device='cpu', subset_size=None):
         super().__init__()
         self.subset_size = subset_size
         self.lmb = lmb
         self.fisher_batch_size = fisher_batch_size
+        self.fisher_approx = fisher_approx
         self.device = device
 
     def query(self, *, model, al_datamodule, acq_size, **kwargs):
@@ -20,25 +21,63 @@ class BaitSampling(Query):
             subset_size=self.subset_size)
         labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
 
-        # Use all data
-        repr_unlabeled = model.get_exp_grad_representations(unlabeled_dataloader)
-        repr_labeled = model.get_exp_grad_representations(labeled_dataloader)
-        repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
+        if self.fisher_approx == 'full':
+            # Use all data
+            repr_unlabeled = model.get_exp_grad_representations(unlabeled_dataloader)
+            repr_labeled = model.get_exp_grad_representations(labeled_dataloader)
+            repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
 
-        fisher = torch.zeros(repr_all.size(-1), repr_all.size(-1)).to(self.device)
-        dl = DataLoader(TensorDataset(repr_all), batch_size=self.fisher_batch_size, shuffle=False)
-        for batch in dl:
-            repr_batch = batch[0].to(self.device)
-            term = torch.matmul(repr_batch.transpose(1, 2), repr_batch) / len(repr_batch)
-            fisher += torch.sum(term, dim=0)
+            fisher_all = torch.zeros(repr_all.size(-1), repr_all.size(-1)).to(self.device)
+            dl = DataLoader(TensorDataset(repr_all), batch_size=self.fisher_batch_size, shuffle=False)
+            for batch in dl:
+                repr_batch = batch[0].to(self.device)
+                term = torch.matmul(repr_batch.transpose(1, 2), repr_batch) / len(repr_batch)
+                fisher_all += torch.sum(term, dim=0)
 
-        init = torch.zeros(repr_all.size(-1), repr_all.size(-1)).to(self.device)
-        dl = DataLoader(TensorDataset(repr_labeled), batch_size=self.fisher_batch_size, shuffle=False)
-        for batch in dl:
-            repr_batch = batch[0].to(self.device)
-            term = torch.matmul(repr_batch.transpose(1, 2), repr_batch) / len(repr_batch)
-            init += torch.sum(term, dim=0)
-        chosen = select(repr_unlabeled, acq_size, fisher, init, lamb=self.lmb, nLabeled=len(labeled_indices))
+            fisher_labeled = torch.zeros(repr_all.size(-1), repr_all.size(-1)).to(self.device)
+            dl = DataLoader(TensorDataset(repr_labeled), batch_size=self.fisher_batch_size, shuffle=False)
+            for batch in dl:
+                repr_batch = batch[0].to(self.device)
+                term = torch.matmul(repr_batch.transpose(1, 2), repr_batch) / len(repr_batch)
+                fisher_labeled += torch.sum(term, dim=0)
+
+        elif self.fisher_approx == 'max_pred':
+            repr_unlabeled = model.get_grad_representations(unlabeled_dataloader)
+            repr_labeled = model.get_grad_representations(labeled_dataloader)
+            repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
+
+            fisher_all = (repr_all.T @ repr_all) / len(repr_all)
+            fisher_labeled = (repr_labeled.T @ repr_labeled) / len(repr_labeled)
+
+            repr_unlabeled = repr_unlabeled[:, None]
+
+            # Efficient computation of the objective (trace rotation & Woodbury identity)
+            # rank = 1  # Rank is one because only max prediction
+            # num_labeled = len(labeled_indices)
+            # dim = repr_unlabeled.size(-1)
+
+            # fisher_labeled = fisher_labeled * num_labeled / (num_labeled + acq_size)
+            # M_0 = self.lmb * torch.eye(dim) + fisher_labeled
+            # M_0_inv = torch.inverse(M_0)
+
+            # repr_unlabeled = repr_unlabeled * np.sqrt(acq_size / (num_labeled + acq_size))
+            # A = torch.inverse(torch.eye(rank) + repr_unlabeled @ M_0_inv @ repr_unlabeled.transpose(1, 2))
+            # tmp = repr_unlabeled @ M_0_inv @ fisher_all @ M_0_inv @ repr_unlabeled.transpose(1, 2) @ A
+            # scores = torch.diagonal(tmp, dim1=-2, dim2=-1).sum(-1)
+            # chosen = (scores.topk(acq_size).indices)
+
+        elif self.fisher_approx == 'diag':
+            repr_unlabeled = model.get_grad_representations(unlabeled_dataloader)
+            repr_labeled = model.get_grad_representations(labeled_dataloader)
+            repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
+
+            fisher_all = torch.diag(torch.mean(repr_all**2, dim=0))
+            fisher_labeled = torch.diag(torch.mean(repr_labeled**2, dim=0))
+
+            repr_unlabeled = repr_unlabeled[:, None]
+
+        chosen = select(repr_unlabeled, acq_size, fisher_all, fisher_labeled, lamb=self.lmb, nLabeled=len(labeled_indices))
+
         return [unlabeled_indices[idx] for idx in chosen]
 
 
@@ -61,6 +100,7 @@ def select(X, K, fisher, iterates, lamb=1, nLabeled=0, device='cpu'):
 
         # check trace with low-rank updates (woodbury identity)
         xt_ = X.to(device)
+
         innerInv = torch.inverse(torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2)).detach()
         innerInv[torch.where(torch.isinf(innerInv))] = torch.sign(
             innerInv[torch.where(torch.isinf(innerInv))]) * np.finfo('float32').max

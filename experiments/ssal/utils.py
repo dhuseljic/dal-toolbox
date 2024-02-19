@@ -56,6 +56,7 @@ class DinoTransforms():
     def eval_transform(self):
         return self.transform
 
+
 def build_data(args):
     # transforms = PlainTransforms(resize=(224, 224))
     transforms = DinoTransforms(size=(256, 256))
@@ -237,7 +238,7 @@ def build_model(args, **kwargs):
     elif args.model.name == 'laplace':
         model = LaplaceNet(num_features, num_classes,
                            mean_field_factor=args.model.mean_field_factor, mc_samples=args.model.mc_samples)
-        
+
         if 'al' in args and args.al.strategy in ['bald', 'pseudo_bald', 'batch_bald']:
             LaplaceNet.use_mean_field = False
     elif args.model.name == 'deterministic':
