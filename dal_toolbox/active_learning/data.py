@@ -112,6 +112,9 @@ class ActiveLearningDataModule(L.LightningDataModule):
         # Check if buy_idx has duplicate indices
         if len(buy_idx) != len(set(buy_idx)):
             raise ValueError('The `buy_idx` has duplicate annotations.')
+        # Check if annotation already in labeled indices
+        if np.any(np.isin(buy_idx, self.labeled_indices)):
+            raise ValueError('Some `buy_idx` annotations are already in labeled indices.')
         self.labeled_indices = list_union(self.labeled_indices, buy_idx)
         self.unlabeled_indices = list_diff(self.unlabeled_indices, buy_idx)
 

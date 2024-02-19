@@ -119,20 +119,16 @@ def build_al_strategy(args):
         strat = strategies.BALDSampling(subset_size=args.al.subset_size)
         al_strategy = PseudoBatch(al_strategy=strat, update_every=args.al.update_every,
                                   gamma=args.update_gamma, subset_size=args.al.subset_size)
-    elif args.al.strategy == 'typiclust':
-        al_strategy = strategies.TypiClust(subset_size=args.al.subset_size)
     elif args.al.strategy == 'bait':
         al_strategy = strategies.BaitSampling(
-            subset_size=args.al.subset_size, fisher_approx=args.al.fisher_approximation)
+            subset_size=args.al.subset_size, fisher_approx=args.al.fisher_approximation, )
     elif args.al.strategy == 'pseudo_bait':
         strat = strategies.BaitSampling(subset_size=args.al.subset_size,
-                                        fisher_approx=args.al.fisher_approximation)
+                                        fisher_approx=args.al.fisher_approximation, topk=True)
         al_strategy = PseudoBatch(al_strategy=strat, update_every=args.al.update_every,
                                   gamma=args.update_gamma, subset_size=args.al.subset_size)
-    elif args.al.strategy == 'decision_flip':
-        strat = DecisionFlipSampling(subset_size=args.al.subset_size)
-        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.al.update_every,
-                                  gamma=args.update_gamma, subset_size=args.al.subset_size)
+    elif args.al.strategy == 'typiclust':
+        al_strategy = strategies.TypiClust(subset_size=args.al.subset_size)
     else:
         raise NotImplementedError()
     return al_strategy
@@ -178,51 +174,6 @@ class PseudoBatch(strategies.Query):
             al_datamodule_batch.update_annotations(idx)
             indices.extend(idx)
         actual_indices = indices
-        return actual_indices
-
-
-class DecisionFlipSampling(strategies.Query):
-    def __init__(self, subset_size=None, random_seed=None):
-        super().__init__(random_seed=random_seed)
-        self.subset_size = subset_size
-        self.gamma = 10
-        self.lmb = 1
-
-    @torch.no_grad()
-    def query(self, *, model, al_datamodule, acq_size, return_utilities=False, **kwargs):
-        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(
-            subset_size=self.subset_size)
-
-        unlabeled_inputs = []
-        for batch in unlabeled_dataloader:
-            inputs = batch[0]
-            unlabeled_inputs.append(inputs)
-        unlabeled_inputs = torch.cat(unlabeled_inputs)
-        unlabeled_logits = model.model.forward_mean_field(unlabeled_inputs)
-        y_pred = unlabeled_logits.argmax(-1)
-
-        _, num_classes = unlabeled_logits.shape
-
-        # Number of decision flips when the label of a sample would be different the prognosed
-        from tqdm import tqdm
-        i_sample = 0
-        scores = torch.zeros(len(unlabeled_indices))
-        for batch in tqdm(unlabeled_dataloader):
-            for sample in batch[0]:
-                for i_cls in range(num_classes):
-                    updated_model = copy.deepcopy(model)
-                    iterator = zip([sample.view(1, -1)], [torch.tensor(i_cls).view(-1)])
-                    updated_model.update_posterior(iterator, lmb=self.lmb, gamma=self.gamma)
-                    updated_logits = updated_model.model.forward_mean_field(unlabeled_inputs)
-                    updated_pred = updated_logits.argmax(-1)
-                    # scores[i_sample] += unlabeled_logits[i_sample].softmax(-1)[i_cls] * torch.sum(y_pred != updated_pred).item()
-                    scores[i_sample] += torch.sum(y_pred != updated_pred).item()
-                i_sample += 1
-
-        _, indices = scores.topk(acq_size)
-        actual_indices = [unlabeled_indices[i] for i in indices]
-        if return_utilities:
-            return actual_indices, scores
         return actual_indices
 
 

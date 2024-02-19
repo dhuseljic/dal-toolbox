@@ -8,12 +8,14 @@ from torch.utils.data import TensorDataset, DataLoader
 
 
 class BaitSampling(Query):
-    def __init__(self, lmb=1, fisher_approx='full', fisher_batch_size=32, device='cpu', subset_size=None):
+    def __init__(self, lmb=1, fisher_approx='full', fisher_batch_size=32, topk=False, device='cpu', subset_size=None):
         super().__init__()
         self.subset_size = subset_size
         self.lmb = lmb
-        self.fisher_batch_size = fisher_batch_size
+
         self.fisher_approx = fisher_approx
+        self.fisher_batch_size = fisher_batch_size
+        self.topk = topk
         self.device = device
 
     def query(self, *, model, al_datamodule, acq_size, **kwargs):
@@ -51,22 +53,11 @@ class BaitSampling(Query):
 
             repr_unlabeled = repr_unlabeled[:, None]
 
-            # Efficient computation of the objective (trace rotation & Woodbury identity)
-            # rank = 1  # Rank is one because only max prediction
-            # num_labeled = len(labeled_indices)
-            # dim = repr_unlabeled.size(-1)
-
-            # fisher_labeled = fisher_labeled * num_labeled / (num_labeled + acq_size)
-            # M_0 = self.lmb * torch.eye(dim) + fisher_labeled
-            # M_0_inv = torch.inverse(M_0)
-
-            # repr_unlabeled = repr_unlabeled * np.sqrt(acq_size / (num_labeled + acq_size))
-            # A = torch.inverse(torch.eye(rank) + repr_unlabeled @ M_0_inv @ repr_unlabeled.transpose(1, 2))
-            # tmp = repr_unlabeled @ M_0_inv @ fisher_all @ M_0_inv @ repr_unlabeled.transpose(1, 2) @ A
-            # scores = torch.diagonal(tmp, dim1=-2, dim2=-1).sum(-1)
-            # chosen = (scores.topk(acq_size).indices)
-
-        chosen = select(repr_unlabeled, acq_size, fisher_all, fisher_labeled, lamb=self.lmb, nLabeled=len(labeled_indices))
+        if not self.topk:
+            chosen = select(repr_unlabeled, acq_size, fisher_all, fisher_labeled,
+                            lamb=self.lmb, nLabeled=len(labeled_indices))
+        else:
+            chosen = select_topk(repr_unlabeled, acq_size, fisher_all, fisher_labeled, lmb=self.lmb, num_labeled=len(labeled_indices))
 
         return [unlabeled_indices[idx] for idx in chosen]
 
@@ -113,6 +104,7 @@ def select(X, K, fisher, iterates, lamb=1, nLabeled=0, device='cpu'):
         xt_ = X[ind].unsqueeze(0).to(device)
         innerInv = torch.inverse(torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2)).detach()
         currentInv = (currentInv - currentInv @ xt_.transpose(1, 2) @ innerInv @ xt_ @ currentInv).detach()[0]
+    # print(indsAll)
 
     # backward pruning
     # print('backward pruning...', flush=True)
@@ -135,4 +127,22 @@ def select(X, K, fisher, iterates, lamb=1, nLabeled=0, device='cpu'):
 
         del indsAll[delInd]
 
+    # print(indsAll)
     return indsAll
+
+
+def select_topk(repr_unlabeled, acq_size, fisher_all, fisher_labeled, lmb, num_labeled):
+    # Efficient computation of the objective (trace rotation & Woodbury identity)
+    dim = repr_unlabeled.size(-1)
+    rank = repr_unlabeled.size(-2)
+
+    fisher_labeled = fisher_labeled * num_labeled / (num_labeled + acq_size)
+    M_0 = lmb * torch.eye(dim) + fisher_labeled
+    M_0_inv = torch.inverse(M_0)
+
+    # repr_unlabeled = repr_unlabeled * np.sqrt(acq_size / (num_labeled + acq_size))
+    A = torch.inverse(torch.eye(rank) + repr_unlabeled @ M_0_inv @ repr_unlabeled.transpose(1, 2))
+    tmp = repr_unlabeled @ M_0_inv @ fisher_all @ M_0_inv @ repr_unlabeled.transpose(1, 2) @ A
+    scores = torch.diagonal(tmp, dim1=-2, dim2=-1).sum(-1)
+    chosen = (scores.topk(acq_size).indices)
+    return chosen
