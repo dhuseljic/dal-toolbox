@@ -18,14 +18,14 @@ dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
 dino_cache_dir: null
 
 al:
-  strategy: bait
+  strategy: random
   subset_size: 1000
   init_method: diverse_dense
   num_init_samples: 10
   num_acq: 10
   acq_size: 10
   update_every: 1
-  fisher_approximation: max_pred
+  fisher_approximation: full
   fisher_batch_size: 10
   device: cpu
 
