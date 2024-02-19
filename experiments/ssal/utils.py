@@ -148,7 +148,7 @@ class LaplaceNet(LaplaceLayer):
         return representations
 
     @torch.inference_mode()
-    def get_grad_representations(self, dataloader, device):
+    def get_grad_representations(self, dataloader, device, approx=True):
         self.eval()
         self.to(device)
 
@@ -162,12 +162,17 @@ class LaplaceNet(LaplaceLayer):
             max_indices = probas.argmax(-1)
             num_classes = logits.size(-1)
 
-            # Exact gradient computation
-            # factor = F.one_hot(max_indices, num_classes=num_classes) - probas
-            # embedding_batch = (factor[:, :, None] * features[:, None, :]).flatten(-2)
 
-            # Approx:for high number of classes. This only considers the gradient of the most likely label
-            embedding_batch = ((1 - probas.max(-1).values)[:, None] * features)
+            if approx:
+                # In some cases (e.g., high number of classes), we can consider
+                # the gradient of the weights that lead to the most likely
+                # label.
+                factor = (1 - probas.max(-1).values)
+                embedding_batch = (factor[:, None] * features)
+            else:
+                # Exact gradient computation
+                factor = F.one_hot(max_indices, num_classes=num_classes) - probas
+                embedding_batch = (factor[:, :, None] * features[:, None, :]).flatten(-2)
             
             embedding.append(embedding_batch)
         # Concat all embeddings
@@ -175,7 +180,7 @@ class LaplaceNet(LaplaceLayer):
         return embedding.cpu()
 
     @torch.no_grad()
-    def get_exp_grad_representations(self, dataloader, device):
+    def get_exp_grad_representations(self, dataloader, device, approx=True):
         self.eval()
         self.to(device)
 
@@ -189,12 +194,18 @@ class LaplaceNet(LaplaceLayer):
             feature_dim = features.size(-1)
             num_classes = logits.size(-1)
 
-            embedding_batch = torch.zeros([len(inputs), num_classes, feature_dim * num_classes]).to(device)
+            grad_dim = feature_dim * num_classes if not approx else feature_dim
+            embedding_batch = torch.zeros([len(inputs), num_classes, grad_dim]).to(device)
             for ind in range(num_classes):
-                one_hot = torch.nn.functional.one_hot(torch.tensor(ind), num_classes=num_classes).to(device)
-                factor = one_hot - probas
-                embedding_batch[:, ind] = (factor[:, :, None] * features[:, None, :]).flatten(-2)
+                if approx:
+                    factor = 1 - probas[:, ind]
+                    embedding_batch[:, ind] = factor[:, None] * features
+                else:
+                    one_hot = torch.nn.functional.one_hot(torch.tensor(ind), num_classes=num_classes).to(device)
+                    factor = one_hot - probas
+                    embedding_batch[:, ind] = (factor[:, :, None] * features[:, None, :]).flatten(-2)
                 embedding_batch[:, ind] = embedding_batch[:, ind] * torch.sqrt(probas[:, ind].view(-1, 1))
+
             embedding.append(embedding_batch.cpu())
         embedding = torch.cat(embedding)
 
