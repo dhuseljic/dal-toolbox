@@ -122,9 +122,17 @@ def build_al_strategy(args):
     elif args.al.strategy == 'typiclust':
         al_strategy = strategies.TypiClust(subset_size=args.al.subset_size)
     elif args.al.strategy == 'bait':
-        al_strategy= strategies.BaitSampling(subset_size=args.al.subset_size, fisher_approx=args.al.fisher_approximation)
+        al_strategy = strategies.BaitSampling(
+            subset_size=args.al.subset_size, fisher_approx=args.al.fisher_approximation)
+    elif args.al.strategy == 'pseudo_bait':
+        strat = strategies.BaitSampling(subset_size=args.al.subset_size,
+                                        fisher_approx=args.al.fisher_approximation)
+        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.al.update_every,
+                                  gamma=args.update_gamma, subset_size=args.al.subset_size)
     elif args.al.strategy == 'decision_flip':
-        al_strategy = DecisionFlipSampling(subset_size=args.al.subset_size)
+        strat = DecisionFlipSampling(subset_size=args.al.subset_size)
+        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.al.update_every,
+                                  gamma=args.update_gamma, subset_size=args.al.subset_size)
     else:
         raise NotImplementedError()
     return al_strategy
@@ -182,7 +190,8 @@ class DecisionFlipSampling(strategies.Query):
 
     @torch.no_grad()
     def query(self, *, model, al_datamodule, acq_size, return_utilities=False, **kwargs):
-        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(
+            subset_size=self.subset_size)
 
         unlabeled_inputs = []
         for batch in unlabeled_dataloader:
@@ -195,20 +204,20 @@ class DecisionFlipSampling(strategies.Query):
         _, num_classes = unlabeled_logits.shape
 
         # Number of decision flips when the label of a sample would be different the prognosed
+        from tqdm import tqdm
+        i_sample = 0
         scores = torch.zeros(len(unlabeled_indices))
-        i = 0
-        for batch in unlabeled_dataloader:
+        for batch in tqdm(unlabeled_dataloader):
             for sample in batch[0]:
                 for i_cls in range(num_classes):
                     updated_model = copy.deepcopy(model)
-
                     iterator = zip([sample.view(1, -1)], [torch.tensor(i_cls).view(-1)])
                     updated_model.update_posterior(iterator, lmb=self.lmb, gamma=self.gamma)
                     updated_logits = updated_model.model.forward_mean_field(unlabeled_inputs)
                     updated_pred = updated_logits.argmax(-1)
-                    # scores[i] += unlabeled_logits[i].softmax(-1)[i_cls] * torch.sum(y_pred != updated_pred).item()
-                    scores[i] += torch.sum(y_pred != updated_pred).item()
-                i += 1
+                    # scores[i_sample] += unlabeled_logits[i_sample].softmax(-1)[i_cls] * torch.sum(y_pred != updated_pred).item()
+                    scores[i_sample] += torch.sum(y_pred != updated_pred).item()
+                i_sample += 1
 
         _, indices = scores.topk(acq_size)
         actual_indices = [unlabeled_indices[i] for i in indices]

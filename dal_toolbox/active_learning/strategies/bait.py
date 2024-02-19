@@ -8,7 +8,7 @@ from torch.utils.data import TensorDataset, DataLoader
 
 
 class BaitSampling(Query):
-    def __init__(self, lmb=1, fisher_approx='max_pred', fisher_batch_size=32, device='cpu', subset_size=None):
+    def __init__(self, lmb=1, fisher_approx='full', fisher_batch_size=32, device='cpu', subset_size=None):
         super().__init__()
         self.subset_size = subset_size
         self.lmb = lmb
@@ -65,16 +65,6 @@ class BaitSampling(Query):
             # tmp = repr_unlabeled @ M_0_inv @ fisher_all @ M_0_inv @ repr_unlabeled.transpose(1, 2) @ A
             # scores = torch.diagonal(tmp, dim1=-2, dim2=-1).sum(-1)
             # chosen = (scores.topk(acq_size).indices)
-
-        elif self.fisher_approx == 'diag':
-            repr_unlabeled = model.get_grad_representations(unlabeled_dataloader)
-            repr_labeled = model.get_grad_representations(labeled_dataloader)
-            repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
-
-            fisher_all = torch.diag(torch.mean(repr_all**2, dim=0))
-            fisher_labeled = torch.diag(torch.mean(repr_labeled**2, dim=0))
-
-            repr_unlabeled = repr_unlabeled[:, None]
 
         chosen = select(repr_unlabeled, acq_size, fisher_all, fisher_labeled, lamb=self.lmb, nLabeled=len(labeled_indices))
 
