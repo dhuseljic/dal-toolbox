@@ -78,100 +78,107 @@ class BayesianEstimateSampling(Query, ABC):
         if logits.ndim != 3:
             raise ValueError(f"Input logits tensor must be 3-dimensional, got shape {logits.shape}")
         probas = torch.softmax(logits, dim=-1) # Probas are required to be in the shape (N Samples, N Ensemble Members, N Classes)
-        pr_YhThetaXp_X_Y_Xp_E_Yh, pr_Yhat_X_Y_Xp_E_Yh, pr_YThetaX_X_Y_E, pr_YhThetaXp_Xp_E_Yh = self.calculate_stuff(probas=probas)
-        indices = self.get_utilities(probas, pr_YhThetaXp_X_Y_Xp_E_Yh, pr_Yhat_X_Y_Xp_E_Yh, pr_YThetaX_X_Y_E, pr_YhThetaXp_Xp_E_Yh, acq_size)
+        p_Yh_ThetaXp, p_Yh, p_Y_ThetaX = self.calculate_probabilities(probas=probas)
+        indices = self.get_utilities(probas, p_Yh_ThetaXp, p_Yh, p_Y_ThetaX, acq_size)
 
         actual_indices = [unlabeled_indices[i] for i in indices]
         return actual_indices
     
 
-    def calculate_stuff(self, probas: Tensor):
+    def calculate_probabilities(self, probas: Tensor):
         ## Pr(y|theta,x)
-        pr_YThetaX_X_E_Y = probas
-        pr_ThetaL = 1 / pr_YThetaX_X_E_Y.shape[1]
+        p_Y_ThetaX = probas
+        p_Theta_L = 1 / p_Y_ThetaX.shape[1]
 
         ## Generate random number of x'
-        xp_indices = random_generator_for_est_pool(pr_YThetaX_X_E_Y.shape[0], self.estimation_pool_size)
-        pr_YhThetaXp_Xp_E_Yh = pr_YThetaX_X_E_Y[xp_indices, :, :]
+        xp_indices = random_generator_for_est_pool(p_Y_ThetaX.shape[0], self.estimation_pool_size)
+        p_Yh_ThetaXp = p_Y_ThetaX[xp_indices, :, :]
 
         ## Transpose dimension of Pr(y|theta,x), and calculate pr(theta|L,(x,y))
-        pr_YThetaX_X_E_Y = pr_ThetaL * pr_YThetaX_X_E_Y
-        pr_YThetaX_X_Y_E = torch.transpose(pr_YThetaX_X_E_Y, 1, 2)  ## transpose by dimension E and Y
+        p_Y_ThetaX = p_Theta_L * p_Y_ThetaX
+        p_Y_ThetaX = torch.transpose(p_Y_ThetaX, 1, 2)  ## transpose by dimension E and Y
 
-        sum_pr_YThetaX_X_Y_1 = torch.sum(pr_YThetaX_X_Y_E, dim=-1).unsqueeze(dim=-1)
-        pr_ThetaLXY_X_Y_E = pr_YThetaX_X_Y_E / sum_pr_YThetaX_X_Y_1
+        sum_p_Y_ThetaX = torch.sum(p_Y_ThetaX, dim=-1).unsqueeze(dim=-1)
+        p_Theta_LXY = p_Y_ThetaX / sum_p_Y_ThetaX
 
         ## Calculate pr(y_hat)
-        pr_ThetaLXY_X_1_Y_E = pr_ThetaLXY_X_Y_E.unsqueeze(dim=1)
-        pr_Yhat_X_Xp_Y_Yh = torch.matmul(pr_ThetaLXY_X_1_Y_E, pr_YhThetaXp_Xp_E_Yh)
+        p_Theta_LXY = p_Theta_LXY.unsqueeze(dim=1)
+        p_Yh = torch.matmul(p_Theta_LXY, p_Yh_ThetaXp)
 
         ## Calculate core MSE by using unsqueeze into same dimension for pr(y_hat) and pr(y_hat|theta,x)
-        pr_YhThetaXp_1_1_Xp_E_Yh = pr_YhThetaXp_Xp_E_Yh.unsqueeze(dim = 0).unsqueeze(dim = 0)
-        pr_YhThetaXp_X_Y_Xp_E_Yh = pr_YhThetaXp_1_1_Xp_E_Yh.repeat(pr_Yhat_X_Xp_Y_Yh.shape[0], pr_Yhat_X_Xp_Y_Yh.shape[2], 1, 1, 1)
+        p_Yh_ThetaXp = p_Yh_ThetaXp.unsqueeze(dim = 0).unsqueeze(dim = 0)
+        p_Yh_ThetaXp = p_Yh_ThetaXp.repeat(p_Yh.shape[0], p_Yh.shape[2], 1, 1, 1)
 
-        pr_Yhat_1_X_Xp_Y_Yh = pr_Yhat_X_Xp_Y_Yh.unsqueeze(dim = 0)
-        pr_Yhat_E_X_Xp_Y_Yh = pr_Yhat_1_X_Xp_Y_Yh.repeat(pr_YhThetaXp_Xp_E_Yh.shape[1],1,1,1,1)
-        pr_Yhat_X_Y_Xp_E_Yh = pr_Yhat_E_X_Xp_Y_Yh.transpose(0,3).transpose(0,1)
+        p_Yh = p_Yh.unsqueeze(dim = 0)
+        p_Yh = p_Yh.repeat(p_Yh_ThetaXp.shape[3],1,1,1,1)
+        p_Yh = p_Yh.transpose(0,3).transpose(0,1)
 
-        return pr_YhThetaXp_X_Y_Xp_E_Yh, pr_Yhat_X_Y_Xp_E_Yh, pr_YThetaX_X_Y_E, pr_YhThetaXp_Xp_E_Yh
+        return p_Yh_ThetaXp, p_Yh, p_Y_ThetaX
 
     @abstractmethod
-    def get_utilities(self, pr_Yhat_X_Xp_Y_Yh, pr_YhThetaXp_Xp_E_Yh, pr_YThetaX_X_Y_E, acq_size):
+    def get_utilities(self, probas, p_Yh_ThetaXp, p_Yh, p_Y_ThetaX, acq_size):
         pass
 
 
+
 class CoreLogTopKSampling(BayesianEstimateSampling):
-    def get_utilities(self, probas, pr_YhThetaXp_X_Y_Xp_E_Yh, pr_Yhat_X_Y_Xp_E_Yh, pr_YThetaX_X_Y_E, pr_YhThetaXp_Xp_E_Yh, acq_size):
-        core_log = torch.mul(pr_YhThetaXp_X_Y_Xp_E_Yh, torch.log(torch.div(pr_YhThetaXp_X_Y_Xp_E_Yh, pr_Yhat_X_Y_Xp_E_Yh)))
-        core_log_X_Y = torch.sum(torch.sum(core_log.sum(dim=-1), dim=-1),dim=-1)
+    def get_utilities(self, probas, p_Yh_ThetaXp, p_Yh, p_Y_ThetaX, acq_size):
+        core_log = torch.mul(p_Yh_ThetaXp, torch.log(torch.div(p_Yh_ThetaXp, p_Yh)))
+        core_log = torch.sum(torch.sum(core_log.sum(dim=-1), dim=-1),dim=-1)
 
         ## Calculate RR
-        pr_YLX_X_Y = torch.sum(pr_YThetaX_X_Y_E, dim=-1)
-        rr = torch.sum(torch.mul(pr_YLX_X_Y, core_log_X_Y), dim=-1) / pr_YhThetaXp_Xp_E_Yh.shape[0]
+        p_Y_LX = torch.sum(p_Y_ThetaX, dim=-1)
+        rr = torch.sum(torch.mul(p_Y_LX, core_log), dim=-1) / p_Yh_ThetaXp.shape[2]
 
         indices = rr.topk(acq_size).indices.numpy()
         return indices
-    
+
+
+
 class CoreLogBatchSampling(BayesianEstimateSampling):
-    def get_utilities(self, probas, pr_YhThetaXp_X_Y_Xp_E_Yh, pr_Yhat_X_Y_Xp_E_Yh, pr_YThetaX_X_Y_E, pr_YhThetaXp_Xp_E_Yh, acq_size):
-        core_log = torch.mul(pr_YhThetaXp_X_Y_Xp_E_Yh, torch.log(torch.div(pr_YhThetaXp_X_Y_Xp_E_Yh, pr_Yhat_X_Y_Xp_E_Yh)))
-        core_log_X_Y_Xp = torch.sum(core_log.sum(dim=-1), dim=-1)
-        core_log_X_Xp_Y = torch.transpose(core_log_X_Y_Xp, 1, 2)
-        core_log_Xp_X_Y = torch.transpose(core_log_X_Xp_Y, 0, 1)
+    def get_utilities(self, probas, p_Yh_ThetaXp, p_Yh, p_Y_ThetaX, acq_size):
+        core_log = torch.mul(p_Yh_ThetaXp, torch.log(torch.div(p_Yh_ThetaXp, p_Yh)))
+        core_log = torch.sum(core_log.sum(dim=-1), dim=-1)
+        core_log = torch.transpose(core_log, 1, 2)
+        core_log = torch.transpose(core_log, 0, 1)
 
         ## Calculate RR
-        pr_YLX_X_Y = torch.sum(pr_YThetaX_X_Y_E, dim=-1)
-        rr_Xp_X_Y = pr_YLX_X_Y.unsqueeze(0) * core_log_Xp_X_Y
-        rr_Xp_X = torch.sum(rr_Xp_X_Y, dim=-1)
-        rr_X_Xp = torch.transpose(rr_Xp_X, 0, 1)
+        p_Y_LX = torch.sum(p_Y_ThetaX, dim=-1)
+        rr = p_Y_LX.unsqueeze(0) * core_log
+        rr = torch.sum(rr, dim=-1)
+        rr = torch.transpose(rr, 0, 1)
 
-        indices = clustering(rr_X_Xp, probas, self.T, acq_size)
+        indices = clustering(rr, probas, self.T, acq_size)
         return indices
+
+
 
 class CoreMSETopKSampling(BayesianEstimateSampling):
-    def get_utilities(self, probas, pr_YhThetaXp_X_Y_Xp_E_Yh, pr_Yhat_X_Y_Xp_E_Yh, pr_YThetaX_X_Y_E, pr_YhThetaXp_Xp_E_Yh, acq_size):
-        core_mse = (pr_YhThetaXp_X_Y_Xp_E_Yh - pr_Yhat_X_Y_Xp_E_Yh).pow(2)
-        core_mse_X_Y = torch.sum(torch.sum(core_mse.sum(dim=-1), dim=-1), dim=-1)
+    def get_utilities(self, probas, p_Yh_ThetaXp, p_Yh, p_Y_ThetaX, acq_size):
+        core_mse = (p_Yh_ThetaXp - p_Yh).pow(2)
+        core_mse = torch.sum(torch.sum(core_mse.sum(dim=-1), dim=-1), dim=-1)
 
         ## Calculate RR
-        pr_YLX_X_Y = torch.sum(pr_YThetaX_X_Y_E, dim=-1)
-        rr = torch.sum(torch.mul(pr_YLX_X_Y, core_mse_X_Y), dim=-1) / pr_YhThetaXp_Xp_E_Yh.shape[0]
+        p_Y_LX = torch.sum(p_Y_ThetaX, dim=-1)
+        rr = torch.sum(torch.mul(p_Y_LX, core_mse), dim=-1) / p_Yh_ThetaXp.shape[2]
         indices = rr.topk(acq_size).indices.numpy()
         return indices
 
+
+
 class CoreMSEBatchSampling(BayesianEstimateSampling):
-    def get_utilities(self, probas, pr_YhThetaXp_X_Y_Xp_E_Yh, pr_Yhat_X_Y_Xp_E_Yh, pr_YThetaX_X_Y_E, pr_YhThetaXp_Xp_E_Yh, acq_size):
-        core_mse = (pr_YhThetaXp_X_Y_Xp_E_Yh - pr_Yhat_X_Y_Xp_E_Yh).pow(2)
-        core_mse_X_Y_Xp = torch.sum(core_mse.sum(dim=-1), dim=-1)
-        core_mse_X_Xp_Y = torch.transpose(core_mse_X_Y_Xp, 1, 2)
-        core_mse_Xp_X_Y = torch.transpose(core_mse_X_Xp_Y, 0, 1)
+    def get_utilities(self, probas, p_Yh_ThetaXp, p_Yh, p_Y_ThetaX, acq_size):
+        core_mse = (p_Yh_ThetaXp - p_Yh).pow(2)
+        core_mse = torch.sum(core_mse.sum(dim=-1), dim=-1)
+        core_mse = torch.transpose(core_mse, 1, 2)
+        core_mse = torch.transpose(core_mse, 0, 1)
 
         ## Calculate RR
-        pr_YLX_X_Y = torch.sum(pr_YThetaX_X_Y_E, dim=-1)
+        p_Y_LX = torch.sum(p_Y_ThetaX, dim=-1)
 
-        rr_Xp_X_Y = pr_YLX_X_Y.unsqueeze(0) * core_mse_Xp_X_Y
-        rr_Xp_X = torch.sum(rr_Xp_X_Y, dim=-1)
-        rr_X_Xp = torch.transpose(rr_Xp_X, 0, 1)
+        rr = p_Y_LX.unsqueeze(0) * core_mse
+        rr = torch.sum(rr, dim=-1)
+        rr = torch.transpose(rr, 0, 1)
 
-        indices = clustering(rr_X_Xp, probas, self.T, acq_size)
+        indices = clustering(rr, probas, self.T, acq_size)
         return indices
