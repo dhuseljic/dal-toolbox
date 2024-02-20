@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torchvision import transforms
 
-from tqdm.auto import tqdm
+from rich.progress import track
 from omegaconf import DictConfig
 
 from dal_toolbox.models.deterministic import DeterministicModel
@@ -331,6 +331,7 @@ class DinoFeatureDataset:
         num_samples = len(dataset)
         hasher.update(str(num_samples).encode())
         num_parameters = sum([p.numel() for p in dino_model.parameters()])
+        hasher.update(str(dino_model).encode())
         hasher.update(str(num_parameters).encode())
 
         indices_to_hash = range(0, num_samples, num_samples//num_hash_samples)
@@ -354,7 +355,7 @@ class DinoFeatureDataset:
         labels = []
         dino_model.eval()
         dino_model.to(device)
-        for batch in tqdm(dataloader):
+        for batch in track(dataloader, 'Dino: Inference'):
             features.append(dino_model(batch[0].to(device)).to('cpu'))
             labels.append(batch[-1])
         features = torch.cat(features)

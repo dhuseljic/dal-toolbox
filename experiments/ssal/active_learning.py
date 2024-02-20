@@ -121,10 +121,10 @@ def build_al_strategy(args):
                                   gamma=args.update_gamma, subset_size=args.al.subset_size)
     elif args.al.strategy == 'bait':
         al_strategy = strategies.BaitSampling(
-            subset_size=args.al.subset_size, fisher_approx=args.al.fisher_approximation, )
+            subset_size=args.al.subset_size, fisher_approx=args.al.fisher_approximation, device=args.al.device)
     elif args.al.strategy == 'pseudo_bait':
         strat = strategies.BaitSampling(subset_size=args.al.subset_size,
-                                        fisher_approx=args.al.fisher_approximation, topk=True)
+                                        fisher_approx=args.al.fisher_approximation, select='topk')
         al_strategy = PseudoBatch(al_strategy=strat, update_every=args.al.update_every,
                                   gamma=args.update_gamma, subset_size=args.al.subset_size)
     elif args.al.strategy == 'typiclust':
@@ -154,8 +154,8 @@ class PseudoBatch(strategies.Query):
             raise ValueError('Acquisition size must be divisible by `update_every`.')
 
         indices = []
-        from tqdm.auto import tqdm
-        for _ in tqdm(range(acq_size // self.update_every)):
+        from rich.progress import track
+        for _ in track(range(acq_size // self.update_every)):
             # Sample via simple strategy
             idx = self.al_strategy.query(
                 model=model,
