@@ -13,6 +13,7 @@ venv/
 build/
 mlruns/
 mlflow/
+*.db
 
 *.pdf
 *.png

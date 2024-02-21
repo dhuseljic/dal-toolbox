@@ -1,5 +1,5 @@
 random_seed: 42
-mlflow_dir: ./mlflow/ssal/updating
+mlflow_uri: sqlite:///mlflow.db
 output_dir: ./output/
 
 update_lmb: 1
@@ -20,7 +20,7 @@ dino_cache_dir: null
 al:
   strategy: random
   subset_size: 1000
-  init_method: diverse_dense
+  init_method: random
   num_init_samples: 10
   num_acq: 10
   acq_size: 10
