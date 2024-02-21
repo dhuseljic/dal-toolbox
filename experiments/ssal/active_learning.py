@@ -123,8 +123,12 @@ def build_al_strategy(args):
         al_strategy = strategies.BaitSampling(
             subset_size=args.al.subset_size, fisher_approx=args.al.fisher_approximation, device=args.al.device)
     elif args.al.strategy == 'pseudo_bait':
-        strat = strategies.BaitSampling(subset_size=args.al.subset_size,
-                                        fisher_approx=args.al.fisher_approximation, select='topk')
+        strat = strategies.BaitSampling(
+            subset_size=args.al.subset_size,
+            fisher_approx=args.al.fisher_approximation,
+            select='topk',
+            device=args.al.device
+        )
         al_strategy = PseudoBatch(al_strategy=strat, update_every=args.al.update_every,
                                   gamma=args.update_gamma, subset_size=args.al.subset_size)
     elif args.al.strategy == 'typiclust':
