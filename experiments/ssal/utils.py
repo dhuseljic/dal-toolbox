@@ -148,7 +148,7 @@ class LaplaceNet(LaplaceLayer):
         return representations
 
     @torch.inference_mode()
-    def get_grad_representations(self, dataloader, device, approx=True):
+    def get_grad_representations(self, dataloader, device, grad_approx=True):
         self.eval()
         self.to(device)
 
@@ -162,25 +162,57 @@ class LaplaceNet(LaplaceLayer):
             max_indices = probas.argmax(-1)
             num_classes = logits.size(-1)
 
-
-            if approx:
+            if grad_approx:
                 # In some cases (e.g., high number of classes), we can consider
                 # the gradient of the weights that lead to the most likely
                 # label.
-                factor = (1 - probas.max(-1).values)
+                probas_max = probas.max(-1).values
+                factor = (1 - probas_max)
                 embedding_batch = (factor[:, None] * features)
             else:
                 # Exact gradient computation
                 factor = F.one_hot(max_indices, num_classes=num_classes) - probas
                 embedding_batch = (factor[:, :, None] * features[:, None, :]).flatten(-2)
-            
+
             embedding.append(embedding_batch)
         # Concat all embeddings
         embedding = torch.cat(embedding)
         return embedding.cpu()
 
     @torch.no_grad()
-    def get_exp_grad_representations(self, dataloader, device, approx=True):
+    def get_topk_grad_representations(self, dataloader, device, k=10, grad_approx=True):
+        self.eval()
+        self.to(device)
+
+        embedding = []
+        for batch in dataloader:
+            inputs = batch[0].to(device)
+            logits = self(inputs)
+
+            features = inputs
+            probas = logits.softmax(-1)
+            feature_dim = features.size(-1)
+            num_classes = logits.size(-1)
+            probas_topk = probas.sort(dim=-1, descending=True)[0][:, :k]
+
+            grad_dim = feature_dim * num_classes if not grad_approx else feature_dim
+            embedding_batch = torch.zeros([len(inputs), k, grad_dim]).to(device)
+            if grad_approx:
+                factor = 1 - probas_topk
+                embedding_batch = factor[:, :, None] * features[:, None, :]
+            # else:
+                # embedding_batch[:] = embedding_batch[:] * torch.sqrt(probas[:].view(-1, 1))
+                #     one_hot = torch.nn.functional.one_hot(torch.tensor(ind), num_classes=num_classes).to(device)
+                #     factor = one_hot - probas
+                #     embedding_batch[:, ind] = (factor[:, :, None] * features[:, None, :]).flatten(-2)
+            embedding_batch = torch.sqrt(probas_topk)[:, :, None] * embedding_batch
+            embedding.append(embedding_batch.cpu())
+        embedding = torch.cat(embedding)
+
+        return embedding
+
+    @torch.no_grad()
+    def get_exp_grad_representations(self, dataloader, device, grad_approx=True):
         self.eval()
         self.to(device)
 
@@ -194,14 +226,15 @@ class LaplaceNet(LaplaceLayer):
             feature_dim = features.size(-1)
             num_classes = logits.size(-1)
 
-            grad_dim = feature_dim * num_classes if not approx else feature_dim
+            grad_dim = feature_dim * num_classes if not grad_approx else feature_dim
             embedding_batch = torch.zeros([len(inputs), num_classes, grad_dim]).to(device)
             for ind in range(num_classes):
-                if approx:
+                if grad_approx:
                     factor = 1 - probas[:, ind]
                     embedding_batch[:, ind] = factor[:, None] * features
                 else:
-                    one_hot = torch.nn.functional.one_hot(torch.tensor(ind), num_classes=num_classes).to(device)
+                    one_hot = torch.nn.functional.one_hot(
+                        torch.tensor(ind), num_classes=num_classes).to(device)
                     factor = one_hot - probas
                     embedding_batch[:, ind] = (factor[:, :, None] * features[:, None, :]).flatten(-2)
                 embedding_batch[:, ind] = embedding_batch[:, ind] * torch.sqrt(probas[:, ind].view(-1, 1))

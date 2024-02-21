@@ -31,34 +31,40 @@ class BaitSampling(Query):
         labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
 
         if self.fisher_approx == 'full':
-            # Use all data
             repr_unlabeled = model.get_exp_grad_representations(unlabeled_dataloader, device=self.device)
             repr_labeled = model.get_exp_grad_representations(labeled_dataloader, device=self.device)
             repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
 
-            fisher_all = torch.zeros(repr_all.size(-1), repr_all.size(-1)).to(self.device)
-            dl = DataLoader(TensorDataset(repr_all), batch_size=self.fisher_batch_size, shuffle=False)
-            for batch in dl:
-                repr_batch = batch[0].to(self.device)
-                term = torch.matmul(repr_batch.transpose(1, 2), repr_batch) / len(repr_batch)
-                fisher_all += torch.sum(term, dim=0)
-
-            fisher_labeled = torch.zeros(repr_all.size(-1), repr_all.size(-1)).to(self.device)
-            dl = DataLoader(TensorDataset(repr_labeled), batch_size=self.fisher_batch_size, shuffle=False)
-            for batch in dl:
-                repr_batch = batch[0].to(self.device)
-                term = torch.matmul(repr_batch.transpose(1, 2), repr_batch) / len(repr_batch)
-                fisher_labeled += torch.sum(term, dim=0)
+        if self.fisher_approx == 'topk':
+            repr_unlabeled = model.get_topk_grad_representations(unlabeled_dataloader, device=self.device)
+            repr_labeled = model.get_topk_grad_representations(labeled_dataloader, device=self.device)
+            repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
 
         elif self.fisher_approx == 'max_pred':
             repr_unlabeled = model.get_grad_representations(unlabeled_dataloader, device=self.device)
             repr_labeled = model.get_grad_representations(labeled_dataloader, device=self.device)
             repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
 
-            fisher_all = (repr_all.T @ repr_all) / len(repr_all)
-            fisher_labeled = (repr_labeled.T @ repr_labeled) / len(repr_labeled)
-
             repr_unlabeled = repr_unlabeled[:, None]
+            repr_labeled = repr_labeled[:, None]
+            repr_all = repr_all[:, None]
+
+        else:
+            raise NotImplementedError()
+
+        fisher_all = torch.zeros(repr_all.size(-1), repr_all.size(-1)).to(self.device)
+        dl = DataLoader(TensorDataset(repr_all), batch_size=self.fisher_batch_size, shuffle=False)
+        for batch in dl:
+            repr_batch = batch[0].to(self.device)
+            term = torch.matmul(repr_batch.transpose(1, 2), repr_batch) / len(repr_batch)
+            fisher_all += torch.sum(term, dim=0)
+
+        fisher_labeled = torch.zeros(repr_all.size(-1), repr_all.size(-1)).to(self.device)
+        dl = DataLoader(TensorDataset(repr_labeled), batch_size=self.fisher_batch_size, shuffle=False)
+        for batch in dl:
+            repr_batch = batch[0].to(self.device)
+            term = torch.matmul(repr_batch.transpose(1, 2), repr_batch) / len(repr_batch)
+            fisher_labeled += torch.sum(term, dim=0)
 
         if self.select == 'forward_backward':
             chosen = select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled,
@@ -88,7 +94,8 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
     # forward selection, over-sample by 2x
     # print('forward selection...', flush=True)
     over_sample = 2
-    for i in track(range(int(over_sample * acq_size)), 'Bait: Oversampling'):
+    # for i in track(range(int(over_sample * acq_size)), 'Bait: Oversampling'):
+    for i in range(int(over_sample * acq_size)):
 
         # check trace with low-rank updates (woodbury identity)
         xt_ = repr_unlabeled.to(device)
@@ -119,7 +126,8 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
 
     # backward pruning
     # print('backward pruning...', flush=True)
-    for i in track(range(len(indsAll) - acq_size), 'Bait: Backward pruning'):
+    # for i in track(range(len(indsAll) - acq_size), 'Bait: Backward pruning'):
+    for i in range(len(indsAll) - acq_size):
 
         # select index for removal
         xt_ = repr_unlabeled[indsAll].to(device)
