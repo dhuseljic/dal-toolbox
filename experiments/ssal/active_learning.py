@@ -74,7 +74,7 @@ def main(args):
         print(f'Cycle {i_acq}:', test_stats, flush=True)
         history.append(test_stats)
 
-    mlflow.set_tracking_uri(uri="file://{}".format(os.path.abspath(args.mlflow_dir)))
+    mlflow.set_tracking_uri(uri="sqlite://{}".format(os.path.abspath(args.mlflow_dir)))
     mlflow.set_experiment("Active Learning")
     mlflow.start_run()
     mlflow.log_params(flatten_cfg(args))
