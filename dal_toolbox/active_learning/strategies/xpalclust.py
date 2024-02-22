@@ -48,7 +48,6 @@ class XPALClust(Query):
     """
     MIN_CLUSTER_SIZE = 5
     MAX_NUM_CLUSTERS = 500
-    K_NN = 20
 
     def __init__(self, num_classes, S, alpha_c, alpha_x, subset_size=None, random_seed=None, precomputed=True,
                  gamma=1e-3, kernel="rbf"):
@@ -170,7 +169,7 @@ class XPALClust(Query):
             idx = indices[rel_gains.argmax()]
             selected.append(idx)
             top_gains.append(rel_gains.max())
-            labels[idx] = -1
+            labels[idx + len(labeled_indices)] = -1
 
         selected = np.array(selected)
         actual_indices = [unlabeled_indices[i] for i in selected]
