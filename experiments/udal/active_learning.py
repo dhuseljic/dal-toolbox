@@ -1,23 +1,23 @@
-import os
 import json
 import logging
+import os
 
+import hydra
+import lightning as L
 import torch
 import torch.nn as nn
-import lightning as L
-import hydra
-
-from torch.utils.data import DataLoader
 from omegaconf import OmegaConf
+from torch.utils.data import DataLoader
 
+from dal_toolbox import datasets
+from dal_toolbox import metrics
+from dal_toolbox.active_learning import ActiveLearningDataModule
+from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge
+from dal_toolbox.datasets.imagenet import ImageNetStandardTransforms
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.models.utils.lr_scheduler import CosineAnnealingLRLinearWarmup
-from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.utils import seed_everything, is_running_on_slurm
-from dal_toolbox import metrics
-from dal_toolbox import datasets
-from dal_toolbox.active_learning.strategies import random, uncertainty, coreset, badge
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
@@ -43,7 +43,10 @@ def main(args):
     test_loader = DataLoader(data.test_dataset, batch_size=args.model.predict_batch_size)
     if args.ood_datasets:
         logging.info('Building ood datasets.')
-        ood_datasets = build_ood_datasets(args, transforms=data.transforms)
+        if ("IMAGENET" in args.dataset):
+            ood_datasets = build_ood_datasets(args, transforms=ImageNetStandardTransforms())
+        else:
+            ood_datasets = build_ood_datasets(args, transforms=data.transforms)
         ood_loaders = {name: DataLoader(ds, batch_size=args.model.predict_batch_size)
                        for name, ds in ood_datasets.items()}
     else:
@@ -83,7 +86,6 @@ def main(args):
             )
             al_datamodule.update_annotations(indices)
             queried_indices[f'cycle{i_acq}'] = indices
-
 
         # Train
         model.reset_states(reset_model_parameters=args.al_cycle.cold_start)
@@ -138,8 +140,6 @@ def main(args):
     logging.info("Saving model weights to %s.", file_name)
     torch.save(model.state_dict(), os.path.join(args.output_dir, 'lit_model_final.pth'))
     torch.save(model.model.state_dict(), os.path.join(args.output_dir, 'model_final.pth'))
-    
-
 
 
 def evaluate(logits, targets):
@@ -175,7 +175,7 @@ def build_query(args, **kwargs):
         query = random.RandomSampling()
     # Aleatoric
     elif args.al_strategy.name == "least_confident":
-        query = uncertainty.LeastConfidentSampling(subset_size=args.al_strategy.subset_size,)
+        query = uncertainty.LeastConfidentSampling(subset_size=args.al_strategy.subset_size, )
     elif args.al_strategy.name == "margin":
         query = uncertainty.MarginSampling(subset_size=args.al_strategy.subset_size)
     elif args.al_strategy.name == "entropy":
@@ -201,7 +201,7 @@ def build_model(args, **kwargs):
     num_classes = kwargs['num_classes']
 
     if args.model.name == 'resnet18_deterministic':
-        model = deterministic.resnet.ResNet18(num_classes)
+        model = deterministic.resnet.ResNet18(num_classes, imagenethead=("IMAGENET" in args.dataset))
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.SGD(
             model.parameters(),
@@ -217,7 +217,7 @@ def build_model(args, **kwargs):
         )
         return model
     elif args.model.name == 'resnet18_labelsmoothing':
-        model = deterministic.resnet.ResNet18(num_classes)
+        model = deterministic.resnet.ResNet18(num_classes, imagenethead=("IMAGENET" in args.dataset))
         criterion = nn.CrossEntropyLoss(label_smoothing=args.model.label_smoothing)
         optimizer = torch.optim.SGD(
             model.parameters(),
@@ -232,7 +232,7 @@ def build_model(args, **kwargs):
             {'train_acc': metrics.Accuracy()}, {'val_acc': metrics.Accuracy()}
         )
     elif args.model.name == 'resnet18_mixup':
-        model = deterministic.resnet.ResNet18(num_classes)
+        model = deterministic.resnet.ResNet18(num_classes, imagenethead=("IMAGENET" in args.dataset))
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.SGD(
             model.parameters(),
@@ -247,7 +247,8 @@ def build_model(args, **kwargs):
             {'train_acc': metrics.Accuracy()}, {'val_acc': metrics.Accuracy()}
         )
     elif args.model.name == 'resnet18_mcdropout':
-        model = mc_dropout.resnet.DropoutResNet18(num_classes, args.model.n_passes, args.model.dropout_rate)
+        model = mc_dropout.resnet.DropoutResNet18(num_classes, args.model.n_passes, args.model.dropout_rate,
+                                                  imagenethead=("IMAGENET" in args.dataset))
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.SGD(
             model.parameters(),
@@ -264,7 +265,7 @@ def build_model(args, **kwargs):
     elif args.model.name == 'resnet18_ensemble':
         members, lr_scheduler_list, optimizer_list = [], [], []
         for _ in range(args.model.n_member):
-            mem = deterministic.resnet.ResNet18(num_classes)
+            mem = deterministic.resnet.ResNet18(num_classes, imagenethead=("IMAGENET" in args.dataset))
             opt = torch.optim.SGD(
                 mem.parameters(),
                 lr=args.model.optimizer.lr,
@@ -284,7 +285,7 @@ def build_model(args, **kwargs):
     elif args.model.name == 'resnet18_sngp':
         model = sngp.resnet.resnet18_sngp(
             num_classes=num_classes,
-            input_shape=(3, 32, 32),
+            input_shape=(3, 224, 224) if ("IMAGENET" in args.dataset) else (3, 32, 32),
             spectral_norm=args.model.spectral_norm.use_spectral_norm,
             norm_bound=args.model.spectral_norm.norm_bound,
             n_power_iterations=args.model.spectral_norm.n_power_iterations,
@@ -296,6 +297,7 @@ def build_model(args, **kwargs):
             mean_field_factor=args.model.gp.mean_field_factor,
             cov_momentum=args.model.gp.cov_momentum,
             ridge_penalty=args.model.gp.ridge_penalty,
+            imagenethead=("IMAGENET" in args.dataset)
         )
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.SGD(
@@ -323,6 +325,8 @@ def build_datasets(args):
         data = datasets.cifar.CIFAR100(args.dataset_path)
     elif args.dataset == 'SVHN':
         data = datasets.svhn.SVHN(args.dataset_path)
+    elif args.dataset == 'IMAGENET100':
+        data = datasets.ImageNet100(args.dataset_path, preload=args.dataset_preload)
     else:
         raise NotImplementedError('Dataset not available')
 
@@ -338,6 +342,8 @@ def build_ood_datasets(args, transforms):
             data = datasets.cifar.CIFAR100(args.dataset_path, transforms=transforms)
         elif ds_name == 'SVHN':
             data = datasets.svhn.SVHN(args.dataset_path, transforms=transforms)
+        elif ds_name == 'IMAGENET100':
+            data = datasets.ImageNet100(args.dataset_path, transforms=transforms, preload=args.dataset_preload)
         else:
             raise NotImplementedError(f'Dataset {ds_name} not implemented.')
         ood_datasets[ds_name] = data.test_dataset
