@@ -121,13 +121,22 @@ def build_al_strategy(args):
                                   gamma=args.update_gamma, subset_size=args.al.subset_size)
     elif args.al.strategy == 'bait':
         al_strategy = strategies.BaitSampling(
-            subset_size=args.al.subset_size, fisher_approx=args.al.fisher_approximation, device=args.al.device)
+            subset_size=args.al.subset_size,
+            grad_approx=args.al.bait.grad_approx,
+            grad_k=args.al.bait.grad_k,
+            fisher_approx=args.al.bait.fisher_approximation,
+            fisher_k=args.al.bait.fisher_k,
+            device=args.al.device
+        )
     elif args.al.strategy == 'pseudo_bait':
         strat = strategies.BaitSampling(
             subset_size=args.al.subset_size,
-            fisher_approx=args.al.fisher_approximation,
+            grad_approx=args.al.bait.grad_approx,
+            grad_k=args.al.bait.grad_k,
+            fisher_approx=args.al.bait.fisher_approximation,
+            fisher_k=args.al.bait.fisher_k,
+            device=args.al.device,
             select='topk',
-            device=args.al.device
         )
         al_strategy = PseudoBatch(al_strategy=strat, update_every=args.al.update_every,
                                   gamma=args.update_gamma, subset_size=args.al.subset_size)

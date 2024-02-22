@@ -180,7 +180,7 @@ class LaplaceNet(LaplaceLayer):
         return embedding.cpu()
 
     @torch.no_grad()
-    def get_topk_grad_representations(self, dataloader, device, k=5, grad_approx=True):
+    def get_topk_grad_representations(self, dataloader, device, k, grad_approx=True):
         self.eval()
         self.to(device)
 

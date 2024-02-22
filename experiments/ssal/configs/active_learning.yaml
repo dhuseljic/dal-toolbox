@@ -25,9 +25,13 @@ al:
   num_acq: 10
   acq_size: 10
   update_every: 1
-  fisher_approximation: full
-  fisher_batch_size: 10
-  device: cpu
+  bait:
+    grad_approx: True
+    grad_k: 10
+    fisher_approximation: topk
+    fisher_k: 10
+    fisher_batch_size: 32
+  device: cuda
 
 model:
   name: laplace

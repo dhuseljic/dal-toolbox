@@ -11,7 +11,10 @@ from rich.progress import track
 class BaitSampling(Query):
     def __init__(self,
                  lmb=1,
+                 grad_approx=True,
+                 grad_k=1,
                  fisher_approx='full',
+                 fisher_k=10,
                  fisher_batch_size=32,
                  select='forward_backward',
                  device='cpu',
@@ -20,7 +23,10 @@ class BaitSampling(Query):
         self.subset_size = subset_size
         self.lmb = lmb
 
+        self.grad_approx = grad_approx
+        self.grad_k = grad_k
         self.fisher_approx = fisher_approx
+        self.fisher_k = fisher_k
         self.fisher_batch_size = fisher_batch_size
         self.select = select
         self.device = device
@@ -31,16 +37,22 @@ class BaitSampling(Query):
         labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
 
         if self.fisher_approx == 'full':
-            repr_unlabeled = model.get_exp_grad_representations(unlabeled_dataloader, device=self.device)
-            repr_labeled = model.get_exp_grad_representations(labeled_dataloader, device=self.device)
+            repr_unlabeled = model.get_exp_grad_representations(
+                unlabeled_dataloader, grad_approx=self.grad_approx, device=self.device)
+            repr_labeled = model.get_exp_grad_representations(
+                labeled_dataloader, grad_approx=self.grad_approx, device=self.device)
             repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
         elif self.fisher_approx == 'topk':
-            repr_unlabeled = model.get_topk_grad_representations(unlabeled_dataloader, device=self.device)
-            repr_labeled = model.get_topk_grad_representations(labeled_dataloader, device=self.device)
+            repr_unlabeled = model.get_topk_grad_representations(
+                unlabeled_dataloader, grad_approx=self.grad_approx, k=self.fisher_k, device=self.device)
+            repr_labeled = model.get_topk_grad_representations(
+                labeled_dataloader, grad_approx=self.grad_approx, k=self.fisher_k, device=self.device)
             repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
         elif self.fisher_approx == 'max_pred':
-            repr_unlabeled = model.get_grad_representations(unlabeled_dataloader, device=self.device)
-            repr_labeled = model.get_grad_representations(labeled_dataloader, device=self.device)
+            repr_unlabeled = model.get_grad_representations(
+                unlabeled_dataloader, grad_approx=self.grad_approx, device=self.device)
+            repr_labeled = model.get_grad_representations(
+                labeled_dataloader, grad_approx=self.grad_approx, device=self.device)
             repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
 
             repr_unlabeled = repr_unlabeled[:, None]
@@ -91,9 +103,8 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
     # forward selection, over-sample by 2x
     # print('forward selection...', flush=True)
     over_sample = 2
-    # for i in track(range(int(over_sample * acq_size)), 'Bait: Oversampling'):
-    for i in range(int(over_sample * acq_size)):
-
+    # for i in range(int(over_sample * acq_size)):
+    for i in track(range(int(over_sample * acq_size)), 'Bait: Oversampling'):
         # check trace with low-rank updates (woodbury identity)
         xt_ = repr_unlabeled.to(device)
 
@@ -123,8 +134,8 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
 
     # backward pruning
     # print('backward pruning...', flush=True)
-    # for i in track(range(len(indsAll) - acq_size), 'Bait: Backward pruning'):
-    for i in range(len(indsAll) - acq_size):
+    for i in track(range(len(indsAll) - acq_size), 'Bait: Backward pruning'):
+        # for i in range(len(indsAll) - acq_size):
 
         # select index for removal
         xt_ = repr_unlabeled[indsAll].to(device)
@@ -148,16 +159,20 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
 
 
 def select_topk(repr_unlabeled, acq_size, fisher_all, fisher_labeled, lmb, num_labeled):
+    device = fisher_all.device
+
     # Efficient computation of the objective (trace rotation & Woodbury identity)
+    repr_unlabeled = repr_unlabeled.to(device)
     dim = repr_unlabeled.size(-1)
     rank = repr_unlabeled.size(-2)
 
     fisher_labeled = fisher_labeled * num_labeled / (num_labeled + acq_size)
-    M_0 = lmb * torch.eye(dim) + fisher_labeled
+    M_0 = lmb * torch.eye(dim, device=device) + fisher_labeled
     M_0_inv = torch.inverse(M_0)
 
     # repr_unlabeled = repr_unlabeled * np.sqrt(acq_size / (num_labeled + acq_size))
-    A = torch.inverse(torch.eye(rank) + repr_unlabeled @ M_0_inv @ repr_unlabeled.transpose(1, 2))
+    A = torch.inverse(torch.eye(rank, device=device) + repr_unlabeled @
+                      M_0_inv @ repr_unlabeled.transpose(1, 2))
     tmp = repr_unlabeled @ M_0_inv @ fisher_all @ M_0_inv @ repr_unlabeled.transpose(1, 2) @ A
     scores = torch.diagonal(tmp, dim1=-2, dim2=-1).sum(-1)
     chosen = (scores.topk(acq_size).indices)
