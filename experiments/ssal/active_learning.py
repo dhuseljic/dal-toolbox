@@ -123,18 +123,18 @@ def build_al_strategy(args):
         al_strategy = strategies.BaitSampling(
             subset_size=args.al.subset_size,
             grad_approx=args.al.bait.grad_approx,
-            grad_k=args.al.bait.grad_k,
             fisher_approx=args.al.bait.fisher_approximation,
             fisher_k=args.al.bait.fisher_k,
+            num_grad_samples=args.al.bait.num_grad_samples,
             device=args.al.device
         )
     elif args.al.strategy == 'pseudo_bait':
         strat = strategies.BaitSampling(
             subset_size=args.al.subset_size,
             grad_approx=args.al.bait.grad_approx,
-            grad_k=args.al.bait.grad_k,
             fisher_approx=args.al.bait.fisher_approximation,
             fisher_k=args.al.bait.fisher_k,
+            num_grad_samples=args.al.bait.num_grad_samples,
             device=args.al.device,
             select='topk',
         )

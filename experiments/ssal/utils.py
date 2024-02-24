@@ -180,9 +180,10 @@ class LaplaceNet(LaplaceLayer):
         return embedding.cpu()
 
     @torch.no_grad()
-    def get_topk_grad_representations(self, dataloader, device, k, grad_approx=True):
+    def get_topk_grad_representations(self, dataloader, device, topk, grad_approx=True):
         self.eval()
         self.to(device)
+        grad_k = 10
 
         embedding = []
         for batch in dataloader:
@@ -193,13 +194,36 @@ class LaplaceNet(LaplaceLayer):
             probas = logits.softmax(-1)
             feature_dim = features.size(-1)
             num_classes = logits.size(-1)
-            probas_topk = probas.sort(dim=-1, descending=True)[0][:, :k]
+            probas_topk, _ = probas.topk(k=topk)
+            probas_gradk, _ = probas.topk(k=grad_k)
 
-            grad_dim = feature_dim * num_classes if not grad_approx else feature_dim
-            embedding_batch = torch.zeros([len(inputs), k, grad_dim]).to(device)
-            if grad_approx:
-                factor = 1 - probas_topk
-                embedding_batch = factor[:, :, None] * features[:, None, :]
+            # grad_dim = feature_dim * num_classes if not grad_approx else feature_dim
+            # embedding_batch = torch.zeros([len(inputs), k, grad_dim]).to(device)
+
+            # if grad_approx:
+            # factor = torch.eye(grad_k, device='cuda')[:topk, None] - probas_topk
+            factor = (torch.eye(grad_k, device=device)[:topk, None] - probas_gradk)
+            embedding_batch = torch.einsum("jnh,nd->njhd", factor, features).flatten(2)
+
+                # tmp = embedding_batch[0, 0].sort().values
+
+                # tmp1 = (1 - probas_gradk[0][0]) * features[0]
+                # tmp2 = (- probas_gradk[0][1]) * features[0]
+                # torch.cat((tmp1, tmp2)) == embedding_batch[0, 0]
+
+                # tmp1 = (-probas_gradk[0][0]) * features[0]
+                # tmp2 = (1-probas_gradk[0][1]) * features[0]
+                # torch.cat((tmp1, tmp2)) == embedding_batch[0, 1]
+
+                # tmp3 = (- probas_topk[0][2]) * features[0]
+
+
+
+                # == embedding_batch[0].squeeze())
+
+                # factor = 1 - probas_topk
+                # embedding_batch = factor[:, :, None] * features[:, None, :]
+
             # else:
                 # embedding_batch[:] = embedding_batch[:] * torch.sqrt(probas[:].view(-1, 1))
                 #     one_hot = torch.nn.functional.one_hot(torch.tensor(ind), num_classes=num_classes).to(device)
@@ -223,22 +247,15 @@ class LaplaceNet(LaplaceLayer):
 
             features = inputs
             probas = logits.softmax(-1)
-            feature_dim = features.size(-1)
             num_classes = logits.size(-1)
 
-            grad_dim = feature_dim * num_classes if not grad_approx else feature_dim
-            embedding_batch = torch.zeros([len(inputs), num_classes, grad_dim]).to(device)
-            for ind in range(num_classes):
-                if grad_approx:
-                    factor = 1 - probas[:, ind]
-                    embedding_batch[:, ind] = factor[:, None] * features
-                else:
-                    one_hot = torch.nn.functional.one_hot(
-                        torch.tensor(ind), num_classes=num_classes).to(device)
-                    factor = one_hot - probas
-                    embedding_batch[:, ind] = (factor[:, :, None] * features[:, None, :]).flatten(-2)
-                embedding_batch[:, ind] = embedding_batch[:, ind] * torch.sqrt(probas[:, ind].view(-1, 1))
+            # if grad_approx:
+            #     factor = 1 - probas[:, ind]
+            #     embedding_batch[:, ind] = factor[:, None] * features
 
+            factor = (torch.eye(num_classes, device=device)[:, None] - probas)
+            embedding_batch = torch.einsum("jnh,nd->njhd", factor, features).flatten(2)
+            embedding_batch = torch.sqrt(probas)[:, :, None] * embedding_batch
             embedding.append(embedding_batch.cpu())
         embedding = torch.cat(embedding)
 

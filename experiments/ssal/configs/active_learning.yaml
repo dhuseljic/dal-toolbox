@@ -26,11 +26,11 @@ al:
   acq_size: 10
   update_every: 1
   bait:
-    grad_approx: True
-    grad_k: 10
-    fisher_approximation: topk
+    grad_approx: False
+    fisher_approximation: full
     fisher_k: 10
     fisher_batch_size: 32
+    num_grad_samples: null
   device: cuda
 
 model:
