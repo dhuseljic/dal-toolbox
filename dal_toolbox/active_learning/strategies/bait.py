@@ -38,22 +38,18 @@ class BaitSampling(Query):
         labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
 
         if self.fisher_approx == 'full':
-            repr_unlabeled = model.get_exp_grad_representations(
-                unlabeled_dataloader, grad_approx=self.grad_approx, device=self.device)
-            repr_labeled = model.get_exp_grad_representations(
-                labeled_dataloader, grad_approx=self.grad_approx, device=self.device)
+            repr_unlabeled = model.get_exp_grad_representations(unlabeled_dataloader,  device=self.device)
+            repr_labeled = model.get_exp_grad_representations(labeled_dataloader,  device=self.device)
             repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
         elif self.fisher_approx == 'topk':
             repr_unlabeled = model.get_topk_grad_representations(
-                unlabeled_dataloader, grad_approx=self.grad_approx, topk=self.fisher_k, device=self.device)
+                unlabeled_dataloader,  topk=self.fisher_k, device=self.device)
             repr_labeled = model.get_topk_grad_representations(
-                labeled_dataloader, grad_approx=self.grad_approx, topk=self.fisher_k, device=self.device)
+                labeled_dataloader, topk=self.fisher_k, device=self.device)
             repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
         elif self.fisher_approx == 'max_pred':
-            repr_unlabeled = model.get_grad_representations(
-                unlabeled_dataloader, grad_approx=self.grad_approx, device=self.device)
-            repr_labeled = model.get_grad_representations(
-                labeled_dataloader, grad_approx=self.grad_approx, device=self.device)
+            repr_unlabeled = model.get_grad_representations(unlabeled_dataloader, device=self.device)
+            repr_labeled = model.get_grad_representations(labeled_dataloader, device=self.device)
             repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
 
             repr_unlabeled = repr_unlabeled[:, None]
@@ -61,15 +57,12 @@ class BaitSampling(Query):
             repr_all = repr_all[:, None]
         else:
             raise NotImplementedError()
-        
 
         if self.num_grad_samples is not None:
-            if self.grad_indices is None:
-                self.grad_indices = torch.randperm(repr_all.size(-1))[:self.num_grad_samples]
-
-            repr_unlabeled = repr_unlabeled[:, :, self.grad_indices]
-            repr_labeled = repr_labeled[:, :, self.grad_indices]
-            repr_all = repr_all[:, :, self.grad_indices]
+            grad_indices = torch.randperm(repr_all.size(-1))[:self.num_grad_samples]
+            repr_unlabeled = repr_unlabeled[:, :, grad_indices]
+            repr_labeled = repr_labeled[:, :, grad_indices]
+            repr_all = repr_all[:, :, grad_indices]
 
         fisher_all = torch.zeros(repr_all.size(-1), repr_all.size(-1)).to(self.device)
         dl = DataLoader(TensorDataset(repr_all), batch_size=self.fisher_batch_size, shuffle=False)
