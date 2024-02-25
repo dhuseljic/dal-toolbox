@@ -29,6 +29,7 @@ al:
     grad_approx: False
     fisher_approximation: full
     fisher_k: 10
+    normalize_top_probas: True
     fisher_batch_size: 32
     num_grad_samples: null
   device: cuda

@@ -125,6 +125,7 @@ def build_al_strategy(args):
             grad_approx=args.al.bait.grad_approx,
             fisher_approx=args.al.bait.fisher_approximation,
             fisher_k=args.al.bait.fisher_k,
+            normalize_top_probas=args.al.bait.normalize_top_probas,
             num_grad_samples=args.al.bait.num_grad_samples,
             device=args.al.device
         )
@@ -134,6 +135,7 @@ def build_al_strategy(args):
             grad_approx=args.al.bait.grad_approx,
             fisher_approx=args.al.bait.fisher_approximation,
             fisher_k=args.al.bait.fisher_k,
+            normalize_top_probas=args.al.bait.normalize_top_probas,
             num_grad_samples=args.al.bait.num_grad_samples,
             device=args.al.device,
             select='topk',

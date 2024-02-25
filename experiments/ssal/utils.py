@@ -180,7 +180,7 @@ class LaplaceNet(LaplaceLayer):
         return embedding.cpu()
 
     @torch.no_grad()
-    def get_topk_grad_representations(self, dataloader, device, topk):
+    def get_topk_grad_representations(self, dataloader, device, topk, normalize_top_probas=True):
         self.eval()
         self.to(device)
 
@@ -193,6 +193,8 @@ class LaplaceNet(LaplaceLayer):
             probas = logits.softmax(-1)
             num_classes = logits.size(-1)
             probas_topk, top_preds = probas.topk(k=topk)
+            if normalize_top_probas:
+                probas_topk /= probas_topk.sum(-1, keepdim=True)
 
             factor = (torch.eye(num_classes, device=device)[:, None] - probas)
             batch_indices = torch.arange(len(top_preds)).unsqueeze(-1).expand(-1, top_preds.size(1))
