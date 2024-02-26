@@ -66,9 +66,10 @@ class BaitSampling(Query):
         #     raise NotImplementedError()
 
         if self.num_grad_samples is not None:
-            # grad_indices = torch.randperm(100)[:13]
-            # grad_indices = torch.cat([torch.arange(384*idx, 384*idx+384) for idx in grad_indices])
-            grad_indices = torch.randperm(repr_all.size(-1))[:self.num_grad_samples]
+            # grad_indices = torch.randperm(repr_all.size(-1))[:self.num_grad_samples]
+            avg_repr = repr_all.mean(dim=1)
+            indices = avg_repr.std(dim=0).argsort()
+            grad_indices = indices[-self.num_grad_samples:]
             repr_unlabeled = repr_unlabeled[:, :, grad_indices]
             repr_labeled = repr_labeled[:, :, grad_indices]
             repr_all = repr_all[:, :, grad_indices]
@@ -80,7 +81,7 @@ class BaitSampling(Query):
             if self.fisher_approximation == 'full':
                 term = torch.matmul(repr_batch.transpose(1, 2), repr_batch)
                 fisher_all += torch.mean(term, dim=0)
-            elif self.fisher_approximation == 'diag': 
+            elif self.fisher_approximation == 'diag':
                 term = torch.mean(torch.sum(repr_batch**2, dim=1), dim=0)
                 fisher_all += torch.diag(term)
             else:
@@ -93,7 +94,7 @@ class BaitSampling(Query):
             if self.fisher_approximation == 'full':
                 term = torch.matmul(repr_batch.transpose(1, 2), repr_batch)
                 fisher_all += torch.mean(term, dim=0)
-            elif self.fisher_approximation == 'diag': 
+            elif self.fisher_approximation == 'diag':
                 term = torch.mean(torch.sum(repr_batch**2, dim=1), dim=0)
                 fisher_all += torch.diag(term)
             else:
