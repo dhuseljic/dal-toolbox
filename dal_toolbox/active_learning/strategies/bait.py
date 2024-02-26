@@ -11,26 +11,23 @@ from rich.progress import track
 class BaitSampling(Query):
     def __init__(self,
                  lmb=1,
-                 grad_approx=True,
-                 fisher_approx='full',
-                 fisher_k=10,
+                 expectation_topk=None,
                  normalize_top_probas=True,
-                 fisher_batch_size=32,
+                 fisher_approximation='full',
                  num_grad_samples=None,
                  select='forward_backward',
+                 fisher_batch_size=32,
                  device='cpu',
                  subset_size=None):
         super().__init__()
         self.subset_size = subset_size
         self.lmb = lmb
 
-        self.grad_approx = grad_approx
-        self.fisher_approx = fisher_approx
-        self.fisher_k = fisher_k
+        self.expectation_topk = expectation_topk
         self.normalize_top_probas = normalize_top_probas
-        self.fisher_batch_size = fisher_batch_size
+        self.fisher_approximation = fisher_approximation
         self.num_grad_samples = num_grad_samples
-        self.grad_indices = None
+        self.fisher_batch_size = fisher_batch_size
         self.select = select
         self.device = device
 
@@ -39,28 +36,38 @@ class BaitSampling(Query):
             subset_size=self.subset_size)
         labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
 
-        if self.fisher_approx == 'full':
+        if self.expectation_topk is None:
             repr_unlabeled = model.get_exp_grad_representations(unlabeled_dataloader,  device=self.device)
             repr_labeled = model.get_exp_grad_representations(labeled_dataloader,  device=self.device)
             repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
-        elif self.fisher_approx == 'topk':
-            repr_unlabeled = model.get_topk_grad_representations(
-                unlabeled_dataloader,  topk=self.fisher_k, normalize_top_probas=self.normalize_top_probas, device=self.device)
-            repr_labeled = model.get_topk_grad_representations(
-                labeled_dataloader, topk=self.fisher_k, normalize_top_probas=self.normalize_top_probas, device=self.device)
-            repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
-        elif self.fisher_approx == 'max_pred':
-            repr_unlabeled = model.get_grad_representations(unlabeled_dataloader, device=self.device)
-            repr_labeled = model.get_grad_representations(labeled_dataloader, device=self.device)
-            repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
-
-            repr_unlabeled = repr_unlabeled[:, None]
-            repr_labeled = repr_labeled[:, None]
-            repr_all = repr_all[:, None]
         else:
-            raise NotImplementedError()
+            repr_unlabeled = model.get_topk_grad_representations(
+                unlabeled_dataloader,
+                topk=self.expectation_topk,
+                normalize_top_probas=self.normalize_top_probas,
+                device=self.device
+            )
+            repr_labeled = model.get_topk_grad_representations(
+                labeled_dataloader,
+                topk=self.expectation_topk,
+                normalize_top_probas=self.normalize_top_probas,
+                device=self.device
+            )
+            repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
+        # elif self.fisher_approx == 'max_pred':
+        #     repr_unlabeled = model.get_grad_representations(unlabeled_dataloader, device=self.device)
+        #     repr_labeled = model.get_grad_representations(labeled_dataloader, device=self.device)
+        #     repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
+
+        #     repr_unlabeled = repr_unlabeled[:, None]
+        #     repr_labeled = repr_labeled[:, None]
+        #     repr_all = repr_all[:, None]
+        # else:
+        #     raise NotImplementedError()
 
         if self.num_grad_samples is not None:
+            # grad_indices = torch.randperm(100)[:13]
+            # grad_indices = torch.cat([torch.arange(384*idx, 384*idx+384) for idx in grad_indices])
             grad_indices = torch.randperm(repr_all.size(-1))[:self.num_grad_samples]
             repr_unlabeled = repr_unlabeled[:, :, grad_indices]
             repr_labeled = repr_labeled[:, :, grad_indices]
@@ -68,17 +75,29 @@ class BaitSampling(Query):
 
         fisher_all = torch.zeros(repr_all.size(-1), repr_all.size(-1)).to(self.device)
         dl = DataLoader(TensorDataset(repr_all), batch_size=self.fisher_batch_size, shuffle=False)
-        for batch in dl:
+        for batch in track(dl):
             repr_batch = batch[0].to(self.device)
-            term = torch.matmul(repr_batch.transpose(1, 2), repr_batch) / len(repr_batch)
-            fisher_all += torch.sum(term, dim=0)
+            if self.fisher_approximation == 'full':
+                term = torch.matmul(repr_batch.transpose(1, 2), repr_batch)
+                fisher_all += torch.mean(term, dim=0)
+            elif self.fisher_approximation == 'diag': 
+                term = torch.mean(torch.sum(repr_batch**2, dim=1), dim=0)
+                fisher_all += torch.diag(term)
+            else:
+                raise NotImplementedError()
 
         fisher_labeled = torch.zeros(repr_all.size(-1), repr_all.size(-1)).to(self.device)
         dl = DataLoader(TensorDataset(repr_labeled), batch_size=self.fisher_batch_size, shuffle=False)
-        for batch in dl:
+        for batch in track(dl):
             repr_batch = batch[0].to(self.device)
-            term = torch.matmul(repr_batch.transpose(1, 2), repr_batch) / len(repr_batch)
-            fisher_labeled += torch.sum(term, dim=0)
+            if self.fisher_approximation == 'full':
+                term = torch.matmul(repr_batch.transpose(1, 2), repr_batch)
+                fisher_all += torch.mean(term, dim=0)
+            elif self.fisher_approximation == 'diag': 
+                term = torch.mean(torch.sum(repr_batch**2, dim=1), dim=0)
+                fisher_all += torch.diag(term)
+            else:
+                raise NotImplementedError()
 
         if self.select == 'forward_backward':
             chosen = select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled,

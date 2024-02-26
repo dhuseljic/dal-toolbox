@@ -163,9 +163,6 @@ class LaplaceNet(LaplaceLayer):
             num_classes = logits.size(-1)
 
             if grad_approx:
-                # In some cases (e.g., high number of classes), we can consider
-                # the gradient of the weights that lead to the most likely
-                # label.
                 probas_max = probas.max(-1).values
                 factor = (1 - probas_max)
                 embedding_batch = (factor[:, None] * features)
