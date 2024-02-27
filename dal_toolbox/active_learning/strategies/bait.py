@@ -41,8 +41,16 @@ class BaitSampling(Query):
         labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
 
         if self.expectation_topk is None:
-            repr_unlabeled = model.get_exp_grad_representations(unlabeled_dataloader,  device=self.device)
-            repr_labeled = model.get_exp_grad_representations(labeled_dataloader,  device=self.device)
+            repr_unlabeled = model.get_exp_grad_representations(
+                unlabeled_dataloader,
+                grad_likelihood=self.grad_likelihood,
+                device=self.device
+            )
+            repr_labeled = model.get_exp_grad_representations(
+                labeled_dataloader,
+                grad_likelihood=self.grad_likelihood,
+                device=self.device
+            )
             repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
         else:
             repr_unlabeled = model.get_topk_grad_representations(

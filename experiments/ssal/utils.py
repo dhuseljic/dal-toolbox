@@ -213,7 +213,7 @@ class LaplaceNet(LaplaceLayer):
         return embedding
 
     @torch.no_grad()
-    def get_exp_grad_representations(self, dataloader, device):
+    def get_exp_grad_representations(self, dataloader,  device, grad_likelihood='cross_entropy'):
         self.eval()
         self.to(device)
 
@@ -226,8 +226,16 @@ class LaplaceNet(LaplaceLayer):
             probas = logits.softmax(-1)
             num_classes = logits.size(-1)
 
-            factor = (torch.eye(num_classes, device=device)[:, None] - probas)
-            embedding_batch = torch.einsum("jnh,nd->njhd", factor, features).flatten(2)
+            if grad_likelihood == 'cross_entropy':
+                factor = (torch.eye(num_classes, device=device)[:, None] - probas)
+                embedding_batch = torch.einsum("jnh,nd->njhd", factor, features).flatten(2)
+            elif grad_likelihood == 'binary_cross_entropy':
+                # TODO check with topk
+                factor = 1 - probas
+                embedding_batch = torch.einsum("nk,nd->nkd", factor, features).flatten(2)
+            else:
+                raise NotImplementedError()
+
             embedding_batch = torch.sqrt(probas)[:, :, None] * embedding_batch
             embedding.append(embedding_batch.cpu())
         embedding = torch.cat(embedding)
