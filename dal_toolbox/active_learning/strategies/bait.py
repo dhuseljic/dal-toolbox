@@ -15,6 +15,7 @@ class BaitSampling(Query):
                  normalize_top_probas=True,
                  fisher_approximation='full',
                  num_grad_samples=None,
+                 grad_likelihood='cross_entropy',
                  grad_selection='magnitude',
                  select='forward_backward',
                  fisher_batch_size=32,
@@ -28,6 +29,7 @@ class BaitSampling(Query):
         self.normalize_top_probas = normalize_top_probas
         self.fisher_approximation = fisher_approximation
         self.num_grad_samples = num_grad_samples
+        self.grad_likelihood = grad_likelihood
         self.grad_selection = grad_selection
         self.fisher_batch_size = fisher_batch_size
         self.select = select
@@ -46,12 +48,14 @@ class BaitSampling(Query):
             repr_unlabeled = model.get_topk_grad_representations(
                 unlabeled_dataloader,
                 topk=self.expectation_topk,
+                grad_likelihood=self.grad_likelihood,
                 normalize_top_probas=self.normalize_top_probas,
                 device=self.device
             )
             repr_labeled = model.get_topk_grad_representations(
                 labeled_dataloader,
                 topk=self.expectation_topk,
+                grad_likelihood=self.grad_likelihood,
                 normalize_top_probas=self.normalize_top_probas,
                 device=self.device
             )

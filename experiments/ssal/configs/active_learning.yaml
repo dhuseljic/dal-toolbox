@@ -30,6 +30,7 @@ al:
     fisher_approximation: full
     num_grad_samples: null
     grad_selection: magnitude
+    grad_likelihood: cross_entropy
     normalize_top_probas: True
     fisher_batch_size: 32
   device: cuda

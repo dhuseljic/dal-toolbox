@@ -177,7 +177,7 @@ class LaplaceNet(LaplaceLayer):
         return embedding.cpu()
 
     @torch.no_grad()
-    def get_topk_grad_representations(self, dataloader, device, topk, normalize_top_probas=True):
+    def get_topk_grad_representations(self, dataloader, device, topk, grad_likelihood='cross_entropy', normalize_top_probas=True):
         self.eval()
         self.to(device)
 
@@ -191,11 +191,17 @@ class LaplaceNet(LaplaceLayer):
             num_classes = logits.size(-1)
             probas_topk, top_preds = probas.topk(k=topk)
 
-            # cross entropy likelihood
-            factor = (torch.eye(num_classes, device=device)[:, None] - probas)
-            batch_indices = torch.arange(len(top_preds)).unsqueeze(-1).expand(-1, top_preds.size(1))
-            factor = factor[top_preds, batch_indices]
-            embedding_batch = torch.einsum("njh,nd->njhd", factor, features).flatten(2)
+            if grad_likelihood == 'cross_entropy':
+                factor = (torch.eye(num_classes, device=device)[:, None] - probas)
+                batch_indices = torch.arange(len(top_preds)).unsqueeze(-1).expand(-1, top_preds.size(1))
+                factor = factor[top_preds, batch_indices]
+                embedding_batch = torch.einsum("njh,nd->njhd", factor, features).flatten(2)
+            elif grad_likelihood == 'binary_cross_entropy':
+                # We assume a binary cross entropy for highest probabilities
+                factor = 1 - probas_topk
+                embedding_batch = torch.einsum("nk,nd->nkd", factor, features).flatten(2)
+            else:
+                raise NotImplementedError()
 
             if normalize_top_probas:
                 probas_topk /= probas_topk.sum(-1, keepdim=True)

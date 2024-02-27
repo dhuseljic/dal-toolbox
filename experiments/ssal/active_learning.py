@@ -125,6 +125,7 @@ def build_al_strategy(args):
             expectation_topk=args.al.bait.expectation_topk,
             normalize_top_probas=args.al.bait.normalize_top_probas,
             fisher_approximation=args.al.bait.fisher_approximation,
+            grad_likelihood=args.al.bait.grad_likelihood,
             num_grad_samples=args.al.bait.num_grad_samples,
             grad_selection=args.al.bait.grad_selection,
             device=args.al.device
