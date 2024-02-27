@@ -60,7 +60,6 @@ class BaitSampling(Query):
         #     repr_unlabeled = model.get_grad_representations(unlabeled_dataloader, device=self.device)
         #     repr_labeled = model.get_grad_representations(labeled_dataloader, device=self.device)
         #     repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
-
         #     repr_unlabeled = repr_unlabeled[:, None]
         #     repr_labeled = repr_labeled[:, None]
         #     repr_all = repr_all[:, None]
@@ -70,21 +69,22 @@ class BaitSampling(Query):
         if self.num_grad_samples is not None:
             if self.grad_selection == 'random':
                 indices = torch.randperm(repr_all.size(-1))[:self.num_grad_samples]
+                grad_indices = indices[-self.num_grad_samples:]
             elif self.grad_selection == 'std':
                 indices = repr_all.mean(0).std(0).argsort()
-                # indices = repr_all.mean(dim=1).std(dim=0).argsort()
+                grad_indices = indices[-self.num_grad_samples:]
             elif self.grad_selection == 'magnitude':
                 indices = torch.abs(repr_all).sum(dim=(0, 1)).argsort()
+                grad_indices = indices[-self.num_grad_samples:]
             else:
                 raise NotImplementedError()
-            grad_indices = indices[-self.num_grad_samples:]
             repr_unlabeled = repr_unlabeled[:, :, grad_indices]
             repr_labeled = repr_labeled[:, :, grad_indices]
             repr_all = repr_all[:, :, grad_indices]
 
         fisher_all = torch.zeros(repr_all.size(-1), repr_all.size(-1)).to(self.device)
         dl = DataLoader(TensorDataset(repr_all), batch_size=self.fisher_batch_size, shuffle=False)
-        for batch in track(dl):
+        for batch in track(dl, "Bait: Computing fisher.."):
             repr_batch = batch[0].to(self.device)
             if self.fisher_approximation == 'full':
                 term = torch.matmul(repr_batch.transpose(1, 2), repr_batch)
@@ -97,7 +97,7 @@ class BaitSampling(Query):
 
         fisher_labeled = torch.zeros(repr_all.size(-1), repr_all.size(-1)).to(self.device)
         dl = DataLoader(TensorDataset(repr_labeled), batch_size=self.fisher_batch_size, shuffle=False)
-        for batch in track(dl):
+        for batch in track(dl, "Bait: Computing fisher.."):
             repr_batch = batch[0].to(self.device)
             if self.fisher_approximation == 'full':
                 term = torch.matmul(repr_batch.transpose(1, 2), repr_batch)

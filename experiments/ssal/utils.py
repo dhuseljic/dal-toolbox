@@ -190,13 +190,15 @@ class LaplaceNet(LaplaceLayer):
             probas = logits.softmax(-1)
             num_classes = logits.size(-1)
             probas_topk, top_preds = probas.topk(k=topk)
-            if normalize_top_probas:
-                probas_topk /= probas_topk.sum(-1, keepdim=True)
 
+            # cross entropy likelihood
             factor = (torch.eye(num_classes, device=device)[:, None] - probas)
             batch_indices = torch.arange(len(top_preds)).unsqueeze(-1).expand(-1, top_preds.size(1))
             factor = factor[top_preds, batch_indices]
             embedding_batch = torch.einsum("njh,nd->njhd", factor, features).flatten(2)
+
+            if normalize_top_probas:
+                probas_topk /= probas_topk.sum(-1, keepdim=True)
             embedding_batch = torch.sqrt(probas_topk)[:, :, None] * embedding_batch
 
             embedding.append(embedding_batch.cpu())
