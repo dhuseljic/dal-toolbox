@@ -15,6 +15,7 @@ class BaitSampling(Query):
                  normalize_top_probas=True,
                  fisher_approximation='full',
                  num_grad_samples=None,
+                 grad_selection='magnitude',
                  select='forward_backward',
                  fisher_batch_size=32,
                  device='cpu',
@@ -27,6 +28,7 @@ class BaitSampling(Query):
         self.normalize_top_probas = normalize_top_probas
         self.fisher_approximation = fisher_approximation
         self.num_grad_samples = num_grad_samples
+        self.grad_selection = grad_selection
         self.fisher_batch_size = fisher_batch_size
         self.select = select
         self.device = device
@@ -66,9 +68,15 @@ class BaitSampling(Query):
         #     raise NotImplementedError()
 
         if self.num_grad_samples is not None:
-            # grad_indices = torch.randperm(repr_all.size(-1))[:self.num_grad_samples]
-            avg_repr = repr_all.mean(dim=1)
-            indices = avg_repr.std(dim=0).argsort()
+            if self.grad_selection == 'random':
+                indices = torch.randperm(repr_all.size(-1))[:self.num_grad_samples]
+            elif self.grad_selection == 'std':
+                indices = repr_all.mean(0).std(0).argsort()
+                # indices = repr_all.mean(dim=1).std(dim=0).argsort()
+            elif self.grad_selection == 'magnitude':
+                indices = torch.abs(repr_all).sum(dim=(0, 1)).argsort()
+            else:
+                raise NotImplementedError()
             grad_indices = indices[-self.num_grad_samples:]
             repr_unlabeled = repr_unlabeled[:, :, grad_indices]
             repr_labeled = repr_labeled[:, :, grad_indices]

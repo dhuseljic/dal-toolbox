@@ -126,6 +126,7 @@ def build_al_strategy(args):
             normalize_top_probas=args.al.bait.normalize_top_probas,
             fisher_approximation=args.al.bait.fisher_approximation,
             num_grad_samples=args.al.bait.num_grad_samples,
+            grad_selection=args.al.bait.grad_selection,
             device=args.al.device
         )
     elif args.al.strategy == 'pseudo_bait':
@@ -194,3 +195,4 @@ class PseudoBatch(strategies.Query):
 
 if __name__ == '__main__':
     main()
+

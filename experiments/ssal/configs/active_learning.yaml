@@ -18,7 +18,7 @@ dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
 dino_cache_dir: null
 
 al:
-  strategy: bait
+  strategy: random
   subset_size: 1000
   init_method: random
   num_init_samples: 10
@@ -29,6 +29,7 @@ al:
     expectation_topk: null
     fisher_approximation: full
     num_grad_samples: null
+    grad_selection: magnitude
     normalize_top_probas: True
     fisher_batch_size: 32
   device: cuda
