@@ -94,7 +94,16 @@ class BaitSampling(Query):
             repr_labeled = repr_labeled[:, :, grad_indices]
             repr_all = repr_all[:, :, grad_indices]
 
-        fisher_all = torch.zeros(repr_all.size(-1), repr_all.size(-1)).to(self.device)
+        if self.fisher_approximation == 'full':
+            fisher_dim = (repr_all.size(-1), repr_all.size(-1))
+        elif self.fisher_approximation == 'diag':
+            fisher_dim = (repr_all.size(-1), repr_all.size(-1))
+            # TODO: only use vector with diagonal elements
+            # fisher_dim = (repr_all.size(-1),)
+        else:
+            raise NotImplementedError()
+
+        fisher_all = torch.zeros(fisher_dim).to(self.device)
         dl = DataLoader(TensorDataset(repr_all), batch_size=self.fisher_batch_size, shuffle=False)
         for batch in track(dl, "Bait: Computing fisher.."):
             repr_batch = batch[0].to(self.device)
@@ -107,16 +116,16 @@ class BaitSampling(Query):
             else:
                 raise NotImplementedError()
 
-        fisher_labeled = torch.zeros(repr_all.size(-1), repr_all.size(-1)).to(self.device)
+        fisher_labeled = torch.zeros(fisher_dim).to(self.device)
         dl = DataLoader(TensorDataset(repr_labeled), batch_size=self.fisher_batch_size, shuffle=False)
         for batch in track(dl, "Bait: Computing fisher.."):
             repr_batch = batch[0].to(self.device)
             if self.fisher_approximation == 'full':
                 term = torch.matmul(repr_batch.transpose(1, 2), repr_batch)
-                fisher_all += torch.mean(term, dim=0)
+                fisher_labeled += torch.mean(term, dim=0)
             elif self.fisher_approximation == 'diag':
                 term = torch.mean(torch.sum(repr_batch**2, dim=1), dim=0)
-                fisher_all += torch.diag(term)
+                fisher_labeled += torch.diag(term)
             else:
                 raise NotImplementedError()
 
