@@ -199,13 +199,17 @@ class LaplaceNet(LaplaceLayer):
             elif grad_likelihood == 'binary_cross_entropy':
                 # We assume a binary cross entropy for highest probabilities
                 factor = 1 - probas_topk
+                factor2 = -probas_topk
+                factor = torch.cat((factor, factor2), dim=1)
+
                 embedding_batch = torch.einsum("nk,nd->nkd", factor, features).flatten(2)
             else:
                 raise NotImplementedError()
 
-            if normalize_top_probas:
-                probas_topk /= probas_topk.sum(-1, keepdim=True)
-            embedding_batch = torch.sqrt(probas_topk)[:, :, None] * embedding_batch
+            # if normalize_top_probas:
+            #     probas_topk /= probas_topk.sum(-1, keepdim=True)
+            # embedding_batch = torch.sqrt(probas_topk)[:, :, None] * embedding_batch
+            embedding_batch = torch.cat((probas_topk, 1 - probas_topk), dim=1).sqrt()[:, :, None] * embedding_batch
 
             embedding.append(embedding_batch.cpu())
         embedding = torch.cat(embedding)
