@@ -68,15 +68,6 @@ class BaitSampling(Query):
                 device=self.device
             )
             repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
-        # elif self.fisher_approx == 'max_pred':
-        #     repr_unlabeled = model.get_grad_representations(unlabeled_dataloader, device=self.device)
-        #     repr_labeled = model.get_grad_representations(labeled_dataloader, device=self.device)
-        #     repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
-        #     repr_unlabeled = repr_unlabeled[:, None]
-        #     repr_labeled = repr_labeled[:, None]
-        #     repr_all = repr_all[:, None]
-        # else:
-        #     raise NotImplementedError()
 
         if self.num_grad_samples is not None:
             if self.grad_selection == 'random':
