@@ -239,12 +239,11 @@ class LaplaceNet(LaplaceLayer):
                 embedding_batch = torch.einsum("jnh,nd->njhd", factor, features).flatten(2)
                 embedding_batch = torch.sqrt(probas)[:, :, None] * embedding_batch
             elif grad_likelihood == 'binary_cross_entropy':
-                # TODO check with topk
-                # max_probas = probas.max(dim=-1).values
+                max_probas = probas.max(dim=-1).values
 
-                top_probas = probas.topk(k=2).values
-                top_probas /= top_probas.sum(-1, keepdim=True)
-                max_probas = top_probas[:, 0]
+                # top_probas = probas.topk(k=2).values
+                # top_probas /= top_probas.sum(-1, keepdim=True)
+                # max_probas = top_probas[:, 0]
 
                 factor = torch.eye(2, device=device)[0] - max_probas[:, None]
                 embedding_batch = torch.einsum("nk,nd->nkd", factor, features).flatten(2)
