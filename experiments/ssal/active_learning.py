@@ -1,4 +1,5 @@
 import os
+import time
 import hydra
 import torch
 import mlflow
@@ -12,7 +13,9 @@ from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.active_learning import strategies
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything
-from utils import DinoFeatureDataset, flatten_cfg, build_data, build_model, build_dino_model
+from utils import DinoFeatureDataset, flatten_cfg, build_data, build_model, build_dino_model, build_tabular_data
+
+
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
@@ -29,7 +32,7 @@ def main(args):
                                  cache=True, cache_dir=args.dino_cache_dir)
     # TODO: use test_ds only at the end
     # test_ds = DinoFeatureDataset(dino_model, dataset=data.test_dataset, cache=True)
-
+    
     seed_everything(args.random_seed)
     al_datamodule = ActiveLearningDataModule(
         train_dataset=train_ds,
@@ -51,11 +54,13 @@ def main(args):
     for i_acq in range(0, args.al.num_acq+1):
         if i_acq != 0:
             print('Querying..')
+            stime = time.time()
             indices = al_strategy.query(
                 model=model,
                 al_datamodule=al_datamodule,
                 acq_size=args.al.acq_size,
             )
+            etime = time.time()
             al_datamodule.update_annotations(indices)
 
         model.reset_states()
@@ -71,6 +76,7 @@ def main(args):
 
         predictions = trainer.predict(model, dataloaders=al_datamodule.test_dataloader())
         test_stats = evaluate(predictions)
+        test_stats['query_time'] = etime - stime if i_acq != 0 else 0
         print(f'Cycle {i_acq}:', test_stats, flush=True)
         history.append(test_stats)
 
@@ -133,10 +139,12 @@ def build_al_strategy(args):
     elif args.al.strategy == 'pseudo_bait':
         strat = strategies.BaitSampling(
             subset_size=args.al.subset_size,
-            fisher_approx=args.al.bait.fisher_approximation,
-            fisher_k=args.al.bait.fisher_k,
+            expectation_topk=args.al.bait.expectation_topk,
             normalize_top_probas=args.al.bait.normalize_top_probas,
+            fisher_approximation=args.al.bait.fisher_approximation,
+            grad_likelihood=args.al.bait.grad_likelihood,
             num_grad_samples=args.al.bait.num_grad_samples,
+            grad_selection=args.al.bait.grad_selection,
             device=args.al.device,
             select='topk',
         )

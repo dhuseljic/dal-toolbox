@@ -1,10 +1,9 @@
 import os
-import math
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, TensorDataset
 from torchvision import transforms
 
 from rich.progress import track
@@ -17,6 +16,9 @@ from dal_toolbox.models.laplace import LaplaceLayer, LaplaceModel
 from dal_toolbox.datasets import CIFAR10, CIFAR100, SVHN, Food101, STL10
 from dal_toolbox.datasets.utils import PlainTransforms
 
+from sklearn.datasets import fetch_openml
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.model_selection import train_test_split
 
 def build_dino_model(args):
     dino_model = torch.hub.load('facebookresearch/dinov2', args.dino_model_name)
@@ -192,9 +194,14 @@ class LaplaceNet(LaplaceLayer):
             probas_topk, top_preds = probas.topk(k=topk)
 
             if grad_likelihood == 'cross_entropy':
+
                 factor = (torch.eye(num_classes, device=device)[:, None] - probas)
                 batch_indices = torch.arange(len(top_preds)).unsqueeze(-1).expand(-1, top_preds.size(1))
                 factor = factor[top_preds, batch_indices]
+                # Unbiased estimator
+                # cat = torch.distributions.Categorical(probas)
+                # sampled_labels = cat.sample((topk,)).T
+                # factor = factor[sampled_labels, batch_indices]
                 embedding_batch = torch.einsum("njh,nd->njhd", factor, features).flatten(2)
                 if normalize_top_probas:
                     probas_topk /= probas_topk.sum(-1, keepdim=True)
@@ -238,6 +245,7 @@ class LaplaceNet(LaplaceLayer):
                 factor = (torch.eye(num_classes, device=device)[:, None] - probas)
                 embedding_batch = torch.einsum("jnh,nd->njhd", factor, features).flatten(2)
                 embedding_batch = torch.sqrt(probas)[:, :, None] * embedding_batch
+
             elif grad_likelihood == 'binary_cross_entropy':
                 max_probas = probas.max(dim=-1).values
 
@@ -344,6 +352,19 @@ def flatten_cfg(cfg, parent_key='', sep='.'):
         else:
             items.append((new_key, v))
     return dict(items)
+
+def build_tabular_data(data_id, path='data/'):
+    X, y = fetch_openml(data_id=data_id, data_home=path, return_X_y=True)
+    X = X.values
+    y = LabelEncoder().fit_transform(y.values)
+    train, test = train_test_split(range(len(X)), random_state=0, test_size=0.25)
+    scaler = StandardScaler().fit(X[train])
+
+    X_train = torch.from_numpy(scaler.transform(X[train])).float()
+    y_train = torch.from_numpy(y[train]).long()
+    X_test = torch.from_numpy(scaler.transform(X[test])).float()
+    y_test = torch.from_numpy(y[test]).long()
+    return TensorDataset(X_train, y_train), TensorDataset(X_test, y_test)
 
 
 class DinoFeatureDataset:
