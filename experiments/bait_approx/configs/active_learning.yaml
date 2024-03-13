@@ -9,6 +9,8 @@ likelihood: gaussian
 # Data
 dataset_path: /datasets
 dataset_name: cifar10
+# dataset_path: /mnt/media/ILSVRC2012
+# dataset_name: imagenet
 
 # Dino model
 dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions

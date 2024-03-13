@@ -13,12 +13,12 @@ from dal_toolbox.models.deterministic import DeterministicModel
 from dal_toolbox.models.sngp import RandomFeatureGaussianProcess, SNGPModel
 from dal_toolbox.models.laplace import LaplaceLayer, LaplaceModel
 
-from dal_toolbox.datasets import CIFAR10, CIFAR100, SVHN, Food101, STL10
-from dal_toolbox.datasets.utils import PlainTransforms
+from dal_toolbox.datasets import CIFAR10, CIFAR100, SVHN, Food101, STL10, ImageNet
 
 from sklearn.datasets import fetch_openml
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.model_selection import train_test_split
+
 
 def build_dino_model(args):
     dino_model = torch.hub.load('facebookresearch/dinov2', args.dino_model_name)
@@ -72,23 +72,8 @@ def build_data(args):
         data = Food101(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'stl10':
         data = STL10(args.dataset_path, transforms=transforms)
-    else:
-        raise NotImplementedError()
-    return data
-
-
-def build_ood_data(args):
-    transforms = DinoTransforms(size=(256, 256))
-    if args.ood_dataset_name == 'cifar10':
-        data = CIFAR10(args.dataset_path, transforms=transforms)
-    elif args.ood_dataset_name == 'cifar100':
-        data = CIFAR100(args.dataset_path, transforms=transforms)
-    elif args.ood_dataset_name == 'svhn':
-        data = SVHN(args.dataset_path, transforms=transforms)
-    elif args.dataset_name == 'food101':
-        data = Food101(args.dataset_path, transforms=transforms)
-    elif args.dataset_name == 'stl10':
-        data = STL10(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'imagenet':
+        data = ImageNet(args.dataset_path, transforms=transforms)
     else:
         raise NotImplementedError()
     return data
@@ -209,7 +194,7 @@ class LaplaceNet(LaplaceLayer):
 
             elif grad_likelihood == 'binary_cross_entropy':
                 # We assume multiple independet binary cross entropy for highest probabilities
-                if topk > 2: 
+                if topk > 2:
                     raise ValueError('When using the binary cross entropy, topk must be 1 or 2.')
                 max_probas = probas_topk[:, 0]
                 factor = torch.eye(topk, device=device)[0] - max_probas[:, None]
@@ -352,6 +337,7 @@ def flatten_cfg(cfg, parent_key='', sep='.'):
         else:
             items.append((new_key, v))
     return dict(items)
+
 
 def build_tabular_data(data_id, path='data/'):
     X, y = fetch_openml(data_id=data_id, data_home=path, return_X_y=True)

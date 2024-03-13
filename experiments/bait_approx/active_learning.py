@@ -16,8 +16,6 @@ from dal_toolbox.utils import seed_everything
 from utils import DinoFeatureDataset, flatten_cfg, build_data, build_model, build_dino_model, build_tabular_data
 
 
-
-
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
 def main(args):
     seed_everything(42)
@@ -31,7 +29,7 @@ def main(args):
     # test_ds = DinoFeatureDataset(dino_model, dataset=data.val_dataset,
     #                              cache=True, cache_dir=args.dino_cache_dir)
     test_ds = DinoFeatureDataset(dino_model, dataset=data.test_dataset, cache=True)
-    
+
     seed_everything(args.random_seed)
     al_datamodule = ActiveLearningDataModule(
         train_dataset=train_ds,
@@ -203,4 +201,3 @@ class PseudoBatch(strategies.Query):
 
 if __name__ == '__main__':
     main()
-
