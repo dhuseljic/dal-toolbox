@@ -179,18 +179,23 @@ class LaplaceNet(LaplaceLayer):
             probas_topk, top_preds = probas.topk(k=topk)
 
             if grad_likelihood == 'cross_entropy':
-
                 factor = (torch.eye(num_classes, device=device)[:, None] - probas)
                 batch_indices = torch.arange(len(top_preds)).unsqueeze(-1).expand(-1, top_preds.size(1))
                 factor = factor[top_preds, batch_indices]
-                # Unbiased estimator
-                # cat = torch.distributions.Categorical(probas)
-                # sampled_labels = cat.sample((topk,)).T
-                # factor = factor[sampled_labels, batch_indices]
+
                 embedding_batch = torch.einsum("njh,nd->njhd", factor, features).flatten(2)
                 if normalize_top_probas:
                     probas_topk /= probas_topk.sum(-1, keepdim=True)
                 embedding_batch = torch.sqrt(probas_topk)[:, :, None] * embedding_batch
+
+            elif grad_likelihood == 'cross_entropy_unbiased':
+                cat = torch.distributions.Categorical(probas)
+                factor = (torch.eye(num_classes, device=device)[:, None] - probas)
+                batch_indices = torch.arange(len(top_preds)).unsqueeze(-1).expand(-1, top_preds.size(1))
+                sampled_labels = cat.sample((topk,)).T
+                factor = factor[sampled_labels, batch_indices]
+
+                embedding_batch = torch.einsum("njh,nd->njhd", factor, features).flatten(2)
 
             elif grad_likelihood == 'binary_cross_entropy':
                 # We assume multiple independet binary cross entropy for highest probabilities
