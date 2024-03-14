@@ -131,6 +131,7 @@ def build_al_strategy(args):
             grad_likelihood=args.al.bait.grad_likelihood,
             num_grad_samples=args.al.bait.num_grad_samples,
             grad_selection=args.al.bait.grad_selection,
+            fisher_batch_size=args.al.bait.fisher_batch_size,
             device=args.al.device
         )
     elif args.al.strategy == 'pseudo_bait':
