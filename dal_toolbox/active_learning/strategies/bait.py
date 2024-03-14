@@ -118,7 +118,7 @@ class BaitSampling(Query):
             else:
                 raise NotImplementedError()
 
-10        # Clear memory for selection
+        # Clear memory for selection
         del repr_batch
         del term
         fisher_all = fisher_all.cpu()
