@@ -34,7 +34,7 @@ al:
     num_grad_samples: null
     grad_selection: magnitude
     normalize_top_probas: True
-    fisher_batch_size: 32
+    fisher_batch_size: 1
   device: cpu
 
 model:

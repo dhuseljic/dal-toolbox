@@ -118,6 +118,13 @@ class BaitSampling(Query):
             else:
                 raise NotImplementedError()
 
+10        # Clear memory for selection
+        del repr_batch
+        del term
+        fisher_all = fisher_all.cpu()
+        fisher_labeled = fisher_labeled.cpu()
+        torch.cuda.empty_cache()
+
         if self.select == 'forward_backward':
             chosen = select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled,
                                              lmb=self.lmb, num_labeled=len(labeled_indices), device=self.device)
@@ -135,8 +142,6 @@ class BaitSampling(Query):
 @torch.no_grad()
 def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled, lmb=1, num_labeled=0, device='cpu'):
     is_diag = (fisher_all.ndim == 1)
-    fisher_all = fisher_all.to(device)
-    fisher_labeled = fisher_labeled.to(device)
 
     indsAll = []
     dim = repr_unlabeled.shape[-1]
@@ -145,10 +150,13 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
     if is_diag:
         currentInv = 1 / (lmb + fisher_labeled * num_labeled / (num_labeled + acq_size))
     else:
-        currentInv = torch.inverse(lmb * torch.eye(dim, device=device) +
-                                   fisher_labeled * num_labeled / (num_labeled + acq_size))
+        inv_device = 'cpu' if fisher_labeled.size(0) > 10_000 else device
+        currentInv = torch.inverse(lmb * torch.eye(dim, device=inv_device) + fisher_labeled.to(inv_device) *
+                                   num_labeled / (num_labeled + acq_size))
     repr_unlabeled = repr_unlabeled * np.sqrt(acq_size / (num_labeled + acq_size))
 
+    fisher_all = fisher_all.to(device)
+    currentInv = currentInv.to(device)
     # forward selection, over-sample by 2x
     # print('forward selection...', flush=True)
     over_sample = 2
@@ -178,18 +186,24 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
             if j not in indsAll:
                 ind = j
                 break
-
         indsAll.append(ind)
         # print(i, ind, traceEst[ind], flush=True)
 
         # commit to a low-rank update
+        del xt_
+        torch.cuda.empty_cache()
         xt_ = repr_unlabeled[ind].unsqueeze(0).to(device)
         if is_diag:
             innerInv = torch.inverse(torch.eye(rank).to(device) + xt_ * currentInv @ xt_.transpose(1, 2))
-            currentInv = (currentInv - torch.diag(((xt_*currentInv).transpose(1, 2) @ innerInv @ (xt_*currentInv))[0]))
+            currentInv = (currentInv - torch.diag(((xt_*currentInv).transpose(1, 2)
+                          @ innerInv @ (xt_*currentInv))[0]))
         else:
+            # xt_.cpu() @ currentInv.cpu() @ xt_.transpose(1, 2).cpu()
             innerInv = torch.inverse(torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2))
             currentInv = (currentInv - currentInv @ xt_.transpose(1, 2) @ innerInv @ xt_ @ currentInv)[0]
+        del xt_
+        del innerInv
+        torch.cuda.empty_cache()
 
     # print(indsAll)
 
@@ -203,11 +217,11 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
         if is_diag:
             innerInv = torch.inverse(-1 * torch.eye(rank).to(device) + xt_ * currentInv @ xt_.transpose(1, 2))
             traceEst = torch.diagonal(xt_ * currentInv * fisher_all * currentInv @
-                                    xt_.transpose(1, 2) @ innerInv, dim1=-2, dim2=-1).sum(-1)
+                                      xt_.transpose(1, 2) @ innerInv, dim1=-2, dim2=-1).sum(-1)
         else:
             innerInv = torch.inverse(-1 * torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2))
             traceEst = torch.diagonal(xt_ @ currentInv @ fisher_all @ currentInv @
-                                    xt_.transpose(1, 2) @ innerInv, dim1=-2, dim2=-1).sum(-1)
+                                      xt_.transpose(1, 2) @ innerInv, dim1=-2, dim2=-1).sum(-1)
         delInd = torch.argmin(-1 * traceEst).item()
         # print(len(indsAll) - i, indsAll[delInd], -1 * traceEst[delInd].item(), flush=True)
 
@@ -216,7 +230,8 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
 
         if is_diag:
             innerInv = torch.inverse(-1 * torch.eye(rank).to(device) + xt_ * currentInv @ xt_.transpose(1, 2))
-            currentInv = (currentInv - torch.diag(((xt_*currentInv).transpose(1, 2) @ innerInv @ (xt_*currentInv))[0]))
+            currentInv = (currentInv - torch.diag(((xt_*currentInv).transpose(1, 2)
+                          @ innerInv @ (xt_*currentInv))[0]))
         else:
             innerInv = torch.inverse(-1 * torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2))
             currentInv = (currentInv - currentInv @ xt_.transpose(1, 2) @ innerInv @ xt_ @ currentInv)[0]
