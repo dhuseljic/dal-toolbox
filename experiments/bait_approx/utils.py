@@ -362,7 +362,8 @@ def build_model(args, **kwargs):
     num_features = kwargs['num_features']
     num_classes = kwargs['num_classes']
 
-    # Laplace net because we want to be able to sample via Bayesian methods
+    # Laplace net because we want to be able to sample via Bayesian methods.
+    # Not using the covariance is equivalent to deterministic model.
     if args.model.name == 'laplace':
         model = LaplaceNet(
             num_features,
@@ -377,8 +378,6 @@ def build_model(args, **kwargs):
         model = LaplaceMLP(num_features, num_classes)
         if 'al' in args and args.al.strategy in ['bald', 'pseudo_bald', 'batch_bald']:
             LaplaceNet.use_mean_field = False
-    elif args.model.name == 'deterministic':
-        model = DeterministcNet(num_features, num_classes)
     else:
         raise NotImplementedError()
 
@@ -398,14 +397,7 @@ def build_model(args, **kwargs):
         raise NotImplementedError()
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.model.num_epochs)
 
-    if args.model.name == 'laplace':
-        model = LaplaceModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
-    elif args.model.name == 'laplace_mlp':
-        model = LaplaceModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
-    elif args.model.name == 'deterministic':
-        model = DeterministicModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
-    else:
-        raise NotImplementedError()
+    model = LaplaceModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
     return model
 
 
