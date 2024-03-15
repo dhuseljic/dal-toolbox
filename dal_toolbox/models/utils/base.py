@@ -115,8 +115,8 @@ class BaseModule(L.LightningModule, abc.ABC):
     def get_topk_grad_representations(self, *args, **kwargs):
         if 'device' not in kwargs:
             kwargs['device'] = 'cuda' if torch.cuda.is_available() else 'cpu'
-        if not hasattr(self.model, 'get_exp_grad_representations'):
-            raise NotImplementedError('The `get_grad_representations` method is not implemented.')
+        if not hasattr(self.model, 'get_topk_grad_representations'):
+            raise NotImplementedError('The `get_topk_grad_representations` method is not implemented.')
         return self.model.get_topk_grad_representations(*args, **kwargs)
 
     @torch.inference_mode()
@@ -124,5 +124,5 @@ class BaseModule(L.LightningModule, abc.ABC):
         if 'device' not in kwargs:
             kwargs['device'] = 'cuda' if torch.cuda.is_available() else 'cpu'
         if not hasattr(self.model, 'get_exp_grad_representations'):
-            raise NotImplementedError('The `get_grad_representations` method is not implemented.')
+            raise NotImplementedError('The `get_exp_grad_representations` method is not implemented.')
         return self.model.get_exp_grad_representations(*args, **kwargs)

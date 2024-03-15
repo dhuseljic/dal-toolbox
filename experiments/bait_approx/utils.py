@@ -138,7 +138,7 @@ class LaplaceNet(LaplaceLayer):
         return representations
 
     @torch.inference_mode()
-    def get_grad_representations(self, dataloader, device, grad_approx=True):
+    def get_grad_representations(self, dataloader, device):
         self.eval()
         self.to(device)
 
@@ -152,14 +152,8 @@ class LaplaceNet(LaplaceLayer):
             max_indices = probas.argmax(-1)
             num_classes = logits.size(-1)
 
-            if grad_approx:
-                probas_max = probas.max(-1).values
-                factor = (1 - probas_max)
-                embedding_batch = (factor[:, None] * features)
-            else:
-                # Exact gradient computation
-                factor = F.one_hot(max_indices, num_classes=num_classes) - probas
-                embedding_batch = (factor[:, :, None] * features[:, None, :]).flatten(-2)
+            factor = F.one_hot(max_indices, num_classes=num_classes) - probas
+            embedding_batch = (factor[:, :, None] * features[:, None, :]).flatten(-2)
 
             embedding.append(embedding_batch)
         # Concat all embeddings
@@ -221,7 +215,7 @@ class LaplaceNet(LaplaceLayer):
         return embedding
 
     @torch.no_grad()
-    def get_exp_grad_representations(self, dataloader,  device, grad_likelihood='cross_entropy'):
+    def get_exp_grad_representations(self, dataloader, device, grad_likelihood='cross_entropy'):
         self.eval()
         self.to(device)
 
@@ -279,7 +273,90 @@ class DeterministcNet(nn.Linear):
         representations = torch.cat(all_representations)
         return representations
 
-# TODO: make mlp for tabular
+
+class LaplaceMLP(nn.Module):
+    def __init__(self, num_features, num_classes, num_hidden=128):
+        super().__init__()
+        self.l1 = nn.Linear(num_features, num_hidden)
+        self.l2 = LaplaceNet(num_hidden, num_classes)
+        self.act = nn.ReLU()
+
+    def forward_feature(self, x):
+        out = self.l1(x)
+        out = self.act(out)
+        return out
+
+    def forward(self, x):
+        feature = self.forward_feature(x)
+        out = self.l2(feature)
+        return out
+
+    def forward_mean_field(self, x):
+        feature = self.forward_feature(x)
+        out = self.l2.forward_mean_field(feature)
+        return out
+
+    def forward_monte_carlo(self, x):
+        feature = self.forward_feature(x)
+        out = self.l2.forward_monte_carlo(feature)
+        return out
+
+    @torch.no_grad()
+    def get_logits(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_logits = []
+        for batch in dataloader:
+            inputs = batch[0]
+            logits = self(inputs.to(device))
+            all_logits.append(logits)
+        logits = torch.cat(all_logits)
+        return logits
+
+    @torch.no_grad()
+    def get_representations(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_representations = []
+        for batch in dataloader:
+            inputs = batch[0]
+            feature = self.forward_feature(inputs.to(device))
+            all_representations.append(feature)
+        representations = torch.cat(all_representations)
+        return representations
+
+    @torch.no_grad()
+    def get_grad_representations(self, dataloader, device, grad_approx=True):
+        self.eval()
+        self.to(device)
+
+        features = self.get_representations(dataloader, device)
+        featureloader = DataLoader(TensorDataset(features), batch_size=dataloader.batch_size)
+        embeddings = self.l2.get_grad_representations(featureloader, device=device)
+        return embeddings
+
+    @torch.no_grad()
+    def get_topk_grad_representations(self, dataloader, device, topk, grad_likelihood='cross_entropy', normalize_top_probas=True):
+        self.eval()
+        self.to(device)
+
+        features = self.get_representations(dataloader, device)
+        featureloader = DataLoader(TensorDataset(features), batch_size=dataloader.batch_size)
+        embeddings = self.l2.get_topk_grad_representations(
+            featureloader, topk=topk, grad_likelihood=grad_likelihood, device=device,  normalize_top_probas=normalize_top_probas)
+        return embeddings
+
+    @torch.no_grad()
+    def get_exp_grad_representations(self, dataloader, device, grad_likelihood='cross_entropy'):
+        self.eval()
+        self.to(device)
+
+        features = self.get_representations(dataloader, device)
+        featureloader = DataLoader(TensorDataset(features), batch_size=dataloader.batch_size)
+        embeddings = self.l2.get_exp_grad_representations(
+            featureloader, device=device, grad_likelihood=grad_likelihood)
+        return embeddings
+
 
 def build_model(args, **kwargs):
     num_features = kwargs['num_features']
@@ -294,6 +371,10 @@ def build_model(args, **kwargs):
             mc_samples=args.model.mc_samples,
             bias=True,
         )
+        if 'al' in args and args.al.strategy in ['bald', 'pseudo_bald', 'batch_bald']:
+            LaplaceNet.use_mean_field = False
+    elif args.model.name == 'laplace_mlp':
+        model = LaplaceMLP(num_features, num_classes)
         if 'al' in args and args.al.strategy in ['bald', 'pseudo_bald', 'batch_bald']:
             LaplaceNet.use_mean_field = False
     elif args.model.name == 'deterministic':
@@ -318,6 +399,8 @@ def build_model(args, **kwargs):
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.model.num_epochs)
 
     if args.model.name == 'laplace':
+        model = LaplaceModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
+    elif args.model.name == 'laplace_mlp':
         model = LaplaceModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
     elif args.model.name == 'deterministic':
         model = DeterministicModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
