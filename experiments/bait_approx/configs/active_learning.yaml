@@ -2,15 +2,10 @@ random_seed: 42
 mlflow_uri: sqlite:///mlflow.db
 output_dir: ./output/
 
-update_lmb: 1
-update_gamma: 10
-likelihood: gaussian
-
 # Data
 dataset_path: /datasets
-dataset_name: cifar10
 # dataset_path: /mnt/media/ILSVRC2012
-# dataset_name: imagenet
+dataset_name: cifar10
 
 # Dino model
 dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
@@ -44,10 +39,6 @@ model:
   predict_batch_size: 128
   mean_field_factor: 0.4
   mc_samples: 100
-  num_inducing: 1024
-  kernel_scale: 10
-  scale_random_features: True
-  optimize_kernel_scale: True
 
 # Optimizer
 optimizer: 

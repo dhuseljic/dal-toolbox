@@ -10,9 +10,7 @@ from rich.progress import track
 from omegaconf import DictConfig
 
 from dal_toolbox.models.deterministic import DeterministicModel
-from dal_toolbox.models.sngp import RandomFeatureGaussianProcess, SNGPModel
 from dal_toolbox.models.laplace import LaplaceLayer, LaplaceModel
-
 from dal_toolbox.datasets import CIFAR10, CIFAR100, SVHN, Food101, STL10, ImageNet
 
 from sklearn.datasets import fetch_openml
@@ -22,12 +20,6 @@ from sklearn.model_selection import train_test_split
 
 def build_dino_model(args):
     dino_model = torch.hub.load('facebookresearch/dinov2', args.dino_model_name)
-
-    #  simclr_checkpoint = torch.load(path / 'wide_resnet_28_10_CIFAR10_0.907.pth', map_location='cpu')
-    #  encoder = wide_resnet.wide_resnet_28_10(num_classes=1, dropout_rate=0.3)
-    #  encoder.linear = nn.Identity()
-    #  encoder.load_state_dict(simclr_checkpoint['model'])
-    #  encoder.requires_grad_(False)
     return dino_model
 
 
@@ -59,7 +51,25 @@ class DinoTransforms():
         return self.transform
 
 
-def build_data(args):
+def build_datasets(args, model):
+    if args.dataset_name in ['cifar10', 'cifar100', 'svhn', 'food101', 'stl10', 'imagenet']:
+        data = build_image_data(args)
+        train_ds = FeatureDataset(model, data.train_dataset, cache=True, cache_dir=args.dino_cache_dir)
+        test_ds = FeatureDataset(model, data.test_dataset, cache=True, cache_dir=args.dino_cache_dir)
+        num_classes = data.num_classes
+    elif args.dataset_name in ['agnews', 'dbpedia', 'banking77']:
+        data = build_text_data(args)
+    elif args.dataset_name in ['letter']:
+        del model
+        openml_id = {'letter': 6}
+        train_ds, test_ds, num_classes = build_tabular_data(openml_id[args.dataset_name])
+    else:
+        raise NotImplementedError()
+
+    return train_ds, test_ds, num_classes
+
+
+def build_image_data(args):
     # transforms = PlainTransforms(resize=(224, 224))
     transforms = DinoTransforms(size=(256, 256))
     if args.dataset_name == 'cifar10':
@@ -79,30 +89,23 @@ def build_data(args):
     return data
 
 
-class SNGPNet(RandomFeatureGaussianProcess):
-    @torch.no_grad()
-    def get_logits(self, dataloader, device):
-        self.to(device)
-        self.eval()
-        all_logits = []
-        for batch in dataloader:
-            inputs = batch[0]
-            logits = self.forward_mean_field(inputs.to(device))
-            all_logits.append(logits)
-        logits = torch.cat(all_logits)
-        return logits
+def build_text_data(args):
+    pass
 
-    @torch.no_grad()
-    def get_representations(self, dataloader, device):
-        self.to(device)
-        self.eval()
-        all_representations = []
-        for batch in dataloader:
-            inputs = batch[0]
-            # TODO: which representation to use? RFF or input
-            all_representations.append(inputs)
-        representations = torch.cat(all_representations)
-        return representations
+
+def build_tabular_data(data_id, path='data/'):
+    X, y = fetch_openml(data_id=data_id, data_home=path, return_X_y=True)
+    X = X.values
+    y = LabelEncoder().fit_transform(y.values)
+    train, test = train_test_split(range(len(X)), random_state=0, test_size=0.25)
+    scaler = StandardScaler().fit(X[train])
+
+    X_train = torch.from_numpy(scaler.transform(X[train])).float()
+    y_train = torch.from_numpy(y[train]).long()
+    X_test = torch.from_numpy(scaler.transform(X[test])).float()
+    y_test = torch.from_numpy(y[test]).long()
+    num_classes = len(y_train.unique())
+    return TensorDataset(X_train, y_train), TensorDataset(X_test, y_test), num_classes
 
 
 class LaplaceNet(LaplaceLayer):
@@ -239,10 +242,6 @@ class LaplaceNet(LaplaceLayer):
             elif grad_likelihood == 'binary_cross_entropy':
                 max_probas = probas.max(dim=-1).values
 
-                # top_probas = probas.topk(k=2).values
-                # top_probas /= top_probas.sum(-1, keepdim=True)
-                # max_probas = top_probas[:, 0]
-
                 factor = torch.eye(2, device=device)[0] - max_probas[:, None]
                 embedding_batch = torch.einsum("nk,nd->nkd", factor, features).flatten(2)
                 probas_ = torch.stack((max_probas, 1 - max_probas), dim=1)
@@ -280,24 +279,21 @@ class DeterministcNet(nn.Linear):
         representations = torch.cat(all_representations)
         return representations
 
+# TODO: make mlp for tabular
 
 def build_model(args, **kwargs):
     num_features = kwargs['num_features']
     num_classes = kwargs['num_classes']
-    if args.model.name == 'sngp':
-        model = SNGPNet(
-            in_features=num_features,
-            out_features=num_classes,
-            num_inducing=args.model.num_inducing,
-            kernel_scale=args.model.kernel_scale,
-            scale_random_features=args.model.scale_random_features,
-            optimize_kernel_scale=args.model.optimize_kernel_scale,
-            mean_field_factor=args.model.mean_field_factor,
-        )
-    elif args.model.name == 'laplace':
-        model = LaplaceNet(num_features, num_classes,
-                           mean_field_factor=args.model.mean_field_factor, mc_samples=args.model.mc_samples)
 
+    # Laplace net because we want to be able to sample via Bayesian methods
+    if args.model.name == 'laplace':
+        model = LaplaceNet(
+            num_features,
+            num_classes,
+            mean_field_factor=args.model.mean_field_factor,
+            mc_samples=args.model.mc_samples,
+            bias=True,
+        )
         if 'al' in args and args.al.strategy in ['bald', 'pseudo_bald', 'batch_bald']:
             LaplaceNet.use_mean_field = False
     elif args.model.name == 'deterministic':
@@ -319,12 +315,9 @@ def build_model(args, **kwargs):
                                       weight_decay=args.optimizer.weight_decay)
     else:
         raise NotImplementedError()
-
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.model.num_epochs)
 
-    if args.model.name == 'sngp':
-        model = SNGPModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
-    elif args.model.name == 'laplace':
+    if args.model.name == 'laplace':
         model = LaplaceModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
     elif args.model.name == 'deterministic':
         model = DeterministicModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
@@ -344,40 +337,25 @@ def flatten_cfg(cfg, parent_key='', sep='.'):
     return dict(items)
 
 
-def build_tabular_data(data_id, path='data/'):
-    X, y = fetch_openml(data_id=data_id, data_home=path, return_X_y=True)
-    X = X.values
-    y = LabelEncoder().fit_transform(y.values)
-    train, test = train_test_split(range(len(X)), random_state=0, test_size=0.25)
-    scaler = StandardScaler().fit(X[train])
+class FeatureDataset:
 
-    X_train = torch.from_numpy(scaler.transform(X[train])).float()
-    y_train = torch.from_numpy(y[train]).long()
-    X_test = torch.from_numpy(scaler.transform(X[test])).float()
-    y_test = torch.from_numpy(y[test]).long()
-    return TensorDataset(X_train, y_train), TensorDataset(X_test, y_test)
-
-
-class DinoFeatureDataset:
-
-    def __init__(self, dino_model, dataset, cache=False, cache_dir=None, device='cuda'):
-
+    def __init__(self, model, dataset, cache=False, cache_dir=None, batch_size=256, device='cuda'):
         if cache:
             if cache_dir is None:
                 home_dir = os.path.expanduser('~')
                 cache_dir = os.path.join(home_dir, '.cache', 'dino_features')
             os.makedirs(cache_dir, exist_ok=True)
-            hash = self.create_hash_from_dataset_and_model(dataset, dino_model)
+            hash = self.create_hash_from_dataset_and_model(dataset, model)
             file_name = os.path.join(cache_dir, hash + '.pth')
             if os.path.exists(file_name):
                 print('Loading cached features from', file_name)
                 features, labels = torch.load(file_name, map_location='cpu')
             else:
-                features, labels = self.get_dino_features(dino_model, dataset, device)
+                features, labels = self.get_features(model, dataset, batch_size, device)
                 print('Saving features to cache file', file_name)
                 torch.save((features, labels), file_name)
         else:
-            features, labels = self.get_dino_features(dino_model, dataset, device)
+            features, labels = self.get_features(model, dataset, batch_size, device)
 
         self.features = features
         self.labels = labels
@@ -405,16 +383,16 @@ class DinoFeatureDataset:
         return self.features[idx], self.labels[idx]
 
     @torch.no_grad()
-    def get_dino_features(self, dino_model, dataset, device):
+    def get_features(self, model, dataset, batch_size, device):
         print('Getting dino features..')
-        dataloader = DataLoader(dataset, batch_size=256, num_workers=4)
+        dataloader = DataLoader(dataset, batch_size=batch_size)
 
         features = []
         labels = []
-        dino_model.eval()
-        dino_model.to(device)
+        model.eval()
+        model.to(device)
         for batch in track(dataloader, 'Dino: Inference'):
-            features.append(dino_model(batch[0].to(device)).to('cpu'))
+            features.append(model(batch[0].to(device)).to('cpu'))
             labels.append(batch[-1])
         features = torch.cat(features)
         labels = torch.cat(labels)
