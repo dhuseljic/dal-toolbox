@@ -16,8 +16,6 @@ from dal_toolbox.utils import seed_everything
 from utils import flatten_cfg, build_datasets, build_model, build_dino_model
 
 
-
-
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
 def main(args):
     seed_everything(42)
