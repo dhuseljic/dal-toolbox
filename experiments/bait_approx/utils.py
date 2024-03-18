@@ -59,9 +59,9 @@ def build_datasets(args, model):
         num_classes = data.num_classes
     elif args.dataset_name in ['agnews', 'dbpedia', 'banking77']:
         data = build_text_data(args)
-    elif args.dataset_name in ['letter']:
+    elif args.dataset_name in ['letter', 'helena']:
         del model
-        openml_id = {'letter': 6}
+        openml_id = {'letter': 6, 'helena': 41169}
         train_ds, test_ds, num_classes = build_tabular_data(openml_id[args.dataset_name])
     else:
         raise NotImplementedError()
@@ -96,7 +96,8 @@ def build_text_data(args):
 def build_tabular_data(data_id, path='data/'):
     X, y = fetch_openml(data_id=data_id, data_home=path, return_X_y=True)
     X = X.values
-    y = LabelEncoder().fit_transform(y.values)
+    y = y.values
+    y = LabelEncoder().fit_transform(y)
     train, test = train_test_split(range(len(X)), random_state=0, test_size=0.25)
     scaler = StandardScaler().fit(X[train])
 
