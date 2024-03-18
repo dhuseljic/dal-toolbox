@@ -87,6 +87,8 @@ class BaitSampling(Query):
 
         if self.fisher_approximation == 'full':
             fisher_dim = (repr_all.size(-1), repr_all.size(-1))
+        elif self.fisher_approximation == 'block_diag':
+            fisher_dim = (10, 384, 384)
         elif self.fisher_approximation == 'diag':
             fisher_dim = (repr_all.size(-1),)
         else:
@@ -99,6 +101,10 @@ class BaitSampling(Query):
             if self.fisher_approximation == 'full':
                 term = torch.matmul(repr_batch.transpose(1, 2), repr_batch)
                 fisher_all += torch.mean(term, dim=0)
+            elif self.fisher_approximation == 'block_diag':
+                repr_batch = repr_batch.view(-1, 10, 10, 384)
+                term = torch.einsum('nkhd,mkhe->hde', repr_batch, repr_batch) 
+                fisher_all += term / len(repr_batch)
             elif self.fisher_approximation == 'diag':
                 term = torch.mean(torch.sum(repr_batch**2, dim=1), dim=0)
                 fisher_all += term
@@ -112,6 +118,10 @@ class BaitSampling(Query):
             if self.fisher_approximation == 'full':
                 term = torch.matmul(repr_batch.transpose(1, 2), repr_batch)
                 fisher_labeled += torch.mean(term, dim=0)
+            elif self.fisher_approximation == 'block_diag':
+                repr_batch = repr_batch.view(-1, 10, 10, 384)
+                term = torch.einsum('nkhd,mkhe->hde', repr_batch, repr_batch) 
+                fisher_labeled += term / len(repr_batch)
             elif self.fisher_approximation == 'diag':
                 term = torch.mean(torch.sum(repr_batch**2, dim=1), dim=0)
                 fisher_labeled += term
@@ -142,6 +152,7 @@ class BaitSampling(Query):
 @torch.no_grad()
 def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled, lmb=1, num_labeled=0, device='cpu'):
     is_diag = (fisher_all.ndim == 1)
+    is_block_diag = (fisher_all.ndim == 3)
 
     indsAll = []
     dim = repr_unlabeled.shape[-1]
@@ -149,6 +160,8 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
 
     if is_diag:
         currentInv = 1 / (lmb + fisher_labeled * num_labeled / (num_labeled + acq_size))
+    elif is_block_diag:
+        currentInv = torch.inverse(lmb + fisher_labeled * num_labeled / (num_labeled + acq_size))
     else:
         inv_device = 'cpu' if fisher_labeled.size(0) > 10_000 else device
         currentInv = torch.inverse(lmb * torch.eye(dim, device=inv_device) + fisher_labeled.to(inv_device) *
@@ -168,14 +181,17 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
         if is_diag:
             innerInv = torch.inverse(torch.eye(rank).to(device) + xt_ *
                                      currentInv @ xt_.transpose(1, 2)).detach()
+        elif is_block_diag:
+            raise NotImplementedError()
         else:
-            innerInv = torch.inverse(torch.eye(rank).to(device) + xt_ @
-                                     currentInv @ xt_.transpose(1, 2)).detach()
+            innerInv = torch.inverse(torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2))
         innerInv[torch.where(torch.isinf(innerInv))] = torch.sign(
             innerInv[torch.where(torch.isinf(innerInv))]) * np.finfo('float32').max
         if is_diag:
             traceEst = torch.diagonal(xt_ * currentInv * fisher_all * currentInv @
                                       xt_.transpose(1, 2) @ innerInv, dim1=-2, dim2=-1).sum(-1)
+        elif is_block_diag:
+            raise NotImplementedError()
         else:
             traceEst = torch.diagonal(xt_ @ currentInv @ fisher_all @ currentInv @
                                       xt_.transpose(1, 2) @ innerInv, dim1=-2, dim2=-1).sum(-1)
@@ -197,6 +213,8 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
             innerInv = torch.inverse(torch.eye(rank).to(device) + xt_ * currentInv @ xt_.transpose(1, 2))
             currentInv = (currentInv - torch.diag(((xt_*currentInv).transpose(1, 2)
                           @ innerInv @ (xt_*currentInv))[0]))
+        elif is_block_diag:
+            raise NotImplementedError()
         else:
             # xt_.cpu() @ currentInv.cpu() @ xt_.transpose(1, 2).cpu()
             innerInv = torch.inverse(torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2))
@@ -218,6 +236,8 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
             innerInv = torch.inverse(-1 * torch.eye(rank).to(device) + xt_ * currentInv @ xt_.transpose(1, 2))
             traceEst = torch.diagonal(xt_ * currentInv * fisher_all * currentInv @
                                       xt_.transpose(1, 2) @ innerInv, dim1=-2, dim2=-1).sum(-1)
+        elif is_block_diag:
+            raise NotImplementedError()
         else:
             innerInv = torch.inverse(-1 * torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2))
             traceEst = torch.diagonal(xt_ @ currentInv @ fisher_all @ currentInv @
@@ -232,6 +252,8 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
             innerInv = torch.inverse(-1 * torch.eye(rank).to(device) + xt_ * currentInv @ xt_.transpose(1, 2))
             currentInv = (currentInv - torch.diag(((xt_*currentInv).transpose(1, 2)
                           @ innerInv @ (xt_*currentInv))[0]))
+        elif is_block_diag:
+            raise NotImplementedError()
         else:
             innerInv = torch.inverse(-1 * torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2))
             currentInv = (currentInv - currentInv @ xt_.transpose(1, 2) @ innerInv @ xt_ @ currentInv)[0]
