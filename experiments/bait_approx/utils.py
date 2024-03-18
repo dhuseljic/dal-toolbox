@@ -450,8 +450,8 @@ class FeatureDataset:
                 home_dir = os.path.expanduser('~')
                 cache_dir = os.path.join(home_dir, '.cache', 'dino_features')
             os.makedirs(cache_dir, exist_ok=True)
-            #hash = self.create_hash_from_dataset_and_model(dataset, model)
-            hash = "text"
+            hash = self.create_hash_from_dataset_and_model(dataset, model)
+            #hash = "text"
 
             file_name = os.path.join(cache_dir, hash + '.pth')
             if os.path.exists(file_name):
@@ -480,7 +480,9 @@ class FeatureDataset:
 
         indices_to_hash = range(0, num_samples, num_samples//num_hash_samples)
         for idx in indices_to_hash:
-            sample = dataset[idx][0]
+            #change for text
+            #sample = dataset[idx][0]
+            sample = dataset["input_ids"][0]
             hasher.update(str(sample).encode())
         return hasher.hexdigest()
 
@@ -499,8 +501,11 @@ class FeatureDataset:
         model.eval()
         model.to(device)
         for batch in track(dataloader, 'Dino: Inference'):
-            features.append(model(batch[0].to(device)).to('cpu'))
-            labels.append(batch[-1])
+            # change batch[0] to batch["input_ids"] etc. 
+            input_ids = batch["input_ids"].to(device)
+            attention_mask = batch["attention_mask"].to(device)
+            features.append(model(input_ids, attention_mask).to('cpu'))
+            labels.append(batch["label"])
         features = torch.cat(features)
         labels = torch.cat(labels)
         return features, labels
