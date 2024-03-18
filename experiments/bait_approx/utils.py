@@ -17,11 +17,12 @@ from sklearn.datasets import fetch_openml
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.model_selection import train_test_split
 
+from datasets import load_dataset
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 def build_dino_model(args):
     dino_model = torch.hub.load('facebookresearch/dinov2', args.dino_model_name)
     return dino_model
-
 
 class DinoTransforms():
     def __init__(self, size=None, center_crop_size=224):
@@ -58,7 +59,22 @@ def build_datasets(args, model):
         test_ds = FeatureDataset(model, data.test_dataset, cache=True, cache_dir=args.dino_cache_dir)
         num_classes = data.num_classes
     elif args.dataset_name in ['agnews', 'dbpedia', 'banking77']:
-        data = build_text_data(args)
+        data, num_classes = build_text_data(args)
+        tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased", use_fast=False)
+        data = data.map(
+            lambda batch: tokenizer(
+                batch["text"], 
+                truncation=True,
+                padding="max_length",
+                max_length=512
+            ), 
+            batched=True, 
+            batch_size=500)
+        data = data.remove_columns(list(set(data['train'].column_names)-set(['input_ids', 'attention_mask', 'label'])))         
+        data = data.with_format("torch")
+        model = BertSequenceClassifier(num_classes=num_classes)
+        train_ds = FeatureDataset(model, data["train"], cache=True, cache_dir=args.dino_cache_dir)
+        test_ds = FeatureDataset(model, data["test"], cache=True, cache_dir=args.dino_cache_dir)
     elif args.dataset_name in ['letter']:
         del model
         openml_id = {'letter': 6}
@@ -68,6 +84,9 @@ def build_datasets(args, model):
 
     return train_ds, test_ds, num_classes
 
+def process_fn(tokenizer, batch):
+    batch = tokenizer(batch['text'], truncation=True)
+    return batch
 
 def build_image_data(args):
     # transforms = PlainTransforms(resize=(224, 224))
@@ -90,7 +109,18 @@ def build_image_data(args):
 
 
 def build_text_data(args):
-    pass
+    if args.dataset_name == "agnews":
+        data = load_dataset("ag_news")
+        num_classes = 4
+    elif args.dataset_name == "dbpedia":
+        data = load_dataset("dbpedia_14")
+        num_classes = 14
+    elif args.dataset_name == "banking77":
+        data = load_dataset("banking77")
+        num_classes = 77
+    else: 
+        raise NotImplementedError()
+    return data, num_classes
 
 
 def build_tabular_data(data_id, path='data/'):
@@ -420,7 +450,9 @@ class FeatureDataset:
                 home_dir = os.path.expanduser('~')
                 cache_dir = os.path.join(home_dir, '.cache', 'dino_features')
             os.makedirs(cache_dir, exist_ok=True)
-            hash = self.create_hash_from_dataset_and_model(dataset, model)
+            #hash = self.create_hash_from_dataset_and_model(dataset, model)
+            hash = "text"
+
             file_name = os.path.join(cache_dir, hash + '.pth')
             if os.path.exists(file_name):
                 print('Loading cached features from', file_name)
@@ -441,6 +473,7 @@ class FeatureDataset:
 
         num_samples = len(dataset)
         hasher.update(str(num_samples).encode())
+
         num_parameters = sum([p.numel() for p in dino_model.parameters()])
         hasher.update(str(dino_model).encode())
         hasher.update(str(num_parameters).encode())
@@ -461,7 +494,6 @@ class FeatureDataset:
     def get_features(self, model, dataset, batch_size, device):
         print('Getting dino features..')
         dataloader = DataLoader(dataset, batch_size=batch_size)
-
         features = []
         labels = []
         model.eval()
@@ -472,3 +504,23 @@ class FeatureDataset:
         features = torch.cat(features)
         labels = torch.cat(labels)
         return features, labels
+
+class BertSequenceClassifier(nn.Module):
+    def __init__(self, num_classes):
+        super(BertSequenceClassifier, self).__init__()
+
+        self.num_classes = num_classes
+        self.bert = AutoModelForSequenceClassification.from_pretrained(
+            "bert-base-uncased",
+            num_labels=self.num_classes)
+            
+    def forward(self, input_ids, attention_mask):
+        outputs = self.bert(input_ids, attention_mask, labels=None, output_hidden_states=True)
+        logits = outputs['logits']
+        
+        # huggingface takes pooler output for classification (not accessible here anymore, would need bert model)
+        last_hidden_state = outputs['hidden_states'][-1] # (batch, sequence, dim)
+        cls_state = last_hidden_state[:,0,:] # (batch, dim)     #not in bert, taken from distilbert and roberta
+        return cls_state
+
+    

@@ -16,13 +16,13 @@ from dal_toolbox.utils import seed_everything
 from utils import flatten_cfg, build_datasets, build_model, build_dino_model
 
 
-@hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
+@hydra.main(version_base=None, config_path="./configs", config_name="active_learning_text")
 def main(args):
     seed_everything(42)
     print(OmegaConf.to_yaml(args))
 
-    ssl_model = build_dino_model(args)
-    train_ds, test_ds, num_classes = build_datasets(args, model=ssl_model)
+    #ssl_model = build_dino_model(args)
+    train_ds, test_ds, num_classes = build_datasets(args, model=None)
 
     seed_everything(args.random_seed)
     al_datamodule = ActiveLearningDataModule(
