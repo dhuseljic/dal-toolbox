@@ -52,11 +52,12 @@ class DinoTransforms():
         return self.transform
 
 
-def build_datasets(args, model):
+def build_datasets(args):
     if args.dataset_name in ['cifar10', 'cifar100', 'svhn', 'food101', 'stl10', 'imagenet']:
+        model = build_dino_model(args)
         data = build_image_data(args)
-        train_ds = FeatureDataset(model, data.train_dataset, cache=True, cache_dir=args.dino_cache_dir)
-        test_ds = FeatureDataset(model, data.test_dataset, cache=True, cache_dir=args.dino_cache_dir)
+        train_ds = FeatureDataset(model, data.train_dataset, cache=True, cache_dir=args.feature_cache_dir)
+        test_ds = FeatureDataset(model, data.test_dataset, cache=True, cache_dir=args.feature_cache_dir)
         num_classes = data.num_classes
 
     elif args.dataset_name in ['agnews', 'dbpedia', 'banking77', 'trec']:
@@ -77,11 +78,10 @@ def build_datasets(args, model):
         data = data.with_format("torch")
 
         model = BertSequenceClassifier(num_classes=num_classes)
-        train_ds = FeatureDataset(model, data["train"], cache=True, cache_dir=args.dino_cache_dir, task="text") # change dino
-        test_ds = FeatureDataset(model, data["test"], cache=True, cache_dir=args.dino_cache_dir, task="text") # change dino
+        train_ds = FeatureDataset(model, data["train"], cache=True, cache_dir=args.feature_cache_dir, task="text")
+        test_ds = FeatureDataset(model, data["test"], cache=True, cache_dir=args.feature_cache_dir, task="text")
 
     elif args.dataset_name in ['letter', 'helena']:
-        del model
         openml_id = {'letter': 6, 'helena': 41169}
         train_ds, test_ds, num_classes = build_tabular_data(openml_id[args.dataset_name])
     else:
@@ -193,10 +193,10 @@ class LaplaceNet(LaplaceLayer):
             factor = F.one_hot(max_indices, num_classes=num_classes) - probas
             embedding_batch = (factor[:, :, None] * features[:, None, :]).flatten(-2)
 
-            embedding.append(embedding_batch)
+            embedding.append(embedding_batch.cpu())
         # Concat all embeddings
         embedding = torch.cat(embedding)
-        return embedding.cpu()
+        return embedding
 
     @torch.no_grad()
     def get_topk_grad_representations(self, dataloader, device, topk, grad_likelihood='cross_entropy', normalize_top_probas=True):
@@ -456,8 +456,7 @@ class FeatureDataset:
         if cache:
             if cache_dir is None:
                 home_dir = os.path.expanduser('~')
-                if task == "text":
-                    cache_dir = os.path.join(home_dir, '.cache', f'{model.__class__.__name__ }') # change
+                cache_dir = os.path.join(home_dir, '.cache', 'feature_datasets')
             os.makedirs(cache_dir, exist_ok=True)
             hash = self.create_hash_from_dataset_and_model(dataset, model)
 
@@ -504,7 +503,7 @@ class FeatureDataset:
 
     @torch.no_grad()
     def get_features(self, model, dataset, batch_size, device, task=None):
-        print('Getting ssl features..') # change
+        print('Getting ssl features..')
         dataloader = DataLoader(dataset, batch_size=batch_size)
         features = []
         labels = []
