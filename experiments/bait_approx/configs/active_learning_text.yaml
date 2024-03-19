@@ -5,7 +5,13 @@ output_dir: ./output/
 # Data
 dataset_path: /datasets
 # dataset_path: /mnt/media/ILSVRC2012
-dataset_name: banking77
+dataset_name: trec
+
+#hf dataset names
+#banking77
+#ag_news
+#dbpedia
+#trec
 
 # Dino model
 #dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions

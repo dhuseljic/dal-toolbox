@@ -58,23 +58,28 @@ def build_datasets(args, model):
         train_ds = FeatureDataset(model, data.train_dataset, cache=True, cache_dir=args.dino_cache_dir)
         test_ds = FeatureDataset(model, data.test_dataset, cache=True, cache_dir=args.dino_cache_dir)
         num_classes = data.num_classes
-    elif args.dataset_name in ['agnews', 'dbpedia', 'banking77']:
+
+    elif args.dataset_name in ['agnews', 'dbpedia', 'banking77', 'trec']:
         data, num_classes = build_text_data(args)
         tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased", use_fast=False)
+
         data = data.map(
             lambda batch: tokenizer(
-                batch["text"], 
+                batch[input], 
                 truncation=True,
                 padding="max_length",
                 max_length=512
             ), 
             batched=True, 
-            batch_size=500)
+            batch_size=1000)
+        
         data = data.remove_columns(list(set(data['train'].column_names)-set(['input_ids', 'attention_mask', 'label'])))         
         data = data.with_format("torch")
+
         model = BertSequenceClassifier(num_classes=num_classes)
-        train_ds = FeatureDataset(model, data["train"], cache=True, cache_dir=args.dino_cache_dir)
-        test_ds = FeatureDataset(model, data["test"], cache=True, cache_dir=args.dino_cache_dir)
+        train_ds = FeatureDataset(model, data["train"], cache=True, cache_dir=args.dino_cache_dir, task="text") # change dino
+        test_ds = FeatureDataset(model, data["test"], cache=True, cache_dir=args.dino_cache_dir, task="text") # change dino
+
     elif args.dataset_name in ['letter']:
         del model
         openml_id = {'letter': 6}
@@ -83,10 +88,6 @@ def build_datasets(args, model):
         raise NotImplementedError()
 
     return train_ds, test_ds, num_classes
-
-def process_fn(tokenizer, batch):
-    batch = tokenizer(batch['text'], truncation=True)
-    return batch
 
 def build_image_data(args):
     # transforms = PlainTransforms(resize=(224, 224))
@@ -110,14 +111,19 @@ def build_image_data(args):
 
 def build_text_data(args):
     if args.dataset_name == "agnews":
-        data = load_dataset("ag_news")
+        data = load_dataset("ag_news") # maybe set cache_dir @denis cache_dir=
         num_classes = 4
     elif args.dataset_name == "dbpedia":
-        data = load_dataset("dbpedia_14")
+        data = load_dataset("dbpedia_14") # maybe set cache_dir @denis cache_dir=
+        data = data.rename_column("content","text")
         num_classes = 14
     elif args.dataset_name == "banking77":
-        data = load_dataset("banking77")
+        data = load_dataset("banking77") # maybe set cache_dir @denis cache_dir=
         num_classes = 77
+    elif args.dataset_name == "trec":
+        data = load_dataset("trec") # maybe set cache_dir @denis cache_dir=
+        num_classes = 6
+        data = data.rename_column("coarse_label", "label")
     else: 
         raise NotImplementedError()
     return data, num_classes
@@ -444,21 +450,21 @@ def flatten_cfg(cfg, parent_key='', sep='.'):
 
 class FeatureDataset:
 
-    def __init__(self, model, dataset, cache=False, cache_dir=None, batch_size=256, device='cuda'):
+    def __init__(self, model, dataset, cache=False, cache_dir=None, batch_size=256, device='cuda', task=None):
         if cache:
             if cache_dir is None:
                 home_dir = os.path.expanduser('~')
-                cache_dir = os.path.join(home_dir, '.cache', 'dino_features')
+                if task == "text":
+                    cache_dir = os.path.join(home_dir, '.cache', f'{model.__class__.__name__ }') # change
             os.makedirs(cache_dir, exist_ok=True)
             hash = self.create_hash_from_dataset_and_model(dataset, model)
-            #hash = "text"
 
             file_name = os.path.join(cache_dir, hash + '.pth')
             if os.path.exists(file_name):
                 print('Loading cached features from', file_name)
                 features, labels = torch.load(file_name, map_location='cpu')
             else:
-                features, labels = self.get_features(model, dataset, batch_size, device)
+                features, labels = self.get_features(model, dataset, batch_size, device, task) # change
                 print('Saving features to cache file', file_name)
                 torch.save((features, labels), file_name)
         else:
@@ -481,8 +487,10 @@ class FeatureDataset:
         indices_to_hash = range(0, num_samples, num_samples//num_hash_samples)
         for idx in indices_to_hash:
             #change for text
-            #sample = dataset[idx][0]
-            sample = dataset["input_ids"][0]
+            try: 
+                sample = dataset[idx][0]
+            except:
+                sample = dataset["input_ids"][0]
             hasher.update(str(sample).encode())
         return hasher.hexdigest()
 
@@ -493,19 +501,23 @@ class FeatureDataset:
         return self.features[idx], self.labels[idx]
 
     @torch.no_grad()
-    def get_features(self, model, dataset, batch_size, device):
-        print('Getting dino features..')
+    def get_features(self, model, dataset, batch_size, device, task=None):
+        print('Getting ssl features..') # change
         dataloader = DataLoader(dataset, batch_size=batch_size)
         features = []
         labels = []
         model.eval()
         model.to(device)
-        for batch in track(dataloader, 'Dino: Inference'):
-            # change batch[0] to batch["input_ids"] etc. 
-            input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
-            features.append(model(input_ids, attention_mask).to('cpu'))
-            labels.append(batch["label"])
+        for batch in track(dataloader, 'Inference'): #change
+            if task == "text":
+                 input_ids = batch["input_ids"].to(device)
+                 attention_mask = batch["attention_mask"].to(device)
+                 features.append(model(input_ids, attention_mask).to('cpu'))
+                 labels.append(batch["label"])
+            else:
+                features.append(model(batch[0].to(device)).to('cpu'))
+                labels.append(batch[-1])
+
         features = torch.cat(features)
         labels = torch.cat(labels)
         return features, labels
