@@ -20,9 +20,11 @@ from sklearn.model_selection import train_test_split
 from datasets import load_dataset
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
+
 def build_dino_model(args):
     dino_model = torch.hub.load('facebookresearch/dinov2', args.dino_model_name)
     return dino_model
+
 
 class DinoTransforms():
     def __init__(self, size=None, center_crop_size=224):
@@ -60,26 +62,29 @@ def build_datasets(args):
         test_ds = FeatureDataset(model, data.test_dataset, cache=True, cache_dir=args.feature_cache_dir)
         num_classes = data.num_classes
 
-    elif args.dataset_name in ['agnews', 'dbpedia', 'banking77', 'trec']:
+    elif args.dataset_name in ['agnews', 'dbpedia', 'clinc', 'trec']:
         data, num_classes = build_text_data(args)
         tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased", use_fast=False)
 
         data = data.map(
             lambda batch: tokenizer(
-                batch["text"], 
+                batch["text"],
                 truncation=True,
                 padding="max_length",
                 max_length=512
-            ), 
-            batched=True, 
+            ),
+            batched=True,
             batch_size=1000)
-        
-        data = data.remove_columns(list(set(data['train'].column_names)-set(['input_ids', 'attention_mask', 'label'])))         
+
+        data = data.remove_columns(
+            list(set(data['train'].column_names)-set(['input_ids', 'attention_mask', 'label'])))
         data = data.with_format("torch")
 
         model = BertSequenceClassifier(num_classes=num_classes)
-        train_ds = FeatureDataset(model, data["train"], cache=True, cache_dir=args.feature_cache_dir, task="text")
-        test_ds = FeatureDataset(model, data["test"], cache=True, cache_dir=args.feature_cache_dir, task="text")
+        train_ds = FeatureDataset(model, data["train"], cache=True,
+                                  cache_dir=args.feature_cache_dir, task="text")
+        test_ds = FeatureDataset(model, data["test"], cache=True,
+                                 cache_dir=args.feature_cache_dir, task="text")
 
     elif args.dataset_name in ['letter',  'aloi']:
         openml_id = {'letter': 6, 'aloi': 42396}
@@ -88,6 +93,7 @@ def build_datasets(args):
         raise NotImplementedError()
 
     return train_ds, test_ds, num_classes
+
 
 def build_image_data(args):
     # transforms = PlainTransforms(resize=(224, 224))
@@ -111,20 +117,21 @@ def build_image_data(args):
 
 def build_text_data(args):
     if args.dataset_name == "agnews":
-        data = load_dataset("ag_news") # maybe set cache_dir @denis cache_dir=
+        data = load_dataset("ag_news")  # maybe set cache_dir @denis cache_dir=
         num_classes = 4
     elif args.dataset_name == "dbpedia":
-        data = load_dataset("dbpedia_14") # maybe set cache_dir @denis cache_dir=
-        data = data.rename_column("content","text")
+        data = load_dataset("dbpedia_14")  # maybe set cache_dir @denis cache_dir=
+        data = data.rename_column("content", "text")
         num_classes = 14
-    elif args.dataset_name == "banking77":
-        data = load_dataset("banking77") # maybe set cache_dir @denis cache_dir=
-        num_classes = 77
+    elif args.dataset_name == "clinc":
+        data = load_dataset("clinc_oos", "plus")  # maybe set cache_dir @denis cache_dir=
+        data = data.rename_column("intent", "label")
+        num_classes = 151
     elif args.dataset_name == "trec":
-        data = load_dataset("trec") # maybe set cache_dir @denis cache_dir=
+        data = load_dataset("trec")  # maybe set cache_dir @denis cache_dir=
         num_classes = 6
         data = data.rename_column("coarse_label", "label")
-    else: 
+    else:
         raise NotImplementedError()
     return data, num_classes
 
@@ -465,7 +472,7 @@ class FeatureDataset:
                 print('Loading cached features from', file_name)
                 features, labels = torch.load(file_name, map_location='cpu')
             else:
-                features, labels = self.get_features(model, dataset, batch_size, device, task) # change
+                features, labels = self.get_features(model, dataset, batch_size, device, task)  # change
                 print('Saving features to cache file', file_name)
                 torch.save((features, labels), file_name)
         else:
@@ -487,8 +494,8 @@ class FeatureDataset:
 
         indices_to_hash = range(0, num_samples, num_samples//num_hash_samples)
         for idx in indices_to_hash:
-            #change for text
-            try: 
+            # change for text
+            try:
                 sample = dataset[idx][0]
             except:
                 sample = dataset["input_ids"][0]
@@ -509,12 +516,12 @@ class FeatureDataset:
         labels = []
         model.eval()
         model.to(device)
-        for batch in track(dataloader, 'Inference'): #change
+        for batch in track(dataloader, 'Inference'):  # change
             if task == "text":
-                 input_ids = batch["input_ids"].to(device)
-                 attention_mask = batch["attention_mask"].to(device)
-                 features.append(model(input_ids, attention_mask).to('cpu'))
-                 labels.append(batch["label"])
+                input_ids = batch["input_ids"].to(device)
+                attention_mask = batch["attention_mask"].to(device)
+                features.append(model(input_ids, attention_mask).to('cpu'))
+                labels.append(batch["label"])
             else:
                 features.append(model(batch[0].to(device)).to('cpu'))
                 labels.append(batch[-1])
@@ -522,6 +529,7 @@ class FeatureDataset:
         features = torch.cat(features)
         labels = torch.cat(labels)
         return features, labels
+
 
 class BertSequenceClassifier(nn.Module):
     def __init__(self, num_classes):
@@ -531,14 +539,13 @@ class BertSequenceClassifier(nn.Module):
         self.bert = AutoModelForSequenceClassification.from_pretrained(
             "bert-base-uncased",
             num_labels=self.num_classes)
-            
+
     def forward(self, input_ids, attention_mask):
         outputs = self.bert(input_ids, attention_mask, labels=None, output_hidden_states=True)
         logits = outputs['logits']
-        
-        # huggingface takes pooler output for classification (not accessible here anymore, would need bert model)
-        last_hidden_state = outputs['hidden_states'][-1] # (batch, sequence, dim)
-        cls_state = last_hidden_state[:,0,:] # (batch, dim)     #not in bert, taken from distilbert and roberta
-        return cls_state
 
-    
+        # huggingface takes pooler output for classification (not accessible here anymore, would need bert model)
+        last_hidden_state = outputs['hidden_states'][-1]  # (batch, sequence, dim)
+        # (batch, dim)     #not in bert, taken from distilbert and roberta
+        cls_state = last_hidden_state[:, 0, :]
+        return cls_state
