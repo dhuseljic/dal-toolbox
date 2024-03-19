@@ -66,7 +66,7 @@ def build_datasets(args):
 
         data = data.map(
             lambda batch: tokenizer(
-                batch[input], 
+                batch["text"], 
                 truncation=True,
                 padding="max_length",
                 max_length=512
