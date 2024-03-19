@@ -81,8 +81,8 @@ def build_datasets(args):
         train_ds = FeatureDataset(model, data["train"], cache=True, cache_dir=args.feature_cache_dir, task="text")
         test_ds = FeatureDataset(model, data["test"], cache=True, cache_dir=args.feature_cache_dir, task="text")
 
-    elif args.dataset_name in ['letter', 'helena']:
-        openml_id = {'letter': 6, 'helena': 41169}
+    elif args.dataset_name in ['letter',  'aloi']:
+        openml_id = {'letter': 6, 'aloi': 42396}
         train_ds, test_ds, num_classes = build_tabular_data(openml_id[args.dataset_name])
     else:
         raise NotImplementedError()
