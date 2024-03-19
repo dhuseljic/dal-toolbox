@@ -80,9 +80,9 @@ def build_datasets(args, model):
         train_ds = FeatureDataset(model, data["train"], cache=True, cache_dir=args.dino_cache_dir, task="text") # change dino
         test_ds = FeatureDataset(model, data["test"], cache=True, cache_dir=args.dino_cache_dir, task="text") # change dino
 
-    elif args.dataset_name in ['letter']:
+    elif args.dataset_name in ['letter', 'helena']:
         del model
-        openml_id = {'letter': 6}
+        openml_id = {'letter': 6, 'helena': 41169}
         train_ds, test_ds, num_classes = build_tabular_data(openml_id[args.dataset_name])
     else:
         raise NotImplementedError()
@@ -132,7 +132,8 @@ def build_text_data(args):
 def build_tabular_data(data_id, path='data/'):
     X, y = fetch_openml(data_id=data_id, data_home=path, return_X_y=True)
     X = X.values
-    y = LabelEncoder().fit_transform(y.values)
+    y = y.values
+    y = LabelEncoder().fit_transform(y)
     train, test = train_test_split(range(len(X)), random_state=0, test_size=0.25)
     scaler = StandardScaler().fit(X[train])
 
@@ -155,7 +156,8 @@ class LaplaceNet(LaplaceLayer):
         for batch in dataloader:
             inputs = batch[0]
             if LaplaceNet.use_mean_field:
-                logits = self.forward_mean_field(inputs.to(device))
+                # logits = self.forward_mean_field(inputs.to(device))
+                logits = self(inputs.to(device))
             else:
                 logits = self.forward_monte_carlo(inputs.to(device))
             all_logits.append(logits)
