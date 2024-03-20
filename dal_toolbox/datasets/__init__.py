@@ -7,6 +7,7 @@ from . import imagenet_subsets
 from . import stl10
 
 from .stl10 import STL10
+from .snacks import Snacks
 from .food import Food101
 from .flowers import Flowers102
 from .country211 import Country211

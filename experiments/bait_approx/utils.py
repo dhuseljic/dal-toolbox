@@ -10,7 +10,7 @@ from rich.progress import track
 from omegaconf import DictConfig
 
 from dal_toolbox.models.laplace import LaplaceLayer, LaplaceModel
-from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, ImageNet, TinyImageNet, Flowers102, StanfordDogs
+from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, ImageNet, TinyImageNet, Flowers102, StanfordDogs, Snacks
 
 from sklearn.datasets import fetch_openml
 from sklearn.preprocessing import LabelEncoder, StandardScaler
@@ -56,7 +56,7 @@ class DinoTransforms():
 
 
 def build_datasets(args):
-    image_datasets = ['cifar10', 'stl10', 'cifar100', 'food101', 'flowers102',
+    image_datasets = ['cifar10', 'stl10', 'snacks', 'cifar100', 'food101', 'flowers102',
                       'caltech101', 'stanford_dogs', 'tiny_imagenet', 'imagenet']
     text_datasets = ['agnews', 'dbpedia', 'clinc', 'trec']
     tabular_datasets = ['letter',  'aloi']
@@ -108,6 +108,8 @@ def build_image_data(args):
         data = CIFAR10(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'stl10':
         data = STL10(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'snacks':
+        data = Snacks(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'cifar100':
         data = CIFAR100(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'food101':
