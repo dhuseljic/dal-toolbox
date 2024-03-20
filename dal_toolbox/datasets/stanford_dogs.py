@@ -60,6 +60,7 @@ class _StanfordDogs(Dataset):
         split_mapping = {'train': 'full', 'test': 'full'}
 
         config.DOWNLOADED_DATASETS_PATH = root
+        config.HF_DATASETS_CACHE = root
         self.ds = load_dataset("Alanox/stanford-dogs", split=split_mapping[self.split])
         self.ds_dict = self.ds.train_test_split(test_size=0.1, seed=42)
         self.ds = self.ds_dict[self.split]

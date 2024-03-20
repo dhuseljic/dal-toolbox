@@ -52,6 +52,7 @@ class _TinyImageNet(Dataset):
         split_mapping = {'train': 'train', 'test': 'valid'}
 
         config.DOWNLOADED_DATASETS_PATH = root
+        config.HF_DATASETS_CACHE = root
         self.ds = load_dataset('Maysee/tiny-imagenet', split=split_mapping[self.split])
 
     def __len__(self):
