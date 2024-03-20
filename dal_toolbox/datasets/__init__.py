@@ -11,6 +11,7 @@ from .food import Food101
 from .flowers import Flowers102
 from .country211 import Country211
 from .tiny_imagenet import TinyImageNet
+from .stanford_dogs import StanfordDogs
 
 from .cifar import CIFAR10, CIFAR100, CIFAR10C
 from .cifar import CIFAR10SimCLR, CIFAR10WithoutNormalization, CIFAR100SimCLR

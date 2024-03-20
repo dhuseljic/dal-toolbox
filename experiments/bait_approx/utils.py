@@ -10,7 +10,7 @@ from rich.progress import track
 from omegaconf import DictConfig
 
 from dal_toolbox.models.laplace import LaplaceLayer, LaplaceModel
-from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, ImageNet, TinyImageNet, Flowers102
+from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, ImageNet, TinyImageNet, Flowers102, StanfordDogs
 
 from sklearn.datasets import fetch_openml
 from sklearn.preprocessing import LabelEncoder, StandardScaler
@@ -38,7 +38,7 @@ class DinoTransforms():
                 transforms.Lambda(lambda x: x.repeat(3, 1, 1) if x.size(0) != 3 else x),
                 transforms.Normalize(dino_mean, dino_std),
             ])
-            
+
         else:
             self.transform = transforms.Compose([transforms.ToTensor()])
 
@@ -57,7 +57,7 @@ class DinoTransforms():
 
 def build_datasets(args):
     image_datasets = ['cifar10', 'stl10', 'cifar100', 'food101', 'flowers102',
-                      'caltech101', 'tiny_imagenet', 'imagenet']
+                      'caltech101', 'stanford_dogs', 'tiny_imagenet', 'imagenet']
     text_datasets = ['agnews', 'dbpedia', 'clinc', 'trec']
     tabular_datasets = ['letter',  'aloi']
 
@@ -114,6 +114,8 @@ def build_image_data(args):
         data = Food101(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'flowers102':
         data = Flowers102(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'stanford_dogs':
+        data = StanfordDogs(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'tiny_imagenet':
         data = TinyImageNet(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'imagenet':
