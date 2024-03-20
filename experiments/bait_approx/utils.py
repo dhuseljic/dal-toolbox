@@ -9,9 +9,8 @@ from torchvision import transforms
 from rich.progress import track
 from omegaconf import DictConfig
 
-from dal_toolbox.models.deterministic import DeterministicModel
 from dal_toolbox.models.laplace import LaplaceLayer, LaplaceModel
-from dal_toolbox.datasets import CIFAR10, CIFAR100, SVHN, Food101, STL10, ImageNet
+from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, ImageNet, TinyImageNet, Flowers102
 
 from sklearn.datasets import fetch_openml
 from sklearn.preprocessing import LabelEncoder, StandardScaler
@@ -36,8 +35,10 @@ class DinoTransforms():
                 transforms.Resize(size, interpolation=3),
                 transforms.CenterCrop(center_crop_size),
                 transforms.ToTensor(),
-                transforms.Normalize(dino_mean, dino_std)
+                transforms.Lambda(lambda x: x.repeat(3, 1, 1) if x.size(0) != 3 else x),
+                transforms.Normalize(dino_mean, dino_std),
             ])
+            
         else:
             self.transform = transforms.Compose([transforms.ToTensor()])
 
@@ -55,14 +56,19 @@ class DinoTransforms():
 
 
 def build_datasets(args):
-    if args.dataset_name in ['cifar10', 'cifar100', 'svhn', 'food101', 'stl10', 'imagenet']:
+    image_datasets = ['cifar10', 'stl10', 'cifar100', 'food101', 'flowers102',
+                      'caltech101', 'tiny_imagenet', 'imagenet']
+    text_datasets = ['agnews', 'dbpedia', 'clinc', 'trec']
+    tabular_datasets = ['letter',  'aloi']
+
+    if args.dataset_name in image_datasets:
         model = build_dino_model(args)
         data = build_image_data(args)
+        data.train_dataset[0]
         train_ds = FeatureDataset(model, data.train_dataset, cache=True, cache_dir=args.feature_cache_dir)
         test_ds = FeatureDataset(model, data.test_dataset, cache=True, cache_dir=args.feature_cache_dir)
         num_classes = data.num_classes
-
-    elif args.dataset_name in ['agnews', 'dbpedia', 'clinc', 'trec']:
+    elif args.dataset_name in text_datasets:
         data, num_classes = build_text_data(args)
         tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased", use_fast=False)
 
@@ -86,7 +92,7 @@ def build_datasets(args):
         test_ds = FeatureDataset(model, data["test"], cache=True,
                                  cache_dir=args.feature_cache_dir, task="text")
 
-    elif args.dataset_name in ['letter',  'aloi']:
+    elif args.dataset_name in tabular_datasets:
         openml_id = {'letter': 6, 'aloi': 42396}
         train_ds, test_ds, num_classes = build_tabular_data(openml_id[args.dataset_name])
     else:
@@ -100,14 +106,16 @@ def build_image_data(args):
     transforms = DinoTransforms(size=(256, 256))
     if args.dataset_name == 'cifar10':
         data = CIFAR10(args.dataset_path, transforms=transforms)
-    elif args.dataset_name == 'cifar100':
-        data = CIFAR100(args.dataset_path, transforms=transforms)
-    elif args.dataset_name == 'svhn':
-        data = SVHN(args.dataset_path, transforms=transforms)
-    elif args.dataset_name == 'food101':
-        data = Food101(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'stl10':
         data = STL10(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'cifar100':
+        data = CIFAR100(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'food101':
+        data = Food101(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'flowers102':
+        data = Flowers102(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'tiny_imagenet':
+        data = TinyImageNet(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'imagenet':
         data = ImageNet(args.dataset_path, transforms=transforms)
     else:
@@ -230,15 +238,6 @@ class LaplaceNet(LaplaceLayer):
                     probas_topk /= probas_topk.sum(-1, keepdim=True)
                 embedding_batch = torch.sqrt(probas_topk)[:, :, None] * embedding_batch
 
-            elif grad_likelihood == 'cross_entropy_unbiased':
-                cat = torch.distributions.Categorical(probas)
-                factor = (torch.eye(num_classes, device=device)[:, None] - probas)
-                batch_indices = torch.arange(len(top_preds)).unsqueeze(-1).expand(-1, top_preds.size(1))
-                sampled_labels = cat.sample((topk,)).T
-                factor = factor[sampled_labels, batch_indices]
-
-                embedding_batch = torch.einsum("njh,nd->njhd", factor, features).flatten(2)
-
             elif grad_likelihood == 'binary_cross_entropy':
                 # We assume multiple independet binary cross entropy for highest probabilities
                 if topk > 2:
@@ -251,7 +250,18 @@ class LaplaceNet(LaplaceLayer):
                 if normalize_top_probas:
                     probas_topk /= probas_topk.sum(-1, keepdim=True)
                 embedding_batch = torch.sqrt(probas_topk)[:, :, None] * embedding_batch
+
+            elif grad_likelihood == 'cross_entropy_unbiased':
+
+                cat = torch.distributions.Categorical(probas)
+                factor = (torch.eye(num_classes, device=device)[:, None] - probas)
+                batch_indices = torch.arange(len(top_preds)).unsqueeze(-1).expand(-1, top_preds.size(1))
+                sampled_labels = cat.sample((topk,)).T
+                factor = factor[sampled_labels, batch_indices]
+
+                embedding_batch = torch.einsum("njh,nd->njhd", factor, features).flatten(2)
             else:
+
                 raise NotImplementedError()
 
             embedding.append(embedding_batch.cpu())
@@ -285,6 +295,13 @@ class LaplaceNet(LaplaceLayer):
                 embedding_batch = torch.einsum("nk,nd->nkd", factor, features).flatten(2)
                 probas_ = torch.stack((max_probas, 1 - max_probas), dim=1)
                 embedding_batch = torch.sqrt(probas_)[:, :, None] * embedding_batch
+            elif grad_likelihood == 'test':
+                c = 10
+                top_probas = probas.topk(c).values
+                top_probas = top_probas / top_probas.sum(-1, keepdim=True)
+                factor = (torch.eye(c, device=device)[:, None] - top_probas)
+                embedding_batch = torch.einsum("jnh,nd->njhd", factor, features).flatten(2)
+
             else:
                 raise NotImplementedError()
 

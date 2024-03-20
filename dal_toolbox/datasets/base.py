@@ -36,9 +36,9 @@ class BaseData(ABC):
         train_indices, val_indices = self._get_train_val_indices(len(self.full_train_dataset))
 
         # Define datasets
-        self.train_dataset = Subset(self.full_train_dataset, indices=train_indices)
-        self.val_dataset = Subset(self.full_train_dataset_eval_transforms, indices=val_indices)
-        self.query_dataset = Subset(self.full_train_dataset_query_transforms, indices=train_indices)
+        self.train_dataset = Subset(self.full_train_dataset, indices=train_indices.tolist())
+        self.val_dataset = Subset(self.full_train_dataset_eval_transforms, indices=val_indices.tolist())
+        self.query_dataset = Subset(self.full_train_dataset_query_transforms, indices=train_indices.tolist())
 
     def _get_train_val_indices(self, num_samples):
         if 0 < self.val_split < 1:
