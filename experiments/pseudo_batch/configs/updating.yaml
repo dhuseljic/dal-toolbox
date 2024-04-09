@@ -1,17 +1,17 @@
+mlflow_uri: sqlite:///updating.db
+
 num_init_samples: 10
 num_new_samples: [1, 5, 10]
 random_seed: 42
-mlflow_dir: ./mlflow/ssal/updating
 
 update_lmb: 1
 update_gamma: 10
 likelihood: gaussian
 
 # Data
-dataset_path: /datasets
+dataset_path: /home/datasets
 dataset_name: cifar10
-ood_dataset_name: cifar100
-num_ood_samples: 1000
+feature_cache_dir: null
 
 # Dino model
 dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
@@ -25,10 +25,6 @@ model:
   num_epochs: 200
   train_batch_size: 32
   predict_batch_size: 256
-  num_inducing: 1024
-  kernel_scale: 100
-  scale_random_features: True
-  optimize_kernel_scale: True
   mean_field_factor: .4
   mc_samples: 1_000
 

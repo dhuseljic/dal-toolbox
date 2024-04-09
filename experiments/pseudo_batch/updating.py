@@ -11,8 +11,7 @@ from dal_toolbox import metrics
 from dal_toolbox.utils import seed_everything
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from torch.utils.data import DataLoader, Subset
-from sklearn.metrics import pairwise_distances
-from utils import DinoFeatureDataset, flatten_cfg, build_data, build_model, build_ood_data, build_dino_model
+from utils import flatten_cfg, build_datasets, build_model
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="updating")
@@ -21,21 +20,27 @@ def main(args):
     print(OmegaConf.to_yaml(args))
 
     # Setup Data
-    dino_model = build_dino_model(args)
-    data = build_data(args)
-    train_ds = DinoFeatureDataset(dino_model, dataset=data.train_dataset, cache=True)
-    test_ds = DinoFeatureDataset(dino_model, dataset=data.test_dataset, cache=True)
+    train_ds, test_ds, num_classes = build_datasets(args)
     test_loader = DataLoader(test_ds, batch_size=args.model.predict_batch_size, shuffle=False)
 
     seed_everything(args.random_seed)
-    init_model = build_model(
-        args, num_features=dino_model.norm.normalized_shape[0], num_classes=data.num_classes)
+    num_features = len(train_ds[0][0])
+    init_model = build_model(args, num_features=num_features, num_classes=num_classes)
 
     # Define indices for training, updating and retraining
     rnd_indices = torch.randperm(len(train_ds))
     base_indices = rnd_indices[:args.num_init_samples]
     new_indices = rnd_indices[args.num_init_samples:args.num_init_samples+max(args.num_new_samples)]
     retrain_indices = rnd_indices[:args.num_init_samples+max(args.num_new_samples)]
+
+    lightning_trainer_config = dict(
+        max_epochs=args.model.num_epochs,
+        default_root_dir=args.output_dir,
+        enable_checkpointing=False,
+        logger=False,
+        enable_progress_bar=False,
+        callbacks=[MetricLogger()],
+    )
 
     # Train
     base_model = copy.deepcopy(init_model)
@@ -45,14 +50,7 @@ def main(args):
         shuffle=True,
         drop_last=len(base_indices) > args.model.train_batch_size,
     )
-    trainer = Trainer(
-        max_epochs=args.model.num_epochs,
-        default_root_dir=args.output_dir,
-        enable_checkpointing=False,
-        logger=False,
-        enable_progress_bar=False,
-        callbacks=[MetricLogger()],
-    )
+    trainer = Trainer(**lightning_trainer_config)
     trainer.fit(base_model, train_dataloaders=train_loader)
 
     # Evaluate
@@ -128,7 +126,7 @@ def main(args):
         }
 
     # Logging
-    mlflow.set_tracking_uri(uri="file://{}".format(os.path.abspath(args.mlflow_dir)))
+    mlflow.set_tracking_uri(uri=args.mlflow_uri)
     mlflow.set_experiment("Updating")
     mlflow.start_run()
     mlflow.log_params(flatten_cfg(args))
