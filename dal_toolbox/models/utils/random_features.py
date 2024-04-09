@@ -69,7 +69,7 @@ class RandomFeatureGaussianProcess(nn.Module):
                  normalize_input: bool = False,
                  random_feature_type: str = 'orf',
                  scale_random_features: bool = False,
-                 optimize_kernel_scale: bool = True,
+                 optimize_kernel_scale: bool = False,
                  mean_field_factor: float = math.pi/8,
                  mc_samples: int = 1000,
                  cov_momentum: float = -1,
