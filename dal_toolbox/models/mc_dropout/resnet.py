@@ -6,7 +6,7 @@ from ..utils.mcdropout import MCDropoutModule, ConsistentMCDropout2d
 
 
 class DropoutResNet18(MCDropoutModule):
-    def __init__(self, num_classes=10, n_passes=10, dropout_rate=0.2):
+    def __init__(self, num_classes=10, n_passes=10, dropout_rate=0.2, imagenethead=False):
         super().__init__(n_passes=n_passes)
         self.in_planes = 64
         self.block = DropoutBasicBlock
@@ -14,9 +14,17 @@ class DropoutResNet18(MCDropoutModule):
         self.n_passes = n_passes
         self.dropout_rate = dropout_rate
 
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
-        self.conv1_dropout = ConsistentMCDropout2d(self.dropout_rate)
-        self.bn1 = nn.BatchNorm2d(64)
+        if imagenethead:
+            self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
+            self.conv1_dropout = ConsistentMCDropout2d(self.dropout_rate)
+            self.bn1 = nn.BatchNorm2d(64)
+            self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        else:
+            # Init layer does not have a kernel size of 7 since cifar has a smaller size of 32x32
+            self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+            self.conv1_dropout = ConsistentMCDropout2d(self.dropout_rate)
+            self.bn1 = nn.BatchNorm2d(64)
+            self.maxpool = nn.Identity()
         self.layer1 = self._make_layer(self.block, 64, self.num_blocks[0], self.dropout_rate, stride=1)
         self.layer2 = self._make_layer(self.block, 128, self.num_blocks[1], self.dropout_rate, stride=2)
         self.layer3 = self._make_layer(self.block, 256, self.num_blocks[2], self.dropout_rate, stride=2)
@@ -35,7 +43,7 @@ class DropoutResNet18(MCDropoutModule):
 
     def forward(self, x, get_embeddings=False):
         out = F.relu(self.bn1(self.conv1(x)))
-        out = self.conv1_dropout(out)
+        out = self.maxpool(self.conv1_dropout(out))
         out = self.layer1(out)
         out = self.layer2(out)
         out = self.layer3(out)

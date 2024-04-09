@@ -6,6 +6,7 @@ queried_indices_json: ./output/queried_indices.json
 cold_start: True
 
 dataset: CIFAR10
+dataset_preload: False # Only applicable to ImageNet and its subsets
 dataset_path: ./data/
 ood_datasets: null
 random_seed: 1

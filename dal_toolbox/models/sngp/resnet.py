@@ -49,6 +49,7 @@ def resnet18_sngp(num_classes,
                   mean_field_factor=math.pi/8,
                   cov_momentum=-1,
                   ridge_penalty=1,
+                  imagenethead=False
                   ):
     resnet18_blocks = [2, 2, 2, 2]
     return ResNetSNGP(
@@ -66,7 +67,8 @@ def resnet18_sngp(num_classes,
         scale_random_features=scale_random_features,
         mean_field_factor=mean_field_factor,
         cov_momentum=cov_momentum,
-        ridge_penalty=ridge_penalty
+        ridge_penalty=ridge_penalty,
+        imagenethead = imagenethead
     )
 
 
@@ -88,6 +90,7 @@ class ResNetSNGP(nn.Module):
                  mc_samples=1000,
                  cov_momentum=-1,
                  ridge_penalty=1,
+                 imagenethead=False
                  ):
         super(ResNetSNGP, self).__init__()
         self.in_planes = 64
@@ -97,10 +100,19 @@ class ResNetSNGP(nn.Module):
         self.n_power_iterations = n_power_iterations
         self.spectral_norm = spectral_norm
 
-        # Init layer does not have a kernel size of 7 since cifar has a smaller size of 32x32
-        self.conv1 = SpectralConv2d(3, 64, kernel_size=3, spectral_norm=self.spectral_norm, norm_bound=self.norm_bound,
-                                    n_power_iterations=self.n_power_iterations, stride=1, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(64)
+        if imagenethead:
+            self.conv1 = SpectralConv2d(3, 64, kernel_size=7, spectral_norm=self.spectral_norm,
+                                        norm_bound=self.norm_bound,
+                                        n_power_iterations=self.n_power_iterations, stride=2, padding=3, bias=False)
+            self.bn1 = nn.BatchNorm2d(64)
+            self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        else:
+            # Init layer does not have a kernel size of 7 since cifar has a smaller size of 32x32
+            self.conv1 = SpectralConv2d(3, 64, kernel_size=3, spectral_norm=self.spectral_norm,
+                                        norm_bound=self.norm_bound,
+                                        n_power_iterations=self.n_power_iterations, stride=1, padding=1, bias=False)
+            self.bn1 = nn.BatchNorm2d(64)
+            self.maxpool = nn.Identity()
         self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
         self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=2)
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
@@ -139,7 +151,7 @@ class ResNetSNGP(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x, mean_field=False, monte_carlo=False, return_cov=False):
-        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.maxpool(F.relu(self.bn1(self.conv1(x))))
         out = self.layer1(out)
         out = self.layer2(out)
         out = self.layer3(out)

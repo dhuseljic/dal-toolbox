@@ -13,6 +13,7 @@ from omegaconf import OmegaConf
 from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.utils import seed_everything, is_running_on_slurm
 from dal_toolbox.models.utils.callbacks import MetricLogger
+from dal_toolbox.datasets.imagenet import ImageNetStandardTransforms
 from active_learning import build_model, build_datasets, build_ood_datasets, evaluate, evaluate_ood
 
 
@@ -38,7 +39,11 @@ def main(args):
     test_loader = DataLoader(data.test_dataset, batch_size=args.model.predict_batch_size)
     if args.ood_datasets:
         logging.info('Building ood datasets.')
-        ood_datasets = build_ood_datasets(args, transforms=data.transforms)
+        if ("IMAGENET" in args.dataset):
+            ood_datasets = build_ood_datasets(args, transforms=ImageNetStandardTransforms())
+        else:
+            ood_datasets = build_ood_datasets(args, transforms=data.transforms)
+
         ood_loaders = {name: DataLoader(ds, batch_size=args.model.predict_batch_size) for name, ds in ood_datasets.items()}
     else:
         ood_loaders = None

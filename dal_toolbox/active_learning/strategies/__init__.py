@@ -6,3 +6,4 @@ from .coreset import *
 from .badge import *
 from .bait import *
 from .typiclust import *
+from .bemps import *
