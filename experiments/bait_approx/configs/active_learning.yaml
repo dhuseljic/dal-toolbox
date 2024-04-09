@@ -1,0 +1,56 @@
+random_seed: 42
+mlflow_uri: sqlite:///mlflow.db
+output_dir: ./output/
+
+# Data
+dataset_path: /datasets
+dataset_name: cifar10
+
+# Dino model
+dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
+# dino_model_name: 'dinov2_vitb14' # 86 M params - 768 dimensions
+# dino_model_name: 'dinov2_vitl14' # 300 M params - 1024 dimensions
+# dino_model_name: 'dinov2_vitg14' # 1100 M params - 1536 dimensions
+feature_cache_dir: null
+
+
+al:
+  strategy: random
+  subset_size: 1000
+  init_method: random
+  num_init_samples: 10
+  num_acq: 20
+  acq_size: 10
+  update_every: 1
+  bait:
+    grad_likelihood: cross_entropy
+    expectation_topk: null
+    fisher_approximation: full
+    num_grad_samples: null
+    grad_selection: magnitude
+    normalize_top_probas: True
+    fisher_batch_size: 1
+  device: cpu
+
+model:
+  name: laplace
+  num_epochs: 200
+  train_batch_size: 128
+  predict_batch_size: 128
+  mean_field_factor: 0.4
+  mc_samples: 100
+
+# Optimizer
+optimizer: 
+  name: RAdam
+  lr: 1e-2
+  weight_decay: 1e-4
+  momentum: 0.9
+
+hydra:
+  run:
+    dir: ${output_dir}
+  job_logging:
+    handlers:
+      file:
+        mode: w

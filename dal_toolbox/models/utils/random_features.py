@@ -13,6 +13,7 @@ class RandomFourierFeatures(nn.Module):
                  in_features: int,
                  num_inducing: int = 1024,
                  kernel_scale: float = 1.,
+                 optimize_kernel_scale: bool = True,
                  scale_features: bool = True,
                  random_feature_type: str = 'orf',
                  std_init: float = None):
@@ -20,6 +21,8 @@ class RandomFourierFeatures(nn.Module):
 
         self.kernel_scale = kernel_scale
         self.input_scale = 1 / math.sqrt(self.kernel_scale)
+        if optimize_kernel_scale:
+            self.input_scale = nn.Parameter(torch.tensor(self.input_scale))
 
         self.scale_features = scale_features
         self.random_feature_scale = math.sqrt(2./float(num_inducing))
@@ -66,10 +69,12 @@ class RandomFeatureGaussianProcess(nn.Module):
                  normalize_input: bool = False,
                  random_feature_type: str = 'orf',
                  scale_random_features: bool = False,
+                 optimize_kernel_scale: bool = True,
                  mean_field_factor: float = math.pi/8,
                  mc_samples: int = 1000,
                  cov_momentum: float = -1,
                  ridge_penalty: float = 1,
+                 cov_likelihood: str = 'gaussian',
                  ):
         super().__init__()
 
@@ -79,6 +84,7 @@ class RandomFeatureGaussianProcess(nn.Module):
 
         # scale inputs
         self.kernel_scale = kernel_scale
+        self.optimize_kernel_scale = optimize_kernel_scale
         self.normalize_input = normalize_input
         if normalize_input:
             self.layer_norm = nn.LayerNorm(in_features)
@@ -93,11 +99,13 @@ class RandomFeatureGaussianProcess(nn.Module):
         # Covariance computation
         self.ridge_penalty = ridge_penalty
         self.cov_momentum = cov_momentum
+        self.cov_likelihood = cov_likelihood
 
         self.random_features = RandomFourierFeatures(
             in_features=self.in_features,
             num_inducing=self.num_inducing,
             kernel_scale=self.kernel_scale,
+            optimize_kernel_scale=self.optimize_kernel_scale,
             scale_features=self.scale_random_features,
             random_feature_type=random_feature_type,
         )
@@ -108,8 +116,8 @@ class RandomFeatureGaussianProcess(nn.Module):
         # precision matrix
         self.init_precision_matrix = torch.eye(num_inducing)*self.ridge_penalty
         self.register_buffer("precision_matrix", copy.deepcopy(self.init_precision_matrix))
+        self.register_buffer("covariance_matrix", torch.full(self.precision_matrix.shape, float('nan')))
         self.recompute_covariance = True
-        self.covariance_matrix = None
 
     def forward(self, features, return_cov=False, return_random_features=False):
         if self.normalize_input:
@@ -121,7 +129,7 @@ class RandomFeatureGaussianProcess(nn.Module):
 
         if self.training:
             self.update_precision_matrix(phi, logits)
-        
+
         if return_cov:
             cov = self.compute_predictive_covariance(phi)
             return logits, cov
@@ -134,7 +142,8 @@ class RandomFeatureGaussianProcess(nn.Module):
         device = self.precision_matrix.device
         self.precision_matrix.data = copy.deepcopy(self.init_precision_matrix)
         self.precision_matrix.to(device)
-        self.covariance_matrix = None
+        self.recompute_covariance = True
+        self.covariance_matrix.data = torch.full(self.precision_matrix.shape, float('nan'))
 
     def synchronize_precision_matrix(self):
         if not is_dist_avail_and_initialized():
@@ -149,11 +158,15 @@ class RandomFeatureGaussianProcess(nn.Module):
 
     @torch.no_grad()
     def update_precision_matrix(self, phi, logits):
-        # probas = logits.softmax(-1)
-        # probas_max = probas.max(1)[0]
-        # multiplier = probas_max * (1-probas_max)
-        # gaussian likelihood
-        multiplier = 1
+        if self.cov_likelihood == 'gaussian':
+            multiplier = 1
+        elif self.cov_likelihood == 'categorical':
+            probas = logits.softmax(-1)
+            probas_max = probas.max(1)[0]
+            multiplier = probas_max * (1-probas_max)
+        else:
+            raise NotImplementedError('Covariance likelihood not implemented.')
+
         self.precision_matrix = self.precision_matrix.to(phi)
         precision_matrix_minibatch = torch.matmul(multiplier*phi.T, phi)
         if self.cov_momentum > 0:
@@ -171,7 +184,7 @@ class RandomFeatureGaussianProcess(nn.Module):
         if self.recompute_covariance:
             # self.covariance_matrix  = torch.linalg.inv(self.precision_matrix.data)
             u = torch.linalg.cholesky(self.precision_matrix.data)
-            self.covariance_matrix = torch.cholesky_inverse(u)
+            self.covariance_matrix.data = torch.cholesky_inverse(u)
         covariance_matrix_feature = self.covariance_matrix.data
         out = torch.matmul(covariance_matrix_feature, phi.T) * self.ridge_penalty
         covariance_matrix_gp = torch.matmul(phi, out)
@@ -214,31 +227,81 @@ class RandomFeatureGaussianProcess(nn.Module):
 
 
 def orthogonal_random_(tensor, std=1):
-    def sample_ortho(shape, gain=1):
-        # https://github.com/keras-team/keras/blob/v2.10.0/keras/initializers/initializers_v2.py#L761-L770
-        q, r = torch.linalg.qr(torch.randn(*shape))
-        d = torch.diag(r)
-        q = q * torch.sign(d)
-        return gain * q
+    # From tensorflow
+    # https://github.com/keras-team/keras/blob/v2.10.0/keras/initializers/initializers_v2.py#L761-L770
+    def _sample_orthogonal_matrix(shape, gain):
+        num_rows = 1
+        for dim in shape[:-1]:
+            num_rows *= dim
+        num_cols = shape[-1]
+        flat_shape = (max(num_cols, num_rows), min(num_cols, num_rows))
 
-    # https://github.com/google/edward2/blob/5338ae3244b90f3fdd0cf10094937c09eb40fab9/edward2/tensorflow/initializers.py#L786-L821
-    num_rows, num_cols = tensor.shape
-    if num_rows > num_cols:
+        g = torch.randn(*flat_shape)
+        q, r = torch.linalg.qr(g)  # Compute the qr factorization
+        d = torch.diag(r)  # Make Q uniform
+        q *= torch.sign(d)
+        if num_rows < num_cols:
+            q = torch.transpose(q, dim0=-1, dim1=-2)
+        return gain * q.view(shape)
+
+    torch_shape = tensor.shape
+    shape = torch_shape[::-1]
+    num_rows, num_cols = shape
+    if num_rows < num_cols:
+        # When num_row < num_col, sample multiple (num_row, num_row) matrices and
+        # then concatenate following [1].
         ortho_mat_list = []
-        num_rows_sampled = 0
-        while num_rows_sampled < num_rows:
-            ortho_mat_square = sample_ortho((num_cols, num_cols), gain=std)
+        num_cols_sampled = 0
+
+        while num_cols_sampled < num_cols:
+            ortho_mat_square = _sample_orthogonal_matrix((num_rows, num_rows), gain=std)
             ortho_mat_list.append(ortho_mat_square)
-            num_rows_sampled += num_cols
-        ortho_mat = torch.cat(ortho_mat_list, dim=0)
-        ortho_mat = ortho_mat[:num_rows]
+            num_cols_sampled += num_rows
+        ortho_mat = torch.cat(ortho_mat_list, dim=-1)
+        ortho_mat = ortho_mat[:, :num_cols]
     else:
-        ortho_mat = sample_ortho((num_rows, num_cols), gain=std)
+        ortho_mat = _sample_orthogonal_matrix(shape, gain=std)
 
     feature_norms_square = torch.randn(ortho_mat.shape)**2
-    feature_norms = torch.sum(feature_norms_square, dim=1).sqrt()
-    ortho_mat = feature_norms.unsqueeze(-1) * ortho_mat
-    tensor.data = ortho_mat
+    feature_norms = torch.sum(feature_norms_square, dim=0)
+    feature_norms = torch.sqrt(feature_norms)
+    ortho_mat = ortho_mat * feature_norms
+
+    # Transpose due to torch shapes
+    tensor.data = ortho_mat.T
+
+# def orthogonal_random_(tensor, std=1):
+#     def sample_ortho(shape, gain=1):
+#         # https://github.com/keras-team/keras/blob/v2.10.0/keras/initializers/initializers_v2.py#L761-L770
+#         g = torch.randn(*shape)
+#         q, r = torch.linalg.qr(g)
+#         d = torch.diag(r)
+#         q = q * torch.sign(d).view(-1, 1)  # view because our rows should be orthogonal
+#         q = gain * q
+#         return q
+
+#     # https://arxiv.org/pdf/1610.09072.pdf
+#     # https://github.com/google/edward2/blob/5338ae3244b90f3fdd0cf10094937c09eb40fab9/edward2/tensorflow/initializers.py#L786-L821
+#     D, d = tensor.shape
+#     if D > d:
+#         # When D > d, we use multiple independently generated random features and concatenate the results.
+#         ortho_mat_list = []
+#         num_rows_sampled = 0
+#         while num_rows_sampled < D:
+#             ortho_mat_square = sample_ortho((d, d), gain=std)
+#             ortho_mat_list.append(ortho_mat_square)
+#             num_rows_sampled += d
+#         ortho_mat = torch.cat(ortho_mat_list, dim=0)
+#         ortho_mat = ortho_mat[:D]
+#     else:
+#         ortho_mat = sample_ortho((d, d), gain=std)
+#         ortho_mat = ortho_mat[:D]  # When D < d, we simply use the first D dimensions of the result.
+
+#     # scale for gaussian-like row norms
+#     feature_norms_square = torch.randn(ortho_mat.shape)**2
+#     feature_norms = torch.sum(feature_norms_square, dim=1).sqrt()
+#     ortho_mat = feature_norms.unsqueeze(-1) * ortho_mat
+    # tensor.data = ortho_mat
 
 
 def mean_field_logits(logits, cov, lmb=math.pi / 8):

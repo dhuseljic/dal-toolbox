@@ -1,8 +1,8 @@
 import numpy as np
 
-from torch.utils.data import DataLoader
-
 from .query import Query
+# from rich.progress import track
+from sklearn.metrics import pairwise_distances
 
 
 class Badge(Query):
@@ -24,12 +24,16 @@ def kmeans_plusplus(X, n_clusters, rng):
     grad_norm = np.linalg.norm(X, ord=2, axis=1)
     idx = np.argmax(grad_norm)
 
+    all_distances = pairwise_distances(X, X)
+
     indices = [idx]
     centers = [X[idx]]
     dist_mat = []
     for _ in range(1, n_clusters):
         # Compute the distance of the last center to all samples
-        dist = np.sqrt(np.sum((X - centers[-1])**2, axis=-1))
+        # dist = np.sqrt(np.sum((X - centers[-1])**2, axis=-1))
+        dist = all_distances[indices[-1]]
+
         dist_mat.append(dist)
         # Get the distance of each sample to its closest center
         min_dist = np.min(dist_mat, axis=0)

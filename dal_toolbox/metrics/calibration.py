@@ -409,6 +409,9 @@ class GeneralCalibrationError(nn.Module):
         probas = probas.view(-1)
         targets = targets.view(-1)
 
+        if probas.numel() == 0:
+            return torch.tensor(0.)
+
         bin_indices = torch.bucketize(probas, upper_bounds, right=True)
         if self.num_bins is None:
             self.num_bins = 0
