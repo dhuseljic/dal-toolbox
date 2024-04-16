@@ -1,4 +1,3 @@
-import os
 import copy
 import time
 import hydra
@@ -80,10 +79,9 @@ def main(args):
         update_ds_mc = Subset(train_ds, indices=new_indices[:num_new])
         update_loader_mc = DataLoader(update_ds_mc, batch_size=args.model.train_batch_size)
         start_time = time.time()
-        sampled_params, weights = update_mc(
-            update_model_mc, update_loader_mc, mc_samples=args.model.mc_samples)
+        sampled_params, weights = update_mc(update_model_mc, update_loader_mc, mc_samples=args.model.mc_samples)
         updating_time = time.time() - start_time
-        predictions_updated_mc = predict_from_mc(test_loader, sampled_params=sampled_params, weights=weights)
+        predictions_updated_mc = predict_from_mc(update_model_mc, test_loader, sampled_params=sampled_params, weights=weights)
         test_stats_mc_updating = evaluate(predictions_updated_mc)
         y_pred_updated_mc = torch.cat([pred[0] for pred in predictions_updated_mc]).argmax(-1)
         test_stats_mc_updating['decision_flips'] = torch.sum(y_pred_original != y_pred_updated_mc).item()
@@ -203,18 +201,16 @@ def update_mc(model, update_loader, mc_samples):
 
 
 @torch.no_grad()
-def predict_from_mc(dataloader, sampled_params, weights):
+def predict_from_mc(model, dataloader, sampled_params, weights):
     predictions = []
-    corrects = 0
-    num_samples = 0
     for batch in dataloader:
         inputs = batch[0]
         targets = batch[1]
-        logits_mc = torch.einsum('nd,ekd->nek', inputs, sampled_params)
-        probas_mc = logits_mc.softmax(-1)
 
-        corrects += torch.sum((probas_mc.mean(1).argmax(-1) == targets).float()).item()
-        num_samples += len(targets)
+        with torch.no_grad():
+            _, phis = model.model(inputs, return_features=True)
+        logits_mc = torch.einsum('nd,ekd->nek', phis, sampled_params)
+        probas_mc = logits_mc.softmax(-1)
 
         if weights is not None:
             probas = torch.einsum('e,nek->nk', weights, probas_mc)

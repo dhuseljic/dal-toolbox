@@ -18,10 +18,10 @@ class LaplaceModel(BaseModule):
             train_metrics: dict = None,
             val_metrics: dict = None,
             scheduler_interval='epoch',
-            predict_kwargs=None,
     ):
         super().__init__(model, loss_fn, optimizer, lr_scheduler, train_metrics, val_metrics, scheduler_interval)
-        self.predict_kwargs = dict(mean_field=True) if predict_kwargs is None else predict_kwargs
+        self.use_mean_field = True
+
 
     def training_step(self, batch):
         inputs, targets = batch
@@ -52,16 +52,31 @@ class LaplaceModel(BaseModule):
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         inputs, targets = batch
 
-        logits = self.model.forward_mean_field(inputs)
+        if self.use_mean_field:
+            logits = self.model.forward_mean_field(inputs)
+        else:
+            logits = self.model.forward_monte_carlo(inputs)
 
         logits = self._gather(logits)
         targets = self._gather(targets)
         return logits, targets
 
+    def use_mean_field_prediction(self):
+        self.use_mean_field = True
+
+    def use_monte_carlo_prediction(self):
+        self.use_mean_field = False
+
+    def set_mc_samples(self, mc_samples: int):
+        for m in self.model.modules():
+            if isinstance(m, LaplaceLayer):
+                m.mc_samples = mc_samples
+
     def set_mean_field_factor(self, mean_field_factor: float):
         for m in self.model.modules():
             if isinstance(m, LaplaceLayer):
                 m.mean_field_factor = mean_field_factor
+
 
     def _reset_precision_matrix(self):
         for m in self.model.modules():
