@@ -9,7 +9,7 @@ from torchvision import transforms
 from rich.progress import track
 from omegaconf import DictConfig
 
-from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, Snacks, Flowers102, TinyImageNet
+from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, Snacks, DTD, Flowers102, TinyImageNet
 from dal_toolbox.datasets import ImageNet, StanfordDogs
 from dal_toolbox.models.laplace import LaplaceLayer, LaplaceModel
 
@@ -74,8 +74,8 @@ class Bert(nn.Module):
         return cls_state
 
 
-def build_datasets(args):
-    image_datasets = ['cifar10', 'stl10', 'snacks', 'cifar100', 'food101', 'flowers102',
+def build_datasets(args, use_val_split=False):
+    image_datasets = ['cifar10', 'stl10', 'snacks', 'dtd', 'cifar100', 'food101', 'flowers102',
                       'caltech101', 'stanford_dogs', 'tiny_imagenet', 'imagenet']
     text_datasets = ['agnews', 'dbpedia', 'clinc', 'trec']
     tabular_datasets = ['letter',  'aloi']
@@ -83,9 +83,11 @@ def build_datasets(args):
     if args.dataset_name in image_datasets:
         model = build_dino_model(args)
         data = build_image_data(args)
-        data.train_dataset[0]
         train_ds = FeatureDataset(model, data.train_dataset, cache=True, cache_dir=args.feature_cache_dir)
-        test_ds = FeatureDataset(model, data.test_dataset, cache=True, cache_dir=args.feature_cache_dir)
+        if use_val_split:
+            test_ds = FeatureDataset(model, data.val_dataset, cache=True, cache_dir=args.feature_cache_dir)
+        else:
+            test_ds = FeatureDataset(model, data.test_dataset, cache=True, cache_dir=args.feature_cache_dir)
         num_classes = data.num_classes
     elif args.dataset_name in text_datasets:
         data, num_classes = build_text_data(args)
@@ -129,6 +131,8 @@ def build_image_data(args):
         data = STL10(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'snacks':
         data = Snacks(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'dtd':
+        data = DTD(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'cifar100':
         data = CIFAR100(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'food101':
