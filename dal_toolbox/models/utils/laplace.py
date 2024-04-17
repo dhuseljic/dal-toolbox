@@ -76,6 +76,7 @@ class LaplaceLayer(nn.Module):
         if self.cov_likelihood == 'gaussian':
             multiplier = 1
         elif self.cov_likelihood == 'categorical':
+            # Approx based on sngp laplace approximation
             probas = logits.softmax(-1)
             probas_max = probas.max(1)[0]
             multiplier = probas_max * (1-probas_max)

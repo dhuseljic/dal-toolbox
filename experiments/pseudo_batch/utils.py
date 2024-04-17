@@ -459,6 +459,7 @@ def build_model(args, **kwargs):
             num_classes,
             mean_field_factor=args.model.mean_field_factor,
             mc_samples=args.model.mc_samples,
+            cov_likelihood=args.likelihood,
             bias=True,
         )
         if 'al' in args and args.al.strategy in ['bald', 'pseudo_bald', 'batch_bald']:
