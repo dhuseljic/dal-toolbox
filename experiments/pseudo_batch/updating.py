@@ -11,6 +11,7 @@ from dal_toolbox.utils import seed_everything
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from torch.utils.data import DataLoader, Subset
 from utils import flatten_cfg, build_datasets, build_model
+from rich.progress import track
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="updating")
@@ -19,11 +20,13 @@ def main(args):
     print(OmegaConf.to_yaml(args))
 
     # Setup Data
-    train_ds, test_ds, num_classes = build_datasets(args, use_val_split=True)
-    test_loader = DataLoader(test_ds, batch_size=args.model.predict_batch_size, shuffle=False)
+    train_ds, test_ds, num_classes = build_datasets(
+        args, use_val_split=True, use_feature_ds=(not args.finetune_dino))
+    test_loader = DataLoader(test_ds, batch_size=args.model.predict_batch_size,
+                             shuffle=False, num_workers=args.num_workers)
 
     seed_everything(args.random_seed)
-    num_features = len(train_ds[0][0])
+    num_features = 384  # len(train_ds[0][0])
     init_model = build_model(args, num_features=num_features, num_classes=num_classes)
 
     # Define indices for training, updating and retraining
@@ -48,6 +51,7 @@ def main(args):
         batch_size=args.model.train_batch_size,
         shuffle=True,
         drop_last=len(base_indices) > args.model.train_batch_size,
+        num_workers=args.num_workers
     )
     trainer = Trainer(**lightning_trainer_config)
     trainer.fit(base_model, train_dataloaders=train_loader)
@@ -77,11 +81,13 @@ def main(args):
         # Update using Bayes theorem (i.e., Monte Carlo)
         update_model_mc = copy.deepcopy(base_model)
         update_ds_mc = Subset(train_ds, indices=new_indices[:num_new])
-        update_loader_mc = DataLoader(update_ds_mc, batch_size=args.model.train_batch_size)
+        update_loader_mc = DataLoader(update_ds_mc, batch_size=args.model.predict_batch_size)
         start_time = time.time()
-        sampled_params, weights = update_mc(update_model_mc, update_loader_mc, mc_samples=args.model.mc_samples)
+        sampled_params, weights = update_mc(
+            update_model_mc, update_loader_mc, mc_samples=args.model.mc_samples)
         updating_time = time.time() - start_time
-        predictions_updated_mc = predict_from_mc(update_model_mc, test_loader, sampled_params=sampled_params, weights=weights)
+        predictions_updated_mc = predict_from_mc(
+            update_model_mc, test_loader, sampled_params=sampled_params, weights=weights)
         test_stats_mc_updating = evaluate(predictions_updated_mc)
         y_pred_updated_mc = torch.cat([pred[0] for pred in predictions_updated_mc]).argmax(-1)
         test_stats_mc_updating['decision_flips'] = torch.sum(y_pred_original != y_pred_updated_mc).item()
@@ -202,13 +208,18 @@ def update_mc(model, update_loader, mc_samples):
 
 @torch.no_grad()
 def predict_from_mc(model, dataloader, sampled_params, weights):
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    weights = weights.to(device)
+    sampled_params = sampled_params.to(device)
+    model = model.to(device)
     predictions = []
-    for batch in dataloader:
-        inputs = batch[0]
+    for batch in track(dataloader, description='Predicting with MC '):
+        inputs = batch[0].to(device)
         targets = batch[1]
 
         with torch.no_grad():
             _, phis = model.model(inputs, return_features=True)
+
         logits_mc = torch.einsum('nd,ekd->nek', phis, sampled_params)
         probas_mc = logits_mc.softmax(-1)
 
@@ -217,7 +228,7 @@ def predict_from_mc(model, dataloader, sampled_params, weights):
         else:
             probas = torch.mean(probas_mc, dim=1)
         logits = probas.log()
-        predictions.append([logits, targets])
+        predictions.append([logits.cpu(), targets])
 
     return predictions
 

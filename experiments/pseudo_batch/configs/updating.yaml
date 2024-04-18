@@ -12,6 +12,7 @@ likelihood: gaussian
 dataset_path: /home/datasets
 dataset_name: cifar10
 feature_cache_dir: null
+num_workers: null
 
 # Dino model
 dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
@@ -20,11 +21,12 @@ dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
 # dino_model_name: 'dinov2_vitg14' # 1100 M params - 1536 dimensions
 
 # model
+finetune_dino: False
 model:
   name: laplace
-  num_epochs: 200
+  num_epochs: 5200
   train_batch_size: 32
-  predict_batch_size: 256
+  predict_batch_size: 64
   mean_field_factor: 1
   mc_samples: 1_000
 
@@ -32,6 +34,7 @@ model:
 optimizer: 
   name: RAdam
   lr: 1e-2
+  lr_backbone: 1e-5
   weight_decay: 1e-4
   momentum: 0.9
 

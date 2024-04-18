@@ -26,23 +26,54 @@ def build_dino_model(args):
     return dino_model
 
 
+class GaussianBlur(transforms.RandomApply):
+    """
+    Apply Gaussian Blur to the PIL image.
+    """
+
+    def __init__(self, *, p: float = 0.5, radius_min: float = 0.1, radius_max: float = 2.0):
+        # NOTE: torchvision is applying 1 - probability to return the original image
+        keep_p = 1 - p
+        transform = transforms.GaussianBlur(kernel_size=9, sigma=(radius_min, radius_max))
+        super().__init__(transforms=[transform], p=keep_p)
+
+
 class DinoTransforms():
-    def __init__(self, size=None, center_crop_size=224):
-        if size:
-            # https://github.com/facebookresearch/dino/blob/main/eval_linear.py#L65-L70
-            dino_mean = (0.485, 0.456, 0.406)
-            dino_std = (0.229, 0.224, 0.225)
-            self.transform = transforms.Compose([
-                transforms.Resize(size, interpolation=3),
-                transforms.CenterCrop(center_crop_size),
-                transforms.ToTensor(),
-                transforms.Normalize(dino_mean, dino_std)
-            ])
-        else:
-            self.transform = transforms.Compose([transforms.ToTensor()])
+    def __init__(self, size=None, center_crop_size=224, finetune=False):
+        # https://github.com/facebookresearch/dino/blob/main/eval_linear.py#L65-L70
+        self.finetune = finetune
+        dino_mean = (0.485, 0.456, 0.406)
+        dino_std = (0.229, 0.224, 0.225)
+
+        self.transform = transforms.Compose([
+            transforms.Resize(size, interpolation=3),
+            transforms.CenterCrop(center_crop_size),
+            transforms.ToTensor(),
+            transforms.Normalize(dino_mean, dino_std)
+        ])
+
+        color_jittering = transforms.Compose([
+                transforms.RandomApply(
+                    [transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1)],
+                    p=0.8,
+                ),
+                transforms.RandomGrayscale(p=0.2),
+        ])
+        self._train_transform = transforms.Compose([
+            transforms.Resize(size, interpolation=3),
+            transforms.RandomResizedCrop(center_crop_size),
+            color_jittering,
+            GaussianBlur(p=0.1),
+            # transforms.RandomSolarize(threshold=128, p=0.2),
+            # transforms.RandomErasing(),
+            transforms.ToTensor(),
+            transforms.Normalize(dino_mean, dino_std)
+        ])
 
     @property
     def train_transform(self):
+        if self.finetune:
+            return self._train_transform
         return self.transform
 
     @property
@@ -74,57 +105,31 @@ class Bert(nn.Module):
         return cls_state
 
 
-def build_datasets(args, use_val_split=False):
+def build_datasets(args, use_val_split=False, use_feature_ds=True):
     image_datasets = ['cifar10', 'stl10', 'snacks', 'dtd', 'cifar100', 'food101', 'flowers102',
                       'caltech101', 'stanford_dogs', 'tiny_imagenet', 'imagenet']
-    text_datasets = ['agnews', 'dbpedia', 'clinc', 'trec']
-    tabular_datasets = ['letter',  'aloi']
 
-    if args.dataset_name in image_datasets:
+    data = build_image_data(args)
+    if use_feature_ds:
         model = build_dino_model(args)
-        data = build_image_data(args)
         train_ds = FeatureDataset(model, data.train_dataset, cache=True, cache_dir=args.feature_cache_dir)
         if use_val_split:
             test_ds = FeatureDataset(model, data.val_dataset, cache=True, cache_dir=args.feature_cache_dir)
         else:
             test_ds = FeatureDataset(model, data.test_dataset, cache=True, cache_dir=args.feature_cache_dir)
-        num_classes = data.num_classes
-    elif args.dataset_name in text_datasets:
-        data, num_classes = build_text_data(args)
-        tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased", use_fast=False)
-
-        data = data.map(
-            lambda batch: tokenizer(
-                batch["text"],
-                truncation=True,
-                padding="max_length",
-                max_length=512
-            ),
-            batched=True,
-            batch_size=1000)
-
-        data = data.remove_columns(
-            list(set(data['train'].column_names)-set(['input_ids', 'attention_mask', 'label'])))
-        data = data.with_format("torch")
-
-        model = Bert(num_classes=num_classes)
-        train_ds = FeatureDataset(model, data["train"], cache=True,
-                                  cache_dir=args.feature_cache_dir, task="text")
-        test_ds = FeatureDataset(model, data["test"], cache=True,
-                                 cache_dir=args.feature_cache_dir, task="text")
-
-    elif args.dataset_name in tabular_datasets:
-        openml_id = {'letter': 6, 'aloi': 42396}
-        train_ds, test_ds, num_classes = build_tabular_data(openml_id[args.dataset_name])
     else:
-        raise NotImplementedError()
+        train_ds = data.train_dataset
+        if use_val_split:
+            test_ds = data.val_dataset
+        else:
+            test_ds = data.test_dataset
+    num_classes = data.num_classes
 
     return train_ds, test_ds, num_classes
 
 
 def build_image_data(args):
-    # transforms = PlainTransforms(resize=(224, 224))
-    transforms = DinoTransforms(size=(256, 256))
+    transforms = DinoTransforms(size=(256, 256), finetune=args.finetune_dino)
     if args.dataset_name == 'cifar10':
         data = CIFAR10(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'stl10':
@@ -363,31 +368,29 @@ class DeterministcNet(nn.Linear):
         return representations
 
 
-class LaplaceMLP(nn.Module):
-    def __init__(self, num_features, num_classes, num_hidden=128):
+class BackboneModel(nn.Module):
+    def __init__(self, ssl_model, last_layer):
         super().__init__()
-        self.l1 = nn.Linear(num_features, num_hidden)
-        self.l2 = LaplaceNet(num_hidden, num_classes)
-        self.act = nn.ReLU()
+        self.ssl_model = ssl_model
+        self.last_layer = last_layer
 
     def forward_feature(self, x):
-        out = self.l1(x)
-        out = self.act(out)
-        return out
+        feature = self.ssl_model(x)
+        return feature
 
-    def forward(self, x):
+    def forward(self, x, return_features=False):
         feature = self.forward_feature(x)
-        out = self.l2(feature)
+        out = self.last_layer(feature, return_features=return_features)
         return out
 
     def forward_mean_field(self, x):
         feature = self.forward_feature(x)
-        out = self.l2.forward_mean_field(feature)
+        out = self.last_layer.forward_mean_field(feature)
         return out
 
     def forward_monte_carlo(self, x):
         feature = self.forward_feature(x)
-        out = self.l2.forward_monte_carlo(feature)
+        out = self.last_layer.forward_monte_carlo(feature)
         return out
 
     @torch.no_grad()
@@ -421,7 +424,7 @@ class LaplaceMLP(nn.Module):
 
         features = self.get_representations(dataloader, device)
         featureloader = DataLoader(TensorDataset(features), batch_size=dataloader.batch_size)
-        embeddings = self.l2.get_grad_representations(featureloader, device=device)
+        embeddings = self.last_layer.get_grad_representations(featureloader, device=device)
         return embeddings
 
     @torch.no_grad()
@@ -431,7 +434,7 @@ class LaplaceMLP(nn.Module):
 
         features = self.get_representations(dataloader, device)
         featureloader = DataLoader(TensorDataset(features), batch_size=dataloader.batch_size)
-        embeddings = self.l2.get_topk_grad_representations(
+        embeddings = self.last_layer.get_topk_grad_representations(
             featureloader, topk=topk, grad_likelihood=grad_likelihood, device=device,  normalize_top_probas=normalize_top_probas)
         return embeddings
 
@@ -442,7 +445,7 @@ class LaplaceMLP(nn.Module):
 
         features = self.get_representations(dataloader, device)
         featureloader = DataLoader(TensorDataset(features), batch_size=dataloader.batch_size)
-        embeddings = self.l2.get_exp_grad_representations(
+        embeddings = self.last_layer.get_exp_grad_representations(
             featureloader, device=device, grad_likelihood=grad_likelihood)
         return embeddings
 
@@ -464,25 +467,35 @@ def build_model(args, **kwargs):
         )
         if 'al' in args and args.al.strategy in ['bald', 'pseudo_bald', 'batch_bald']:
             LaplaceNet.use_mean_field = False
-    elif args.model.name == 'laplace_mlp':
-        model = LaplaceMLP(num_features, num_classes)
-        if 'al' in args and args.al.strategy in ['bald', 'pseudo_bald', 'batch_bald']:
-            LaplaceNet.use_mean_field = False
+    elif args.model.name == 'dino_laplace':
+        ssl_model = build_dino_model(args)
+        last_layer = LaplaceNet(
+            num_features,
+            num_classes,
+            mean_field_factor=args.model.mean_field_factor,
+            mc_samples=args.model.mc_samples,
+            cov_likelihood=args.likelihood,
+            bias=True,
+        )
+        model = BackboneModel(ssl_model, last_layer)
+
     else:
         raise NotImplementedError()
 
+    params = [
+        {'params': [p for n, p in model.named_parameters() if 'ssl_model' not in n]},
+        {'params': [p for n, p in model.named_parameters() if 'ssl_model' in n],
+         'lr': args.optimizer.lr_backbone},
+    ]
+
     if args.optimizer.name == 'SGD':
-        optimizer = torch.optim.SGD(model.parameters(), lr=args.optimizer.lr,
+        optimizer = torch.optim.SGD(params, lr=args.optimizer.lr,
                                     momentum=args.optimizer.momentum, weight_decay=args.optimizer.weight_decay)
     elif args.optimizer.name == 'Adam':
-        optimizer = torch.optim.Adam(model.parameters(), lr=args.optimizer.lr,
+        optimizer = torch.optim.Adam(params, lr=args.optimizer.lr,
                                      weight_decay=args.optimizer.weight_decay)
-    elif args.optimizer.name == 'AdamW':
-        optimizer = torch.optim.AdamW(model.parameters(), lr=args.optimizer.lr,
-                                      weight_decay=args.optimizer.weight_decay)
     elif args.optimizer.name == 'RAdam':
-        optimizer = torch.optim.RAdam(model.parameters(), lr=args.optimizer.lr,
-                                      weight_decay=args.optimizer.weight_decay)
+        optimizer = torch.optim.RAdam(params, lr=args.optimizer.lr, weight_decay=args.optimizer.weight_decay)
     else:
         raise NotImplementedError()
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.model.num_epochs)
