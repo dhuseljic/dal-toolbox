@@ -5,14 +5,14 @@ num_new_samples: [1, 5, 10]
 random_seed: 42
 
 update_lmb: 1
-update_gamma: 10
+update_gamma: 1
 likelihood: gaussian
 
 # Data
 dataset_path: /home/datasets
 dataset_name: cifar10
 feature_cache_dir: null
-num_workers: null
+num_workers: 0
 
 # Dino model
 dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
@@ -24,7 +24,7 @@ dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
 finetune_dino: False
 model:
   name: laplace
-  num_epochs: 5200
+  num_epochs: 200
   train_batch_size: 32
   predict_batch_size: 64
   mean_field_factor: 1
