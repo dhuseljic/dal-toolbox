@@ -1,7 +1,9 @@
 mlflow_uri: sqlite:///updating.db
 
 num_init_samples: 10
-num_new_samples: [1, 5, 10]
+num_new_samples: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+# num_new_samples: [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+# num_new_samples: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 random_seed: 42
 
 update_lmb: 1
@@ -11,6 +13,7 @@ likelihood: gaussian
 # Data
 dataset_path: /home/datasets
 dataset_name: cifar10
+cache_features: True
 feature_cache_dir: null
 num_workers: 0
 
@@ -21,22 +24,22 @@ dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
 # dino_model_name: 'dinov2_vitg14' # 1100 M params - 1536 dimensions
 
 # model
-finetune_dino: False
 model:
   name: laplace
   num_epochs: 200
   train_batch_size: 32
   predict_batch_size: 64
   mean_field_factor: 1
-  mc_samples: 1_000
+  mc_samples: 10_000
 
 # Optimizer
 optimizer: 
   name: RAdam
   lr: 1e-2
-  lr_backbone: 1e-5
   weight_decay: 1e-4
   momentum: 0.9
+  lr_backbone: 1e-5
+  finetune_backbone: False
 
 output_dir: ./output/
 hydra:

@@ -20,8 +20,7 @@ def main(args):
     print(OmegaConf.to_yaml(args))
 
     # Setup Data
-    train_ds, test_ds, num_classes = build_datasets(
-        args, use_val_split=True, use_feature_ds=(not args.finetune_dino))
+    train_ds, test_ds, num_classes = build_datasets(args, val_split=True, cache_features=args.cache_features)
     test_loader = DataLoader(test_ds, batch_size=args.model.predict_batch_size,
                              shuffle=False, num_workers=args.num_workers)
 
@@ -209,7 +208,6 @@ def update_mc(model, update_loader, mc_samples):
 @torch.no_grad()
 def predict_from_mc(model, dataloader, sampled_params, weights):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    weights = weights.to(device)
     sampled_params = sampled_params.to(device)
     model = model.to(device)
     predictions = []
@@ -224,6 +222,7 @@ def predict_from_mc(model, dataloader, sampled_params, weights):
         probas_mc = logits_mc.softmax(-1)
 
         if weights is not None:
+            weights = weights.to(probas_mc)
             probas = torch.einsum('e,nek->nk', weights, probas_mc)
         else:
             probas = torch.mean(probas_mc, dim=1)

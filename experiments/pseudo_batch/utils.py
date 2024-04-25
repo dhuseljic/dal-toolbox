@@ -105,21 +105,21 @@ class Bert(nn.Module):
         return cls_state
 
 
-def build_datasets(args, use_val_split=False, use_feature_ds=True):
+def build_datasets(args, val_split=False, cache_features=True):
     image_datasets = ['cifar10', 'stl10', 'snacks', 'dtd', 'cifar100', 'food101', 'flowers102',
                       'caltech101', 'stanford_dogs', 'tiny_imagenet', 'imagenet']
 
     data = build_image_data(args)
-    if use_feature_ds:
+    if cache_features:
         model = build_dino_model(args)
         train_ds = FeatureDataset(model, data.train_dataset, cache=True, cache_dir=args.feature_cache_dir)
-        if use_val_split:
+        if val_split:
             test_ds = FeatureDataset(model, data.val_dataset, cache=True, cache_dir=args.feature_cache_dir)
         else:
             test_ds = FeatureDataset(model, data.test_dataset, cache=True, cache_dir=args.feature_cache_dir)
     else:
         train_ds = data.train_dataset
-        if use_val_split:
+        if val_split:
             test_ds = data.val_dataset
         else:
             test_ds = data.test_dataset
@@ -129,7 +129,7 @@ def build_datasets(args, use_val_split=False, use_feature_ds=True):
 
 
 def build_image_data(args):
-    transforms = DinoTransforms(size=(256, 256), finetune=args.finetune_dino)
+    transforms = DinoTransforms(size=(256, 256), finetune=args.optimizer.finetune_backbone)
     if args.dataset_name == 'cifar10':
         data = CIFAR10(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'stl10':
@@ -478,6 +478,11 @@ def build_model(args, **kwargs):
             bias=True,
         )
         model = BackboneModel(ssl_model, last_layer)
+
+        if not args.optimizer.finetune_backbone:
+            for n, p in model.named_parameters():
+                if 'ssl_model' in n:
+                    p.requires_grad = False
 
     else:
         raise NotImplementedError()
