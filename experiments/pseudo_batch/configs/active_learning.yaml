@@ -7,6 +7,7 @@ likelihood: gaussian
 
 dataset_path: /home/datasets
 dataset_name: cifar10
+use_val_split: False
 cache_features: True
 feature_cache_dir: null
 num_workers: 0
