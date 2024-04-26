@@ -126,7 +126,7 @@ def build_al_strategy(args):
             device=args.al.device
         )
     elif args.al.strategy == 'pseudo_bait':
-        al_strategy = strategies.BaitSampling(
+        strat = strategies.BaitSampling(
             subset_size=args.al.subset_size,
             grad_likelihood=args.al.bait.grad_likelihood,
             device=args.al.device
