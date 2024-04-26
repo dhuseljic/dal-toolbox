@@ -13,9 +13,8 @@ from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.active_learning import strategies
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything
-from utils import DinoFeatureDataset, flatten_cfg, build_data, build_model, build_dino_model, build_tabular_data
-
-
+from utils import build_datasets, flatten_cfg, build_model
+from torch.utils.data import DataLoader, Subset
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
@@ -23,15 +22,11 @@ def main(args):
     seed_everything(42)
     print(OmegaConf.to_yaml(args))
 
-    dino_model = build_dino_model(args)
-    data = build_data(args)
+    train_ds, test_ds, num_classes = build_datasets(args, val_split=True, cache_features=args.cache_features)
+    test_loader = DataLoader(test_ds, batch_size=args.model.predict_batch_size,
+                             shuffle=False, num_workers=args.num_workers)
 
-    train_ds = DinoFeatureDataset(dino_model, dataset=data.train_dataset,
-                                  cache=True, cache_dir=args.dino_cache_dir)
-    # test_ds = DinoFeatureDataset(dino_model, dataset=data.val_dataset,
-    #                              cache=True, cache_dir=args.dino_cache_dir)
-    test_ds = DinoFeatureDataset(dino_model, dataset=data.test_dataset, cache=True)
-    
+
     seed_everything(args.random_seed)
     al_datamodule = ActiveLearningDataModule(
         train_dataset=train_ds,
@@ -49,7 +44,16 @@ def main(args):
     al_strategy = build_al_strategy(args)
 
     history = []
-    model = build_model(args, num_features=dino_model.norm.normalized_shape[0], num_classes=data.num_classes)
+    num_features = 384  # len(train_ds[0][0])
+    model = build_model(args, num_features=num_features, num_classes=num_classes)
+    lightning_trainer_config = dict(
+        max_epochs=args.model.num_epochs,
+        default_root_dir=args.output_dir,
+        enable_checkpointing=False,
+        logger=False,
+        enable_progress_bar=False,
+        callbacks=[MetricLogger()],
+    )
     for i_acq in range(0, args.al.num_acq+1):
         if i_acq != 0:
             print('Querying..')
@@ -63,14 +67,7 @@ def main(args):
             al_datamodule.update_annotations(indices)
 
         model.reset_states()
-        trainer = Trainer(
-            max_epochs=args.model.num_epochs,
-            default_root_dir=args.output_dir,
-            enable_checkpointing=False,
-            logger=False,
-            enable_progress_bar=False,
-            callbacks=[MetricLogger()],
-        )
+        trainer = Trainer(**lightning_trainer_config)
         trainer.fit(model, train_dataloaders=al_datamodule)
 
         predictions = trainer.predict(model, dataloaders=al_datamodule.test_dataloader())
@@ -203,4 +200,3 @@ class PseudoBatch(strategies.Query):
 
 if __name__ == '__main__':
     main()
-

@@ -1,21 +1,20 @@
 random_seed: 42
-mlflow_uri: sqlite:///mlflow.db
-output_dir: ./output/
+mlflow_uri: sqlite:///active_learning.db
 
 update_lmb: 1
 update_gamma: 10
 likelihood: gaussian
 
-# Data
-dataset_path: /datasets
+dataset_path: /home/datasets
 dataset_name: cifar10
+cache_features: True
+feature_cache_dir: null
+num_workers: 0
 
-# Dino model
 dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
 # dino_model_name: 'dinov2_vitb14' # 86 M params - 768 dimensions
 # dino_model_name: 'dinov2_vitl14' # 300 M params - 1024 dimensions
 # dino_model_name: 'dinov2_vitg14' # 1100 M params - 1536 dimensions
-dino_cache_dir: null
 
 al:
   strategy: random
@@ -41,11 +40,7 @@ model:
   train_batch_size: 64
   predict_batch_size: 128
   mean_field_factor: 0.4
-  mc_samples: 100
-  num_inducing: 1024
-  kernel_scale: 10
-  scale_random_features: True
-  optimize_kernel_scale: True
+  mc_samples: 10_000
 
 # Optimizer
 optimizer: 
@@ -53,7 +48,10 @@ optimizer:
   lr: 1e-2
   weight_decay: 1e-4
   momentum: 0.9
+  lr_backbone: 1e-5
+  finetune_backbone: False
 
+output_dir: ./output/
 hydra:
   run:
     dir: ${output_dir}
