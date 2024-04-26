@@ -3,6 +3,7 @@ mlflow_uri: sqlite:///active_learning.db
 
 update_lmb: 1
 update_gamma: 10
+update_every: 1
 likelihood: gaussian
 
 dataset_path: /home/datasets
@@ -24,15 +25,8 @@ al:
   num_init_samples: 10
   num_acq: 10
   acq_size: 10
-  update_every: 1
   bait:
-    grad_likelihood: cross_entropy
-    expectation_topk: null
-    fisher_approximation: full
-    num_grad_samples: null
-    grad_selection: magnitude
-    normalize_top_probas: True
-    fisher_batch_size: 32
+    grad_likelihood: binary_cross_entropy
   device: cpu
 
 model:

@@ -105,44 +105,33 @@ def build_al_strategy(args):
         al_strategy = strategies.MarginSampling(subset_size=args.al.subset_size)
     elif args.al.strategy == 'pseudo_margin':
         strat = strategies.MarginSampling(subset_size=args.al.subset_size)
-        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.al.update_every,
+        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.update_every,
                                   gamma=args.update_gamma, subset_size=args.al.subset_size)
     elif args.al.strategy == 'badge':
         al_strategy = strategies.Badge(subset_size=args.al.subset_size)
     elif args.al.strategy == 'pseudo_badge':
         strat = strategies.Badge(subset_size=args.al.subset_size)
-        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.al.update_every,
+        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.update_every,
                                   gamma=args.update_gamma, subset_size=args.al.subset_size)
     elif args.al.strategy == 'batch_bald':
         al_strategy = strategies.BatchBALDSampling(subset_size=args.al.subset_size)
     elif args.al.strategy == 'pseudo_bald':
         strat = strategies.BALDSampling(subset_size=args.al.subset_size)
-        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.al.update_every,
+        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.update_every,
                                   gamma=args.update_gamma, subset_size=args.al.subset_size)
     elif args.al.strategy == 'bait':
         al_strategy = strategies.BaitSampling(
             subset_size=args.al.subset_size,
-            expectation_topk=args.al.bait.expectation_topk,
-            normalize_top_probas=args.al.bait.normalize_top_probas,
-            fisher_approximation=args.al.bait.fisher_approximation,
             grad_likelihood=args.al.bait.grad_likelihood,
-            num_grad_samples=args.al.bait.num_grad_samples,
-            grad_selection=args.al.bait.grad_selection,
             device=args.al.device
         )
     elif args.al.strategy == 'pseudo_bait':
-        strat = strategies.BaitSampling(
+        al_strategy = strategies.BaitSampling(
             subset_size=args.al.subset_size,
-            expectation_topk=args.al.bait.expectation_topk,
-            normalize_top_probas=args.al.bait.normalize_top_probas,
-            fisher_approximation=args.al.bait.fisher_approximation,
             grad_likelihood=args.al.bait.grad_likelihood,
-            num_grad_samples=args.al.bait.num_grad_samples,
-            grad_selection=args.al.bait.grad_selection,
-            device=args.al.device,
-            select='topk',
+            device=args.al.device
         )
-        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.al.update_every,
+        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.update_every,
                                   gamma=args.update_gamma, subset_size=args.al.subset_size)
     elif args.al.strategy == 'typiclust':
         al_strategy = strategies.TypiClust(subset_size=args.al.subset_size)
