@@ -79,7 +79,7 @@ def main(args):
     mlflow.start_run()
     mlflow.log_params(flatten_cfg(args))
     for i_acq, test_stats in enumerate(history):
-        mlflow.log_metrics(test_stats, step=i_acq)
+        mlflow.log_metrics(test_stats, step=i_acq, synchronous=False)
     mlflow.end_run()
 
 
