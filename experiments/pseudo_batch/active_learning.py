@@ -77,7 +77,7 @@ def main(args):
     mlflow.set_tracking_uri(uri="{}".format(args.mlflow_uri))
     mlflow.set_experiment("Active Learning")
     mlflow.start_run()
-    mlflow.log_params(flatten_cfg(args))
+    mlflow.log_params(flatten_cfg(args), synchronous=False)
     for i_acq, test_stats in enumerate(history):
         mlflow.log_metrics(test_stats, step=i_acq, synchronous=False)
     mlflow.end_run()
