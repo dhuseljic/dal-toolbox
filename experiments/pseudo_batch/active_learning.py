@@ -77,9 +77,9 @@ def main(args):
     mlflow.set_tracking_uri(uri="{}".format(args.mlflow_uri))
     mlflow.set_experiment("Active Learning")
     mlflow.start_run()
-    log_params(flatten_cfg(args))
+    mlflow.log_params(flatten_cfg(args))
     for i_acq, test_stats in enumerate(history):
-        log_metrics(test_stats, step=i_acq)
+        mlflow.log_metrics(test_stats, step=i_acq)
     mlflow.end_run()
 
 
@@ -183,26 +183,6 @@ class PseudoBatch(strategies.Query):
             indices.extend(idx)
         actual_indices = indices
         return actual_indices
-
-
-def log_params(*args, **kwargs):
-    retry = 5
-    for _ in range(retry):
-        try:
-            mlflow.log_params(*args, **kwargs)
-            return
-        except:
-            time.sleep(1)
-
-
-def log_metrics(*args, **kwargs):
-    retry = 5
-    for _ in range(retry):
-        try:
-            mlflow.log_metrics(*args, **kwargs)
-            return
-        except:
-            time.sleep(1)
 
 
 if __name__ == '__main__':
