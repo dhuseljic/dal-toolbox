@@ -75,7 +75,7 @@ def main(args):
         history.append(test_stats)
 
     mlflow.set_tracking_uri(uri="{}".format(args.mlflow_uri))
-    mlflow.set_experiment("Active Learning")
+    mlflow.get_experiment_by_name("Active Learning")
     mlflow.start_run()
     mlflow.log_params(flatten_cfg(args))
     for i_acq, test_stats in enumerate(history):
