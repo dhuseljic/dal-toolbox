@@ -203,8 +203,8 @@ class LaplaceNet(LaplaceLayer):
         for batch in dataloader:
             inputs = batch[0]
             if LaplaceNet.use_mean_field:
-                # logits = self.forward_mean_field(inputs.to(device))
-                logits = self(inputs.to(device))
+                logits = self.forward_mean_field(inputs.to(device))
+                # logits = self(inputs.to(device))
             else:
                 logits = self.forward_monte_carlo(inputs.to(device))
             all_logits.append(logits)
