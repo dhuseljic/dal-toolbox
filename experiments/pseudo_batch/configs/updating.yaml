@@ -1,4 +1,5 @@
 random_seed: 42
+experiment_name: updating
 mlflow_uri: sqlite:///updating.db
 
 update_lmb: 1

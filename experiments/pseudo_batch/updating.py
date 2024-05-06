@@ -131,7 +131,7 @@ def main(args):
 
     # Logging
     mlflow.set_tracking_uri(uri=args.mlflow_uri)
-    mlflow.set_experiment("Updating")
+    mlflow.set_experiment(args.experiment_name)
     mlflow.start_run()
     mlflow.log_params(flatten_cfg(args))
     for num_new in results:
