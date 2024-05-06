@@ -20,7 +20,8 @@ def main(args):
     print(OmegaConf.to_yaml(args))
 
     # Setup Data
-    train_ds, test_ds, num_classes = build_datasets(args, val_split=True, cache_features=args.cache_features)
+    train_ds, test_ds, num_classes = build_datasets(
+        args, val_split=args.use_val_split, cache_features=args.cache_features)
     test_loader = DataLoader(test_ds, batch_size=args.model.predict_batch_size,
                              shuffle=False, num_workers=args.num_workers)
 
