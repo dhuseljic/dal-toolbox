@@ -14,7 +14,7 @@ num_new_samples: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 dataset_path: /home/datasets
 dataset_name: cifar10
-use_val_split: True
+use_val_split: False
 cache_features: True
 feature_cache_dir: null
 num_workers: 0

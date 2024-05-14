@@ -26,7 +26,7 @@ def main(args):
                              shuffle=False, num_workers=args.num_workers)
 
     seed_everything(args.random_seed)
-    num_features = 384  # len(train_ds[0][0])
+    num_features = len(train_ds[0][0])
     init_model = build_model(args, num_features=num_features, num_classes=num_classes)
 
     # Define indices for training, updating and retraining

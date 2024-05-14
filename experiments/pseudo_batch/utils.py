@@ -53,11 +53,11 @@ class DinoTransforms():
         ])
 
         color_jittering = transforms.Compose([
-                transforms.RandomApply(
-                    [transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1)],
-                    p=0.8,
-                ),
-                transforms.RandomGrayscale(p=0.2),
+            transforms.RandomApply(
+                [transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2, hue=0.1)],
+                p=0.8,
+            ),
+            transforms.RandomGrayscale(p=0.2),
         ])
         self._train_transform = transforms.Compose([
             transforms.Resize(size, interpolation=3),
@@ -108,22 +108,50 @@ class Bert(nn.Module):
 def build_datasets(args, val_split=False, cache_features=True):
     image_datasets = ['cifar10', 'stl10', 'snacks', 'dtd', 'cifar100', 'food101', 'flowers102',
                       'caltech101', 'stanford_dogs', 'tiny_imagenet', 'imagenet']
+    text_datasets = ['agnews', 'dbpedia', 'clinc', 'trec']
 
-    data = build_image_data(args)
-    if cache_features:
-        model = build_dino_model(args)
-        train_ds = FeatureDataset(model, data.train_dataset, cache=True, cache_dir=args.feature_cache_dir)
-        if val_split:
-            test_ds = FeatureDataset(model, data.val_dataset, cache=True, cache_dir=args.feature_cache_dir)
+    if args.dataset_name in image_datasets:
+        data = build_image_data(args)
+        if cache_features:
+            model = build_dino_model(args)
+            train_ds = FeatureDataset(model, data.train_dataset, cache=True, cache_dir=args.feature_cache_dir)
+            if val_split:
+                test_ds = FeatureDataset(model, data.val_dataset, cache=True,
+                                         cache_dir=args.feature_cache_dir)
+            else:
+                test_ds = FeatureDataset(model, data.test_dataset, cache=True,
+                                         cache_dir=args.feature_cache_dir)
         else:
-            test_ds = FeatureDataset(model, data.test_dataset, cache=True, cache_dir=args.feature_cache_dir)
-    else:
-        train_ds = data.train_dataset
-        if val_split:
-            test_ds = data.val_dataset
-        else:
-            test_ds = data.test_dataset
-    num_classes = data.num_classes
+            train_ds = data.train_dataset
+            if val_split:
+                test_ds = data.val_dataset
+            else:
+                test_ds = data.test_dataset
+        num_classes = data.num_classes
+
+    elif args.dataset_name in text_datasets:
+        data, num_classes = build_text_data(args)
+        tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased", use_fast=False)
+
+        data = data.map(
+            lambda batch: tokenizer(
+                batch["text"],
+                truncation=True,
+                padding="max_length",
+                max_length=512
+            ),
+            batched=True,
+            batch_size=1000)
+
+        data = data.remove_columns(
+            list(set(data['train'].column_names)-set(['input_ids', 'attention_mask', 'label'])))
+        data = data.with_format("torch")
+
+        model = BertSequenceClassifier(num_classes=num_classes)
+        train_ds = FeatureDataset(model, data["train"], cache=True,
+                                  cache_dir=args.feature_cache_dir, task="text")
+        test_ds = FeatureDataset(model, data["test"], cache=True,
+                                 cache_dir=args.feature_cache_dir, task="text")
 
     return train_ds, test_ds, num_classes
 
@@ -592,3 +620,23 @@ class FeatureDataset:
         features = torch.cat(features)
         labels = torch.cat(labels)
         return features, labels
+
+
+class BertSequenceClassifier(nn.Module):
+    def __init__(self, num_classes):
+        super(BertSequenceClassifier, self).__init__()
+
+        self.num_classes = num_classes
+        self.bert = AutoModelForSequenceClassification.from_pretrained(
+            "bert-base-uncased",
+            num_labels=self.num_classes)
+
+    def forward(self, input_ids, attention_mask):
+        outputs = self.bert(input_ids, attention_mask, labels=None, output_hidden_states=True)
+        logits = outputs['logits']
+
+        # huggingface takes pooler output for classification (not accessible here anymore, would need bert model)
+        last_hidden_state = outputs['hidden_states'][-1]  # (batch, sequence, dim)
+        # (batch, dim)     #not in bert, taken from distilbert and roberta
+        cls_state = last_hidden_state[:, 0, :]
+        return cls_state
