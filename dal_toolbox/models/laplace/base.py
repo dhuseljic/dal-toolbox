@@ -90,6 +90,7 @@ class LaplaceModel(BaseModule):
 
     @torch.no_grad()
     def update_posterior(self, dataloader, lmb=1, gamma=1, likelihood='gaussian'):
+        # Set to eval to avoid precision matrix update
         self.eval()
 
         # check if return_features is in forward_kwargs
