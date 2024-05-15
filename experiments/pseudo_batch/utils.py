@@ -108,7 +108,7 @@ class Bert(nn.Module):
 def build_datasets(args, val_split=False, cache_features=True):
     image_datasets = ['cifar10', 'stl10', 'snacks', 'dtd', 'cifar100', 'food101', 'flowers102',
                       'caltech101', 'stanford_dogs', 'tiny_imagenet', 'imagenet']
-    text_datasets = ['agnews', 'dbpedia', 'clinc', 'trec']
+    text_datasets = ['agnews', 'dbpedia', 'banking77', 'clinc']
 
     if args.dataset_name in image_datasets:
         data = build_image_data(args)
@@ -185,20 +185,20 @@ def build_image_data(args):
 
 def build_text_data(args):
     if args.dataset_name == "agnews":
-        data = load_dataset("ag_news")  # maybe set cache_dir @denis cache_dir=
+        data = load_dataset("ag_news")
         num_classes = 4
     elif args.dataset_name == "dbpedia":
-        data = load_dataset("dbpedia_14")  # maybe set cache_dir @denis cache_dir=
+        data = load_dataset("dbpedia_14")
         data = data.rename_column("content", "text")
         num_classes = 14
+    elif args.dataset_name == "banking77":
+        data = load_dataset("banking77") 
+        num_classes = 77
+        # data = data.rename_column("coarse_label", "label")
     elif args.dataset_name == "clinc":
-        data = load_dataset("clinc_oos", "plus")  # maybe set cache_dir @denis cache_dir=
+        data = load_dataset("clinc_oos", "plus")
         data = data.rename_column("intent", "label")
         num_classes = 151
-    elif args.dataset_name == "trec":
-        data = load_dataset("trec")  # maybe set cache_dir @denis cache_dir=
-        num_classes = 6
-        data = data.rename_column("coarse_label", "label")
     else:
         raise NotImplementedError()
     return data, num_classes
