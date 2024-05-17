@@ -61,37 +61,63 @@ def main(args):
     test_stats_base = evaluate(predictions_base)
     y_pred_original = torch.cat([pred[0] for pred in predictions_base]).argmax(-1)
 
+    update_types = ['first_order', 'second_order', 'mc']
     results = {}
     for num_new in args.num_new_samples:
-        # Second-order updating
-        update_model = copy.deepcopy(base_model)
         update_ds = Subset(train_ds, indices=new_indices[:num_new])
         update_loader = DataLoader(update_ds, batch_size=args.model.train_batch_size)
-        start_time = time.time()
-        update_model.update_posterior(update_loader, lmb=args.update_lmb,
-                                      gamma=args.update_gamma, likelihood=args.likelihood)
-        updating_time = time.time() - start_time
 
-        predictions_updated = trainer.predict(update_model, test_loader)
-        test_stats_updating = evaluate(predictions_updated)
-        y_pred_updated = torch.cat([pred[0] for pred in predictions_updated]).argmax(-1)
-        test_stats_updating['decision_flips'] = torch.sum(y_pred_original != y_pred_updated).item()
-        test_stats_updating['time'] = updating_time
+        if 'second_order' in update_types:
+            update_model = copy.deepcopy(base_model)
+            start_time = time.time()
+            update_model.update_posterior(
+                update_loader,
+                lmb=args.update_lmb,
+                gamma=args.update_gamma,
+                cov_likelihood=args.likelihood,
+                update_type='second_order'
+            )
+            updating_time = time.time() - start_time
 
-        # Update using Bayes theorem (i.e., Monte Carlo)
-        update_model_mc = copy.deepcopy(base_model)
-        update_ds_mc = Subset(train_ds, indices=new_indices[:num_new])
-        update_loader_mc = DataLoader(update_ds_mc, batch_size=args.model.predict_batch_size)
-        start_time = time.time()
-        sampled_params, weights = update_mc(
-            update_model_mc, update_loader_mc, mc_samples=args.model.mc_samples)
-        updating_time = time.time() - start_time
-        predictions_updated_mc = predict_from_mc(
-            update_model_mc, test_loader, sampled_params=sampled_params, weights=weights)
-        test_stats_mc_updating = evaluate(predictions_updated_mc)
-        y_pred_updated_mc = torch.cat([pred[0] for pred in predictions_updated_mc]).argmax(-1)
-        test_stats_mc_updating['decision_flips'] = torch.sum(y_pred_original != y_pred_updated_mc).item()
-        test_stats_mc_updating['time'] = updating_time
+            predictions_updated = trainer.predict(update_model, test_loader)
+            y_pred_updated = torch.cat([pred[0] for pred in predictions_updated]).argmax(-1)
+            test_stats_updating = evaluate(predictions_updated)
+            test_stats_updating['decision_flips'] = torch.sum(y_pred_original != y_pred_updated).item()
+            test_stats_updating['time'] = updating_time
+
+        if 'first_order' in update_types:
+            update_model = copy.deepcopy(base_model)
+            start_time = time.time()
+            update_model.update_posterior(
+                update_loader,
+                lmb=args.update_lmb,
+                gamma=args.update_gamma_fo,
+                cov_likelihood=args.likelihood,
+                update_type='first_order'
+            )
+            updating_time = time.time() - start_time
+
+            predictions_updated = trainer.predict(update_model, test_loader)
+            y_pred_updated = torch.cat([pred[0] for pred in predictions_updated]).argmax(-1)
+            test_stats_updating_fo = evaluate(predictions_updated)
+            test_stats_updating_fo['decision_flips'] = torch.sum(y_pred_original != y_pred_updated).item()
+            test_stats_updating_fo['time'] = updating_time
+
+        if 'mc' in update_types:
+            update_model_mc = copy.deepcopy(base_model)
+            start_time = time.time()
+            sampled_params, weights = update_mc(
+                update_model_mc,
+                update_loader,
+                mc_samples=args.model.mc_samples
+            )
+            updating_time = time.time() - start_time
+            predictions_updated_mc = predict_from_mc(
+                update_model_mc, test_loader, sampled_params=sampled_params, weights=weights)
+            test_stats_updating_mc = evaluate(predictions_updated_mc)
+            y_pred_updated_mc = torch.cat([pred[0] for pred in predictions_updated_mc]).argmax(-1)
+            test_stats_updating_mc['decision_flips'] = torch.sum(y_pred_original != y_pred_updated_mc).item()
+            test_stats_updating_mc['time'] = updating_time
 
         # Retraining
         retrain_model = copy.deepcopy(init_model)
@@ -117,15 +143,16 @@ def main(args):
         test_stats_retraining['time'] = retraining_time
 
         print('Number of new samples:', num_new)
-        print('Base model:', test_stats_base)
-        print('Updated model:', test_stats_updating)
-        print('MC Updated model:', test_stats_mc_updating)
-        print('Retrained model:', test_stats_retraining)
-        print('=' * 20)
+        print('Baseline model:\t\t', test_stats_base)
+        print('FO Updated model:\t', test_stats_updating_fo)
+        print('MC Updated model:\t', test_stats_updating_mc)
+        print('SO Updated model:\t', test_stats_updating)
+        print('Retrained model:\t', test_stats_retraining)
         results[num_new] = {
             'base': test_stats_base,
             'updated': test_stats_updating,
-            'mc_updated': test_stats_mc_updating,
+            'fo_updated': test_stats_updating_fo,
+            'mc_updated': test_stats_updating_mc,
             'retrained': test_stats_retraining
         }
 
@@ -138,19 +165,21 @@ def main(args):
         res_dict = results[num_new]
         test_stats_base = res_dict['base']
         test_stats_updating = res_dict['updated']
-        test_stats_mc_updating = res_dict['mc_updated']
+        test_stats_updating_mc = res_dict['mc_updated']
+        test_stats_updating_fo = res_dict['fo_updated']
         test_stats_retraining = res_dict['retrained']
 
         mlflow.log_metrics({f'base_{k}': v for k, v in test_stats_base.items()}, step=num_new)
         mlflow.log_metrics({f'updated_{k}': v for k, v in test_stats_updating.items()}, step=num_new)
-        mlflow.log_metrics({f'mc_updated_{k}': v for k, v in test_stats_mc_updating.items()}, step=num_new)
+        mlflow.log_metrics({f'mc_updated_{k}': v for k, v in test_stats_updating_mc.items()}, step=num_new)
         mlflow.log_metrics({f'retrained_{k}': v for k, v in test_stats_retraining.items()}, step=num_new)
 
         print('Number of new samples:', num_new)
-        print('Base model:', test_stats_base)
-        print('Updated model:', test_stats_updating)
-        print('MC Updated model:', test_stats_mc_updating)
-        print('Retrained model:', test_stats_retraining)
+        print('Baseline model:\t\t', test_stats_base)
+        print('FO Updated model:\t', test_stats_updating_fo)
+        print('MC Updated model:\t', test_stats_updating_mc)
+        print('SO Updated model:\t', test_stats_updating)
+        print('Retrained model:\t', test_stats_retraining)
         print('=' * 20)
     mlflow.end_run()
 
@@ -161,11 +190,8 @@ def evaluate(predictions):
 
     test_stats = {
         'accuracy': metrics.Accuracy()(test_logits, test_labels).item(),
-        'NLL': metrics.CrossEntropy()(test_logits, test_labels).item(),
-        'BS': metrics.BrierScore()(test_logits, test_labels).item(),
         'ECE': metrics.ExpectedCalibrationError()(test_logits, test_labels).item(),
         'ACE': metrics.AdaptiveCalibrationError()(test_logits, test_labels).item(),
-        'reliability': metrics.BrierScoreDecomposition()(test_logits, test_labels)['reliability']
     }
     return test_stats
 

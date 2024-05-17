@@ -22,7 +22,6 @@ class LaplaceModel(BaseModule):
         super().__init__(model, loss_fn, optimizer, lr_scheduler, train_metrics, val_metrics, scheduler_interval)
         self.use_mean_field = True
 
-
     def training_step(self, batch):
         inputs, targets = batch
 
@@ -77,7 +76,6 @@ class LaplaceModel(BaseModule):
             if isinstance(m, LaplaceLayer):
                 m.mean_field_factor = mean_field_factor
 
-
     def _reset_precision_matrix(self):
         for m in self.model.modules():
             if isinstance(m, LaplaceLayer):
@@ -89,7 +87,7 @@ class LaplaceModel(BaseModule):
                 m.synchronize_precision_matrix()
 
     @torch.no_grad()
-    def update_posterior(self, dataloader, lmb=1, gamma=1, likelihood='gaussian'):
+    def update_posterior(self, dataloader, lmb=1, gamma=1, cov_likelihood='gaussian', update_type='first_order'):
         # Set to eval to avoid precision matrix update
         self.eval()
 
@@ -114,69 +112,95 @@ class LaplaceModel(BaseModule):
             if isinstance(m, LaplaceLayer):
                 laplace_layer = m
 
-        mean = laplace_layer.layer.weight.data.clone()
-        cov = laplace_layer.covariance_matrix.data.clone()
+        mean = laplace_layer.layer.weight.data
+        cov = laplace_layer.covariance_matrix.data
         targets_onehot = F.one_hot(targets, num_classes=num_classes)
 
-        if likelihood == 'gaussian':
-            for _ in range(lmb):
-                for phi, target_onehot in zip(phis, targets_onehot):
-                    # Compute new cov with woodbury identity
-                    tmp_1 = torch.matmul(cov, phi)
-                    tmp_2 = torch.outer(tmp_1, tmp_1)
-                    var = torch.matmul(phi, tmp_1)
+        if update_type == 'first_order':
+            new_mean = first_order_update(phis, targets_onehot, mean, gamma=gamma, lmb=lmb)
+            new_cov = cov.clone()
+        elif update_type == 'second_order':
+            new_mean, new_cov = second_order_update(
+                phis, targets_onehot, mean, cov, cov_likelihood=cov_likelihood, gamma=gamma, lmb=lmb)
 
-                    cov_update = tmp_2 / (1 + var)
-                    cov -= cov_update
+        laplace_layer.layer.weight.data = new_mean
+        laplace_layer.covariance_matrix.data = new_cov
 
-                    # Update mean
-                    logits = F.linear(phi, mean)
-                    probas = logits.softmax(-1)
 
-                    tmp_3 = F.linear(gamma*cov, phi)
-                    tmp_4 = (target_onehot - probas)
-                    mean += torch.outer(tmp_4, tmp_3)
+def first_order_update(features, targets_onehot, mean, gamma=1, lmb=1):
+    mean = mean.clone()
+    for _ in range(lmb):
+        for feature, target_onehot in zip(features, targets_onehot):
+            logits = F.linear(feature, mean)
+            probas = logits.softmax(-1)
 
-        elif likelihood == 'categorical':
-            for _ in range(lmb):
-                for phi, target_onehot in zip(phis, targets_onehot):
-                    tmp_1 = cov @ phi
-                    tmp_2 = torch.outer(tmp_1, tmp_1)
+            tmp_3 = gamma*feature.clone()
+            tmp_4 = (target_onehot - probas)
+            mean += torch.outer(tmp_4, tmp_3)
+    return mean
 
-                    # Compute new prediction.
-                    var = F.linear(phi, tmp_1)
-                    logits = F.linear(phi, mean)
-                    probas = logits.softmax(-1)
-                    probas_max = probas.max()
 
-                    # Update covariance matrix.
-                    num = probas_max * (1-probas_max)
-                    denom = 1 + num * var
-                    factor = num / denom
-                    cov_update = factor * tmp_2
-                    cov -= cov_update
+def second_order_update(features, targets_onehot, mean, cov, cov_likelihood='gaussian', gamma=1, lmb=1):
+    mean = mean.clone()
+    cov = cov.clone()
 
-                    # Update mean.
-                    tmp_3 = F.linear(gamma*cov, phi)
-                    tmp_4 = (target_onehot - probas)
-                    mean += torch.outer(tmp_4, tmp_3)
+    if cov_likelihood == 'gaussian':
+        for _ in range(lmb):
+            for feature, target_onehot in zip(features, targets_onehot):
+                # Compute new cov with woodbury identity
+                tmp_1 = torch.matmul(cov, feature)
+                tmp_2 = torch.outer(tmp_1, tmp_1)
+                var = torch.matmul(feature, tmp_1)
 
-                    # Undo cov update.
-                    cov += cov_update
+                cov_update = tmp_2 / (1 + var)
+                cov -= cov_update
 
-                    # Compute new prediction.
-                    logits = F.linear(phi, mean)
-                    probas = logits.softmax(-1)
-                    probas_max = probas.max()
+                # Update mean
+                logits = F.linear(feature, mean)
+                probas = logits.softmax(-1)
 
-                    # Update covariance matrix.
-                    num = probas_max * (1 - probas_max)
-                    denom = 1 + num * var
-                    factor = num / denom
-                    cov_update = factor * tmp_2
-                    cov -= cov_update
-        else:
-            raise NotImplementedError()
+                tmp_3 = F.linear(gamma*cov, feature)
+                tmp_4 = (target_onehot - probas)
+                mean += torch.outer(tmp_4, tmp_3)
+    elif cov_likelihood == 'categorical':
+        for _ in range(lmb):
+            for feature, target_onehot in zip(features, targets_onehot):
+                tmp_1 = cov @ feature
+                tmp_2 = torch.outer(tmp_1, tmp_1)
 
-        laplace_layer.layer.weight.data = mean
-        laplace_layer.covariance_matrix.data = cov
+                # Compute new prediction.
+                var = F.linear(feature, tmp_1)
+                logits = F.linear(feature, mean)
+                probas = logits.softmax(-1)
+                probas_max = probas.max()
+
+                # Update covariance matrix.
+                num = probas_max * (1-probas_max)
+                denom = 1 + num * var
+                factor = num / denom
+                cov_update = factor * tmp_2
+                cov -= cov_update
+
+                # Update mean.
+                tmp_3 = F.linear(gamma*cov, feature)
+                tmp_4 = (target_onehot - probas)
+                mean += torch.outer(tmp_4, tmp_3)
+
+                # Undo cov update.
+                cov += cov_update
+
+                # Compute new prediction.
+                logits = F.linear(feature, mean)
+                probas = logits.softmax(-1)
+                probas_max = probas.max()
+
+                # Update covariance matrix.
+                num = probas_max * (1 - probas_max)
+                denom = 1 + num * var
+                factor = num / denom
+                cov_update = factor * tmp_2
+                cov -= cov_update
+    else:
+        raise NotImplementedError()
+
+    return mean, cov
