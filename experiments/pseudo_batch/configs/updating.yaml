@@ -5,6 +5,7 @@ mlflow_uri: sqlite:///updating.db
 update_lmb: 1
 update_gamma: 10
 update_gamma_fo: 1e-3
+update_gamma_mc: 1e-2
 likelihood: gaussian
 
 num_init_samples: 10

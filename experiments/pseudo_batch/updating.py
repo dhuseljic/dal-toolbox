@@ -109,7 +109,8 @@ def main(args):
             sampled_params, weights = update_mc(
                 update_model_mc,
                 update_loader,
-                mc_samples=args.model.mc_samples
+                mc_samples=args.model.mc_samples,
+                gamma=args.update_gamma_mc
             )
             updating_time = time.time() - start_time
             predictions_updated_mc = predict_from_mc(
@@ -197,7 +198,7 @@ def evaluate(predictions):
     return test_stats
 
 
-def update_mc(model, update_loader, mc_samples):
+def update_mc(model, update_loader, mc_samples, gamma=1e-3):
     # Get all features
     phis_list = []
     targets_list = []
@@ -227,7 +228,7 @@ def update_mc(model, update_loader, mc_samples):
     n_samples, n_members, _ = logits_mc.shape
     log_prior = torch.log(torch.ones(n_members) / n_members)  # uniform prior
     log_likelihood = log_probas_mc.permute(1, 0, 2)[:, range(n_samples), targets].sum(dim=1)
-    log_posterior = log_prior + log_likelihood
+    log_posterior = log_prior + gamma*log_likelihood
     weights = torch.softmax(log_posterior, dim=0)
 
     return sampled_params, weights
@@ -262,3 +263,4 @@ def predict_from_mc(model, dataloader, sampled_params, weights):
 
 if __name__ == '__main__':
     main()
+
