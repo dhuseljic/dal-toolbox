@@ -170,7 +170,7 @@ def main(args):
         test_stats_retraining = res_dict['retrained']
 
         mlflow.log_metrics({f'base_{k}': v for k, v in test_stats_base.items()}, step=num_new)
-        mlflow.log_metrics({f'fo_updated_{k}': v for k, v in test_stats_updating.items()}, step=num_new)
+        mlflow.log_metrics({f'fo_updated_{k}': v for k, v in test_stats_updating_fo.items()}, step=num_new)
         mlflow.log_metrics({f'mc_updated_{k}': v for k, v in test_stats_updating_mc.items()}, step=num_new)
         mlflow.log_metrics({f'updated_{k}': v for k, v in test_stats_updating.items()}, step=num_new)
         mlflow.log_metrics({f'retrained_{k}': v for k, v in test_stats_retraining.items()}, step=num_new)
