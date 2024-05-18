@@ -87,7 +87,7 @@ class LaplaceModel(BaseModule):
                 m.synchronize_precision_matrix()
 
     @torch.no_grad()
-    def update_posterior(self, dataloader, lmb=1, gamma=1, cov_likelihood='gaussian', update_type='first_order'):
+    def update_posterior(self, dataloader, lmb=1, gamma=1, cov_likelihood='gaussian', update_type='second_order'):
         # Set to eval to avoid precision matrix update
         self.eval()
 
