@@ -12,6 +12,8 @@ from dal_toolbox.models.utils.callbacks import MetricLogger
 from torch.utils.data import DataLoader, Subset
 from utils import flatten_cfg, build_datasets, build_model
 from rich.progress import track
+from pytorch_lightning.plugins.environments import SLURMEnvironment
+SLURMEnvironment.detect = lambda: False
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="updating")
@@ -265,4 +267,3 @@ def predict_from_mc(model, dataloader, sampled_params, weights):
 
 if __name__ == '__main__':
     main()
-
