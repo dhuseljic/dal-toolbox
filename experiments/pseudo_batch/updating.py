@@ -199,14 +199,16 @@ def evaluate(predictions):
 
 
 def update_mc(model, update_loader, mc_samples, gamma=1e-3):
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    model = model.to(device)
     # Get all features
     phis_list = []
     targets_list = []
     for inputs, targets in update_loader:
         with torch.no_grad():
-            _, phis = model.model(inputs, return_features=True)
-    phis_list.append(phis)
-    targets_list.append(targets)
+            _, phis = model.model(inputs.to(device), return_features=True)
+        phis_list.append(phis)
+        targets_list.append(targets)
     phis = torch.cat(phis_list)
     targets = torch.cat(targets_list)
 
@@ -226,12 +228,12 @@ def update_mc(model, update_loader, mc_samples, gamma=1e-3):
 
     # Bayes theorem for update
     n_samples, n_members, _ = logits_mc.shape
-    log_prior = torch.log(torch.ones(n_members) / n_members)  # uniform prior
+    log_prior = torch.log(torch.ones(n_members, device=device) / n_members)  # uniform prior
     log_likelihood = log_probas_mc.permute(1, 0, 2)[:, range(n_samples), targets].sum(dim=1)
     log_posterior = log_prior + gamma*log_likelihood
     weights = torch.softmax(log_posterior, dim=0)
 
-    return sampled_params, weights
+    return sampled_params.cpu(), weights.cpu()
 
 
 @torch.no_grad()
