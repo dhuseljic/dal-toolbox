@@ -176,7 +176,8 @@ def second_order_update(features, targets_onehot, mean, cov, cov_likelihood='gau
 
                 # Update covariance matrix.
                 num = probas_max * (1-probas_max)
-                denom = 1 + num * var
+                # denom = 1 + num * var
+                denom = 1 + var
                 factor = num / denom
                 cov_update = factor * tmp_2
                 cov -= cov_update
