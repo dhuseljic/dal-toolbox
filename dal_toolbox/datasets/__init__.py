@@ -8,6 +8,7 @@ from . import stl10
 
 from .stl10 import STL10
 from .snacks import Snacks
+from .dtd import DTD
 from .food import Food101
 from .flowers import Flowers102
 from .country211 import Country211

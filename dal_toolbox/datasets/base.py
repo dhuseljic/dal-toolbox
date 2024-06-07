@@ -33,6 +33,7 @@ class BaseData(ABC):
         self._download_datasets()
 
         # Train Validation split on training dataset
+        # TODO allow val_dataset without a split
         train_indices, val_indices = self._get_train_val_indices(len(self.full_train_dataset))
 
         # Define datasets

@@ -76,6 +76,7 @@ class LaplaceLayer(nn.Module):
         if self.cov_likelihood == 'gaussian':
             multiplier = 1
         elif self.cov_likelihood == 'categorical':
+            # Approx based on sngp laplace approximation
             probas = logits.softmax(-1)
             probas_max = probas.max(1)[0]
             multiplier = probas_max * (1-probas_max)
@@ -126,4 +127,6 @@ class LaplaceLayer(nn.Module):
 
         gaussian = torch.distributions.Normal(loc=gp_mean,  scale=gp_std)
         mc_logits = gaussian.sample(sample_shape=(self.mc_samples,)).permute(1, 0, 2)
+        temperature = torch.sqrt(1 + self.mean_field_factor*gp_var)[:, None]
+        mc_logits = mc_logits / temperature
         return mc_logits

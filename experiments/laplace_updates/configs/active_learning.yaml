@@ -1,21 +1,23 @@
 random_seed: 42
-mlflow_uri: sqlite:///mlflow.db
-output_dir: ./output/
+experiment_name: active_learning
+mlflow_uri: sqlite:///active_learning.db
 
 update_lmb: 1
 update_gamma: 10
+update_every: 1
 likelihood: gaussian
 
-# Data
-dataset_path: /datasets
+dataset_path: /home/datasets
 dataset_name: cifar10
+use_val_split: False
+cache_features: True
+feature_cache_dir: null
+num_workers: 0
 
-# Dino model
 dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
 # dino_model_name: 'dinov2_vitb14' # 86 M params - 768 dimensions
 # dino_model_name: 'dinov2_vitl14' # 300 M params - 1024 dimensions
 # dino_model_name: 'dinov2_vitg14' # 1100 M params - 1536 dimensions
-dino_cache_dir: null
 
 al:
   strategy: random
@@ -24,15 +26,8 @@ al:
   num_init_samples: 10
   num_acq: 10
   acq_size: 10
-  update_every: 1
   bait:
-    grad_likelihood: cross_entropy
-    expectation_topk: null
-    fisher_approximation: full
-    num_grad_samples: null
-    grad_selection: magnitude
-    normalize_top_probas: True
-    fisher_batch_size: 32
+    grad_likelihood: binary_cross_entropy
   device: cpu
 
 model:
@@ -41,19 +36,17 @@ model:
   train_batch_size: 64
   predict_batch_size: 128
   mean_field_factor: 0.4
-  mc_samples: 100
-  num_inducing: 1024
-  kernel_scale: 10
-  scale_random_features: True
-  optimize_kernel_scale: True
+  mc_samples: 10_000
 
-# Optimizer
 optimizer: 
   name: RAdam
   lr: 1e-2
   weight_decay: 1e-4
   momentum: 0.9
+  lr_backbone: 1e-5
+  finetune_backbone: False
 
+output_dir: ./output/
 hydra:
   run:
     dir: ${output_dir}

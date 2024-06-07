@@ -96,7 +96,7 @@ class BaitSampling(Query):
 
         fisher_all = torch.zeros(fisher_dim).to(self.device)
         dl = DataLoader(TensorDataset(repr_all), batch_size=self.fisher_batch_size, shuffle=False)
-        for batch in track(dl, "Bait: Computing fisher.."):
+        for batch in track(dl, "Bait: Computing fisher..", disable=True):
             repr_batch = batch[0].to(self.device)
             if self.fisher_approximation == 'full':
                 term = torch.matmul(repr_batch.transpose(1, 2), repr_batch)
@@ -113,7 +113,7 @@ class BaitSampling(Query):
 
         fisher_labeled = torch.zeros(fisher_dim).to(self.device)
         dl = DataLoader(TensorDataset(repr_labeled), batch_size=self.fisher_batch_size, shuffle=False)
-        for batch in track(dl, "Bait: Computing fisher.."):
+        for batch in track(dl, "Bait: Computing fisher..", disable=True):
             repr_batch = batch[0].to(self.device)
             if self.fisher_approximation == 'full':
                 term = torch.matmul(repr_batch.transpose(1, 2), repr_batch)
@@ -174,7 +174,7 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
     # print('forward selection...', flush=True)
     over_sample = 2
     # for i in range(int(over_sample * acq_size)):
-    for i in track(range(int(over_sample * acq_size)), 'Bait: Oversampling'):
+    for i in track(range(int(over_sample * acq_size)), 'Bait: Oversampling', disable=True):
         # check trace with low-rank updates (woodbury identity)
         xt_ = repr_unlabeled.to(device)
 
@@ -227,7 +227,7 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
 
     # backward pruning
     # print('backward pruning...', flush=True)
-    for i in track(range(len(indsAll) - acq_size), 'Bait: Backward pruning'):
+    for i in track(range(len(indsAll) - acq_size), 'Bait: Backward pruning', disable=True):
         # for i in range(len(indsAll) - acq_size):
 
         # select index for removal
