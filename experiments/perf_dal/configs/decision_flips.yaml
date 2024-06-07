@@ -1,0 +1,8 @@
+random_seed: 42
+num_train_samples: 100
+num_test_samples: 1000
+max_new_samples: 10
+num_epochs: 200
+
+mlflow_uri: 'sqlite:///decision_flips.db'
+mlflow_exp_name: 'decision_flips'

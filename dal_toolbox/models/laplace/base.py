@@ -20,7 +20,8 @@ class LaplaceModel(BaseModule):
             scheduler_interval='epoch',
     ):
         super().__init__(model, loss_fn, optimizer, lr_scheduler, train_metrics, val_metrics, scheduler_interval)
-        self.use_mean_field = True
+        # self.use_mean_field = True
+        self.predict_type = 'mean_field'
 
     def training_step(self, batch):
         inputs, targets = batch
@@ -41,7 +42,14 @@ class LaplaceModel(BaseModule):
     def validation_step(self, batch, batch_idx):
         inputs, targets = batch
 
-        logits = self.model.forward_mean_field(inputs)
+        if self.predict_type == 'mean_field':
+            logits = self.model.forward_mean_field(inputs)
+        elif self.predict_type == 'monte_carlo':
+            logits = self.model.forward_monte_carlo(inputs)
+        elif self.predict_type == 'deterministic':
+            logits = self.model(inputs)
+        else:
+            raise NotImplementedError()
         loss = self.loss_fn(logits, targets)
         self.log('val_loss', loss, prog_bar=True)
 
@@ -51,20 +59,18 @@ class LaplaceModel(BaseModule):
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         inputs, targets = batch
 
-        if self.use_mean_field:
+        if self.predict_type == 'mean_field':
             logits = self.model.forward_mean_field(inputs)
-        else:
+        elif self.predict_type == 'monte_carlo':
             logits = self.model.forward_monte_carlo(inputs)
+        elif self.predict_type == 'deterministic':
+            logits = self.model(inputs)
+        else:
+            raise NotImplementedError()
 
         logits = self._gather(logits)
         targets = self._gather(targets)
         return logits, targets
-
-    def use_mean_field_prediction(self):
-        self.use_mean_field = True
-
-    def use_monte_carlo_prediction(self):
-        self.use_mean_field = False
 
     def set_mc_samples(self, mc_samples: int):
         for m in self.model.modules():
