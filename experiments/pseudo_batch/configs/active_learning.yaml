@@ -1,4 +1,5 @@
 random_seed: 42
+experiment_name: active_learning
 mlflow_uri: sqlite:///active_learning.db
 
 update_lmb: 1
@@ -37,7 +38,6 @@ model:
   mean_field_factor: 0.4
   mc_samples: 10_000
 
-# Optimizer
 optimizer: 
   name: RAdam
   lr: 1e-2
