@@ -19,15 +19,16 @@ logging.getLogger("lightning").setLevel(logging.ERROR)
 
 @hydra.main(version_base=None, config_path="./configs", config_name="decision_flips")
 def main(args):
-    seed_everything(args.random_seed)
+    seed_everything(42)
     transforms = DinoTransforms(size=(256, 256))
     data = CIFAR10(args.dataset_path, transforms=transforms)
     train_ds = data.train_dataset
     test_ds = data.test_dataset
-
     ssl_model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
     train_ds = FeatureDataset(ssl_model, train_ds, cache=True)
     test_ds = FeatureDataset(ssl_model, test_ds, cache=True)
+
+    seed_everything(args.random_seed)
 
     trainer_kwargs = dict(
         max_epochs=args.num_epochs,
