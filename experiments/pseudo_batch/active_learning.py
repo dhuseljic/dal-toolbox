@@ -13,9 +13,8 @@ from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.active_learning import strategies
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything
-from utils import DinoFeatureDataset, flatten_cfg, build_data, build_model, build_dino_model, build_tabular_data
-
-
+from utils import build_datasets, flatten_cfg, build_model
+from torch.utils.data import DataLoader, Subset
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
@@ -23,15 +22,9 @@ def main(args):
     seed_everything(42)
     print(OmegaConf.to_yaml(args))
 
-    dino_model = build_dino_model(args)
-    data = build_data(args)
+    train_ds, test_ds, num_classes = build_datasets(
+        args, val_split=args.use_val_split, cache_features=args.cache_features)
 
-    train_ds = DinoFeatureDataset(dino_model, dataset=data.train_dataset,
-                                  cache=True, cache_dir=args.dino_cache_dir)
-    # test_ds = DinoFeatureDataset(dino_model, dataset=data.val_dataset,
-    #                              cache=True, cache_dir=args.dino_cache_dir)
-    test_ds = DinoFeatureDataset(dino_model, dataset=data.test_dataset, cache=True)
-    
     seed_everything(args.random_seed)
     al_datamodule = ActiveLearningDataModule(
         train_dataset=train_ds,
@@ -49,7 +42,16 @@ def main(args):
     al_strategy = build_al_strategy(args)
 
     history = []
-    model = build_model(args, num_features=dino_model.norm.normalized_shape[0], num_classes=data.num_classes)
+    num_features = 384  # len(train_ds[0][0])
+    model = build_model(args, num_features=num_features, num_classes=num_classes)
+    lightning_trainer_config = dict(
+        max_epochs=args.model.num_epochs,
+        default_root_dir=args.output_dir,
+        enable_checkpointing=False,
+        logger=False,
+        enable_progress_bar=False,
+        callbacks=[MetricLogger()],
+    )
     for i_acq in range(0, args.al.num_acq+1):
         if i_acq != 0:
             print('Querying..')
@@ -63,14 +65,7 @@ def main(args):
             al_datamodule.update_annotations(indices)
 
         model.reset_states()
-        trainer = Trainer(
-            max_epochs=args.model.num_epochs,
-            default_root_dir=args.output_dir,
-            enable_checkpointing=False,
-            logger=False,
-            enable_progress_bar=False,
-            callbacks=[MetricLogger()],
-        )
+        trainer = Trainer(**lightning_trainer_config)
         trainer.fit(model, train_dataloaders=al_datamodule)
 
         predictions = trainer.predict(model, dataloaders=al_datamodule.test_dataloader())
@@ -80,8 +75,8 @@ def main(args):
         history.append(test_stats)
 
     mlflow.set_tracking_uri(uri="{}".format(args.mlflow_uri))
-    mlflow.set_experiment("Active Learning")
-    mlflow.start_run()
+    experiment_id = mlflow.set_experiment('Active Learning').experiment_id
+    mlflow.start_run(experiment_id=experiment_id)
     mlflow.log_params(flatten_cfg(args))
     for i_acq, test_stats in enumerate(history):
         mlflow.log_metrics(test_stats, step=i_acq)
@@ -110,47 +105,20 @@ def build_al_strategy(args):
         al_strategy = strategies.MarginSampling(subset_size=args.al.subset_size)
     elif args.al.strategy == 'pseudo_margin':
         strat = strategies.MarginSampling(subset_size=args.al.subset_size)
-        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.al.update_every,
+        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.update_every,
                                   gamma=args.update_gamma, subset_size=args.al.subset_size)
     elif args.al.strategy == 'badge':
         al_strategy = strategies.Badge(subset_size=args.al.subset_size)
     elif args.al.strategy == 'pseudo_badge':
         strat = strategies.Badge(subset_size=args.al.subset_size)
-        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.al.update_every,
+        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.update_every,
                                   gamma=args.update_gamma, subset_size=args.al.subset_size)
-    elif args.al.strategy == 'batch_bald':
-        al_strategy = strategies.BatchBALDSampling(subset_size=args.al.subset_size)
+    elif args.al.strategy == 'bald':
+        al_strategy = strategies.BALDSampling(subset_size=args.al.subset_size)
     elif args.al.strategy == 'pseudo_bald':
         strat = strategies.BALDSampling(subset_size=args.al.subset_size)
-        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.al.update_every,
+        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.update_every,
                                   gamma=args.update_gamma, subset_size=args.al.subset_size)
-    elif args.al.strategy == 'bait':
-        al_strategy = strategies.BaitSampling(
-            subset_size=args.al.subset_size,
-            expectation_topk=args.al.bait.expectation_topk,
-            normalize_top_probas=args.al.bait.normalize_top_probas,
-            fisher_approximation=args.al.bait.fisher_approximation,
-            grad_likelihood=args.al.bait.grad_likelihood,
-            num_grad_samples=args.al.bait.num_grad_samples,
-            grad_selection=args.al.bait.grad_selection,
-            device=args.al.device
-        )
-    elif args.al.strategy == 'pseudo_bait':
-        strat = strategies.BaitSampling(
-            subset_size=args.al.subset_size,
-            expectation_topk=args.al.bait.expectation_topk,
-            normalize_top_probas=args.al.bait.normalize_top_probas,
-            fisher_approximation=args.al.bait.fisher_approximation,
-            grad_likelihood=args.al.bait.grad_likelihood,
-            num_grad_samples=args.al.bait.num_grad_samples,
-            grad_selection=args.al.bait.grad_selection,
-            device=args.al.device,
-            select='topk',
-        )
-        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.al.update_every,
-                                  gamma=args.update_gamma, subset_size=args.al.subset_size)
-    elif args.al.strategy == 'typiclust':
-        al_strategy = strategies.TypiClust(subset_size=args.al.subset_size)
     else:
         raise NotImplementedError()
     return al_strategy
@@ -203,4 +171,3 @@ class PseudoBatch(strategies.Query):
 
 if __name__ == '__main__':
     main()
-

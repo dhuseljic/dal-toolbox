@@ -1,4 +1,3 @@
-import os
 import copy
 import time
 import hydra
@@ -11,8 +10,10 @@ from dal_toolbox import metrics
 from dal_toolbox.utils import seed_everything
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from torch.utils.data import DataLoader, Subset
-from sklearn.metrics import pairwise_distances
-from utils import DinoFeatureDataset, flatten_cfg, build_data, build_model, build_ood_data, build_dino_model
+from utils import flatten_cfg, build_datasets, build_model
+from rich.progress import track
+from pytorch_lightning.plugins.environments import SLURMEnvironment
+SLURMEnvironment.detect = lambda: False
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="updating")
@@ -21,21 +22,29 @@ def main(args):
     print(OmegaConf.to_yaml(args))
 
     # Setup Data
-    dino_model = build_dino_model(args)
-    data = build_data(args)
-    train_ds = DinoFeatureDataset(dino_model, dataset=data.train_dataset, cache=True)
-    test_ds = DinoFeatureDataset(dino_model, dataset=data.test_dataset, cache=True)
-    test_loader = DataLoader(test_ds, batch_size=args.model.predict_batch_size, shuffle=False)
+    train_ds, test_ds, num_classes = build_datasets(
+        args, val_split=args.use_val_split, cache_features=args.cache_features)
+    test_loader = DataLoader(test_ds, batch_size=args.model.predict_batch_size,
+                             shuffle=False, num_workers=args.num_workers)
 
     seed_everything(args.random_seed)
-    init_model = build_model(
-        args, num_features=dino_model.norm.normalized_shape[0], num_classes=data.num_classes)
+    num_features = len(train_ds[0][0])
+    init_model = build_model(args, num_features=num_features, num_classes=num_classes)
 
     # Define indices for training, updating and retraining
     rnd_indices = torch.randperm(len(train_ds))
     base_indices = rnd_indices[:args.num_init_samples]
     new_indices = rnd_indices[args.num_init_samples:args.num_init_samples+max(args.num_new_samples)]
     retrain_indices = rnd_indices[:args.num_init_samples+max(args.num_new_samples)]
+
+    lightning_trainer_config = dict(
+        max_epochs=args.model.num_epochs,
+        default_root_dir=args.output_dir,
+        enable_checkpointing=False,
+        logger=False,
+        enable_progress_bar=False,
+        callbacks=[MetricLogger()],
+    )
 
     # Train
     base_model = copy.deepcopy(init_model)
@@ -44,15 +53,9 @@ def main(args):
         batch_size=args.model.train_batch_size,
         shuffle=True,
         drop_last=len(base_indices) > args.model.train_batch_size,
+        num_workers=args.num_workers
     )
-    trainer = Trainer(
-        max_epochs=args.model.num_epochs,
-        default_root_dir=args.output_dir,
-        enable_checkpointing=False,
-        logger=False,
-        enable_progress_bar=False,
-        callbacks=[MetricLogger()],
-    )
+    trainer = Trainer(**lightning_trainer_config)
     trainer.fit(base_model, train_dataloaders=train_loader)
 
     # Evaluate
@@ -60,36 +63,64 @@ def main(args):
     test_stats_base = evaluate(predictions_base)
     y_pred_original = torch.cat([pred[0] for pred in predictions_base]).argmax(-1)
 
+    update_types = ['first_order', 'second_order', 'mc']
     results = {}
     for num_new in args.num_new_samples:
-        # Second-order updating
-        update_model = copy.deepcopy(base_model)
         update_ds = Subset(train_ds, indices=new_indices[:num_new])
         update_loader = DataLoader(update_ds, batch_size=args.model.train_batch_size)
-        start_time = time.time()
-        update_model.update_posterior(update_loader, lmb=args.update_lmb,
-                                      gamma=args.update_gamma, likelihood=args.likelihood)
-        updating_time = time.time() - start_time
 
-        predictions_updated = trainer.predict(update_model, test_loader)
-        test_stats_updating = evaluate(predictions_updated)
-        y_pred_updated = torch.cat([pred[0] for pred in predictions_updated]).argmax(-1)
-        test_stats_updating['decision_flips'] = torch.sum(y_pred_original != y_pred_updated).item()
-        test_stats_updating['time'] = updating_time
+        if 'second_order' in update_types:
+            update_model = copy.deepcopy(base_model)
+            start_time = time.time()
+            update_model.update_posterior(
+                update_loader,
+                lmb=args.update_lmb,
+                gamma=args.update_gamma,
+                cov_likelihood=args.likelihood,
+                update_type='second_order'
+            )
+            updating_time = time.time() - start_time
 
-        # Update using Bayes theorem (i.e., Monte Carlo)
-        update_model_mc = copy.deepcopy(base_model)
-        update_ds_mc = Subset(train_ds, indices=new_indices[:num_new])
-        update_loader_mc = DataLoader(update_ds_mc, batch_size=args.model.train_batch_size)
-        start_time = time.time()
-        sampled_params, weights = update_mc(
-            update_model_mc, update_loader_mc, mc_samples=args.model.mc_samples)
-        updating_time = time.time() - start_time
-        predictions_updated_mc = predict_from_mc(test_loader, sampled_params=sampled_params, weights=weights)
-        test_stats_mc_updating = evaluate(predictions_updated_mc)
-        y_pred_updated_mc = torch.cat([pred[0] for pred in predictions_updated_mc]).argmax(-1)
-        test_stats_mc_updating['decision_flips'] = torch.sum(y_pred_original != y_pred_updated_mc).item()
-        test_stats_mc_updating['time'] = updating_time
+            predictions_updated = trainer.predict(update_model, test_loader)
+            y_pred_updated = torch.cat([pred[0] for pred in predictions_updated]).argmax(-1)
+            test_stats_updating = evaluate(predictions_updated)
+            test_stats_updating['decision_flips'] = torch.sum(y_pred_original != y_pred_updated).item()
+            test_stats_updating['time'] = updating_time
+
+        if 'first_order' in update_types:
+            update_model = copy.deepcopy(base_model)
+            start_time = time.time()
+            update_model.update_posterior(
+                update_loader,
+                lmb=args.update_lmb,
+                gamma=args.update_gamma_fo,
+                cov_likelihood=args.likelihood,
+                update_type='first_order'
+            )
+            updating_time = time.time() - start_time
+
+            predictions_updated = trainer.predict(update_model, test_loader)
+            y_pred_updated = torch.cat([pred[0] for pred in predictions_updated]).argmax(-1)
+            test_stats_updating_fo = evaluate(predictions_updated)
+            test_stats_updating_fo['decision_flips'] = torch.sum(y_pred_original != y_pred_updated).item()
+            test_stats_updating_fo['time'] = updating_time
+
+        if 'mc' in update_types:
+            update_model_mc = copy.deepcopy(base_model)
+            start_time = time.time()
+            sampled_params, weights = update_mc(
+                update_model_mc,
+                update_loader,
+                mc_samples=args.model.mc_samples,
+                gamma=args.update_gamma_mc
+            )
+            updating_time = time.time() - start_time
+            predictions_updated_mc = predict_from_mc(
+                update_model_mc, test_loader, sampled_params=sampled_params, weights=weights)
+            test_stats_updating_mc = evaluate(predictions_updated_mc)
+            y_pred_updated_mc = torch.cat([pred[0] for pred in predictions_updated_mc]).argmax(-1)
+            test_stats_updating_mc['decision_flips'] = torch.sum(y_pred_original != y_pred_updated_mc).item()
+            test_stats_updating_mc['time'] = updating_time
 
         # Retraining
         retrain_model = copy.deepcopy(init_model)
@@ -115,40 +146,44 @@ def main(args):
         test_stats_retraining['time'] = retraining_time
 
         print('Number of new samples:', num_new)
-        print('Base model:', test_stats_base)
-        print('Updated model:', test_stats_updating)
-        print('MC Updated model:', test_stats_mc_updating)
-        print('Retrained model:', test_stats_retraining)
-        print('=' * 20)
+        print('Baseline model:\t\t', test_stats_base)
+        print('FO Updated model:\t', test_stats_updating_fo)
+        print('MC Updated model:\t', test_stats_updating_mc)
+        print('SO Updated model:\t', test_stats_updating)
+        print('Retrained model:\t', test_stats_retraining)
         results[num_new] = {
             'base': test_stats_base,
             'updated': test_stats_updating,
-            'mc_updated': test_stats_mc_updating,
+            'fo_updated': test_stats_updating_fo,
+            'mc_updated': test_stats_updating_mc,
             'retrained': test_stats_retraining
         }
 
     # Logging
-    mlflow.set_tracking_uri(uri="file://{}".format(os.path.abspath(args.mlflow_dir)))
-    mlflow.set_experiment("Updating")
+    mlflow.set_tracking_uri(uri=args.mlflow_uri)
+    mlflow.set_experiment(args.experiment_name)
     mlflow.start_run()
     mlflow.log_params(flatten_cfg(args))
     for num_new in results:
         res_dict = results[num_new]
         test_stats_base = res_dict['base']
         test_stats_updating = res_dict['updated']
-        test_stats_mc_updating = res_dict['mc_updated']
+        test_stats_updating_mc = res_dict['mc_updated']
+        test_stats_updating_fo = res_dict['fo_updated']
         test_stats_retraining = res_dict['retrained']
 
         mlflow.log_metrics({f'base_{k}': v for k, v in test_stats_base.items()}, step=num_new)
+        mlflow.log_metrics({f'fo_updated_{k}': v for k, v in test_stats_updating_fo.items()}, step=num_new)
+        mlflow.log_metrics({f'mc_updated_{k}': v for k, v in test_stats_updating_mc.items()}, step=num_new)
         mlflow.log_metrics({f'updated_{k}': v for k, v in test_stats_updating.items()}, step=num_new)
-        mlflow.log_metrics({f'mc_updated_{k}': v for k, v in test_stats_mc_updating.items()}, step=num_new)
         mlflow.log_metrics({f'retrained_{k}': v for k, v in test_stats_retraining.items()}, step=num_new)
 
         print('Number of new samples:', num_new)
-        print('Base model:', test_stats_base)
-        print('Updated model:', test_stats_updating)
-        print('MC Updated model:', test_stats_mc_updating)
-        print('Retrained model:', test_stats_retraining)
+        print('Baseline model:\t\t', test_stats_base)
+        print('FO Updated model:\t', test_stats_updating_fo)
+        print('MC Updated model:\t', test_stats_updating_mc)
+        print('SO Updated model:\t', test_stats_updating)
+        print('Retrained model:\t', test_stats_retraining)
         print('=' * 20)
     mlflow.end_run()
 
@@ -159,24 +194,23 @@ def evaluate(predictions):
 
     test_stats = {
         'accuracy': metrics.Accuracy()(test_logits, test_labels).item(),
-        'NLL': metrics.CrossEntropy()(test_logits, test_labels).item(),
-        'BS': metrics.BrierScore()(test_logits, test_labels).item(),
         'ECE': metrics.ExpectedCalibrationError()(test_logits, test_labels).item(),
         'ACE': metrics.AdaptiveCalibrationError()(test_logits, test_labels).item(),
-        'reliability': metrics.BrierScoreDecomposition()(test_logits, test_labels)['reliability']
     }
     return test_stats
 
 
-def update_mc(model, update_loader, mc_samples):
+def update_mc(model, update_loader, mc_samples, gamma=1e-3):
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    model = model.to(device)
     # Get all features
     phis_list = []
     targets_list = []
     for inputs, targets in update_loader:
         with torch.no_grad():
-            _, phis = model.model(inputs, return_features=True)
-    phis_list.append(phis)
-    targets_list.append(targets)
+            _, phis = model.model(inputs.to(device), return_features=True)
+        phis_list.append(phis)
+        targets_list.append(targets)
     phis = torch.cat(phis_list)
     targets = torch.cat(targets_list)
 
@@ -196,34 +230,37 @@ def update_mc(model, update_loader, mc_samples):
 
     # Bayes theorem for update
     n_samples, n_members, _ = logits_mc.shape
-    log_prior = torch.log(torch.ones(n_members) / n_members)  # uniform prior
+    log_prior = torch.log(torch.ones(n_members, device=device) / n_members)  # uniform prior
     log_likelihood = log_probas_mc.permute(1, 0, 2)[:, range(n_samples), targets].sum(dim=1)
-    log_posterior = log_prior + log_likelihood
+    log_posterior = log_prior + gamma*log_likelihood
     weights = torch.softmax(log_posterior, dim=0)
 
-    return sampled_params, weights
+    return sampled_params.cpu(), weights.cpu()
 
 
 @torch.no_grad()
-def predict_from_mc(dataloader, sampled_params, weights):
+def predict_from_mc(model, dataloader, sampled_params, weights):
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    sampled_params = sampled_params.to(device)
+    model = model.to(device)
     predictions = []
-    corrects = 0
-    num_samples = 0
-    for batch in dataloader:
-        inputs = batch[0]
+    for batch in track(dataloader, description='Predicting with MC '):
+        inputs = batch[0].to(device)
         targets = batch[1]
-        logits_mc = torch.einsum('nd,ekd->nek', inputs, sampled_params)
+
+        with torch.no_grad():
+            _, phis = model.model(inputs, return_features=True)
+
+        logits_mc = torch.einsum('nd,ekd->nek', phis, sampled_params)
         probas_mc = logits_mc.softmax(-1)
 
-        corrects += torch.sum((probas_mc.mean(1).argmax(-1) == targets).float()).item()
-        num_samples += len(targets)
-
         if weights is not None:
+            weights = weights.to(probas_mc)
             probas = torch.einsum('e,nek->nk', weights, probas_mc)
         else:
             probas = torch.mean(probas_mc, dim=1)
         logits = probas.log()
-        predictions.append([logits, targets])
+        predictions.append([logits.cpu(), targets])
 
     return predictions
 
