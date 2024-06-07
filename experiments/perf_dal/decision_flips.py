@@ -3,9 +3,7 @@ import hydra
 import mlflow
 import logging
 import numpy as np
-import pylab as plt
 import torch
-import torch.nn as nn
 from omegaconf import DictConfig
 
 from torch.utils.data import DataLoader
@@ -24,12 +22,12 @@ def main(args):
     data = CIFAR10(args.dataset_path, transforms=transforms)
     train_ds = data.train_dataset
     test_ds = data.test_dataset
+
     ssl_model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
-    train_ds = FeatureDataset(ssl_model, train_ds, cache=True)
-    test_ds = FeatureDataset(ssl_model, test_ds, cache=True)
+    train_ds = FeatureDataset(ssl_model, train_ds, cache=True, cache_dir=args.dataset_path)
+    test_ds = FeatureDataset(ssl_model, test_ds, cache=True, cache_dir=args.dataset_path)
 
     seed_everything(args.random_seed)
-
     trainer_kwargs = dict(
         max_epochs=args.num_epochs,
         enable_checkpointing=False,
