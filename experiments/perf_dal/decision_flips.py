@@ -21,7 +21,7 @@ logging.getLogger("lightning").setLevel(logging.ERROR)
 def main(args):
     seed_everything(args.random_seed)
     transforms = DinoTransforms(size=(256, 256))
-    data = CIFAR10('/home/datasets', transforms=transforms)
+    data = CIFAR10(args.dataset_path, transforms=transforms)
     train_ds = data.train_dataset
     test_ds = data.test_dataset
 
