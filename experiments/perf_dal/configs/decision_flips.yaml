@@ -1,7 +1,14 @@
 dataset_path: /home/datasets
-num_train_samples: 100
-num_test_samples: 1000
+
+min_train_samples: 10
+steps_train_samples: 10
+max_train_samples: 100
+
+min_new_samples: 10
+steps_new_samples: 1
 max_new_samples: 10
+
+num_test_samples: 1000
 num_epochs: 200
 
 mlflow_uri: 'sqlite:///decision_flips.db'

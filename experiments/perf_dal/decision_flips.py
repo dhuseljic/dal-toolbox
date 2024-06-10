@@ -7,6 +7,7 @@ import torch
 from omegaconf import DictConfig
 
 from torch.utils.data import DataLoader
+from omegaconf import OmegaConf
 from lightning import Trainer
 from dal_toolbox.datasets import CIFAR10
 from dal_toolbox.datasets.utils import DinoTransforms, FeatureDataset
@@ -17,6 +18,7 @@ logging.getLogger("lightning").setLevel(logging.ERROR)
 
 @hydra.main(version_base=None, config_path="./configs", config_name="decision_flips")
 def main(args):
+    print(OmegaConf.to_yaml(args))
     seed_everything(42)
     transforms = DinoTransforms(size=(256, 256))
     data = CIFAR10(args.dataset_path, transforms=transforms)
@@ -45,39 +47,41 @@ def main(args):
     test_loader = DataLoader(test_ds, batch_size=32, sampler=test_indices)
 
     results = []
-    for num_new in range(1, args.max_new_samples+1):
+    for num_train_samples in range(args.min_train_samples, args.max_train_samples+1, args.steps_train_samples):
+        for num_new in range(args.min_new_samples, args.max_new_samples+1, args.steps_new_samples):
 
-        # Training
-        lit_model.reset_states()
-        trainer = Trainer(**trainer_kwargs)
-        train_loader = DataLoader(train_ds, batch_size=32, sampler=train_indices[:args.num_train_samples])
-        trainer.fit(lit_model, train_loader)
-        test_predictions = trainer.predict(lit_model, test_loader)
+            # Training
+            lit_model.reset_states()
+            trainer = Trainer(**trainer_kwargs)
+            train_loader = DataLoader(train_ds, batch_size=32, sampler=train_indices[:num_train_samples])
+            trainer.fit(lit_model, train_loader)
+            test_predictions = trainer.predict(lit_model, test_loader)
 
-        lit_model.reset_states()
-        trainer = Trainer(**trainer_kwargs)
-        train_loader = DataLoader(train_ds, batch_size=32, sampler=train_indices[:args.num_train_samples+num_new])
-        trainer.fit(lit_model, train_loader)
-        test_predictions_new = trainer.predict(lit_model, test_loader)
+            lit_model.reset_states()
+            trainer = Trainer(**trainer_kwargs)
+            train_loader = DataLoader(train_ds, batch_size=32, sampler=train_indices[:num_train_samples+num_new])
+            trainer.fit(lit_model, train_loader)
+            test_predictions_new = trainer.predict(lit_model, test_loader)
 
-        # Eval
-        test_logits = torch.cat([pred[0] for pred in test_predictions])
-        test_labels = torch.cat([pred[1] for pred in test_predictions])
-        test_decisions = test_logits.argmax(-1)
-        test_acc = torch.mean((test_decisions == test_labels).float())
+            # Eval
+            test_logits = torch.cat([pred[0] for pred in test_predictions])
+            test_labels = torch.cat([pred[1] for pred in test_predictions])
+            test_decisions = test_logits.argmax(-1)
+            test_acc = torch.mean((test_decisions == test_labels).float())
 
-        test_logits_new = torch.cat([pred[0] for pred in test_predictions_new])
-        test_labels_new = torch.cat([pred[1] for pred in test_predictions_new])
-        test_decisions_new = test_logits_new.argmax(-1)
-        test_acc_new = torch.mean((test_decisions_new == test_labels_new).float())
+            test_logits_new = torch.cat([pred[0] for pred in test_predictions_new])
+            test_labels_new = torch.cat([pred[1] for pred in test_predictions_new])
+            test_decisions_new = test_logits_new.argmax(-1)
+            test_acc_new = torch.mean((test_decisions_new == test_labels_new).float())
 
-        decision_flips = torch.sum(test_decisions != test_decisions_new)
-        results.append({
-            'num_new_samples': num_new,
-            'decision_flips': decision_flips.item(),
-            'accuracy': test_acc.item(),
-            'accuracy_new': test_acc_new.item(),
-        })
+            decision_flips = torch.sum(test_decisions != test_decisions_new)
+            results.append({
+                'num_train_samples': num_train_samples,
+                'num_new_samples': num_new,
+                'decision_flips': decision_flips.item(),
+                'accuracy': test_acc.item(),
+                'accuracy_new': test_acc_new.item(),
+            })
 
     mlflow.set_tracking_uri(uri=args.mlflow_uri)
     mlflow.set_experiment(args.mlflow_exp_name)
