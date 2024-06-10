@@ -82,7 +82,7 @@ def main(args):
                 'accuracy': test_acc.item(),
                 'accuracy_new': test_acc_new.item(),
             })
-            print(results)
+            print(results[-1])
 
     mlflow.set_tracking_uri(uri=args.mlflow_uri)
     mlflow.set_experiment(args.mlflow_exp_name)
