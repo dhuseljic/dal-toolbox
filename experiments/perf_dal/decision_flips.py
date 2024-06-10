@@ -54,14 +54,16 @@ def main(args):
             lit_model.reset_states()
             trainer = Trainer(**trainer_kwargs)
             sampler = SubsetRandomSampler(indices=train_indices[:num_train_samples])
-            train_loader = DataLoader(train_ds, batch_size=32, sampler=sampler, drop_last=True)
+            drop_last = len(sampler.indices) > args.batch_size
+            train_loader = DataLoader(train_ds, batch_size=args.batch_size, sampler=sampler, drop_last=drop_last)
             trainer.fit(lit_model, train_loader)
             test_predictions = trainer.predict(lit_model, test_loader)
 
             lit_model.reset_states()
             trainer = Trainer(**trainer_kwargs)
             sampler = SubsetRandomSampler(indices=train_indices[:num_train_samples+num_new])
-            train_loader = DataLoader(train_ds, batch_size=32, sampler=sampler, drop_last=True)
+            drop_last = len(sampler.indices) > args.batch_size
+            train_loader = DataLoader(train_ds, batch_size=args.batch_size, sampler=sampler, drop_last=drop_last)
             trainer.fit(lit_model, train_loader)
             test_predictions_new = trainer.predict(lit_model, test_loader)
 
