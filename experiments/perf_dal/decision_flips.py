@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from omegaconf import DictConfig
 
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, SubsetRandomSampler
 from omegaconf import OmegaConf
 from lightning import Trainer
 from dal_toolbox.datasets import CIFAR10
@@ -53,13 +53,15 @@ def main(args):
             # Training
             lit_model.reset_states()
             trainer = Trainer(**trainer_kwargs)
-            train_loader = DataLoader(train_ds, batch_size=32, sampler=train_indices[:num_train_samples], drop_last=True)
+            sampler = SubsetRandomSampler(indices=train_indices[:num_train_samples])
+            train_loader = DataLoader(train_ds, batch_size=32, sampler=sampler, drop_last=True)
             trainer.fit(lit_model, train_loader)
             test_predictions = trainer.predict(lit_model, test_loader)
 
             lit_model.reset_states()
             trainer = Trainer(**trainer_kwargs)
-            train_loader = DataLoader(train_ds, batch_size=32, sampler=train_indices[:num_train_samples+num_new], drop_last=True)
+            sampler = SubsetRandomSampler(indices=train_indices[:num_train_samples+num_new])
+            train_loader = DataLoader(train_ds, batch_size=32, sampler=sampler, drop_last=True)
             trainer.fit(lit_model, train_loader)
             test_predictions_new = trainer.predict(lit_model, test_loader)
 
