@@ -1,12 +1,13 @@
+dataset_name: agnews
 dataset_path: /home/datasets
 
 min_train_samples: 10
 steps_train_samples: 10
 max_train_samples: 100
 
-min_new_samples: 10
+min_new_samples: 1
 steps_new_samples: 1
-max_new_samples: 10
+max_new_samples: 1
 
 num_test_samples: 1000
 num_epochs: 200

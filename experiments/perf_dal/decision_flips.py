@@ -4,15 +4,14 @@ import mlflow
 import logging
 import numpy as np
 import torch
-from omegaconf import DictConfig
 
 from torch.utils.data import DataLoader, SubsetRandomSampler
 from omegaconf import OmegaConf
 from lightning import Trainer
-from dal_toolbox.datasets import CIFAR10
-from dal_toolbox.datasets.utils import DinoTransforms, FeatureDataset
 from dal_toolbox.models.laplace import LaplaceModel, LaplaceLayer
 from dal_toolbox.utils import seed_everything
+from utils import build_datasets, flatten_cfg
+
 logging.getLogger("lightning").setLevel(logging.ERROR)
 
 
@@ -20,14 +19,7 @@ logging.getLogger("lightning").setLevel(logging.ERROR)
 def main(args):
     print(OmegaConf.to_yaml(args))
     seed_everything(42)
-    transforms = DinoTransforms(size=(256, 256))
-    data = CIFAR10(args.dataset_path, transforms=transforms)
-    train_ds = data.train_dataset
-    test_ds = data.test_dataset
-
-    ssl_model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
-    train_ds = FeatureDataset(ssl_model, train_ds, cache=True, cache_dir=args.dataset_path)
-    test_ds = FeatureDataset(ssl_model, test_ds, cache=True, cache_dir=args.dataset_path)
+    train_ds, test_ds, num_classes = build_datasets(args, val_split=True, cache_features=True)
 
     seed_everything(args.random_seed)
     trainer_kwargs = dict(
@@ -36,7 +28,7 @@ def main(args):
         logger=False,
         barebones=True,
     )
-    model = LaplaceLayer(384, 10)
+    model = LaplaceLayer(len(train_ds[0][0]), num_classes)
     optimizer = torch.optim.RAdam(model.parameters(), lr=1e-2, weight_decay=1e-5)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=trainer_kwargs['max_epochs'])
@@ -55,7 +47,8 @@ def main(args):
             trainer = Trainer(**trainer_kwargs)
             sampler = SubsetRandomSampler(indices=train_indices[:num_train_samples])
             drop_last = len(sampler.indices) > args.batch_size
-            train_loader = DataLoader(train_ds, batch_size=args.batch_size, sampler=sampler, drop_last=drop_last)
+            train_loader = DataLoader(train_ds, batch_size=args.batch_size,
+                                      sampler=sampler, drop_last=drop_last)
             trainer.fit(lit_model, train_loader)
             test_predictions = trainer.predict(lit_model, test_loader)
 
@@ -63,7 +56,8 @@ def main(args):
             trainer = Trainer(**trainer_kwargs)
             sampler = SubsetRandomSampler(indices=train_indices[:num_train_samples+num_new])
             drop_last = len(sampler.indices) > args.batch_size
-            train_loader = DataLoader(train_ds, batch_size=args.batch_size, sampler=sampler, drop_last=drop_last)
+            train_loader = DataLoader(train_ds, batch_size=args.batch_size,
+                                      sampler=sampler, drop_last=drop_last)
             trainer.fit(lit_model, train_loader)
             test_predictions_new = trainer.predict(lit_model, test_loader)
 
@@ -96,84 +90,6 @@ def main(args):
         mlflow.log_metrics(result_dict, step=result_dict['num_new_samples'])
     mlflow.end_run()
 
-
-class FeatureDataset:
-
-    def __init__(self, model, dataset, cache=False, cache_dir=None, batch_size=256, device='cuda', task=None):
-        if cache:
-            if cache_dir is None:
-                home_dir = os.path.expanduser('~')
-                cache_dir = os.path.join(home_dir, '.cache', 'feature_datasets')
-            os.makedirs(cache_dir, exist_ok=True)
-            hash = self.create_hash_from_dataset_and_model(dataset, model)
-
-            file_name = os.path.join(cache_dir, hash + '.pth')
-            if os.path.exists(file_name):
-                print('Loading cached features from', file_name)
-                features, labels = torch.load(file_name, map_location='cpu')
-            else:
-                features, labels = self.get_features(model, dataset, batch_size, device, task)  # change
-                print('Saving features to cache file', file_name)
-                torch.save((features, labels), file_name)
-        else:
-            features, labels = self.get_features(model, dataset, batch_size, device)
-
-        self.features = features
-        self.labels = labels
-
-    def create_hash_from_dataset_and_model(self, dataset, dino_model, num_hash_samples=50):
-        import hashlib
-        hasher = hashlib.md5()
-
-        num_samples = len(dataset)
-        hasher.update(str(num_samples).encode())
-
-        num_parameters = sum([p.numel() for p in dino_model.parameters()])
-        hasher.update(str(dino_model).encode())
-        hasher.update(str(num_parameters).encode())
-
-        indices_to_hash = range(0, num_samples, num_samples//num_hash_samples)
-        for idx in indices_to_hash:
-            # change for text
-            try:
-                sample = dataset[idx][0]
-            except:
-                sample = dataset["input_ids"][0]
-            hasher.update(str(sample).encode())
-        return hasher.hexdigest()
-
-    def __len__(self) -> int:
-        return len(self.features)
-
-    def __getitem__(self, idx: int):
-        return self.features[idx], self.labels[idx]
-
-    @torch.no_grad()
-    def get_features(self, model, dataset, batch_size, device, task=None):
-        print('Getting ssl features..')
-        dataloader = DataLoader(dataset, batch_size=batch_size)
-        features = []
-        labels = []
-        model.eval()
-        model.to(device)
-        for batch in dataloader:
-            features.append(model(batch[0].to(device)).to('cpu'))
-            labels.append(batch[-1])
-
-        features = torch.cat(features)
-        labels = torch.cat(labels)
-        return features, labels
-
-
-def flatten_cfg(cfg, parent_key='', sep='.'):
-    items = []
-    for k, v in cfg.items():
-        new_key = f"{parent_key}{sep}{k}" if parent_key else k
-        if isinstance(v, (dict, DictConfig)):
-            items.extend(flatten_cfg(v, new_key, sep=sep).items())
-        else:
-            items.append((new_key, v))
-    return dict(items)
 
 
 if __name__ == '__main__':
