@@ -1,40 +1,52 @@
 <img src="./icon_proposal_2.png" width="200"/>
 
-# Deep Uncertainty Modeling and Active Learning
-Framework for uncertainty-based neural networks and active learning.
+Welcome to DAL-Toolbox, a comprehensive repository designed for implementing various models and strategies in deep active learning (DAL). DAL has garnered significant attention for its potential to reduce the amount of labeled data required to train deep neural networks, the most prominent machine learning model of today. Our toolbox provides a versatile and user-friendly framework for researchers and practitioners to explore and advance the field of DAL. Next to classical supervised DAL, we provide tools regarding semi- and self-supervised learning due to their recent success as well as improving uncertainty as it plays a central role in DAL.
 
 ## Setup
+
+Setting up the DAL-Toolbox is straight forward! After cloning the repository, use the following comments to get started:
 ```
 conda create -n dal-toolbox python=3.9
 pip install -e .
 ```
-### Development
-To start developing it is best to use:
-```
-conda create -n dal-toolbox python=3.9
-pip install -e .
-```
-## Experiments
-All experiments are stored in the `experiments` folder.
 
-## Getting Started
-We provide [notebooks](notebooks) that give examples of how to work with this repository. 
+## Examples
 
-### Uncertainty modeling
-Examples of how to train models with improved uncertainty estimation:
-- [Deterministic](notebooks/uncertainty/deterministic.ipynb)
-- [Ensemble](notebooks/uncertainty/ensemble.ipynb)
-- [MC-Dropout](notebooks/uncertainty/mc-dropout.ipynb)
-- [SNGP](notebooks/uncertainty/sngp.ipynb)
-
-### Semi-Supervised Learning
-Examples of how to train models with semi-supervised learning algorithms:
-- [Fully-Supervised](notebooks/semi_supervised_learning/fully_supervised.ipynb)
-- [Pseudo-Labeling](notebooks/semi_supervised_learning/pseudo_labels.ipynb)
-- [Pi-Model](notebooks/semi_supervised_learning/pimodel.ipynb)
-- [FixMatch](notebooks/semi_supervised_learning/fixmatch.ipynb)
+We provide various examples for each topic mentioned in the description. Each example folder contains two subfolders, a __toy_example__ and a __server_experiments__ folder. The toy examples demonstrate each method on a two dimensional dataset and provide a minimal example how to use the respective methods provided by the toolbox. The server experiments contain an examplatory workflow for working on a cluster server with the DAL-Toolbox. Below, we list each example section provided:
 
 ### Active Learning
 Examples of how to implement an active learning cycle:
-- [Standard Active Learning](notebooks/active_learning/deterministic.ipynb)
-- [Bayesian Active Learning](notebooks/active_learning/mc-dropout.ipynb)
+- [Standard Active Learning](examples/active_learning/toy_examples/deterministic.ipynb)
+- [Bayesian Active Learning](examples/active_learning/toy_examples/mc-dropout.ipynb)
+
+### Self-Supervised Learning
+Examples of how to train models with self-supervised learning algorithms:
+- [SimCLR](examples/self_supervised_learning/toy_examples/simclr.ipynb)
+
+### Semi-Supervised Learning
+Examples of how to train models with semi-supervised learning algorithms:
+- [Pseudo-Labeling](examples/semi_supervised_learning/toy_examples/pseudo_labels.ipynb)
+- [Pi-Model](examples/semi_supervised_learning/toy_examples/pimodel.ipynb)
+- [FixMatch](examples/semi_supervised_learning/toy_examples/fixmatch.ipynb)
+
+### Supervised Learning
+For an example for performing standard supervised learning using the DAL-Toolbox we refer to the Deterministic example from the subsequent Uncertainty section.
+
+### Uncertainty
+Examples of how to train models with improved uncertainty estimation:
+- [Deterministic](examples/uncertainty/toy_examples/deterministic.ipynb)
+- [Ensemble](examples/uncertainty/toy_examples/ensemble.ipynb)
+- [MC-Dropout](examples/uncertainty/toy_examples/mc-dropout.ipynb)
+- [SNGP](examples/uncertainty/toy_examples/sngp.ipynb)
+
+
+## Publications
+The DAL-Toolbox has already been used for various publications. The respective code for their experiments is stored in the __publication_experiments__ folder. Examples for paper using the DAL-Toolbox are
+- 
+- 
+- 
+
+
+## Citation
+
+Todo
