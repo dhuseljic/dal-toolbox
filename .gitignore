@@ -16,7 +16,6 @@ mlflow/
 *.db
 
 *.pdf
-*.png
 *.jpg
 *.pth
 *.ipynb_checkpoints
