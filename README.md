@@ -1,3 +1,5 @@
+<img src="./icon_proposal.png"/>
+
 # Deep Uncertainty Modeling and Active Learning
 Framework for uncertainty-based neural networks and active learning.
 
