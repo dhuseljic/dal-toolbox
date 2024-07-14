@@ -41,6 +41,7 @@ Examples of how to train models with improved uncertainty estimation:
 
 
 ## Publications
+
 The DAL-Toolbox has already been used for various publications. The respective code for their experiments is stored in the __publication_experiments__ folder. Examples for paper using the DAL-Toolbox are
 - 
 - 
