@@ -12,7 +12,7 @@ pip install -e .
 
 ## Examples
 
-We provide various examples for each topic mentioned in the description. Each example folder contains two subfolders, a __toy_example__ and a __server_experiments__ folder. The toy examples demonstrate each method on a two dimensional dataset and provide a minimal example how to use the respective methods provided by the toolbox. The server experiments contain an examplatory workflow for working on a cluster server with the DAL-Toolbox. Below, we list each example section provided:
+We provide various examples for each topic mentioned in the description in the [example section](examples/). Each example folder contains two subfolders, a __toy_example__-folder and a __server_experiments__-folder. The toy examples demonstrate each method on a two dimensional dataset and provide a minimal example how to use the respective methods provided by the toolbox. The server experiments contain an examplatory workflow for working on a cluster server with the DAL-Toolbox. Below, we list each example section provided:
 
 ### Active Learning
 Examples of how to implement an active learning cycle:
@@ -28,9 +28,6 @@ Examples of how to train models with semi-supervised learning algorithms:
 - [Pseudo-Labeling](examples/semi_supervised_learning/toy_examples/pseudo_labels.ipynb)
 - [Pi-Model](examples/semi_supervised_learning/toy_examples/pimodel.ipynb)
 - [FixMatch](examples/semi_supervised_learning/toy_examples/fixmatch.ipynb)
-
-### Supervised Learning
-For an example for performing standard supervised learning using the DAL-Toolbox we refer to the Deterministic example from the subsequent Uncertainty section.
 
 ### Uncertainty
 Examples of how to train models with improved uncertainty estimation:
