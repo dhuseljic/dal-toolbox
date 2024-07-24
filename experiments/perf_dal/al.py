@@ -144,6 +144,7 @@ class DiverseBatches(Query):
 
         # Compute distances from
         distances = []
+        print(self.batch_indices)
         for batch_idx in self.batch_indices:
             mask_batch = np.isin(np.array(labeled_indices), np.array(batch_idx))
             X_batch = features_labeled[mask_batch]
@@ -152,6 +153,7 @@ class DiverseBatches(Query):
         idx = np.argmax(np.min(distances, axis=0))
         local_indices = combination_indices[idx]
         global_indices = [unlabeled_indices[idx] for idx in local_indices]
+        self.batch_indices.append(global_indices)
         return global_indices
 
 
