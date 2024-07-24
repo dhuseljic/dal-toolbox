@@ -140,11 +140,10 @@ class DiverseBatches(Query):
 
         # To much
         combination_indices = np.array([np.random.permutation(
-            self.subset_size)[:acq_size] for i in range(100)])
+            self.subset_size)[:acq_size] for i in range(1000)])
 
         # Compute distances from
         distances = []
-        print(self.batch_indices)
         for batch_idx in self.batch_indices:
             mask_batch = np.isin(np.array(labeled_indices), np.array(batch_idx))
             X_batch = features_labeled[mask_batch]
