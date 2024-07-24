@@ -140,7 +140,7 @@ class DiverseBatches(Query):
 
         # To much
         combination_indices = np.array([np.random.permutation(
-            self.subset_size)[:acq_size] for i in range(1000)])
+            self.subset_size)[:acq_size] for i in range(10000)])
 
         # Compute distances from
         distances = []
