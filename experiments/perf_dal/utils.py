@@ -12,6 +12,8 @@ from dal_toolbox.datasets.utils import DinoTransforms, FeatureDataset
 from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, Snacks, DTD, Flowers102, TinyImageNet
 from dal_toolbox.datasets import ImageNet, StanfordDogs
 
+from dal_toolbox.models.laplace import LaplaceLinear, LaplaceModel
+
 
 def build_datasets(args, val_split=False, cache_features=True):
     image_datasets = ['cifar10', 'stl10', 'snacks', 'dtd', 'cifar100', 'food101', 'flowers102',
@@ -62,6 +64,7 @@ def build_datasets(args, val_split=False, cache_features=True):
 
     return train_ds, test_ds, num_classes
 
+
 def build_image_data(args):
     transforms = DinoTransforms(size=(256, 256))
     if args.dataset_name == 'cifar10':
@@ -98,7 +101,7 @@ def build_text_data(args):
         data = data.rename_column("content", "text")
         num_classes = 14
     elif args.dataset_name == "banking77":
-        data = load_dataset("banking77") 
+        data = load_dataset("banking77")
         num_classes = 77
         # data = data.rename_column("coarse_label", "label")
     elif args.dataset_name == "clinc":
@@ -108,6 +111,7 @@ def build_text_data(args):
     else:
         raise NotImplementedError()
     return data, num_classes
+
 
 class FeatureDataset:
 
@@ -202,6 +206,7 @@ class BertSequenceClassifier(nn.Module):
         cls_state = last_hidden_state[:, 0, :]
         return cls_state
 
+
 def flatten_cfg(cfg, parent_key='', sep='.'):
     items = []
     for k, v in cfg.items():
@@ -211,3 +216,212 @@ def flatten_cfg(cfg, parent_key='', sep='.'):
         else:
             items.append((new_key, v))
     return dict(items)
+
+
+class LaplaceNet(LaplaceLinear):
+    use_mean_field = True
+
+    @torch.no_grad()
+    def get_logits(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_logits = []
+        for batch in dataloader:
+            inputs = batch[0]
+            if LaplaceNet.use_mean_field:
+                logits = self.forward_mean_field(inputs.to(device))
+            else:
+                logits = self.forward_monte_carlo(inputs.to(device))
+            all_logits.append(logits)
+        logits = torch.cat(all_logits)
+        return logits
+
+    @torch.no_grad()
+    def get_representations(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_representations = []
+        for batch in dataloader:
+            inputs = batch[0]
+            all_representations.append(inputs)
+        representations = torch.cat(all_representations)
+        return representations
+
+    @torch.inference_mode()
+    def get_grad_representations(self, dataloader, device):
+        self.eval()
+        self.to(device)
+
+        embedding = []
+        for batch in dataloader:
+            inputs = batch[0].to(device)
+            logits = self(inputs)
+
+            features = inputs
+            probas = logits.softmax(-1)
+            max_indices = probas.argmax(-1)
+            num_classes = logits.size(-1)
+
+            factor = F.one_hot(max_indices, num_classes=num_classes) - probas
+            embedding_batch = (factor[:, :, None] * features[:, None, :]).flatten(-2)
+
+            embedding.append(embedding_batch.cpu())
+        # Concat all embeddings
+        embedding = torch.cat(embedding)
+        return embedding
+
+    @torch.no_grad()
+    def get_topk_grad_representations(self, dataloader, device, topk, grad_likelihood='cross_entropy', normalize_top_probas=True):
+        self.eval()
+        self.to(device)
+
+        embedding = []
+        for batch in dataloader:
+            inputs = batch[0].to(device)
+            logits = self(inputs)
+
+            features = inputs
+            probas = logits.softmax(-1)
+            num_classes = logits.size(-1)
+            probas_topk, top_preds = probas.topk(k=topk)
+
+            if grad_likelihood == 'cross_entropy':
+                factor = (torch.eye(num_classes, device=device)[:, None] - probas)
+                batch_indices = torch.arange(len(top_preds)).unsqueeze(-1).expand(-1, top_preds.size(1))
+                factor = factor[top_preds, batch_indices]
+
+                embedding_batch = torch.einsum("njh,nd->njhd", factor, features).flatten(2)
+                if normalize_top_probas:
+                    probas_topk /= probas_topk.sum(-1, keepdim=True)
+                embedding_batch = torch.sqrt(probas_topk)[:, :, None] * embedding_batch
+
+            elif grad_likelihood == 'binary_cross_entropy':
+                # We assume multiple independet binary cross entropy for highest probabilities
+                if topk > 2:
+                    raise ValueError('When using the binary cross entropy, topk must be 1 or 2.')
+                max_probas = probas_topk[:, 0]
+                factor = torch.eye(topk, device=device)[0] - max_probas[:, None]
+                embedding_batch = torch.einsum("nk,nd->nkd", factor, features).flatten(2)
+
+                probas_topk = torch.stack((max_probas, 1 - max_probas), dim=1)[:, :topk]
+                if normalize_top_probas:
+                    probas_topk /= probas_topk.sum(-1, keepdim=True)
+                embedding_batch = torch.sqrt(probas_topk)[:, :, None] * embedding_batch
+
+            elif grad_likelihood == 'cross_entropy_unbiased':
+
+                cat = torch.distributions.Categorical(probas)
+                factor = (torch.eye(num_classes, device=device)[:, None] - probas)
+                batch_indices = torch.arange(len(top_preds)).unsqueeze(-1).expand(-1, top_preds.size(1))
+                sampled_labels = cat.sample((topk,)).T
+                factor = factor[sampled_labels, batch_indices]
+
+                embedding_batch = torch.einsum("njh,nd->njhd", factor, features).flatten(2)
+            else:
+
+                raise NotImplementedError()
+
+            embedding.append(embedding_batch.cpu())
+        embedding = torch.cat(embedding)
+
+        return embedding
+
+    @torch.no_grad()
+    def get_exp_grad_representations(self, dataloader, device, grad_likelihood='cross_entropy'):
+        self.eval()
+        self.to(device)
+
+        embedding = []
+        for batch in dataloader:
+            inputs = batch[0].to(device)
+            logits = self(inputs)
+
+            features = inputs
+            probas = logits.softmax(-1)
+            num_classes = logits.size(-1)
+
+            if grad_likelihood == 'cross_entropy':
+                factor = (torch.eye(num_classes, device=device)[:, None] - probas)
+                embedding_batch = torch.einsum("jnh,nd->njhd", factor, features).flatten(2)
+                embedding_batch = torch.sqrt(probas)[:, :, None] * embedding_batch
+
+            elif grad_likelihood == 'binary_cross_entropy':
+                max_probas = probas.max(dim=-1).values
+
+                factor = torch.eye(2, device=device)[0] - max_probas[:, None]
+                embedding_batch = torch.einsum("nk,nd->nkd", factor, features).flatten(2)
+                probas_ = torch.stack((max_probas, 1 - max_probas), dim=1)
+                embedding_batch = torch.sqrt(probas_)[:, :, None] * embedding_batch
+            elif grad_likelihood == 'test':
+                c = 10
+                top_probas = probas.topk(c).values
+                top_probas = top_probas / top_probas.sum(-1, keepdim=True)
+                factor = (torch.eye(c, device=device)[:, None] - top_probas)
+                embedding_batch = torch.einsum("jnh,nd->njhd", factor, features).flatten(2)
+
+            else:
+                raise NotImplementedError()
+
+            embedding.append(embedding_batch.cpu())
+        embedding = torch.cat(embedding)
+
+        return embedding
+
+
+def build_model(args, **kwargs):
+    num_features = kwargs['num_features']
+    num_classes = kwargs['num_classes']
+
+    # Laplace net because we want to be able to sample via Bayesian methods.
+    # Not using the covariance is equivalent to deterministic model.
+    if args.model.name == 'laplace':
+        model = LaplaceNet(
+            num_features,
+            num_classes,
+            mean_field_factor=args.model.mean_field_factor,
+            mc_samples=args.model.mc_samples,
+            cov_likelihood=args.likelihood,
+            bias=True,
+        )
+        if 'al' in args and args.al.strategy in ['bald', 'pseudo_bald', 'batch_bald']:
+            LaplaceNet.use_mean_field = False
+    elif args.model.name == 'dino_laplace':
+        ssl_model = build_dino_model(args)
+        last_layer = LaplaceNet(
+            num_features,
+            num_classes,
+            mean_field_factor=args.model.mean_field_factor,
+            mc_samples=args.model.mc_samples,
+            cov_likelihood=args.likelihood,
+            bias=True,
+        )
+        model = BackboneModel(ssl_model, last_layer)
+
+        if not args.optimizer.finetune_backbone:
+            for n, p in model.named_parameters():
+                if 'ssl_model' in n:
+                    p.requires_grad = False
+
+    else:
+        raise NotImplementedError()
+
+    params = [
+        {'params': [p for n, p in model.named_parameters() if 'ssl_model' not in n]},
+        {'params': [p for n, p in model.named_parameters() if 'ssl_model' in n],
+         'lr': args.optimizer.lr_backbone},
+    ]
+
+    if args.optimizer.name == 'SGD':
+        optimizer = torch.optim.SGD(params, lr=args.optimizer.lr,
+                                    momentum=args.optimizer.momentum, weight_decay=args.optimizer.weight_decay)
+    elif args.optimizer.name == 'Adam':
+        optimizer = torch.optim.Adam(params, lr=args.optimizer.lr,
+                                     weight_decay=args.optimizer.weight_decay)
+    elif args.optimizer.name == 'RAdam':
+        optimizer = torch.optim.RAdam(params, lr=args.optimizer.lr, weight_decay=args.optimizer.weight_decay)
+    else:
+        raise NotImplementedError()
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.model.num_epochs)
+
+    model = LaplaceModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
+    return model
