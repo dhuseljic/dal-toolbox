@@ -11,7 +11,7 @@ from omegaconf import DictConfig
 
 from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, Snacks, DTD, Flowers102, TinyImageNet
 from dal_toolbox.datasets import ImageNet, StanfordDogs
-from dal_toolbox.models.laplace import LaplaceLayer, LaplaceModel
+from dal_toolbox.models.laplace import LaplaceLinear, LaplaceModel
 
 from sklearn.datasets import fetch_openml
 from sklearn.preprocessing import LabelEncoder, StandardScaler
@@ -220,7 +220,7 @@ def build_tabular_data(data_id, path='data/'):
     return TensorDataset(X_train, y_train), TensorDataset(X_test, y_test), num_classes
 
 
-class LaplaceNet(LaplaceLayer):
+class LaplaceNet(LaplaceLinear):
     use_mean_field = True
 
     @torch.no_grad()

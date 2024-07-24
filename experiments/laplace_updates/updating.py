@@ -215,9 +215,9 @@ def update_mc(model, update_loader, mc_samples, gamma=1e-3):
     targets = torch.cat(targets_list)
 
     # Sample hypothesis
-    from dal_toolbox.models.laplace import LaplaceLayer
+    from dal_toolbox.models.laplace import LaplaceLinear
     for m in model.model.modules():
-        if isinstance(m, LaplaceLayer):
+        if isinstance(m, LaplaceLinear):
             laplace_layer = m
     mean = laplace_layer.layer.weight.data
     prec = laplace_layer.precision_matrix.data

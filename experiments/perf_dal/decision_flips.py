@@ -8,11 +8,11 @@ import torch
 from torch.utils.data import DataLoader, SubsetRandomSampler
 from omegaconf import OmegaConf
 from lightning import Trainer
-from dal_toolbox.models.laplace import LaplaceModel, LaplaceLayer
+from dal_toolbox.models.laplace import LaplaceModel, LaplaceLinear
 from dal_toolbox.utils import seed_everything
 from utils import build_datasets, flatten_cfg
 
-logging.getLogger("lightning").setLevel(logging.ERROR)
+logging.getLogger("lightning.pytorch").setLevel(logging.ERROR)
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="decision_flips")
@@ -28,7 +28,7 @@ def main(args):
         logger=False,
         barebones=True,
     )
-    model = LaplaceLayer(len(train_ds[0][0]), num_classes)
+    model = LaplaceLinear(len(train_ds[0][0]), num_classes)
     optimizer = torch.optim.RAdam(model.parameters(), lr=1e-2, weight_decay=1e-5)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=trainer_kwargs['max_epochs'])

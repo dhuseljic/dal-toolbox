@@ -1,4 +1,4 @@
-dataset_name: agnews
+dataset_name: cifar100
 dataset_path: /home/datasets
 
 min_train_samples: 10

@@ -8,7 +8,7 @@ from dal_toolbox.utils import is_dist_avail_and_initialized
 from .random_features import mean_field_logits
 
 
-class LaplaceLayer(nn.Module):
+class LaplaceLinear(nn.Module):
     def __init__(self,
                  in_features: int,
                  out_features: int,

@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..utils.laplace import LaplaceLayer
+from ..utils.laplace import LaplaceLinear
 from ..utils.base import BaseModule
 
 
@@ -74,22 +74,22 @@ class LaplaceModel(BaseModule):
 
     def set_mc_samples(self, mc_samples: int):
         for m in self.model.modules():
-            if isinstance(m, LaplaceLayer):
+            if isinstance(m, LaplaceLinear):
                 m.mc_samples = mc_samples
 
     def set_mean_field_factor(self, mean_field_factor: float):
         for m in self.model.modules():
-            if isinstance(m, LaplaceLayer):
+            if isinstance(m, LaplaceLinear):
                 m.mean_field_factor = mean_field_factor
 
     def _reset_precision_matrix(self):
         for m in self.model.modules():
-            if isinstance(m, LaplaceLayer):
+            if isinstance(m, LaplaceLinear):
                 m.reset_precision_matrix()
 
     def _synchronize_precision_matrix(self):
         for m in self.model.modules():
-            if isinstance(m, LaplaceLayer):
+            if isinstance(m, LaplaceLinear):
                 m.synchronize_precision_matrix()
 
     @torch.no_grad()
@@ -115,7 +115,7 @@ class LaplaceModel(BaseModule):
 
         # Get the laplace layer
         for m in self.model.modules():
-            if isinstance(m, LaplaceLayer):
+            if isinstance(m, LaplaceLinear):
                 laplace_layer = m
 
         mean = laplace_layer.layer.weight.data
