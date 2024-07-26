@@ -121,10 +121,12 @@ def build_al_strategy(args):
 
 
 class DiverseBatches(Query):
-    def __init__(self, subset_size=None, random_seed=None):
+    def __init__(self, subset_size=None, random_seed=None, num_combinations=100, strat='test'):
         super().__init__(random_seed=random_seed)
         self.subset_size = subset_size
         self.init_run = True
+        self.num_combinations = num_combinations
+        self.strat = strat
 
     @torch.no_grad()
     def query(self, *, model, al_datamodule, acq_size, return_utilities=False, **kwargs):
@@ -135,12 +137,11 @@ class DiverseBatches(Query):
             # Save the first indices
             self.batch_indices = [labeled_indices]
             self.init_run = False
-        features_unlabeled = model.get_representations(unlabeled_dataloader)
-        features_labeled = model.get_representations(labeled_dataloader)
+        features_unlabeled, logits_unlabeled = model.get_representations_and_logits(unlabeled_dataloader)
+        features_labeled, logits_labeled = model.get_representations_and_logits(labeled_dataloader)
 
-        # To much
         combination_indices = np.array([np.random.permutation(
-            self.subset_size)[:acq_size] for i in range(10000)])
+            self.subset_size)[:acq_size] for i in range(self.num_combinations)])
 
         # Compute distances from
         distances = []
@@ -149,8 +150,25 @@ class DiverseBatches(Query):
             X_batch = features_labeled[mask_batch]
             dist = [batch_distance(X_batch, features_unlabeled[comb_idx]) for comb_idx in combination_indices]
             distances.append(dist)
-        idx = np.argmax(np.min(distances, axis=0))
-        local_indices = combination_indices[idx]
+        np.array(distances).shape
+
+        if self.strat is None:
+            idx = np.argmax(np.min(distances, axis=0))
+            local_indices = combination_indices[idx]
+        else:
+            from dal_toolbox.active_learning.strategies.uncertainty import margin_score
+            sort_idx = np.argsort(np.min(distances, axis=0))[::-1]
+            combination_indices_sorted = combination_indices[sort_idx]
+
+            comb_scores = []
+            for comb_idx in combination_indices_sorted[:10]:
+                logits_comb = logits_unlabeled[comb_idx]
+                probas_comb = logits_comb.softmax(-1)
+                scores = margin_score(probas_comb)
+                score = scores.sum().item()
+                comb_scores.append(score)
+            best_comb_idx = np.argmax(comb_scores)
+            local_indices = combination_indices_sorted[best_comb_idx]
         global_indices = [unlabeled_indices[idx] for idx in local_indices]
         self.batch_indices.append(global_indices)
         return global_indices

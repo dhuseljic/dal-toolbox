@@ -104,6 +104,14 @@ class BaseModule(L.LightningModule, abc.ABC):
         return self.model.get_representations(*args, **kwargs)
 
     @torch.inference_mode()
+    def get_representations_and_logits(self, *args, **kwargs):
+        if 'device' not in kwargs:
+            kwargs['device'] = 'cuda' if torch.cuda.is_available() else 'cpu'
+        if not hasattr(self.model, 'get_representations_and_logits'):
+            raise NotImplementedError('The `get_representations_and_logits` method is not implemented.')
+        return self.model.get_representations_and_logits(*args, **kwargs)
+
+    @torch.inference_mode()
     def get_grad_representations(self, *args, **kwargs):
         if 'device' not in kwargs:
             kwargs['device'] = 'cuda' if torch.cuda.is_available() else 'cpu'

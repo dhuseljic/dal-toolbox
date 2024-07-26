@@ -247,6 +247,23 @@ class LaplaceNet(LaplaceLinear):
         representations = torch.cat(all_representations)
         return representations
 
+    @torch.no_grad()
+    def get_representations_and_logits(self, dataloader, device):
+        self.to(device)
+        self.eval()
+
+        all_representations = []
+        all_logits = []
+        for batch in dataloader:
+            inputs = batch[0]
+            logits = self.forward(inputs.to(device))
+
+            all_representations.append(inputs)
+            all_logits.append(logits)
+        representations = torch.cat(all_representations)
+        logits = torch.cat(all_logits)
+        return representations, logits
+
     @torch.inference_mode()
     def get_grad_representations(self, dataloader, device):
         self.eval()
