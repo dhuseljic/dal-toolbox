@@ -115,9 +115,10 @@ def build_al_strategy(args):
     elif args.al.strategy == 'optimal':
         al_strategy = Optimal(
             subset_size=args.al.subset_size,
-            num_batches=args.al.num_batches,
-            num_mc_labels=args.al.num_mc_labels,
-            loss=args.al.loss,
+            num_batches=args.al.optimal.num_batches,
+            num_mc_labels=args.al.optimal.num_mc_labels,
+            gamma=args.al.optimal.gamma,
+            loss=args.al.optimal.loss,
             device=device
         )
     elif args.al.strategy == 'margin':
