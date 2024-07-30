@@ -108,12 +108,13 @@ def evaluate(predictions):
 
 
 def build_al_strategy(args):
+    device = args.al.device
     if args.al.strategy == 'random':
         al_strategy = strategies.RandomSampling()
     elif args.al.strategy == 'optimal':
-        al_strategy = Optimal(subset_size=args.al.subset_size)
+        al_strategy = Optimal(subset_size=args.al.subset_size, device=device)
     elif args.al.strategy == 'margin':
-        al_strategy = strategies.MarginSampling(subset_size=args.al.subset_size)
+        al_strategy = strategies.MarginSampling(subset_size=args.al.subset_size, device=device)
     elif args.al.strategy == 'badge':
         al_strategy = strategies.Badge(subset_size=args.al.subset_size)
     else:
@@ -122,26 +123,30 @@ def build_al_strategy(args):
 
 
 class Optimal(Query):
-    def __init__(self, subset_size=None, random_seed=None, num_combinations=100, strat='test'):
+    def __init__(self, subset_size=None, num_batches=100, num_mc_labels=1, device='cpu', loss='cross_entropy', random_seed=None):
         super().__init__(random_seed=random_seed)
         self.subset_size = subset_size
-        self.num_combinations = num_combinations
-        self.strat = strat
+        self.num_batches = num_batches
+        self.num_mc_labels = num_mc_labels
+        self.device = device
+
+        if loss == 'cross_entropy':
+            self.loss_fn = torch.nn.CrossEntropyLoss()
+        else:
+            raise NotImplementedError()
 
     @torch.no_grad()
     def query(self, *, model, al_datamodule, acq_size, return_utilities=False, **kwargs):
-        num_batches = 100
-        num_mc_labels = 1
-        device = 'cuda'
-        loss_fn = torch.nn.CrossEntropyLoss()
 
         # Select batches for argmin (random vs. diverse batches)
-        indices_batches = [np.random.permutation(self.subset_size)[:acq_size] for _ in range(num_batches)]
+        indices_batches = [np.random.permutation(self.subset_size)[:acq_size]
+                           for _ in range(self.num_batches)]
 
         # For each batch compute the expected error
-        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
-        unlabeled_features = model.get_representations(unlabeled_dataloader, device=device)
-        unlabeled_logits = model.get_logits_from_representations(unlabeled_features, device=device).cpu()
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(
+            subset_size=self.subset_size)
+        unlabeled_features = model.get_representations(unlabeled_dataloader, device=self.device)
+        unlabeled_logits = model.get_logits_from_representations(unlabeled_features, device=self.device)
         # labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
         # labeled_features = model.get_representations(labeled_dataloader, device=device)
         # labeled_logits = model.get_logits_from_representations(labeled_features, device=device).cpu()
@@ -151,30 +156,33 @@ class Optimal(Query):
         for indices in indices_batches:
             # MC sampling for one-step-lookahead
             categorical = torch.distributions.Categorical(logits=unlabeled_logits[indices])
-            mc_labels = categorical.sample((num_mc_labels,)).squeeze()
+            mc_labels = categorical.sample((self.num_mc_labels,)).squeeze()
 
             # Incremental learning - p(y | x, L^+)
             model.load_state_dict(init_params)
-            model.update_posterior(iter(zip(unlabeled_features[indices], mc_labels)), from_representations=True, device=device)
-            
+            model.update_posterior(
+                iter(zip(unlabeled_features[indices], mc_labels)),
+                from_representations=True,
+                device=self.device
+            )
+
             # Estimate new loss - validation set
-            model.to(device)
+            model.to(self.device)
             num_samples = 0
             running_loss = 0
             test_loader = al_datamodule.test_dataloader()
             for batch in test_loader:
-                inputs, targets = batch[0].to(device), batch[1].to(device)
+                inputs, targets = batch[0].to(self.device), batch[1].to(self.device)
                 logits = model(inputs)
                 num_samples += len(inputs)
-                running_loss += len(inputs)*loss_fn(logits, targets).item()
+                running_loss += len(inputs)*self.loss_fn(logits, targets).item()
 
             all_losses.append(running_loss / num_samples)
-        
+
         best_idx = np.argmin(all_losses)
         local_indices = indices_batches[best_idx]
         global_indices = [unlabeled_indices[idx] for idx in local_indices]
         return global_indices
-
 
         # combination_indices = np.array([np.random.permutation(self.subset_size)[:acq_size] for i in range(self.num_combinations)])
         # # Compute distances from
@@ -187,6 +195,7 @@ class Optimal(Query):
         # np.array(distances).shape
         # idx = np.argmax(np.min(distances, axis=0))
         # local_indices = combination_indices[idx]
+
 
 def batch_distance(X1, X2):
     cost_matrix = pairwise_distances(X1, X2)

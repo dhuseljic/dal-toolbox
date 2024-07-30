@@ -9,9 +9,10 @@ from ...metrics import entropy_from_logits, entropy_from_probas, ensemble_log_so
 
 
 class UncertaintySampling(Query, ABC):
-    def __init__(self, subset_size=None, random_seed=None):
+    def __init__(self, subset_size=None, random_seed=None, device='cpu'):
         super().__init__(random_seed=random_seed)
         self.subset_size = subset_size
+        self.device = device
 
     @torch.no_grad()
     def query(
@@ -26,7 +27,7 @@ class UncertaintySampling(Query, ABC):
     ):
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(
             subset_size=self.subset_size)
-        logits = model.get_logits(unlabeled_dataloader)  # , **forward_kwargs)
+        logits = model.get_logits(unlabeled_dataloader, device=self.device)
         scores = self.get_utilities(logits)
         _, indices = scores.topk(acq_size)
 
