@@ -19,6 +19,7 @@ from utils import build_datasets, flatten_cfg, build_model
 from torch.utils.data import DataLoader, Subset
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import pairwise_distances
+from rich.progress import track
 
 logging.getLogger("lightning.pytorch").setLevel(logging.ERROR)
 
@@ -112,7 +113,13 @@ def build_al_strategy(args):
     if args.al.strategy == 'random':
         al_strategy = strategies.RandomSampling()
     elif args.al.strategy == 'optimal':
-        al_strategy = Optimal(subset_size=args.al.subset_size, device=device)
+        al_strategy = Optimal(
+            subset_size=args.al.subset_size,
+            num_batches=args.al.num_batches,
+            num_mc_labels=args.al.num_mc_labels,
+            loss=args.al.loss,
+            device=device
+        )
     elif args.al.strategy == 'margin':
         al_strategy = strategies.MarginSampling(subset_size=args.al.subset_size, device=device)
     elif args.al.strategy == 'badge':
@@ -123,7 +130,7 @@ def build_al_strategy(args):
 
 
 class Optimal(Query):
-    def __init__(self, subset_size=None, num_batches=100, num_mc_labels=1, device='cpu', loss='cross_entropy', random_seed=None):
+    def __init__(self, subset_size=None, num_batches=1000, num_mc_labels=1, device='cpu', loss='cross_entropy', random_seed=None):
         super().__init__(random_seed=random_seed)
         self.subset_size = subset_size
         self.num_batches = num_batches
@@ -153,7 +160,7 @@ class Optimal(Query):
 
         all_losses = []
         init_params = copy.deepcopy(model.state_dict())
-        for indices in indices_batches:
+        for indices in track(indices_batches):
             # MC sampling for one-step-lookahead
             categorical = torch.distributions.Categorical(logits=unlabeled_logits[indices])
             mc_labels = categorical.sample((self.num_mc_labels,)).squeeze()
