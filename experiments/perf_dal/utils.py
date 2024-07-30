@@ -248,21 +248,11 @@ class LaplaceNet(LaplaceLinear):
         return representations
 
     @torch.no_grad()
-    def get_representations_and_logits(self, dataloader, device):
+    def get_logits_from_representations(self, representations, device):
         self.to(device)
         self.eval()
-
-        all_representations = []
-        all_logits = []
-        for batch in dataloader:
-            inputs = batch[0]
-            logits = self.forward(inputs.to(device))
-
-            all_representations.append(inputs)
-            all_logits.append(logits)
-        representations = torch.cat(all_representations)
-        logits = torch.cat(all_logits)
-        return representations, logits
+        logits = self.forward(representations.to(device))
+        return logits
 
     @torch.inference_mode()
     def get_grad_representations(self, dataloader, device):
@@ -283,6 +273,7 @@ class LaplaceNet(LaplaceLinear):
             embedding_batch = (factor[:, :, None] * features[:, None, :]).flatten(-2)
 
             embedding.append(embedding_batch.cpu())
+
         # Concat all embeddings
         embedding = torch.cat(embedding)
         return embedding

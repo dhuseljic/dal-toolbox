@@ -93,25 +93,47 @@ class LaplaceModel(BaseModule):
                 m.synchronize_precision_matrix()
 
     @torch.no_grad()
-    def update_posterior(self, dataloader, lmb=1, gamma=1, cov_likelihood='gaussian', update_type='second_order'):
+    def update_posterior(self, dataloader, lmb=1, gamma=10, cov_likelihood='gaussian', update_type='second_order', from_representations=False, device='cpu'):
         # Set to eval to avoid precision matrix update
         self.eval()
+        self.to(device)
 
         # check if return_features is in forward_kwargs
         forward_kwargs = inspect.signature(self.model.forward).parameters
         if 'return_features' not in forward_kwargs:
             raise ValueError('Define the kwarg `return_features` in the forward method of your model.')
 
-        # get features
-        phis_list = []
-        targets_list = []
-        for inputs, targets in dataloader:
-            logits, phis = self.model(inputs, return_features=True)
-            phis_list.append(phis)
-            targets_list.append(targets)
-        phis = torch.cat(phis_list)
-        targets = torch.cat(targets_list)
-        num_classes = logits.size(-1)
+        if not from_representations:
+            phis_list = []
+            targets_list = []
+            for inputs, targets in dataloader:
+                inputs = inputs.to(device)
+                targets = targets.to(device)
+                inputs = inputs.unsqueeze(0) if inputs.ndim == 1 else inputs
+                targets = targets.unsqueeze(0) if targets.ndim == 0 else targets
+
+                logits, phis = self.model(inputs, return_features=True)
+                phis_list.append(phis)
+                targets_list.append(targets)
+            phis = torch.cat(phis_list)
+            targets = torch.cat(targets_list)
+            num_classes = logits.size(-1)
+        else:
+            phis_list = []
+            targets_list = []
+            for features, targets in dataloader:
+                features = features.to(device)
+                targets = targets.to(device)
+                features = features.unsqueeze(0) if features.ndim == 1 else features
+                targets = targets.unsqueeze(0) if targets.ndim == 0 else targets
+
+                logits = self.get_logits_from_representations(features, device=device)
+                phis_list.append(features)
+                targets_list.append(targets)
+            phis = torch.cat(phis_list)
+            targets = torch.cat(targets_list)
+            num_classes = logits.size(-1)
+
 
         # Get the laplace layer
         for m in self.model.modules():

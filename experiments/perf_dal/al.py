@@ -2,6 +2,7 @@ import time
 import hydra
 import torch
 import mlflow
+import copy
 import logging
 
 import numpy as np
@@ -109,8 +110,8 @@ def evaluate(predictions):
 def build_al_strategy(args):
     if args.al.strategy == 'random':
         al_strategy = strategies.RandomSampling()
-    elif args.al.strategy == 'diverse_batches':
-        al_strategy = DiverseBatches(subset_size=args.al.subset_size)
+    elif args.al.strategy == 'optimal':
+        al_strategy = Optimal(subset_size=args.al.subset_size)
     elif args.al.strategy == 'margin':
         al_strategy = strategies.MarginSampling(subset_size=args.al.subset_size)
     elif args.al.strategy == 'badge':
@@ -120,59 +121,72 @@ def build_al_strategy(args):
     return al_strategy
 
 
-class DiverseBatches(Query):
+class Optimal(Query):
     def __init__(self, subset_size=None, random_seed=None, num_combinations=100, strat='test'):
         super().__init__(random_seed=random_seed)
         self.subset_size = subset_size
-        self.init_run = True
         self.num_combinations = num_combinations
         self.strat = strat
 
     @torch.no_grad()
     def query(self, *, model, al_datamodule, acq_size, return_utilities=False, **kwargs):
-        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(
-            subset_size=self.subset_size)
-        labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
-        if self.init_run:
-            # Save the first indices
-            self.batch_indices = [labeled_indices]
-            self.init_run = False
-        features_unlabeled, logits_unlabeled = model.get_representations_and_logits(unlabeled_dataloader)
-        features_labeled, logits_labeled = model.get_representations_and_logits(labeled_dataloader)
+        num_batches = 100
+        num_mc_labels = 1
+        device = 'cuda'
+        loss_fn = torch.nn.CrossEntropyLoss()
 
-        combination_indices = np.array([np.random.permutation(
-            self.subset_size)[:acq_size] for i in range(self.num_combinations)])
+        # Select batches for argmin (random vs. diverse batches)
+        indices_batches = [np.random.permutation(self.subset_size)[:acq_size] for _ in range(num_batches)]
 
-        # Compute distances from
-        distances = []
-        for batch_idx in self.batch_indices:
-            mask_batch = np.isin(np.array(labeled_indices), np.array(batch_idx))
-            X_batch = features_labeled[mask_batch]
-            dist = [batch_distance(X_batch, features_unlabeled[comb_idx]) for comb_idx in combination_indices]
-            distances.append(dist)
-        np.array(distances).shape
+        # For each batch compute the expected error
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
+        unlabeled_features = model.get_representations(unlabeled_dataloader, device=device)
+        unlabeled_logits = model.get_logits_from_representations(unlabeled_features, device=device).cpu()
+        # labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
+        # labeled_features = model.get_representations(labeled_dataloader, device=device)
+        # labeled_logits = model.get_logits_from_representations(labeled_features, device=device).cpu()
 
-        if self.strat is None:
-            idx = np.argmax(np.min(distances, axis=0))
-            local_indices = combination_indices[idx]
-        else:
-            from dal_toolbox.active_learning.strategies.uncertainty import margin_score
-            sort_idx = np.argsort(np.min(distances, axis=0))[::-1]
-            combination_indices_sorted = combination_indices[sort_idx]
+        all_losses = []
+        init_params = copy.deepcopy(model.state_dict())
+        for indices in indices_batches:
+            # MC sampling for one-step-lookahead
+            categorical = torch.distributions.Categorical(logits=unlabeled_logits[indices])
+            mc_labels = categorical.sample((num_mc_labels,)).squeeze()
 
-            comb_scores = []
-            for comb_idx in combination_indices_sorted[:10]:
-                logits_comb = logits_unlabeled[comb_idx]
-                probas_comb = logits_comb.softmax(-1)
-                scores = margin_score(probas_comb)
-                score = scores.sum().item()
-                comb_scores.append(score)
-            best_comb_idx = np.argmax(comb_scores)
-            local_indices = combination_indices_sorted[best_comb_idx]
+            # Incremental learning - p(y | x, L^+)
+            model.load_state_dict(init_params)
+            model.update_posterior(iter(zip(unlabeled_features[indices], mc_labels)), from_representations=True, device=device)
+            
+            # Estimate new loss - validation set
+            model.to(device)
+            num_samples = 0
+            running_loss = 0
+            test_loader = al_datamodule.test_dataloader()
+            for batch in test_loader:
+                inputs, targets = batch[0].to(device), batch[1].to(device)
+                logits = model(inputs)
+                num_samples += len(inputs)
+                running_loss += len(inputs)*loss_fn(logits, targets).item()
+
+            all_losses.append(running_loss / num_samples)
+        
+        best_idx = np.argmin(all_losses)
+        local_indices = indices_batches[best_idx]
         global_indices = [unlabeled_indices[idx] for idx in local_indices]
-        self.batch_indices.append(global_indices)
         return global_indices
 
+
+        # combination_indices = np.array([np.random.permutation(self.subset_size)[:acq_size] for i in range(self.num_combinations)])
+        # # Compute distances from
+        # distances = []
+        # for batch_idx in self.batch_indices:
+        #     mask_batch = np.isin(np.array(labeled_indices), np.array(batch_idx))
+        #     X_batch = labeled_features[mask_batch]
+        #     dist = [batch_distance(X_batch, unlabeled_features[comb_idx]) for comb_idx in combination_indices]
+        #     distances.append(dist)
+        # np.array(distances).shape
+        # idx = np.argmax(np.min(distances, axis=0))
+        # local_indices = combination_indices[idx]
 
 def batch_distance(X1, X2):
     cost_matrix = pairwise_distances(X1, X2)
