@@ -130,14 +130,17 @@ def build_al_strategy(args):
 
 
 class Optimal(Query):
-    def __init__(self, subset_size=None, num_batches=1000, num_mc_labels=1, device='cpu', loss='cross_entropy', random_seed=None):
+    def __init__(self, subset_size=None, num_batches=1000, num_mc_labels=1, loss='cross_entropy', gamma=1, device='cpu',  random_seed=None):
         super().__init__(random_seed=random_seed)
         self.subset_size = subset_size
         self.num_batches = num_batches
         self.num_mc_labels = num_mc_labels
+        self.gamma = gamma
         self.device = device
 
         if loss == 'cross_entropy':
+            self.loss_fn = torch.nn.CrossEntropyLoss()
+        elif loss == 'accuracy':
             self.loss_fn = torch.nn.CrossEntropyLoss()
         else:
             raise NotImplementedError()
@@ -145,11 +148,6 @@ class Optimal(Query):
     @torch.no_grad()
     def query(self, *, model, al_datamodule, acq_size, return_utilities=False, **kwargs):
 
-        # Select batches for argmin (random vs. diverse batches)
-        indices_batches = [np.random.permutation(self.subset_size)[:acq_size]
-                           for _ in range(self.num_batches)]
-
-        # For each batch compute the expected error
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(
             subset_size=self.subset_size)
         unlabeled_features = model.get_representations(unlabeled_dataloader, device=self.device)
@@ -158,33 +156,43 @@ class Optimal(Query):
         # labeled_features = model.get_representations(labeled_dataloader, device=device)
         # labeled_logits = model.get_logits_from_representations(labeled_features, device=device).cpu()
 
+        # Select batches for argmin (random vs. diverse batches)
+        indices_batches = [np.random.permutation(self.subset_size)[:acq_size]
+                           for _ in range(self.num_batches)]
+
         all_losses = []
         init_params = copy.deepcopy(model.state_dict())
         for indices in track(indices_batches):
             # MC sampling for one-step-lookahead
             categorical = torch.distributions.Categorical(logits=unlabeled_logits[indices])
-            mc_labels = categorical.sample((self.num_mc_labels,)).squeeze()
+            mc_labels = categorical.sample((self.num_mc_labels,))
 
-            # Incremental learning - p(y | x, L^+)
-            model.load_state_dict(init_params)
-            model.update_posterior(
-                iter(zip(unlabeled_features[indices], mc_labels)),
-                from_representations=True,
-                device=self.device
-            )
+            mc_losses = []
+            for labels in mc_labels:
+                # Incremental learning - p(y | x, L^+)
+                features_batch = unlabeled_features[indices]
+                model.load_state_dict(init_params)
+                model.update_posterior(
+                    iter(zip(features_batch, labels)),
+                    gamma=self.gamma,
+                    from_representations=True,
+                    device=self.device
+                )
+                # TODO: check if predictions are changing before and after
 
-            # Estimate new loss - validation set
-            model.to(self.device)
-            num_samples = 0
-            running_loss = 0
-            test_loader = al_datamodule.test_dataloader()
-            for batch in test_loader:
-                inputs, targets = batch[0].to(self.device), batch[1].to(self.device)
-                logits = model(inputs)
-                num_samples += len(inputs)
-                running_loss += len(inputs)*self.loss_fn(logits, targets).item()
+                # Estimate new loss via validation set
+                model.to(self.device)
+                num_samples = 0
+                running_loss = 0
+                test_loader = al_datamodule.test_dataloader()
+                for batch in test_loader:
+                    inputs, targets = batch[0].to(self.device), batch[1].to(self.device)
+                    logits = model(inputs)
+                    num_samples += len(inputs)
+                    running_loss += len(inputs)*self.loss_fn(logits, targets).item()
 
-            all_losses.append(running_loss / num_samples)
+                mc_losses.append(running_loss / num_samples)
+            all_losses.append(np.mean(mc_losses))
 
         best_idx = np.argmin(all_losses)
         local_indices = indices_batches[best_idx]

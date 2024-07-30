@@ -251,7 +251,7 @@ class LaplaceNet(LaplaceLinear):
     def get_logits_from_representations(self, representations, device):
         self.to(device)
         self.eval()
-        logits = self.forward(representations.to(device))
+        logits = self.forward_mean_field(representations.to(device))
         return logits
 
     @torch.inference_mode()

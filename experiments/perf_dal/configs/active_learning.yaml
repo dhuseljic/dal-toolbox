@@ -28,8 +28,9 @@ al:
   acq_size: 10
   bait:
     grad_likelihood: binary_cross_entropy
-  num_batches: 1000
-  num_mc_labels: 1
+  num_batches: 100
+  num_mc_labels: 5
+  gamma: 1
   loss: cross_entropy
   device: cpu
 
