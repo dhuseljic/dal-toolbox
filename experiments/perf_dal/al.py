@@ -123,6 +123,8 @@ def build_al_strategy(args):
         )
     elif args.al.strategy == 'margin':
         al_strategy = strategies.MarginSampling(subset_size=args.al.subset_size, device=device)
+    elif args.al.strategy == 'typiclust':
+        al_strategy = strategies.TypiClust(subset_size=args.al.subset_size)
     elif args.al.strategy == 'badge':
         al_strategy = strategies.Badge(subset_size=args.al.subset_size)
     else:

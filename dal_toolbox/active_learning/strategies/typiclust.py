@@ -53,9 +53,10 @@ class TypiClust(Query):
     MAX_NUM_CLUSTERS = 500
     K_NN = 20
 
-    def __init__(self, subset_size=None, random_seed=None):
+    def __init__(self, subset_size=None, random_seed=None, device='cpu'):
         super().__init__(random_seed=random_seed)
         self.subset_size = subset_size
+        self.device = device
 
     @torch.no_grad()
     def query(self,
@@ -69,9 +70,9 @@ class TypiClust(Query):
 
         num_clusters = min(len(labeled_indices) + acq_size, self.MAX_NUM_CLUSTERS)
 
-        unlabeled_features = model.get_representations(unlabeled_dataloader)
+        unlabeled_features = model.get_representations(unlabeled_dataloader, device=self.device)
         if len(labeled_indices) > 0:
-            labeled_features = model.get_representations(labeled_dataloader)
+            labeled_features = model.get_representations(labeled_dataloader, device=self.device)
         else:
             labeled_features = torch.Tensor([])
 
