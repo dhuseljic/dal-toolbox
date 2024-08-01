@@ -26,12 +26,11 @@ al:
   num_init_samples: 10
   num_acq: 10
   acq_size: 10
-  bait:
-    grad_likelihood: binary_cross_entropy
   optimal:
     num_batches: 100
-    num_mc_labels: 5
-    gamma: 1
+    num_mc_labels: null
+    gamma: null
+    use_val_ds: True
     loss: cross_entropy
   device: cpu
 

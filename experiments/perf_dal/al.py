@@ -36,6 +36,7 @@ def main(args):
     al_datamodule = ActiveLearningDataModule(
         train_dataset=train_ds,
         query_dataset=train_ds,
+        val_dataset=test_ds,
         test_dataset=test_ds,
         train_batch_size=args.model.train_batch_size,
         predict_batch_size=args.model.predict_batch_size,
@@ -76,7 +77,7 @@ def main(args):
 
         model.reset_states()
         trainer = Trainer(**lightning_trainer_config)
-        trainer.fit(model, train_dataloaders=al_datamodule)
+        trainer.fit(model, train_dataloaders=al_datamodule.train_dataloader())
 
         predictions = trainer.predict(model, dataloaders=al_datamodule.test_dataloader())
         test_stats = evaluate(predictions)
@@ -117,6 +118,7 @@ def build_al_strategy(args):
             subset_size=args.al.subset_size,
             num_batches=args.al.optimal.num_batches,
             num_mc_labels=args.al.optimal.num_mc_labels,
+            use_val_ds=args.al.optimal.use_val_ds,
             gamma=args.al.optimal.gamma,
             loss=args.al.optimal.loss,
             device=device
@@ -133,12 +135,13 @@ def build_al_strategy(args):
 
 
 class Optimal(Query):
-    def __init__(self, subset_size=None, num_batches=1000, num_mc_labels=1, loss='cross_entropy', gamma=1, device='cpu',  random_seed=None):
+    def __init__(self, subset_size=None, num_batches=200, num_mc_labels=None, gamma=None, use_val_ds=True, loss='cross_entropy', device='cpu', random_seed=None):
         super().__init__(random_seed=random_seed)
         self.subset_size = subset_size
         self.num_batches = num_batches
         self.num_mc_labels = num_mc_labels
         self.gamma = gamma
+        self.use_val_ds= use_val_ds
         self.device = device
 
         if loss == 'cross_entropy':
@@ -161,21 +164,20 @@ class Optimal(Query):
         # labeled_features = model.get_representations(labeled_dataloader, device=device)
         # labeled_logits = model.get_logits_from_representations(labeled_features, device=device).cpu()
 
-        # Select batches for argmin (random vs. diverse batches)
+        # Select batches (TODO: Smart selection, diverse batches)
         indices_batches = [np.random.permutation(self.subset_size)[:acq_size]
                            for _ in range(self.num_batches)]
 
-        optimal = True
 
         all_losses = []
         init_params = model.state_dict()
         for indices in track(indices_batches):
             features_batch = unlabeled_features[indices]
 
-            # Expectation of labels 
+            # Expectation of labels
             # Optimal: We just know the labels
             # Non-optimal: We need to evaluate the expectation
-            if optimal:
+            if self.num_mc_labels is None:
                 # Use true labels of batch for model training
                 labels_batch = unlabeled_labels[indices]
             else:
@@ -185,12 +187,12 @@ class Optimal(Query):
             # Updating the model
             # Optimal: We just retrain with the new labels
             # Non-optimal: We use Bayesian updates
-            if optimal:
+            if self.gamma is None:
                 model.reset_states(reset_model_parameters=True)
                 trainer = Trainer(barebones=True, max_epochs=50)
                 aldm = copy.deepcopy(al_datamodule)
                 aldm.update_annotations([unlabeled_indices[idx] for idx in indices])
-                trainer.fit(model, aldm)
+                trainer.fit(model, aldm.train_dataloader())
             else:
                 model.load_state_dict(init_params)
                 model.update_posterior(
@@ -203,11 +205,11 @@ class Optimal(Query):
             # Evaluate the performance
             # Optimal: We just use a validation dataset
             # Non-Optimal: We need to approximate the performance without a validation dataset
-            if optimal:
+            if self.use_val_ds:
                 model.to(self.device)
                 num_samples = 0
                 running_loss = 0
-                test_loader = al_datamodule.test_dataloader()
+                test_loader = al_datamodule.val_dataloader()
                 for batch in test_loader:
                     inputs, targets = batch[0].to(self.device), batch[1].to(self.device)
                     logits = model(inputs)
