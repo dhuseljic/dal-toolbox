@@ -142,7 +142,7 @@ class Optimal(Query):
         if loss == 'cross_entropy':
             self.loss_fn = torch.nn.CrossEntropyLoss()
         elif loss == 'accuracy':
-            self.loss_fn = torch.nn.CrossEntropyLoss()
+            self.loss_fn = lambda logits, y: 1 - torch.mean((logits.argmax(dim=-1) == y).float())
         else:
             raise NotImplementedError()
 
@@ -151,8 +151,10 @@ class Optimal(Query):
 
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(
             subset_size=self.subset_size)
+
         unlabeled_features = model.get_representations(unlabeled_dataloader, device=self.device)
-        unlabeled_logits = model.get_logits_from_representations(unlabeled_features, device=self.device)
+        unlabeled_labels = torch.cat([batch[1] for batch in unlabeled_dataloader])
+        # unlabeled_logits = model.get_logits_from_representations(unlabeled_features, device=self.device)
         # labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
         # labeled_features = model.get_representations(labeled_dataloader, device=device)
         # labeled_logits = model.get_logits_from_representations(labeled_features, device=device).cpu()
@@ -161,27 +163,45 @@ class Optimal(Query):
         indices_batches = [np.random.permutation(self.subset_size)[:acq_size]
                            for _ in range(self.num_batches)]
 
-        all_losses = []
-        init_params = copy.deepcopy(model.state_dict())
-        for indices in track(indices_batches):
-            # MC sampling for one-step-lookahead
-            categorical = torch.distributions.Categorical(logits=unlabeled_logits[indices])
-            mc_labels = categorical.sample((self.num_mc_labels,))
+        optimal = True
 
-            mc_losses = []
-            for labels in mc_labels:
-                # Incremental learning - p(y | x, L^+)
-                features_batch = unlabeled_features[indices]
+        all_losses = []
+        init_params = model.state_dict()
+        for indices in track(indices_batches):
+            features_batch = unlabeled_features[indices]
+
+            # Expectation of labels 
+            # Optimal: We just know the labels
+            # Non-optimal: We need to evaluate the expectation
+            if optimal:
+                # Use true labels of batch for model training
+                labels_batch = unlabeled_labels[indices]
+            else:
+                # Compute Expectation
+                raise NotImplementedError()
+
+            # Updating the model
+            # Optimal: We just retrain with the new labels
+            # Non-optimal: We use Bayesian updates
+            if optimal:
+                model.reset_states(reset_model_parameters=True)
+                trainer = Trainer(barebones=True, max_epochs=50)
+                aldm = copy.deepcopy(al_datamodule)
+                aldm.update_annotations([unlabeled_indices[idx] for idx in indices])
+                trainer.fit(model, aldm)
+            else:
                 model.load_state_dict(init_params)
                 model.update_posterior(
-                    iter(zip(features_batch, labels)),
+                    iter(zip(features_batch, labels_batch)),
                     gamma=self.gamma,
                     from_representations=True,
                     device=self.device
                 )
-                # TODO: check if predictions are changing before and after
 
-                # Estimate new loss via validation set
+            # Evaluate the performance
+            # Optimal: We just use a validation dataset
+            # Non-Optimal: We need to approximate the performance without a validation dataset
+            if optimal:
                 model.to(self.device)
                 num_samples = 0
                 running_loss = 0
@@ -191,9 +211,42 @@ class Optimal(Query):
                     logits = model(inputs)
                     num_samples += len(inputs)
                     running_loss += len(inputs)*self.loss_fn(logits, targets).item()
+                loss = running_loss / num_samples
+                all_losses.append(loss)
+            else:
+                raise NotImplementedError()
 
-                mc_losses.append(running_loss / num_samples)
-            all_losses.append(np.mean(mc_losses))
+            # # MC sampling for one-step-lookahead
+            # categorical = torch.distributions.Categorical(logits=unlabeled_logits[indices])
+            # mc_labels = categorical.sample((self.num_mc_labels,))
+
+            # mc_losses = []
+            # for labels in mc_labels:
+            #     # Incremental learning - p(y | x, L^+)
+            #     features_batch = unlabeled_features[indices]
+            #     model.load_state_dict(init_params)
+            #     model.update_posterior(
+            #         iter(zip(features_batch, labels)),
+            #         gamma=self.gamma,
+            #         from_representations=True,
+            #         device=self.device
+            #     )
+
+            #     # TODO: check if predictions are changing before and after
+
+            #     # Estimate new loss via validation set
+            #     model.to(self.device)
+            #     num_samples = 0
+            #     running_loss = 0
+            #     test_loader = al_datamodule.test_dataloader()
+            #     for batch in test_loader:
+            #         inputs, targets = batch[0].to(self.device), batch[1].to(self.device)
+            #         logits = model(inputs)
+            #         num_samples += len(inputs)
+            #         running_loss += len(inputs)*self.loss_fn(logits, targets).item()
+
+            #     mc_losses.append(running_loss / num_samples)
+            # all_losses.append(np.mean(mc_losses))
 
         best_idx = np.argmin(all_losses)
         local_indices = indices_batches[best_idx]
