@@ -26,13 +26,16 @@ al:
   num_init_samples: 10
   num_acq: 10
   acq_size: 10
+  device: cpu
   optimal:
     num_batches: 100
-    num_mc_labels: null
-    gamma: null
+    num_mc_labels: 10
+    gamma: 7
+    use_true_labels: True
+    use_retraining: True
+    num_retraining_epochs: 50
     use_val_ds: True
     loss: cross_entropy
-  device: cpu
 
 model:
   name: laplace

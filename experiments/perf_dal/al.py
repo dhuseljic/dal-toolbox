@@ -117,9 +117,12 @@ def build_al_strategy(args):
         al_strategy = Optimal(
             subset_size=args.al.subset_size,
             num_batches=args.al.optimal.num_batches,
-            num_mc_labels=args.al.optimal.num_mc_labels,
-            use_val_ds=args.al.optimal.use_val_ds,
             gamma=args.al.optimal.gamma,
+            num_mc_labels=args.al.optimal.num_mc_labels,
+            use_true_labels=args.al.optimal.use_true_labels,
+            use_retraining=args.al.optimal.use_retraining,
+            num_retraining_epochs=args.al.optimal.num_retraining_epochs,
+            use_val_ds=args.al.optimal.use_val_ds,
             loss=args.al.optimal.loss,
             device=device
         )
@@ -135,31 +138,51 @@ def build_al_strategy(args):
 
 
 class Optimal(Query):
-    def __init__(self, subset_size=None, num_batches=200, num_mc_labels=None, gamma=None, use_val_ds=True, loss='cross_entropy', device='cpu', random_seed=None):
+    def __init__(self,
+                 subset_size=None,
+                 num_batches=200,
+                 gamma=7,
+                 num_mc_labels=None,
+                 use_true_labels=True,
+                 use_retraining=True,
+                 use_val_ds=True,
+                 num_retraining_epochs=10,
+                 loss='cross_entropy',
+                 device='cpu',
+                 random_seed=None,
+                 ):
         super().__init__(random_seed=random_seed)
         self.subset_size = subset_size
+        self.device = device
+
         self.num_batches = num_batches
         self.num_mc_labels = num_mc_labels
         self.gamma = gamma
-        self.use_val_ds= use_val_ds
-        self.device = device
+
+        self.use_true_labels = use_true_labels
+        self.use_retraining = use_retraining
+        self.num_retraining_epochs = num_retraining_epochs
+        self.use_val_ds = use_val_ds
+
 
         if loss == 'cross_entropy':
             self.loss_fn = torch.nn.CrossEntropyLoss()
-        elif loss == 'accuracy':
+        elif loss == 'expected_cross_entropy':
+            raise NotImplementedError() # Entropy of highest prediction
+        elif loss == 'zero_one':
             self.loss_fn = lambda logits, y: 1 - torch.mean((logits.argmax(dim=-1) == y).float())
+        elif loss == 'expected_zero_one':
+            self.loss_fn = lambda logits, _: torch.mean(1 - logits.softmax(-1).max(-1).values) 
         else:
             raise NotImplementedError()
 
     @torch.no_grad()
     def query(self, *, model, al_datamodule, acq_size, return_utilities=False, **kwargs):
-
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(
             subset_size=self.subset_size)
-
         unlabeled_features = model.get_representations(unlabeled_dataloader, device=self.device)
         unlabeled_labels = torch.cat([batch[1] for batch in unlabeled_dataloader])
-        # unlabeled_logits = model.get_logits_from_representations(unlabeled_features, device=self.device)
+        unlabeled_logits = model.get_logits_from_representations(unlabeled_features, device=self.device)
         # labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
         # labeled_features = model.get_representations(labeled_dataloader, device=device)
         # labeled_logits = model.get_logits_from_representations(labeled_features, device=device).cpu()
@@ -167,63 +190,72 @@ class Optimal(Query):
         # Select batches (TODO: Smart selection, diverse batches)
         indices_batches = [np.random.permutation(self.subset_size)[:acq_size]
                            for _ in range(self.num_batches)]
-
-
-        all_losses = []
+        loss_batches = []
         init_params = model.state_dict()
         for indices in track(indices_batches):
             features_batch = unlabeled_features[indices]
 
-            # Expectation of labels
-            # Optimal: We just know the labels
-            # Non-optimal: We need to evaluate the expectation
-            if self.num_mc_labels is None:
+            if self.use_true_labels:
                 # Use true labels of batch for model training
-                labels_batch = unlabeled_labels[indices]
+                labels = unlabeled_labels[indices]
+                labels = labels.unsqueeze(0)
             else:
-                # Compute Expectation
-                raise NotImplementedError()
+                # MC labels
+                categorical = torch.distributions.Categorical(logits=unlabeled_logits[indices])
+                labels = categorical.sample((self.num_mc_labels,))
+            
+            loss_labels = []
+            for labels_batch in labels:
+                if self.use_retraining:
+                    model.reset_states(reset_model_parameters=True)
+                    trainer = Trainer(barebones=True, max_epochs=self.num_retraining_epochs)
+                    aldm = copy.deepcopy(al_datamodule)
+                    aldm.update_annotations([unlabeled_indices[idx] for idx in indices])
+                    trainer.fit(model, aldm.train_dataloader())
+                else:
+                    model.load_state_dict(init_params)
+                    model.update_posterior(
+                        iter(zip(features_batch, labels_batch)),
+                        gamma=self.gamma,
+                        from_representations=True,
+                        device=self.device
+                    )
+
+                if self.use_val_ds:
+                    loss = self.evaluate_model(model, al_datamodule.val_dataloader())
+                else:
+                    raise NotImplementedError()
+                loss_labels.append(loss)
+            loss_batches.append(np.mean(loss_labels))
+
+        best_idx = np.argmin(loss_batches)
+        local_indices = indices_batches[best_idx]
+        global_indices = [unlabeled_indices[idx] for idx in local_indices]
+        return global_indices
+
+    @torch.no_grad()
+    def evaluate_model(self, model, dataloader):
+        model.to(self.device)
+        num_samples = 0
+        running_loss = 0
+        for batch in dataloader:
+            inputs, targets = batch[0].to(self.device), batch[1].to(self.device)
+            logits = model(inputs)
+            
+            num_samples += len(inputs)
+            running_loss += len(inputs)*self.loss_fn(logits, targets).item()
+        loss = running_loss / num_samples
+        return loss
 
             # Updating the model
             # Optimal: We just retrain with the new labels
             # Non-optimal: We use Bayesian updates
-            if self.gamma is None:
-                model.reset_states(reset_model_parameters=True)
-                trainer = Trainer(barebones=True, max_epochs=50)
-                aldm = copy.deepcopy(al_datamodule)
-                aldm.update_annotations([unlabeled_indices[idx] for idx in indices])
-                trainer.fit(model, aldm.train_dataloader())
-            else:
-                model.load_state_dict(init_params)
-                model.update_posterior(
-                    iter(zip(features_batch, labels_batch)),
-                    gamma=self.gamma,
-                    from_representations=True,
-                    device=self.device
-                )
 
             # Evaluate the performance
             # Optimal: We just use a validation dataset
             # Non-Optimal: We need to approximate the performance without a validation dataset
-            if self.use_val_ds:
-                model.to(self.device)
-                num_samples = 0
-                running_loss = 0
-                test_loader = al_datamodule.val_dataloader()
-                for batch in test_loader:
-                    inputs, targets = batch[0].to(self.device), batch[1].to(self.device)
-                    logits = model(inputs)
-                    num_samples += len(inputs)
-                    running_loss += len(inputs)*self.loss_fn(logits, targets).item()
-                loss = running_loss / num_samples
-                all_losses.append(loss)
-            else:
-                raise NotImplementedError()
 
             # # MC sampling for one-step-lookahead
-            # categorical = torch.distributions.Categorical(logits=unlabeled_logits[indices])
-            # mc_labels = categorical.sample((self.num_mc_labels,))
-
             # mc_losses = []
             # for labels in mc_labels:
             #     # Incremental learning - p(y | x, L^+)
@@ -237,7 +269,6 @@ class Optimal(Query):
             #     )
 
             #     # TODO: check if predictions are changing before and after
-
             #     # Estimate new loss via validation set
             #     model.to(self.device)
             #     num_samples = 0
@@ -252,10 +283,6 @@ class Optimal(Query):
             #     mc_losses.append(running_loss / num_samples)
             # all_losses.append(np.mean(mc_losses))
 
-        best_idx = np.argmin(all_losses)
-        local_indices = indices_batches[best_idx]
-        global_indices = [unlabeled_indices[idx] for idx in local_indices]
-        return global_indices
 
         # combination_indices = np.array([np.random.permutation(self.subset_size)[:acq_size] for i in range(self.num_combinations)])
         # # Compute distances from
