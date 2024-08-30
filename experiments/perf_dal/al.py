@@ -164,15 +164,14 @@ class Optimal(Query):
         self.num_retraining_epochs = num_retraining_epochs
         self.use_val_ds = use_val_ds
 
-
         if loss == 'cross_entropy':
             self.loss_fn = torch.nn.CrossEntropyLoss()
         elif loss == 'expected_cross_entropy':
-            raise NotImplementedError() # Entropy of highest prediction
+            self.loss_fn = lambda logits, _: torch.mean(torch.sum(logits.softmax(-1) * logits.log_softmax(-1), dim=-1))
         elif loss == 'zero_one':
             self.loss_fn = lambda logits, y: 1 - torch.mean((logits.argmax(dim=-1) == y).float())
         elif loss == 'expected_zero_one':
-            self.loss_fn = lambda logits, _: torch.mean(1 - logits.softmax(-1).max(-1).values) 
+            self.loss_fn = lambda logits, _: torch.mean(1 - logits.softmax(-1).max(-1).values)
         else:
             raise NotImplementedError()
 
@@ -190,6 +189,7 @@ class Optimal(Query):
         # Select batches (TODO: Smart selection, diverse batches)
         indices_batches = [np.random.permutation(self.subset_size)[:acq_size]
                            for _ in range(self.num_batches)]
+
         loss_batches = []
         init_params = model.state_dict()
         for indices in track(indices_batches):
@@ -203,7 +203,7 @@ class Optimal(Query):
                 # MC labels
                 categorical = torch.distributions.Categorical(logits=unlabeled_logits[indices])
                 labels = categorical.sample((self.num_mc_labels,))
-            
+
             loss_labels = []
             for labels_batch in labels:
                 if self.use_retraining:
@@ -241,48 +241,47 @@ class Optimal(Query):
         for batch in dataloader:
             inputs, targets = batch[0].to(self.device), batch[1].to(self.device)
             logits = model(inputs)
-            
+
             num_samples += len(inputs)
             running_loss += len(inputs)*self.loss_fn(logits, targets).item()
         loss = running_loss / num_samples
         return loss
 
-            # Updating the model
-            # Optimal: We just retrain with the new labels
-            # Non-optimal: We use Bayesian updates
+        # Updating the model
+        # Optimal: We just retrain with the new labels
+        # Non-optimal: We use Bayesian updates
 
-            # Evaluate the performance
-            # Optimal: We just use a validation dataset
-            # Non-Optimal: We need to approximate the performance without a validation dataset
+        # Evaluate the performance
+        # Optimal: We just use a validation dataset
+        # Non-Optimal: We need to approximate the performance without a validation dataset
 
-            # # MC sampling for one-step-lookahead
-            # mc_losses = []
-            # for labels in mc_labels:
-            #     # Incremental learning - p(y | x, L^+)
-            #     features_batch = unlabeled_features[indices]
-            #     model.load_state_dict(init_params)
-            #     model.update_posterior(
-            #         iter(zip(features_batch, labels)),
-            #         gamma=self.gamma,
-            #         from_representations=True,
-            #         device=self.device
-            #     )
+        # # MC sampling for one-step-lookahead
+        # mc_losses = []
+        # for labels in mc_labels:
+        #     # Incremental learning - p(y | x, L^+)
+        #     features_batch = unlabeled_features[indices]
+        #     model.load_state_dict(init_params)
+        #     model.update_posterior(
+        #         iter(zip(features_batch, labels)),
+        #         gamma=self.gamma,
+        #         from_representations=True,
+        #         device=self.device
+        #     )
 
-            #     # TODO: check if predictions are changing before and after
-            #     # Estimate new loss via validation set
-            #     model.to(self.device)
-            #     num_samples = 0
-            #     running_loss = 0
-            #     test_loader = al_datamodule.test_dataloader()
-            #     for batch in test_loader:
-            #         inputs, targets = batch[0].to(self.device), batch[1].to(self.device)
-            #         logits = model(inputs)
-            #         num_samples += len(inputs)
-            #         running_loss += len(inputs)*self.loss_fn(logits, targets).item()
+        #     # TODO: check if predictions are changing before and after
+        #     # Estimate new loss via validation set
+        #     model.to(self.device)
+        #     num_samples = 0
+        #     running_loss = 0
+        #     test_loader = al_datamodule.test_dataloader()
+        #     for batch in test_loader:
+        #         inputs, targets = batch[0].to(self.device), batch[1].to(self.device)
+        #         logits = model(inputs)
+        #         num_samples += len(inputs)
+        #         running_loss += len(inputs)*self.loss_fn(logits, targets).item()
 
-            #     mc_losses.append(running_loss / num_samples)
-            # all_losses.append(np.mean(mc_losses))
-
+        #     mc_losses.append(running_loss / num_samples)
+        # all_losses.append(np.mean(mc_losses))
 
         # combination_indices = np.array([np.random.permutation(self.subset_size)[:acq_size] for i in range(self.num_combinations)])
         # # Compute distances from
