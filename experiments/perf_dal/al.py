@@ -182,6 +182,7 @@ class Optimal(Query):
         unlabeled_features = model.get_representations(unlabeled_dataloader, device=self.device)
         unlabeled_labels = torch.cat([batch[1] for batch in unlabeled_dataloader])
         unlabeled_logits = model.get_logits_from_representations(unlabeled_features, device=self.device)
+
         # labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
         # labeled_features = model.get_representations(labeled_dataloader, device=device)
         # labeled_logits = model.get_logits_from_representations(labeled_features, device=device).cpu()
@@ -224,7 +225,7 @@ class Optimal(Query):
                 if self.use_val_ds:
                     loss = self.evaluate_model(model, al_datamodule.val_dataloader())
                 else:
-                    raise NotImplementedError()
+                    loss = self.evaluate_model(model, al_datamodule.labeled_dataloader()[0])
                 loss_labels.append(loss)
             loss_batches.append(np.mean(loss_labels))
 
