@@ -54,7 +54,7 @@ for i_cycle in range(8):
 
 The resulting decision boundary of the model looks as follows\
 <img src="./examples/readme_example_decision_bounday.png" width="300"/>\
-We refer to [this notebook](/examples/readme_example.ipynb) for a notebook containing the above code to start playing around!
+[This notebook](/examples/readme_example.ipynb) contains the code above with some utility functions to produce the decision boundary plot, ready to be adapted to different scenarios!
 
 
 
