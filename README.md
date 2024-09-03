@@ -10,7 +10,7 @@ pip install -e .
 ```
 
 ## Examplatory Usage
-The following code snipped demonstrates a basic usage of the DAL-Toolbox in a two-dimensional toy example:
+The following code snipped demonstrates a basic usage of the DAL-Toolbox on a two-dimensional toy example:
 
 ```python
 import torch
