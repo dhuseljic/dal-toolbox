@@ -86,11 +86,16 @@ Examples of how to train models with improved uncertainty estimation:
 
 ## Publications
 The DAL-Toolbox has already been used for various publications. The respective code for their experiments is stored in the __publication_experiments__ folder. This may provide relevant insights for experienced researches and plentiful examples of experimental sections in papers with the respective code. Publications using the DAL-Toolbox are
-[1](publications/hyperparameters_in_al/) Huseljic, Denis, et al. "Role of Hyperparameters in Deep Active Learning." IAL@PKDD/ECML. 2023.
-[2](publications/bait_approx/) Huseljic, Denis, et al. "Fast Fishing: Approximating BAIT for Efficient and Scalable Deep Active Image Classification." arXiv preprint arXiv:2404.08981 (2024).
-[3](publications/laplace_updates/) Herde, Marek, et al. "Fast Bayesian Updates for Deep Learning with a Use Case in Active Learning." arXiv preprint arXiv:2210.06112 (2022).
-[4](publications/aglae) Rauch, Lukas, et al. "Activeglae: A benchmark for deep active learning with transformers." Joint European Conference on Machine Learning and Knowledge Discovery in Databases. Cham: Springer Nature Switzerland, 2023.
-[5](publications/udal/) Huseljic, Denis, et al. "The Interplay of Uncertainty Modeling and Deep Active Learning: An Empirical Analysis in Image Classification." Transactions on Machine Learning Research.
+
+[[1]](publications/hyperparameters_in_al/) Huseljic, Denis, et al. "Role of Hyperparameters in Deep Active Learning." IAL@PKDD/ECML. 2023.
+
+[[2]](publications/bait_approx/) Huseljic, Denis, et al. "Fast Fishing: Approximating BAIT for Efficient and Scalable Deep Active Image Classification." arXiv preprint arXiv:2404.08981 (2024).
+
+[[3]](publications/laplace_updates/) Herde, Marek, et al. "Fast Bayesian Updates for Deep Learning with a Use Case in Active Learning." arXiv preprint arXiv:2210.06112 (2022).
+
+[[4]](publications/aglae) Rauch, Lukas, et al. "Activeglae: A benchmark for deep active learning with transformers." Joint European Conference on Machine Learning and Knowledge Discovery in Databases. Cham: Springer Nature Switzerland, 2023.
+
+[[5]](publications/udal/) Huseljic, Denis, et al. "The Interplay of Uncertainty Modeling and Deep Active Learning: An Empirical Analysis in Image Classification." Transactions on Machine Learning Research.
 
 
 ## Citation
