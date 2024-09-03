@@ -86,7 +86,7 @@ Examples of how to train models with improved uncertainty estimation:
 
 
 ## Publications
-The DAL-Toolbox has already been used for various publications. The respective code for their experiments is stored in the __publication_experiments__ folder. This may provide relevant insights for experienced researches and plentiful examples of experimental sections in papers with the respective code. Publications using the DAL-Toolbox are
+The DAL-Toolbox has already been used for various publications. The respective code for their experiments is stored in the __publications__ folder. This may provide relevant insights for experienced researches and plentiful examples of experimental sections in papers with the respective code. Publications using the DAL-Toolbox are
 
 [[1](publications/hyperparameters_in_al/)] Huseljic, Denis, et al. "Role of Hyperparameters in Deep Active Learning." IAL@PKDD/ECML. 2023.
 
