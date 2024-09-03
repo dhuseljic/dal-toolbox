@@ -46,11 +46,11 @@ def plot_dset(X_l, y_l, X_u=None, y_u=None, ax=None, title=None):
     
 
 @torch.no_grad()
-def plot_contour(model, X_l, y_l, X_u=None, y_u=None, ax=None, x_domain=3, y_domain=3, forward_mode='single'):
+def plot_contour(model, X_l, y_l, X_u=None, y_u=None, ax=None, x_domain=(-3, 3), y_domain=(-3, 3), forward_mode='single'):
     model.eval()
     model.cpu()
     origin = 'lower'
-    xx, yy = torch.meshgrid(torch.linspace(-x_domain, x_domain, 51), torch.linspace(-y_domain, y_domain, 51), indexing='ij')
+    xx, yy = torch.meshgrid(torch.linspace(x_domain[0], x_domain[1], 51), torch.linspace(y_domain[0], y_domain[1], 51), indexing='ij')
     zz = torch.stack((xx.flatten(), yy.flatten()), dim=1)
 
     if forward_mode == 'single':

@@ -206,8 +206,7 @@ class SimpleSNGP(nn.Module):
         x = self.act(self.first(x))
         for residual in self.residuals:
             x = self.act(residual(x) + x)
-        features = F.avg_pool2d(x, 4)
-        return features.squeeze()
+        return x.squeeze()
     
     @torch.inference_mode()
     def get_logits(self, dataloader, device):
@@ -220,6 +219,7 @@ class SimpleSNGP(nn.Module):
             logits = self(inputs.to(device), monte_carlo=True)
             all_logits.append(logits)
         logits = torch.cat(all_logits)
+        logits = torch.mean(logits, dim=1)
         return logits
 
     @torch.inference_mode()

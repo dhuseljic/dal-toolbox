@@ -20,7 +20,8 @@ import lightning as L
 from sklearn.datasets import make_moons
 from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.models.deterministic import DeterministicModel
-from dal_toolbox.active_learning.strategies import CoreSet
+from dal_toolbox.active_learning.strategies import LeastConfidentSampling
+from dal_toolbox.models.deterministic.simplenet import SimpleNet as Net
 
 # Create the twoo moons dataset
 X, y = make_moons(200, noise=.1, random_state=42)
@@ -38,7 +39,7 @@ model = Net(dropout_rate=0., num_classes=2)
 model = DeterministicModel(model, optimizer=torch.optim.SGD(model.parameters(), lr=1e-1, momentum=.9))
 
 # Initialize an AL-Strategy
-al_strategy = CoreSet()
+al_strategy = LeastConfidentSampling()
 
 # Perfom AL-Cycles
 for i_cycle in range(8):
@@ -53,9 +54,60 @@ for i_cycle in range(8):
     trainer.fit(model, al_datamodule)
 ```
 
-The resulting decision boundary of the model looks as follows\
-<img src="./examples/readme_example_decision_bounday.png" width="500"/>\
-[This notebook](/examples/readme_example.ipynb) contains the code above with some utility functions to produce the decision boundary plot, ready to be adapted to different scenarios!
+The resulting decision boundary of the model looks as follows
+
+<img src="./examples/readme_example_decision_bounday_1.png" width="500"/>
+
+and shows that a simple deterministic model may not have the best uncertainty estimations to provide good features for LeastCertaintySampling. Let's make use of the implemented Spectral Normalized Gaussian Processes (SNGP) to improve the models uncertainty estimations and hopefully solve this task!
+
+```python
+import torch
+import torch.nn as nn
+import lightning as L
+from sklearn.datasets import make_moons
+from dal_toolbox.active_learning import ActiveLearningDataModule
+from dal_toolbox.models.sngp import SNGPModel
+from dal_toolbox.models.deterministic.simplenet import SimpleSNGP as SNGPNet
+from dal_toolbox.active_learning.strategies import LeastConfidentSampling
+
+# Create the twoo moons dataset
+X, y = make_moons(200, noise=.1, random_state=42)
+
+# Transform into a TensorDataset
+X, y = torch.tensor(X).float(), torch.tensor(y).long()
+tensor_dataset = torch.utils.data.TensorDataset(X, y)
+
+# Setup the AL-Datamodule provided by the dal_toolbox and initialize with two randomly labeled samples
+al_datamodule = ActiveLearningDataModule(tensor_dataset, train_batch_size=32)
+al_datamodule.random_init(n_samples=2, class_balanced=True)
+
+# Initialize a model and wrap it with the DeterministicModel Wrapper provided by the DAL-Toolbox
+model = Net(dropout_rate=0., num_classes=2)
+model = DeterministicModel(model, optimizer=torch.optim.SGD(model.parameters(), lr=1e-1, momentum=.9))
+
+# Initialize an AL-Strategy
+al_strategy = LeastConfidentSampling()
+
+# Perfom AL-Cycles
+for i_cycle in range(8):
+    # Acquire new Labels
+    if i_cycle != 0:
+        indices = al_strategy.query(model=model, al_datamodule=al_datamodule, acq_size=1)
+        al_datamodule.update_annotations(indices)
+
+    # Refit the model on the labeled data
+    model.reset_states()
+    trainer = L.Trainer(max_epochs=50, enable_progress_bar=False)
+    trainer.fit(model, al_datamodule)
+```
+
+The resulting decision boundary
+
+<img src="./examples/readme_example_decision_bounday_2.png" width="500"/>
+
+looks much more promising, demonstrating how improving the uncertainty estimation of a model can have a positive impact on DAL.
+
+Check out [this notebook](/examples/readme_example.ipynb) which contains the code above with some utility functions to produce the decision boundary plots, ready to be adapted to different scenarios!
 
 
 
