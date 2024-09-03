@@ -1,6 +1,4 @@
-<p align="center" width="100%">
 <img src="./icon.png" width="300"/>
-</p>
 
 # DAL-Toolbox: A Toolbox for Deep Active Learning
 Welcome to DAL-Toolbox, a comprehensive repository designed for implementing various models and strategies in deep active learning (DAL). DAL has garnered significant attention for its potential to reduce the amount of labeled data required to train deep neural networks, the most prominent machine learning model of today. Our toolbox provides a versatile and user-friendly framework for researchers and practitioners to explore and advance the field of DAL. Next to classical supervised DAL, we provide tools regarding semi- and self-supervised learning due to their recent success as well as improving uncertainty as it plays a central role in DAL.
@@ -56,7 +54,7 @@ for i_cycle in range(8):
 ```
 
 The resulting decision boundary of the model looks as follows\
-<img src="./examples/readme_example_decision_bounday.png" width="300"/>\
+<img src="./examples/readme_example_decision_bounday.png" width="500"/>\
 [This notebook](/examples/readme_example.ipynb) contains the code above with some utility functions to produce the decision boundary plot, ready to be adapted to different scenarios!
 
 
