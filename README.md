@@ -12,7 +12,7 @@ pip install -e .
 ## Examplatory Usage
 The following code snipped demonstrates a basic usage of the DAL-Toolbox in a two-dimensional toy example:
 
-```
+```python
 import torch
 import torch.nn as nn
 import lightning as L
