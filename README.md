@@ -1,5 +1,6 @@
 <img src="./icon.png" width="200"/>
 
+# DAL-Toolbox: A Toolbox for Deep Active Learning
 Welcome to DAL-Toolbox, a comprehensive repository designed for implementing various models and strategies in deep active learning (DAL). DAL has garnered significant attention for its potential to reduce the amount of labeled data required to train deep neural networks, the most prominent machine learning model of today. Our toolbox provides a versatile and user-friendly framework for researchers and practitioners to explore and advance the field of DAL. Next to classical supervised DAL, we provide tools regarding semi- and self-supervised learning due to their recent success as well as improving uncertainty as it plays a central role in DAL.
 
 ## Setup
@@ -9,7 +10,7 @@ conda create -n dal-toolbox python=3.9
 pip install -e .
 ```
 
-## Examplatory Usage
+## Code Snippet Illustration
 The following code snipped demonstrates a basic usage of the DAL-Toolbox on a two-dimensional toy example:
 
 ```python
