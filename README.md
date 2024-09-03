@@ -81,9 +81,9 @@ tensor_dataset = torch.utils.data.TensorDataset(X, y)
 al_datamodule = ActiveLearningDataModule(tensor_dataset, train_batch_size=32)
 al_datamodule.random_init(n_samples=2, class_balanced=True)
 
-# Initialize a model and wrap it with the DeterministicModel Wrapper provided by the DAL-Toolbox
-model = Net(dropout_rate=0., num_classes=2)
-model = DeterministicModel(model, optimizer=torch.optim.SGD(model.parameters(), lr=1e-1, momentum=.9))
+# Initialize a model and wrap it with the SNGPModel Wrapper provided by the DAL-Toolbox
+model = SNGPNet(num_classes=2, use_spectral_norm=True, spectral_norm_params=spectral_norm_params, gp_params=gp_params)
+model = SNGPModel(model, optimizer=torch.optim.SGD(model.parameters(),  lr=1e-2, weight_decay=1e-2, momentum=.9))
 
 # Initialize an AL-Strategy
 al_strategy = LeastConfidentSampling()
