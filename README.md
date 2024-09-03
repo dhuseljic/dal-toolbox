@@ -19,7 +19,7 @@ import lightning as L
 from sklearn.datasets import make_moons
 from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.models.deterministic import DeterministicModel
-from dal_toolbox.active_learning.strategies import Badge
+from dal_toolbox.active_learning.strategies import CoreSet
 
 # Create the twoo moons dataset
 X, y = make_moons(200, noise=.1, random_state=42)
@@ -37,7 +37,7 @@ model = Net(dropout_rate=0., num_classes=2)
 model = DeterministicModel(model, optimizer=torch.optim.SGD(model.parameters(), lr=1e-1, momentum=.9))
 
 # Initialize an AL-Strategy
-al_strategy = Badge()
+al_strategy = CoreSet()
 
 # Perfom AL-Cycles
 for i_cycle in range(8):
@@ -52,11 +52,14 @@ for i_cycle in range(8):
     trainer.fit(model, al_datamodule)
 ```
 
-###TODO: Include Image of Resulting Model on Problem
+The resulting decision boundary of the model looks as follows
+<img src="./examples/readme_example_decision_bounday.png" width="300"/>
+We refer to [this notebook](/examples/readme_example.ipynb) for a notebook containing the above code to start playing around!
+
 
 
 ## Examples
-We provide various examples for each topic mentioned in the description in the [example section](examples/). Each example folder contains two subfolders, a __toy_example__-folder and a __server_experiments__-folder. The toy examples demonstrate each method on a two dimensional dataset and provide a minimal example how to use the respective methods provided by the toolbox. The server experiments contain an examplatory workflow for working on a cluster server with the DAL-Toolbox. Below, we list each example section provided:
+Next to the example above, we provide various examples for each topic mentioned in the description in the [example section](examples/). Each example folder contains two subfolders, a __toy_example__-folder and a __server_experiments__-folder. The toy examples demonstrate each method on a two dimensional dataset and provide a minimal example how to use the respective methods provided by the toolbox. The server experiments contain an examplatory workflow for working on a cluster server with the DAL-Toolbox. Below, we list each example section provided:
 
 ### Active Learning
 Examples of how to implement an active learning cycle:
