@@ -3,15 +3,59 @@
 Welcome to DAL-Toolbox, a comprehensive repository designed for implementing various models and strategies in deep active learning (DAL). DAL has garnered significant attention for its potential to reduce the amount of labeled data required to train deep neural networks, the most prominent machine learning model of today. Our toolbox provides a versatile and user-friendly framework for researchers and practitioners to explore and advance the field of DAL. Next to classical supervised DAL, we provide tools regarding semi- and self-supervised learning due to their recent success as well as improving uncertainty as it plays a central role in DAL.
 
 ## Setup
-
 Setting up the DAL-Toolbox is straight forward! After cloning the repository, use the following comments to get started:
 ```
 conda create -n dal-toolbox python=3.9
 pip install -e .
 ```
 
-## Examples
+## Examplatory Usage
+The following code snipped demonstrates a basic usage of the DAL-Toolbox in a two-dimensional toy example:
 
+```
+import torch
+import torch.nn as nn
+import lightning as L
+from sklearn.datasets import make_moons
+from dal_toolbox.active_learning import ActiveLearningDataModule
+from dal_toolbox.models.deterministic import DeterministicModel
+from dal_toolbox.active_learning.strategies import Badge
+
+# Create the twoo moons dataset
+X, y = make_moons(200, noise=.1, random_state=42)
+
+# Transform into a TensorDataset
+X, y = torch.tensor(X).float(), torch.tensor(y).long()
+tensor_dataset = torch.utils.data.TensorDataset(X, y)
+
+# Setup the AL-Datamodule provided by the dal_toolbox and initialize with two randomly labeled samples
+al_datamodule = ActiveLearningDataModule(tensor_dataset, train_batch_size=32)
+al_datamodule.random_init(n_samples=2, class_balanced=True)
+
+# Initialize a model and wrap it with the DeterministicModel Wrapper provided by the DAL-Toolbox
+model = Net(dropout_rate=0., num_classes=2)
+model = DeterministicModel(model, optimizer=torch.optim.SGD(model.parameters(), lr=1e-1, momentum=.9))
+
+# Initialize an AL-Strategy
+al_strategy = Badge()
+
+# Perfom AL-Cycles
+for i_cycle in range(8):
+    # Acquire new Labels
+    if i_cycle != 0:
+        indices = al_strategy.query(model=model, al_datamodule=al_datamodule, acq_size=1)
+        al_datamodule.update_annotations(indices)
+
+    # Refit the model on the labeled data
+    model.reset_states()
+    trainer = L.Trainer(max_epochs=50, enable_progress_bar=False)
+    trainer.fit(model, al_datamodule)
+```
+
+###TODO: Include Image of Resulting Model on Problem
+
+
+## Examples
 We provide various examples for each topic mentioned in the description in the [example section](examples/). Each example folder contains two subfolders, a __toy_example__-folder and a __server_experiments__-folder. The toy examples demonstrate each method on a two dimensional dataset and provide a minimal example how to use the respective methods provided by the toolbox. The server experiments contain an examplatory workflow for working on a cluster server with the DAL-Toolbox. Below, we list each example section provided:
 
 ### Active Learning
@@ -38,10 +82,19 @@ Examples of how to train models with improved uncertainty estimation:
 
 
 ## Publications
-
 The DAL-Toolbox has already been used for various publications. The respective code for their experiments is stored in the __publication_experiments__ folder. This may provide relevant insights for experienced researches and plentiful examples of experimental sections in papers with the respective code. Publications using the DAL-Toolbox are
- 
-TODO: Insert Publication References
+- :: @inproceedings{huseljic2023role,
+  title={Role of Hyperparameters in Deep Active Learning.},
+  author={Huseljic, Denis and Herde, Marek and Hahn, Paul and Sick, Bernhard},
+  booktitle={IAL@ PKDD/ECML},
+  pages={19--24},
+  year={2023}
+}
+..
+-
+-
+-
+
 
 
 ## Citation
