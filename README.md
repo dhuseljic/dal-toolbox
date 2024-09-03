@@ -52,8 +52,8 @@ for i_cycle in range(8):
     trainer.fit(model, al_datamodule)
 ```
 
-The resulting decision boundary of the model looks as follows
-<img src="./examples/readme_example_decision_bounday.png" width="300"/>
+The resulting decision boundary of the model looks as follows\
+<img src="./examples/readme_example_decision_bounday.png" width="300"/>\
 We refer to [this notebook](/examples/readme_example.ipynb) for a notebook containing the above code to start playing around!
 
 
