@@ -5,6 +5,7 @@ from . import distilroberta
 from . import roberta
 
 from . import linear
+from . import simplenet
 
 from . import resnet
 from . import spectral_resnet
