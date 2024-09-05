@@ -113,7 +113,7 @@ Examples of how to train models with improved uncertainty estimation:
 
 
 ## Query Strategies
-The DAL-Toolbox contains various query strategies ready to be used. The following list shows each available strategy with a reference to the original paper.
+The DAL-Toolbox contains various query strategies ready to be used. The following list shows popular available strategies with a reference to the original papers.
 
 | **Item**        | **Publication**                                                                                                                                              |
 |-----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -127,7 +127,7 @@ The DAL-Toolbox contains various query strategies ready to be used. The followin
 | ProbCover       | [Active Learning Through a Covering Lens](https://arxiv.org/abs/2205.11320)                                                                                  |
 | CAL             | [Active Learning by Acquiring Contrastive Examples](https://arxiv.org/abs/2109.03764)                                                                        |
 
-In addition, we provide various basic strategies, such as Random, Entropy, LeastCertainy and some variations thereof.
+In addition, we provide various basic strategies, such as Random, Entropy, LeastCertainy and some variations thereof. Check out [Query Strategies](dal_toolbox/active_learning/strategies/) for a full list.
 
 ## Publications
 The DAL-Toolbox has already been used for various publications. The respective code for their experiments is stored in the __publications__ folder. This may provide relevant insights for experienced researches and plentiful examples of experimental sections in papers with the respective code. Publications using the DAL-Toolbox are
