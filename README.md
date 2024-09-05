@@ -30,13 +30,11 @@ tensor_dataset = torch.utils.data.TensorDataset(X, y)
 # Setup the AL-Datamodule provided by the dal_toolbox and initialize with two randomly labeled samples
 al_datamodule = ActiveLearningDataModule(tensor_dataset, train_batch_size=32)
 al_datamodule.random_init(n_samples=2, class_balanced=True)
+al_strategy = LeastConfidentSampling()
 
 # Initialize a model and wrap it with the DeterministicModel Wrapper provided by the DAL-Toolbox
 model = Net(dropout_rate=0., num_classes=2)
 model = DeterministicModel(model, optimizer=torch.optim.SGD(model.parameters(), lr=1e-1, momentum=.9))
-
-# Initialize an AL-Strategy
-al_strategy = LeastConfidentSampling()
 
 # Perfom AL-Cycles
 for i_cycle in range(4):
@@ -69,12 +67,10 @@ al_datamodule2.random_init(n_samples=2, class_balanced=True)
 
 # Perfom AL-Cycles
 for i_cycle in range(4):
-    # Acquire new Labels
     if i_cycle != 0:
         indices = al_strategy.query(model=model2, al_datamodule=al_datamodule2, acq_size=2)
         al_datamodule2.update_annotations(indices)
 
-    # Refit the model on the labeled data
     model2.reset_states()
     trainer = L.Trainer(max_epochs=50, enable_progress_bar=False)
     trainer.fit(model2, al_datamodule2)
