@@ -8,6 +8,7 @@ import logging
 import numpy as np
 from lightning import Trainer
 from omegaconf import OmegaConf
+from torch.utils.data.dataset import Dataset
 
 from dal_toolbox import metrics
 from dal_toolbox.active_learning import ActiveLearningDataModule
@@ -16,7 +17,7 @@ from dal_toolbox.active_learning.strategies.query import Query
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything
 from utils import build_datasets, flatten_cfg, build_model
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader, Subset, ConcatDataset
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import pairwise_distances
 from rich.progress import track
@@ -183,7 +184,7 @@ class Optimal(Query):
         unlabeled_labels = torch.cat([batch[1] for batch in unlabeled_dataloader])
         unlabeled_logits = model.get_logits_from_representations(unlabeled_features, device=self.device)
 
-        # labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
+        labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
         # labeled_features = model.get_representations(labeled_dataloader, device=device)
         # labeled_logits = model.get_logits_from_representations(labeled_features, device=device).cpu()
 
@@ -210,9 +211,18 @@ class Optimal(Query):
                 if self.use_retraining:
                     model.reset_states(reset_model_parameters=True)
                     trainer = Trainer(barebones=True, max_epochs=self.num_retraining_epochs)
-                    aldm = copy.deepcopy(al_datamodule)
-                    aldm.update_annotations([unlabeled_indices[idx] for idx in indices])
-                    trainer.fit(model, aldm.train_dataloader())
+
+                    train_ds1 = Subset(al_datamodule.train_dataset, indices=labeled_indices)
+                    train_ds2 = Subset_(
+                        al_datamodule.train_dataset, 
+                        indices=np.array(unlabeled_indices)[indices],
+                        labels=labels_batch
+                    )
+                    train_ds = ConcatDataset([train_ds1, train_ds2])
+                    drop_last = len(train_ds) > al_datamodule.train_batch_size
+                    train_loader = DataLoader(train_ds, al_datamodule.train_batch_size, shuffle=True, drop_last=drop_last)
+
+                    trainer.fit(model, train_loader)
                 else:
                     model.load_state_dict(init_params)
                     model.update_posterior(
@@ -302,6 +312,15 @@ def batch_distance(X1, X2):
     row_ind, col_ind = linear_sum_assignment(cost_matrix)
     return np.sum(cost_matrix[row_ind, col_ind])
 
+
+class Subset_(Subset):
+    def __init__(self, dataset, indices, labels):
+        super().__init__(dataset, indices)
+        self.labels = labels
+        assert len(indices) == len(labels)
+
+    def __getitem__(self, idx):
+        return super().__getitem__(idx)[0], self.labels[idx]
 
 if __name__ == '__main__':
     main()

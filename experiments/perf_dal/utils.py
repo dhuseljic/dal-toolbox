@@ -228,6 +228,7 @@ class LaplaceNet(LaplaceLinear):
         all_logits = []
         for batch in dataloader:
             inputs = batch[0]
+            # TODO
             if LaplaceNet.use_mean_field:
                 logits = self.forward_mean_field(inputs.to(device))
             else:
@@ -251,6 +252,7 @@ class LaplaceNet(LaplaceLinear):
     def get_logits_from_representations(self, representations, device):
         self.to(device)
         self.eval()
+        # TODO
         logits = self.forward_mean_field(representations.to(device))
         return logits
 
