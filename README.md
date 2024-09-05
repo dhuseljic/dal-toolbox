@@ -129,6 +129,7 @@ The DAL-Toolbox contains various query strategies ready to be used. The followin
 | TypiClust       | [Active Learning on a Budget: Opposite Strategies Suit High and Low Budgets](https://arxiv.org/abs/2202.02794)                                               |
 | XPAL            | [Toward optimal probabilistic active learning using a Bayesian approach](https://link.springer.com/article/10.1007/s10994-021-05986-9)                       |
 | ProbCover       | [Active Learning Through a Covering Lens](https://arxiv.org/abs/2205.11320)                                                                                  |
+| CAL             | [Active Learning by Acquiring Contrastive Examples](https://arxiv.org/abs/2109.03764)                                                                        |
 
 In addition, we provide various basic strategies, such as Random, Entropy, LeastCertainy and some variations thereof.
 
