@@ -23,10 +23,10 @@ def plot_dset(X_l, y_l, X_u=None, y_u=None, ax=None, title=None):
 
     # Either plot just labeled data or labeled and unlabeled greyed out
     if X_u != None:
-        scatter = plt.scatter(X_l[:, 0], X_l[:, 1], c=y_l, s=75, edgecolors='red', linewidths=2, label='labeled', zorder=5)
-        plt.scatter(X_u[:, 0], X_u[:, 1], c=y_u, s=50, alpha=0.5, label='unlabeled')
+        scatter = plt.scatter(X_l[:, 0], X_l[:, 1], c=y_l, s=75, edgecolors='red', linewidths=2, label='labeled', zorder=5, cmap='coolwarm')
+        plt.scatter(X_u[:, 0], X_u[:, 1], c=y_u, s=50, alpha=0.5, label='unlabeled', cmap='coolwarm')
     else:
-        scatter = plt.scatter(X_l[:, 0], X_l[:, 1], c=y_l, s=50, zorder=5, edgecolors='black')
+        scatter = plt.scatter(X_l[:, 0], X_l[:, 1], c=y_l, s=50, zorder=5, edgecolors='black', cmap='coolwarm')
 
     # Automatically generate a legend
     leg_el = scatter.legend_elements()
@@ -72,10 +72,10 @@ def plot_contour(model, X_l, y_l, X_u=None, y_u=None, ax=None, x_domain=(-3, 3),
         plt.sca(ax)
 
     if X_u != None:
-        scatter = plt.scatter(X_l[:, 0], X_l[:, 1], c=y_l, s=75, edgecolors='red', linewidths=2, zorder=5)
-        plt.scatter(X_u[:, 0], X_u[:, 1], c=y_u, s=50, alpha=0.5, label='unlabeled')
+        scatter = plt.scatter(X_l[:, 0], X_l[:, 1], c=y_l, s=75, edgecolors='red', linewidths=2, zorder=5, cmap='coolwarm')
+        plt.scatter(X_u[:, 0], X_u[:, 1], c=y_u, s=50, alpha=1, label='unlabeled', edgecolors='black', linewidths=1, cmap='coolwarm')
     else:
-        scatter = plt.scatter(X_l[:, 0], X_l[:, 1], c=y_l, s=50, zorder=5, edgecolors='black')
+        scatter = plt.scatter(X_l[:, 0], X_l[:, 1], c=y_l, s=50, zorder=5, edgecolors='black', cmap='coolwarm')
 
     # Automatically generate a legend
     leg_el = scatter.legend_elements()
@@ -87,7 +87,7 @@ def plot_contour(model, X_l, y_l, X_u=None, y_u=None, ax=None, x_domain=(-3, 3),
                     loc="upper right", title="Classes")
     plt.gca().add_artist(legend1)
 
-    CS = plt.contourf(xx.numpy(), yy.numpy(), zz.numpy(), alpha=.75, zorder=-1, levels=np.linspace(0, 1, 6), origin=origin)
+    CS = plt.contourf(xx.numpy(), yy.numpy(), zz.numpy(), alpha=.75, zorder=-1, levels=np.linspace(0, 1, 6), origin=origin, cmap='coolwarm')
     CS2 = plt.contour(CS, levels=[0.5], colors='black', origin=origin)
     cbar = plt.colorbar(CS)
     cbar.add_lines(CS2)

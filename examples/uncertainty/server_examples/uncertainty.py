@@ -37,7 +37,7 @@ def main(args):
 
     # Load data for evaluation (in and out-of domain)
     test_dataset = dset.test_dataset
-    ood_datasets = build_ood_datasets(args, mean=dset.transforms.mean, std=dset.transforms.std)
+    ood_datasets = build_ood_datasets(args, transforms=dset.transforms)
     test_loader_id = DataLoader(test_dataset, batch_size=args.model.predict_batch_size)
     test_loaders_ood = {n: DataLoader(ood_ds, batch_size=args.model.predict_batch_size)
                         for n, ood_ds in ood_datasets.items()}
@@ -260,19 +260,19 @@ def build_dataset(args):
     return dset
 
 
-def build_ood_datasets(args, mean, std):
+def build_ood_datasets(args, transforms=None):
     ood_datasets = {}
     # Use transforms from the original dataset - probably dset.transforms
     if 'CIFAR10' in args.ood_datasets:
-        data = datasets.cifar.CIFAR10(dataset_path=args.dataset_path, mean=mean, std=std)
+        data = datasets.cifar.CIFAR10(dataset_path=args.dataset_path, transforms=transforms)
         ood_datasets["CIFAR10"] = data.test_dataset
 
     if 'CIFAR100' in args.ood_datasets:
-        data = datasets.cifar.CIFAR100(dataset_path=args.dataset_path, mean=mean, std=std)
+        data = datasets.cifar.CIFAR100(dataset_path=args.dataset_path, transforms=transforms)
         ood_datasets["CIFAR100"] = data.test_dataset
 
     if 'SVHN' in args.ood_datasets:
-        data = datasets.svhn.SVHN(dataset_path=args.dataset_path, mean=mean, std=std)
+        data = datasets.svhn.SVHN(dataset_path=args.dataset_path, transforms=transforms)
         ood_datasets["SVHN"] = data.test_dataset
 
     return ood_datasets

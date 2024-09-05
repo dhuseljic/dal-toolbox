@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from dal_toolbox.models.utils.mcdropout import MCDropoutModule, ConsistentMCDropout
 from dal_toolbox.models.utils.random_features import RandomFeatureGaussianProcess
 from dal_toolbox.models.utils.spectral_normalization import spectral_norm_linear
