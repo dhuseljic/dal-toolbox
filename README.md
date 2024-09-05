@@ -117,7 +117,7 @@ Examples of how to train models with improved uncertainty estimation:
 
 
 ## Query Strategies
-The DAL-Toolbox contains various query strategies ready to be used. The following list shows each available strategy with a reference to the original paper proposing the strategy.
+The DAL-Toolbox contains various query strategies ready to be used. The following list shows each available strategy with a reference to the original paper.
 
 | **Item**        | **Publication**                                                                                                                                              |
 |-----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -128,8 +128,9 @@ The DAL-Toolbox contains various query strategies ready to be used. The followin
 | CoreSet         | [Active Learning for Convolutional Neural Networks: A Core-Set Approach](https://arxiv.org/abs/1708.00489)                                                   |
 | TypiClust       | [Active Learning on a Budget: Opposite Strategies Suit High and Low Budgets](https://arxiv.org/abs/2202.02794)                                               |
 | XPAL            | [Toward optimal probabilistic active learning using a Bayesian approach](https://link.springer.com/article/10.1007/s10994-021-05986-9)                       |
+| ProbCover       | [Active Learning Through a Covering Lens](https://arxiv.org/abs/2205.11320)                                                                                  |
 
-
+In addition, we provide various basic strategies, such as Random, Entropy, LeastCertainy and some variations thereof.
 
 ## Publications
 The DAL-Toolbox has already been used for various publications. The respective code for their experiments is stored in the __publications__ folder. This may provide relevant insights for experienced researches and plentiful examples of experimental sections in papers with the respective code. Publications using the DAL-Toolbox are
