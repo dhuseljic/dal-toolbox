@@ -13,10 +13,10 @@ venv/
 build/
 mlruns/
 mlflow/
+dev/
 *.db
 
 *.pdf
-*.png
 *.jpg
 *.pth
 *.ipynb_checkpoints
