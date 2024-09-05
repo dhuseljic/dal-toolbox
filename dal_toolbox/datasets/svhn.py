@@ -12,10 +12,10 @@ class SVHNTransforms(Enum):
 
 
 class SVHNStandardTransforms(BaseTransforms):
-    def __init__(self):
+    def __init__(self, mean=SVHNTransforms.mean.value, std=SVHNTransforms.std.value):
         super().__init__()
-        self.mean = SVHNTransforms.mean.value
-        self.std = SVHNTransforms.std.value
+        self.mean = mean
+        self.std = std
 
     @property
     def train_transform(self):
@@ -78,9 +78,11 @@ class SVHN(BaseData):
             dataset_path: str,
             transforms: BaseTransforms = None,
             val_split: float = 0.1,
-            seed: int = None
+            seed: int = None,
+            mean = SVHNTransforms.mean.value,
+            std = SVHNTransforms.std.value
     ) -> None:
-        self.transforms = SVHNStandardTransforms() if transforms is None else transforms
+        self.transforms = SVHNStandardTransforms(mean=mean, std=std) if transforms is None else transforms
         self.train_transform = self.transforms.train_transform
         self.eval_transform = self.transforms.eval_transform
         self.query_transform = self.transforms.query_transform

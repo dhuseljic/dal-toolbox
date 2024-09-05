@@ -15,7 +15,6 @@ The following code snipped demonstrates a basic usage of the DAL-Toolbox on a tw
 
 ```python
 import torch
-import torch.nn as nn
 import lightning as L
 from sklearn.datasets import make_moons
 from dal_toolbox.active_learning import ActiveLearningDataModule
@@ -25,8 +24,6 @@ from dal_toolbox.models.deterministic.simplenet import SimpleNet as Net
 
 # Create the twoo moons dataset
 X, y = make_moons(200, noise=.1, random_state=42)
-
-# Transform into a TensorDataset
 X, y = torch.tensor(X).float(), torch.tensor(y).long()
 tensor_dataset = torch.utils.data.TensorDataset(X, y)
 
@@ -42,70 +39,52 @@ model = DeterministicModel(model, optimizer=torch.optim.SGD(model.parameters(), 
 al_strategy = LeastConfidentSampling()
 
 # Perfom AL-Cycles
-for i_cycle in range(8):
-    # Acquire new Labels
+for i_cycle in range(4):
     if i_cycle != 0:
-        indices = al_strategy.query(model=model, al_datamodule=al_datamodule, acq_size=1)
+        indices = al_strategy.query(model=model, al_datamodule=al_datamodule, acq_size=2)
         al_datamodule.update_annotations(indices)
 
-    # Refit the model on the labeled data
     model.reset_states()
     trainer = L.Trainer(max_epochs=50, enable_progress_bar=False)
     trainer.fit(model, al_datamodule)
 ```
 
-The resulting decision boundary of the model looks as follows
+Plotting the resulting decision boundaries for each cycle leaves us with
 
-<img src="./examples/readme_example_decision_bounday_1.png" width="500"/>
+<img src="./examples/readme_example_1.png" width="500"/>
 
-and shows that a simple deterministic model may not have the best uncertainty estimations to provide good features for LeastCertaintySampling. Let's make use of the implemented Spectral Normalized Gaussian Processes (SNGP) to improve the models uncertainty estimations and hopefully solve this task!
+This shows that a simple deterministic model may not have the best uncertainty estimations to provide good features for LeastCertaintySampling. Let's make use of the implemented Spectral Normalized Gaussian Processes (SNGP) to improve the models uncertainty estimations and hopefully solve this task!
 
 ```python
-import torch
-import torch.nn as nn
-import lightning as L
-from sklearn.datasets import make_moons
-from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.models.sngp import SNGPModel
 from dal_toolbox.models.deterministic.simplenet import SimpleSNGP as SNGPNet
-from dal_toolbox.active_learning.strategies import LeastConfidentSampling
 
-# Create the twoo moons dataset
-X, y = make_moons(200, noise=.1, random_state=42)
+# Initialize the new sngp model
+model2 = SNGPNet(num_classes=2, use_spectral_norm=True, spectral_norm_params=spectral_norm_params, gp_params=gp_params)
+model2 = SNGPModel(model2, optimizer=torch.optim.SGD(model.parameters(),  lr=1e-2, weight_decay=1e-2, momentum=.9))
 
-# Transform into a TensorDataset
-X, y = torch.tensor(X).float(), torch.tensor(y).long()
-tensor_dataset = torch.utils.data.TensorDataset(X, y)
-
-# Setup the AL-Datamodule provided by the dal_toolbox and initialize with two randomly labeled samples
-al_datamodule = ActiveLearningDataModule(tensor_dataset, train_batch_size=32)
-al_datamodule.random_init(n_samples=2, class_balanced=True)
-
-# Initialize a model and wrap it with the SNGPModel Wrapper provided by the DAL-Toolbox
-model = SNGPNet(num_classes=2, use_spectral_norm=True, spectral_norm_params=spectral_norm_params, gp_params=gp_params)
-model = SNGPModel(model, optimizer=torch.optim.SGD(model.parameters(),  lr=1e-2, weight_decay=1e-2, momentum=.9))
-
-# Initialize an AL-Strategy
-al_strategy = LeastConfidentSampling()
+# Setup another datamodule
+al_datamodule2 = ActiveLearningDataModule(tensor_dataset, train_batch_size=32)
+al_datamodule2.random_init(n_samples=2, class_balanced=True)
 
 # Perfom AL-Cycles
-for i_cycle in range(8):
+for i_cycle in range(4):
     # Acquire new Labels
     if i_cycle != 0:
-        indices = al_strategy.query(model=model, al_datamodule=al_datamodule, acq_size=1)
-        al_datamodule.update_annotations(indices)
+        indices = al_strategy.query(model=model2, al_datamodule=al_datamodule2, acq_size=2)
+        al_datamodule2.update_annotations(indices)
 
     # Refit the model on the labeled data
-    model.reset_states()
+    model2.reset_states()
     trainer = L.Trainer(max_epochs=50, enable_progress_bar=False)
-    trainer.fit(model, al_datamodule)
+    trainer.fit(model2, al_datamodule2)
 ```
 
-The resulting decision boundary
+Again, we plot the resulting decision boundaries:
 
-<img src="./examples/readme_example_decision_bounday_2.png" width="500"/>
+<img src="./examples/readme_example_2.png" width="500"/>
 
-looks much more promising, demonstrating how improving the uncertainty estimation of a model can have a positive impact on DAL.
+This looks much more promising, demonstrating how improving the uncertainty estimation of a model can have a positive impact on DAL.
 
 Check out [this notebook](/examples/readme_example.ipynb) which contains the code above with some utility functions to produce the decision boundary plots, ready to be adapted to different scenarios!
 
@@ -137,12 +116,27 @@ Examples of how to train models with improved uncertainty estimation:
 - [SNGP](examples/uncertainty/toy_examples/sngp.ipynb)
 
 
+## Query Strategies
+The DAL-Toolbox contains various query strategies ready to be used. The following list shows each available strategy with a reference to the original paper proposing the strategy.
+
+| **Item**        | **Publication**                                                                                                                                              |
+|-----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| BADGE           | [Deep Batch Active Learning by Diverse, Uncertain Gradient Lower Bounds](https://arxiv.org/abs/1906.03671#)                                                  |
+| BAIT            | [Gone Fishing: Neural Active Learning with Fisher Embeddings](https://proceedings.neurips.cc/paper/2021/hash/4afe044911ed2c247005912512ace23b-Abstract.html) |
+| BALD            | [Bayesian active learning for classification and preference learning](https://arxiv.org/abs/1112.5745)                                                       |
+| BEMPS           | [Bayesian Estimate of Mean Proper Scores for Diversity-Enhanced Active Learning](https://ieeexplore.ieee.org/abstract/document/10360321)                     |
+| CoreSet         | [Active Learning for Convolutional Neural Networks: A Core-Set Approach](https://arxiv.org/abs/1708.00489)                                                   |
+| TypiClust       | [Active Learning on a Budget: Opposite Strategies Suit High and Low Budgets](https://arxiv.org/abs/2202.02794)                                               |
+| XPAL            | [Toward optimal probabilistic active learning using a Bayesian approach](https://link.springer.com/article/10.1007/s10994-021-05986-9)                       |
+
+
+
 ## Publications
 The DAL-Toolbox has already been used for various publications. The respective code for their experiments is stored in the __publications__ folder. This may provide relevant insights for experienced researches and plentiful examples of experimental sections in papers with the respective code. Publications using the DAL-Toolbox are
 
 [[1](publications/hyperparameters_in_al/)] Huseljic, Denis, et al. "Role of Hyperparameters in Deep Active Learning." IAL@PKDD/ECML. 2023.
 
-[[2](publications/bait_approx/)] Huseljic, Denis, et al. "Fast Fishing: Approximating BAIT for Efficient and Scalable Deep Active Image Classification." arXiv preprint arXiv:2404.08981 (2024).
+[[2](publications/bait_approx/)] Huseljic, Denis, et al. "Fast Fishing: Approximating BAIT for Efficient and Scalable Deep Active Image Classification." PKDD/ECML. 2024.
 
 [[3](publications/laplace_updates/)] Herde, Marek, et al. "Fast Bayesian Updates for Deep Learning with a Use Case in Active Learning." arXiv preprint arXiv:2210.06112 (2022).
 

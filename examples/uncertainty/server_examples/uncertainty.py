@@ -14,44 +14,51 @@ from dal_toolbox import datasets
 from dal_toolbox import metrics
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp
 from dal_toolbox.models.utils.callbacks import MetricLogger
-from dal_toolbox.utils import seed_everything, is_running_on_slurm
+from dal_toolbox.utils import seed_everything
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="uncertainty")
 def main(args):
-    logger = logging.getLogger(__name__)
-    logger.info('Using config: \n%s', OmegaConf.to_yaml(args))
+    logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
+    
+    # Create output directory
+    logging.info(f'Creating Output Directory at {args.output_dir}')
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    # Seed everything for reporducability
     seed_everything(args.random_seed)
     misc = {}
 
-    # Load data
-    data = build_dataset(args)
-    train_loader = DataLoader(data.train_dataset, batch_size=args.model.train_batch_size, shuffle=True, drop_last=True)
-    val_loader = DataLoader(data.val_dataset, batch_size=args.model.predict_batch_size)
+    logging.info('Setup ...')
 
-    test_dataset = data.test_dataset
-    ood_datasets = build_ood_datasets(args, data.mean, data.mean)
+    # Load data for training
+    dset = build_dataset(args)
+    train_loader = DataLoader(dset.train_dataset, batch_size=args.model.train_batch_size, shuffle=True, drop_last=True)
+
+    # Load data for evaluation (in and out-of domain)
+    test_dataset = dset.test_dataset
+    ood_datasets = build_ood_datasets(args, mean=dset.transforms.mean, std=dset.transforms.std)
     test_loader_id = DataLoader(test_dataset, batch_size=args.model.predict_batch_size)
     test_loaders_ood = {n: DataLoader(ood_ds, batch_size=args.model.predict_batch_size)
                         for n, ood_ds in ood_datasets.items()}
 
-    # Training
-    logger.info('Starting Training..')
-    model = build_model(args, num_classes=data.num_classes)
-    callbacks = []
-    if is_running_on_slurm():
-        callbacks.append(MetricLogger())
+    # Initialize model and trainer
+    model = build_model(args, num_classes=dset.num_classes)
     trainer = L.Trainer(
         max_epochs=args.model.n_epochs,
-        callbacks=callbacks,
+        callbacks=[MetricLogger()],
         check_val_every_n_epoch=args.val_interval,
         enable_checkpointing=False,
-        enable_progress_bar=is_running_on_slurm() is False,
+        enable_progress_bar=False,
         devices=args.num_devices,
     )
-    trainer.fit(model, train_loader, val_dataloaders=val_loader)
 
-    # Evaluation
+    # Train the model
+    logging.info(f"Start training the model...")
+    trainer.fit(model, train_loader)
+
+    # Evaluate the model in domain
+    logging.info(f"Evaluating the model in domain...")
     test_predictions = trainer.predict(model, test_loader_id)
     logits = torch.cat([pred[0] for pred in test_predictions])
     targets = torch.cat([pred[1] for pred in test_predictions])
@@ -69,7 +76,7 @@ def main(args):
 
     # Saving results
     fname = os.path.join(args.output_dir, 'results_final.json')
-    logger.info("Saving results to %s", fname)
+    logging.info("Saving results to %s", fname)
     results = {'test_stats': test_stats, 'misc': misc}
     with open(fname, 'w') as f:
         json.dump(results, f)
@@ -109,6 +116,7 @@ def evaluate_ood(id_logits, ood_logits):
 
 def build_model(args, **kwargs):
     num_classes = kwargs['num_classes']
+    # remove train/val-acc
 
     if args.model.name == 'resnet18_deterministic':
         model = deterministic.resnet.ResNet18(num_classes=num_classes)
@@ -129,7 +137,6 @@ def build_model(args, **kwargs):
         )
 
     elif args.model.name == 'resnet18_labelsmoothing':
-        # Lightning:
         model = deterministic.resnet.ResNet18(num_classes)
         optimizer = torch.optim.SGD(
             model.parameters(),
@@ -148,7 +155,6 @@ def build_model(args, **kwargs):
         )
 
     elif args.model.name == 'resnet18_mixup':
-        # Lightning:
         model = deterministic.resnet.ResNet18(num_classes)
         optimizer = torch.optim.SGD(
             model.parameters(),
@@ -242,36 +248,31 @@ def build_model(args, **kwargs):
 
 def build_dataset(args):
     if args.dataset == 'CIFAR10':
-        data = datasets.cifar.CIFAR10(args.dataset_path)
-        return data
-
+        dset = datasets.cifar.CIFAR10(args.dataset_path)
     elif args.dataset == 'CIFAR100':
-        data = datasets.cifar.CIFAR100(args.dataset_path)
-
+        dset = datasets.cifar.CIFAR100(args.dataset_path)
     elif args.dataset == 'SVHN':
-        data = datasets.svhn.SVHN(args.dataset_path)
-
+        dset = datasets.svhn.SVHN(args.dataset_path)
     elif args.dataset == 'Imagenet':
-        data = datasets.imagenet.ImageNet(args.dataset_path)
-
+        dset = datasets.imagenet.ImageNet(args.dataset_path)
     else:
         raise NotImplementedError()
-
-    return data
+    return dset
 
 
 def build_ood_datasets(args, mean, std):
     ood_datasets = {}
+    # Use transforms from the original dataset - probably dset.transforms
     if 'CIFAR10' in args.ood_datasets:
-        data = datasets.cifar.CIFAR10(args.dataset_path, mean=mean, std=std)
+        data = datasets.cifar.CIFAR10(dataset_path=args.dataset_path, mean=mean, std=std)
         ood_datasets["CIFAR10"] = data.test_dataset
 
     if 'CIFAR100' in args.ood_datasets:
-        data = datasets.cifar.CIFAR100(args.dataset_path, mean=mean, std=std)
+        data = datasets.cifar.CIFAR100(dataset_path=args.dataset_path, mean=mean, std=std)
         ood_datasets["CIFAR100"] = data.test_dataset
 
     if 'SVHN' in args.ood_datasets:
-        data = datasets.svhn.SVHN(args.dataset_path, mean=mean, std=std)
+        data = datasets.svhn.SVHN(dataset_path=args.dataset_path, mean=mean, std=std)
         ood_datasets["SVHN"] = data.test_dataset
 
     return ood_datasets

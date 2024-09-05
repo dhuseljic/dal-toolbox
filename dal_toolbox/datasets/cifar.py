@@ -70,10 +70,10 @@ class CIFAR10SimCLRTransforms(BaseTransforms):
 
 
 class CIFAR10StandardTransforms(BaseTransforms):
-    def __init__(self):
+    def __init__(self, mean=CIFAR10Transforms.mean.value, std=CIFAR10Transforms.std.value):
         super().__init__()
-        self.mean = CIFAR10Transforms.mean.value
-        self.std = CIFAR10Transforms.std.value
+        self.mean = mean
+        self.std = std
 
     @property
     def train_transform(self):
@@ -108,8 +108,10 @@ class CIFAR10(BaseData):
                  dataset_path: str,
                  transforms: BaseTransforms = None,
                  val_split: float = 0.1,
-                 seed: int = None) -> None:
-        self.transforms = CIFAR10StandardTransforms() if transforms is None else transforms
+                 seed: int = None,
+                 mean = CIFAR10Transforms.mean.value,
+                 std = CIFAR10Transforms.std.value) -> None:
+        self.transforms = CIFAR10StandardTransforms(mean=mean, std=std) if transforms is None else transforms
         self.train_transform = self.transforms.train_transform
         self.eval_transform = self.transforms.eval_transform
         self.query_transform = self.transforms.query_transform
@@ -221,10 +223,10 @@ class CIFAR100Transforms(Enum):
 
 
 class CIFAR100StandardTransforms(BaseTransforms):
-    def __init__(self):
+    def __init__(self, mean=CIFAR100Transforms.mean.value, std=CIFAR100Transforms.std.value):
         super().__init__()
-        self.mean = CIFAR100Transforms.mean.value
-        self.std = CIFAR100Transforms.std.value
+        self.mean = mean
+        self.std = std
 
     @property
     def train_transform(self):
@@ -324,8 +326,10 @@ class CIFAR100(BaseData):
                  dataset_path: str,
                  transforms: BaseTransforms = None,
                  val_split: float = 0.1,
-                 seed: int = None) -> None:
-        self.transforms = CIFAR100StandardTransforms() if transforms is None else transforms
+                 seed: int = None,
+                 mean=CIFAR100Transforms.mean.value,
+                 std=CIFAR100Transforms.std.value) -> None:
+        self.transforms = CIFAR100StandardTransforms(mean=mean, std=std) if transforms is None else transforms
         self.train_transform = self.transforms.train_transform
         self.eval_transform = self.transforms.eval_transform
         self.query_transform = self.transforms.query_transform

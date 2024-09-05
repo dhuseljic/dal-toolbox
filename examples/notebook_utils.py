@@ -66,8 +66,10 @@ def plot_contour(model, X_l, y_l, X_u=None, y_u=None, ax=None, x_domain=(-3, 3),
     else:
         raise NotImplementedError('This forward method is not taken account for. Choose one in [single, mc, mean_field]!')
         
-
     zz = probas[:, 1].view(xx.shape)
+
+    if ax:
+        plt.sca(ax)
 
     if X_u != None:
         scatter = plt.scatter(X_l[:, 0], X_l[:, 1], c=y_l, s=75, edgecolors='red', linewidths=2, zorder=5)
