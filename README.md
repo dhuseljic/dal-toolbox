@@ -51,7 +51,7 @@ for i_cycle in range(4):
 
 Plotting the resulting decision boundaries for each cycle leaves us with
 
-<img src="./examples/readme_example_1.png" width="500"/>
+<img src="./examples/readme_example_1.png" width="2500"/>
 
 This shows that a simple deterministic model may not have the best uncertainty estimations to provide good features for LeastCertaintySampling. Let's make use of the implemented Spectral Normalized Gaussian Processes (SNGP) to improve the models uncertainty estimations and hopefully solve this task!
 
@@ -82,7 +82,7 @@ for i_cycle in range(4):
 
 Again, we plot the resulting decision boundaries:
 
-<img src="./examples/readme_example_2.png" width="500"/>
+<img src="./examples/readme_example_2.png" width="2500"/>
 
 This looks much more promising, demonstrating how improving the uncertainty estimation of a model can have a positive impact on DAL.
 
