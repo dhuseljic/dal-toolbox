@@ -42,7 +42,7 @@ def main(args):
     al_strategy = build_al_strategy(args)
 
     history = []
-    num_features = 384  # len(train_ds[0][0])
+    num_features = len(train_ds[0][0])
     model = build_model(args, num_features=num_features, num_classes=num_classes)
     lightning_trainer_config = dict(
         max_epochs=args.model.num_epochs,
