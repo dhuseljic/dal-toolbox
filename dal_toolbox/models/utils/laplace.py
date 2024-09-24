@@ -127,6 +127,9 @@ class LaplaceLinear(nn.Module):
 
         gaussian = torch.distributions.Normal(loc=gp_mean,  scale=gp_std)
         mc_logits = gaussian.sample(sample_shape=(self.mc_samples,)).permute(1, 0, 2)
-        temperature = torch.sqrt(1 + self.mean_field_factor*gp_var)[:, None]
+        if self.mean_field_factor > 0:
+            temperature = torch.sqrt(1 + self.mean_field_factor*gp_var)[:, None]
+        else:
+            temperature = 1
         mc_logits = mc_logits / temperature
         return mc_logits
