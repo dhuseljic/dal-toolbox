@@ -135,9 +135,9 @@ class PseudoBatch(strategies.Query):
 
     @torch.no_grad()
     def query(self, *, model, al_datamodule, acq_size, return_utilities=False, **kwargs):
-        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(
-            subset_size=self.subset_size)
+        unlabeled_dataloader, _ = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
         dataset = unlabeled_dataloader.dataset
+        al_datamodule_batch = copy.deepcopy(al_datamodule)
 
         if acq_size % self.update_every != 0:
             raise ValueError('Acquisition size must be divisible by `update_every`.')
@@ -145,16 +145,12 @@ class PseudoBatch(strategies.Query):
         indices = []
         from rich.progress import track
         for _ in track(range(acq_size // self.update_every), 'PseudoBatch: Querying'):
-            # Copy data module to avoid querying the same instances
-            al_datamodule_batch = copy.deepcopy(al_datamodule)
-            al_datamodule_batch.update_annotations(indices)
-
-            # Sample via simple strategy
             idx = self.al_strategy.query(
                 model=model,
                 al_datamodule=al_datamodule_batch,
                 acq_size=self.update_every
             )
+            al_datamodule_batch.update_annotations(idx)
 
             # Get the element and label from the dataloader
             data = dataset[idx]
