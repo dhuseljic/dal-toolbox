@@ -239,6 +239,12 @@ class LaplaceNet(LaplaceLinear):
         logits = torch.cat(all_logits)
         return logits
 
+    def get_logits_from_representations(self, representations, device):
+        self.to(device)
+        self.eval()
+        logits = self.forward_mean_field(representations.to(device))
+        return logits
+
     @torch.no_grad()
     def get_representations(self, dataloader, device):
         self.to(device)

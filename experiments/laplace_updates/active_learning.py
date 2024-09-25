@@ -4,6 +4,7 @@ import hydra
 import torch
 import mlflow
 import copy
+import numpy as np
 
 from omegaconf import OmegaConf
 from lightning import Trainer
@@ -119,6 +120,12 @@ def build_al_strategy(args):
         strat = strategies.BALDSampling(subset_size=args.al.subset_size)
         al_strategy = PseudoBatch(al_strategy=strat, update_every=args.update_every,
                                   gamma=args.update_gamma, subset_size=args.al.subset_size)
+    elif args.al.strategy == 'optimal':
+        al_strategy = Optimal(
+            subset_size=args.al.subset_size,
+            gamma=args.update_gamma,
+            num_batches=args.al.optimal.num_batches,
+        )
     else:
         raise NotImplementedError()
     return al_strategy
@@ -163,6 +170,72 @@ class PseudoBatch(strategies.Query):
             indices.extend(idx)
         actual_indices = indices
         return actual_indices
+
+
+class Optimal(strategies.Query):
+    def __init__(self,
+                 subset_size=None,
+                 num_batches=200,
+                 gamma=10,
+                 random_seed=None,
+                 device='cpu',
+                 ):
+        super().__init__(random_seed=random_seed)
+        self.subset_size = subset_size
+        self.device = device
+
+        self.num_batches = num_batches
+        self.gamma = gamma
+        self.loss_fn = torch.nn.CrossEntropyLoss()
+
+    @torch.no_grad()
+    def query(self, *, model, al_datamodule, acq_size, return_utilities=False, **kwargs):
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(
+            subset_size=self.subset_size)
+        unlabeled_features = model.get_representations(unlabeled_dataloader, device=self.device)
+        unlabeled_labels = torch.cat([batch[1] for batch in unlabeled_dataloader])
+
+        indices_batches = [np.random.permutation(self.subset_size)[:acq_size]
+                           for _ in range(self.num_batches)]
+
+        loss_batches = []
+        init_params = model.state_dict()
+        from rich.progress import track
+        for indices in track(indices_batches):
+            features_batch = unlabeled_features[indices]
+            labels = unlabeled_labels[indices]
+
+            model.train()
+            model.load_state_dict(init_params)
+            model.update_posterior(
+                iter(zip(features_batch, labels)),
+                gamma=self.gamma,
+                from_representations=True,
+                device=self.device
+            )
+
+            loss = self.evaluate_model(model, al_datamodule.test_dataloader())
+            loss_batches.append(loss)
+
+        best_idx = np.argmin(loss_batches)
+        local_indices = indices_batches[best_idx]
+        global_indices = [unlabeled_indices[idx] for idx in local_indices]
+        return global_indices
+
+    @torch.no_grad()
+    def evaluate_model(self, model, dataloader):
+        model.eval()
+        model.to(self.device)
+        num_samples = 0
+        running_loss = 0
+        for batch in dataloader:
+            inputs, targets = batch[0].to(self.device), batch[1].to(self.device)
+            logits = model(inputs)
+
+            num_samples += len(inputs)
+            running_loss += len(inputs)*self.loss_fn(logits, targets).item()
+        loss = running_loss / num_samples
+        return loss
 
 
 if __name__ == '__main__':

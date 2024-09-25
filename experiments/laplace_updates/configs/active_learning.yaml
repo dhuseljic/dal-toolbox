@@ -20,14 +20,16 @@ dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
 # dino_model_name: 'dinov2_vitg14' # 1100 M params - 1536 dimensions
 
 al:
-  strategy: random
+  strategy: optimal 
   subset_size: 1000
   init_method: random
   num_init_samples: 10
-  num_acq: 10
+  num_acq: 20
   acq_size: 10
   bait:
     grad_likelihood: binary_cross_entropy
+  optimal:
+    num_batches: 200
   device: cpu
 
 model:
