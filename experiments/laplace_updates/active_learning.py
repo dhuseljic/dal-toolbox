@@ -120,6 +120,8 @@ def build_al_strategy(args):
         strat = strategies.BALDSampling(subset_size=args.al.subset_size)
         al_strategy = PseudoBatch(al_strategy=strat, update_every=args.update_every,
                                   gamma=args.update_gamma, subset_size=args.al.subset_size)
+    elif args.al.strategy == 'typiclust':
+        al_strategy = strategies.TypiClust(subset_size=args.al.subset_size)
     elif args.al.strategy == 'optimal':
         al_strategy = Optimal(
             subset_size=args.al.subset_size,
