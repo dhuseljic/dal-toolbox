@@ -34,10 +34,11 @@ def main(args):
         train_batch_size=args.model.train_batch_size,
         predict_batch_size=args.model.predict_batch_size,
     )
+    num_init = args.al.acq_size if args.al.num_init_samples is None else args.al.num_init_samples
     if args.al.init_method == 'random':
-        al_datamodule.random_init(n_samples=args.al.num_init_samples)
+        al_datamodule.random_init(n_samples=num_init)
     elif args.al.init_method == 'diverse_dense':
-        al_datamodule.diverse_dense_init(n_samples=args.al.num_init_samples)
+        al_datamodule.diverse_dense_init(n_samples=num_init)
     else:
         raise NotImplementedError()
     al_strategy = build_al_strategy(args)
