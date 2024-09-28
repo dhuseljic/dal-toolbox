@@ -499,7 +499,7 @@ def build_model(args, **kwargs):
             cov_likelihood=args.likelihood,
             bias=True,
         )
-        if 'al' in args and args.al.strategy in ['bald', 'pseudo_bald', 'batch_bald']:
+        if 'al' in args and args.al.strategy in ['bald', 'pseudo_bald', 'varratio', 'pseudo_varratio']:
             LaplaceNet.use_mean_field = False
     elif args.model.name == 'dino_laplace':
         ssl_model = build_dino_model(args)

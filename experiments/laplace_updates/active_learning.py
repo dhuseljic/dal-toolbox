@@ -15,7 +15,6 @@ from dal_toolbox.active_learning import strategies
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything
 from utils import build_datasets, flatten_cfg, build_model
-from torch.utils.data import DataLoader, Subset
 
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
@@ -119,6 +118,12 @@ def build_al_strategy(args):
         al_strategy = strategies.BALDSampling(subset_size=args.al.subset_size)
     elif args.al.strategy == 'pseudo_bald':
         strat = strategies.BALDSampling(subset_size=args.al.subset_size)
+        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.update_every,
+                                  gamma=args.update_gamma, subset_size=args.al.subset_size)
+    elif args.al.strategy == 'varratio':
+        al_strategy = strategies.VariationRatioSampling(subset_size=args.al.subset_size)
+    elif args.al.strategy == 'pseudo_varratio':
+        strat = strategies.VariationRatioSampling(subset_size=args.al.subset_size)
         al_strategy = PseudoBatch(al_strategy=strat, update_every=args.update_every,
                                   gamma=args.update_gamma, subset_size=args.al.subset_size)
     elif args.al.strategy == 'typiclust':
