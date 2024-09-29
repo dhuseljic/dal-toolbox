@@ -121,9 +121,9 @@ def build_al_strategy(args):
         al_strategy = PseudoBatch(al_strategy=strat, update_every=args.update_every,
                                   gamma=args.update_gamma, subset_size=args.al.subset_size)
     elif args.al.strategy == 'varratio':
-        al_strategy = strategies.VariationRatioSampling(subset_size=args.al.subset_size)
+        al_strategy = VariationRatioSamplingLaplace(subset_size=args.al.subset_size)
     elif args.al.strategy == 'pseudo_varratio':
-        strat = strategies.VariationRatioSampling(subset_size=args.al.subset_size)
+        strat = VariationRatioSamplingLaplace(subset_size=args.al.subset_size)
         al_strategy = PseudoBatch(al_strategy=strat, update_every=args.update_every,
                                   gamma=args.update_gamma, subset_size=args.al.subset_size)
     elif args.al.strategy == 'typiclust':
@@ -180,6 +180,23 @@ class PseudoBatch(strategies.Query):
         return actual_indices
 
 
+class VariationRatioSamplingLaplace(strategies.Query):
+    def __init__(self, subset_size=None, random_seed=None, device='cpu'):
+        super().__init__(random_seed=random_seed)
+        self.subset_size = subset_size
+        self.device = device
+
+    @torch.no_grad()
+    def query(self, *, model, al_datamodule, acq_size, return_utilities=False, **kwargs):
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(
+            subset_size=self.subset_size)
+        vars = model.get_variances(unlabeled_dataloader, device=self.device)
+        _, indices = vars.topk(acq_size)
+
+        actual_indices = [unlabeled_indices[i] for i in indices]
+        return actual_indices
+
+
 class Optimal(strategies.Query):
     def __init__(self,
                  subset_size=None,
@@ -196,12 +213,26 @@ class Optimal(strategies.Query):
         self.gamma = gamma
         self.loss_fn = torch.nn.CrossEntropyLoss()
 
+    def select_batches(self,):
+        # half of batches exploration, half of batches exploitation
+        pass
+
     @torch.no_grad()
     def query(self, *, model, al_datamodule, acq_size, return_utilities=False, **kwargs):
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(
             subset_size=self.subset_size)
         unlabeled_features = model.get_representations(unlabeled_dataloader, device=self.device)
         unlabeled_labels = torch.cat([batch[1] for batch in unlabeled_dataloader])
+
+        # Get batches
+        from sklearn.cluster import KMeans
+        from sklearn.metrics import pairwise_distances
+        km = KMeans(n_clusters=acq_size, n_init='auto')
+        clusters = km.fit_predict(unlabeled_features)
+        for i in range(acq_size):
+            feats = unlabeled_features[i == clusters]
+            dist = pairwise_distances(feats).sum(-1)
+            np.where(i == clusters)[0][dist.argmin()]
 
         indices_batches = [np.random.permutation(self.subset_size)[:acq_size]
                            for _ in range(self.num_batches)]

@@ -93,6 +93,12 @@ class LaplaceModel(BaseModule):
                 m.synchronize_precision_matrix()
 
     @torch.no_grad()
+    def get_variances(self, *args, **kwargs):
+        if not hasattr(self.model, 'get_variances'):
+            raise NotImplementedError('The `get_variances` method is not implemented.')
+        return self.model.get_variances(*args, **kwargs)
+
+    @torch.no_grad()
     def update_posterior(self, dataloader, lmb=1, gamma=10, cov_likelihood='gaussian', update_type='second_order', from_representations=False, device='cpu'):
         # Set to eval to avoid precision matrix update
         self.eval()

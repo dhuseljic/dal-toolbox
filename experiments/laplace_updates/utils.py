@@ -239,6 +239,19 @@ class LaplaceNet(LaplaceLinear):
         logits = torch.cat(all_logits)
         return logits
 
+    @torch.no_grad()
+    def get_variances(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_vars = []
+        for batch in dataloader:
+            inputs = batch[0]
+            _, cov = self.forward(inputs.to(device), return_cov=True)
+            vars = cov.diag()
+            all_vars.append(vars)
+        vars = torch.cat(all_vars)
+        return vars
+
     def get_logits_from_representations(self, representations, device):
         self.to(device)
         self.eval()
