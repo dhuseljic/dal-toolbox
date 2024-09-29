@@ -126,6 +126,12 @@ def build_al_strategy(args):
         strat = VariationRatioSamplingLaplace(subset_size=args.al.subset_size)
         al_strategy = PseudoBatch(al_strategy=strat, update_every=args.update_every,
                                   gamma=args.update_gamma, subset_size=args.al.subset_size)
+    elif args.al.strategy == 'entropy':
+        al_strategy = strategies.EntropySampling(subset_size=args.al.subset_size)
+    elif args.al.strategy == 'pseudo_entropy':
+        strat = strategies.EntropySampling(subset_size=args.al.subset_size)
+        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.update_every,
+                                  gamma=args.update_gamma, subset_size=args.al.subset_size)
     elif args.al.strategy == 'typiclust':
         al_strategy = strategies.TypiClust(subset_size=args.al.subset_size)
     elif args.al.strategy == 'optimal':
