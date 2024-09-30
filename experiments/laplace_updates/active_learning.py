@@ -216,7 +216,7 @@ class Optimal(strategies.Query):
         indices_batches = []
 
         # Random batches
-        indices = [np.random.permutation(self.subset_size)[:acq_size] for _ in range(num_random)]
+        indices = [np.random.permutation(len(unlabeled_features))[:acq_size] for _ in range(num_random)]
         indices_batches.extend(indices)
 
         # Diverse batches: Random sampling from k-means clusters
