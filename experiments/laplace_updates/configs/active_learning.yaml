@@ -23,13 +23,13 @@ al:
   strategy: random
   subset_size: 1000
   init_method: random
-  num_init_samples: 10
-  num_acq: 20
+  num_init_samples: Null
   acq_size: 10
+  num_acq: 20
   bait:
     grad_likelihood: binary_cross_entropy
   optimal:
-    num_batches: 200
+    num_batches: 300
   device: cpu
 
 model:
@@ -38,7 +38,7 @@ model:
   train_batch_size: 64
   predict_batch_size: 128
   mean_field_factor: 0.4
-  mc_samples: 10_000
+  mc_samples: 1_000
 
 optimizer: 
   name: RAdam
