@@ -120,18 +120,6 @@ def build_al_strategy(args):
         strat = strategies.BALDSampling(subset_size=args.al.subset_size)
         al_strategy = PseudoBatch(al_strategy=strat, update_every=args.update_every,
                                   gamma=args.update_gamma, subset_size=args.al.subset_size)
-    elif args.al.strategy == 'varratio':
-        al_strategy = VariationRatioSamplingLaplace(subset_size=args.al.subset_size)
-    elif args.al.strategy == 'pseudo_varratio':
-        strat = VariationRatioSamplingLaplace(subset_size=args.al.subset_size)
-        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.update_every,
-                                  gamma=args.update_gamma, subset_size=args.al.subset_size)
-    elif args.al.strategy == 'entropy':
-        al_strategy = strategies.EntropySampling(subset_size=args.al.subset_size)
-    elif args.al.strategy == 'pseudo_entropy':
-        strat = strategies.EntropySampling(subset_size=args.al.subset_size)
-        al_strategy = PseudoBatch(al_strategy=strat, update_every=args.update_every,
-                                  gamma=args.update_gamma, subset_size=args.al.subset_size)
     elif args.al.strategy == 'typiclust':
         al_strategy = strategies.TypiClust(subset_size=args.al.subset_size)
     elif args.al.strategy == 'optimal':
@@ -206,7 +194,7 @@ class VariationRatioSamplingLaplace(strategies.Query):
 class Optimal(strategies.Query):
     def __init__(self,
                  subset_size=None,
-                 num_batches=200,
+                 num_batches=300,
                  gamma=10,
                  random_seed=None,
                  device='cpu',
@@ -219,9 +207,47 @@ class Optimal(strategies.Query):
         self.gamma = gamma
         self.loss_fn = torch.nn.CrossEntropyLoss()
 
-    def select_batches(self,):
-        # half of batches exploration, half of batches exploitation
-        pass
+    def select_batches(self, acq_size, unlabeled_features, labeled_features, labeled_labels):
+        # Selects the batches to evaluate on. We consider (i) random (ii) diverse, and (iii) informative ones.
+        num_random = self.num_batches // 3
+        num_diverse = self.num_batches // 3
+        num_informative = self.num_batches // 3
+
+        indices_batches = []
+
+        # Random batches
+        indices = [np.random.permutation(self.subset_size)[:acq_size] for _ in range(num_random)]
+        indices_batches.extend(indices)
+
+        # Diverse batches: Random sampling from k-means clusters
+        from sklearn.cluster import KMeans
+        km = KMeans(n_clusters=acq_size, n_init='auto')
+        clusters = km.fit_predict(unlabeled_features)
+        indices = []
+        for _ in range(num_diverse):
+            idx = []
+            for i in range(acq_size):
+                indices_cluster = np.where(clusters == i)[0]
+                idx.append(self.rng.choice(indices_cluster))
+            indices.append(np.array(idx))
+        indices_batches.extend(indices)
+
+        # Informative batches: Highly uncertainty samples based on margin
+        from sklearn.linear_model import LogisticRegression
+        clf = LogisticRegression()
+        clf.fit(labeled_features, labeled_labels.view(-1, 1))
+        probas = clf.predict_proba(unlabeled_features)
+        probas = torch.from_numpy(probas)
+        top_probas, _ = torch.topk(probas, k=2, dim=-1)
+        uncertainty = 1 - (top_probas[:, 0] - top_probas[:, 1])
+        indicies_uncertain = np.where(uncertainty > uncertainty.mean())[0]
+
+        indices = []
+        for _ in range(num_informative):
+            indices.append(self.rng.choice(indicies_uncertain, size=acq_size, replace=False))
+        indices_batches.extend(indices)
+
+        return indices_batches
 
     @torch.no_grad()
     def query(self, *, model, al_datamodule, acq_size, return_utilities=False, **kwargs):
@@ -230,18 +256,11 @@ class Optimal(strategies.Query):
         unlabeled_features = model.get_representations(unlabeled_dataloader, device=self.device)
         unlabeled_labels = torch.cat([batch[1] for batch in unlabeled_dataloader])
 
-        # Get batches
-        from sklearn.cluster import KMeans
-        from sklearn.metrics import pairwise_distances
-        km = KMeans(n_clusters=acq_size, n_init='auto')
-        clusters = km.fit_predict(unlabeled_features)
-        for i in range(acq_size):
-            feats = unlabeled_features[i == clusters]
-            dist = pairwise_distances(feats).sum(-1)
-            np.where(i == clusters)[0][dist.argmin()]
+        labeled_dataloader, _ = al_datamodule.labeled_dataloader()
+        labeled_features = model.get_representations(labeled_dataloader, device=self.device)
+        labeled_labels = torch.cat([batch[1] for batch in labeled_dataloader])
 
-        indices_batches = [np.random.permutation(self.subset_size)[:acq_size]
-                           for _ in range(self.num_batches)]
+        indices_batches = self.select_batches(acq_size, unlabeled_features, labeled_features, labeled_labels)
 
         loss_batches = []
         init_params = model.state_dict()
