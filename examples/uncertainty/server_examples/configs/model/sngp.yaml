@@ -1,4 +1,4 @@
-name : resnet18_sngp
+name : sngp
 train_batch_size: 64
 predict_batch_size: 256
 n_epochs: 250

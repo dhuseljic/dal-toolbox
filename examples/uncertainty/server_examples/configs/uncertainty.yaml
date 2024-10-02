@@ -1,17 +1,17 @@
 defaults:
   - _self_
-  - model: 'resnet18'
+  - model: 'deterministic'
 
 dataset: CIFAR10 
-dataset_path: /mnt/datasets/
 ood_datasets: [SVHN, CIFAR100]
-val_interval: 25
+val_interval: 20
 
 random_seed: 42
 num_devices: 1
 
 # Define output dir
 output_dir: "./output/"
+data_dir: "./data/"
 hydra:
   run:
     dir: ${output_dir}
