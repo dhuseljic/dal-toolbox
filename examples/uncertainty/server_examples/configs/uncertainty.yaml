@@ -5,6 +5,7 @@ defaults:
 dataset: CIFAR10 
 ood_datasets: [SVHN, CIFAR100]
 val_interval: 20
+val_split: 0
 
 random_seed: 42
 num_devices: 1

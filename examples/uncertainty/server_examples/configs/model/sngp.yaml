@@ -1,7 +1,7 @@
 name : sngp
 train_batch_size: 64
 predict_batch_size: 256
-n_epochs: 250
+n_epochs: 200
 spectral_norm:
   use_spectral_norm: True
   norm_bound: 6

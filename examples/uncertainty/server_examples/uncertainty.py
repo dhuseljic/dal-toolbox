@@ -5,6 +5,7 @@ import logging
 import hydra
 import torch
 import torch.nn as nn
+from torch import Tensor
 import lightning as L
 
 from omegaconf import OmegaConf
@@ -14,9 +15,12 @@ from dal_toolbox import datasets
 from dal_toolbox.datasets.base import BaseData
 from dal_toolbox import metrics
 from dal_toolbox.models import deterministic, mc_dropout, ensemble, sngp
-from dal_toolbox.models.utils import BaseModule
-from dal_toolbox.models.utils.callbacks import MetricLogger
+from dal_toolbox.models.utils.base import BaseModule
+from dal_toolbox.models.utils.callbacks import MetricLogger, MetricHistory
 from dal_toolbox.utils import seed_everything
+
+#TODO: remove after DEBUG
+from torch.utils.data import Subset
 
 
 
@@ -36,17 +40,18 @@ def main(args):
     logging.info(f'Building in-domain dataset {args.dataset} and ood-datasets {args.ood_datasets}!')
     dset = build_dataset(dataset=args.dataset, data_dir=args.data_dir)
     ood_dsets = build_ood_datasets(dsets=args.ood_datasets, data_dir=args.data_dir, transforms=dset.transforms)
-    train_loader = DataLoader(dset.train_dataset, batch_size=args.model.train_batch_size, shuffle=True, drop_last=True)    
-    test_loader_id = DataLoader(dset.test_dataset, batch_size=args.model.predict_batch_size)
-    test_loaders_ood = {n: DataLoader(ood_ds, batch_size=args.model.predict_batch_size) for n, ood_ds in ood_dsets.items()}
+    train_loader = DataLoader(Subset(dset.train_dataset, range(200)), batch_size=args.model.train_batch_size, shuffle=True, drop_last=True)    
+    test_loader_id = DataLoader(Subset(dset.test_dataset, range(200)), batch_size=args.model.predict_batch_size)
+    test_loaders_ood = {n: DataLoader(Subset(ood_ds, range(200)), batch_size=args.model.predict_batch_size) for n, ood_ds in ood_dsets.items()}
 
     # Build model and trainer
     logging.info(f'Building the model {args.model.name}!')
     model = build_model(args, num_classes=dset.num_classes)
-    metrics_callback = MetricLogger()
+    metric_logger = MetricLogger()
+    metric_history = MetricHistory()
     trainer = L.Trainer(
         max_epochs=args.model.n_epochs,
-        callbacks=[metrics_callback],
+        callbacks=[metric_logger, metric_history],
         check_val_every_n_epoch=args.val_interval,
         enable_checkpointing=False,
         enable_progress_bar=False,
@@ -81,11 +86,9 @@ def main(args):
     fname = os.path.join(args.output_dir, 'results_final.json')
     logging.info(f"Saving results to {fname}.")
     results = {
-        'train_stats':metrics_callback.train_metrics, 
-        'val_stats':metrics_callback.val_metrics, 
+        'train_stats':metric_history.metrics, 
         'id_test_stats': id_test_stats, 
-        'ood_test_stats': ood_test_stats, 
-        'args':OmegaConf.to_yaml(args)
+        'ood_test_stats': ood_test_stats
         }
     with open(fname, 'w') as f:
         json.dump(results, f)
@@ -93,7 +96,7 @@ def main(args):
 
 
 
-def evaluate(logits, targets):
+def evaluate(logits: Tensor, targets: Tensor) -> dict:
     """
     Calculates different metrics for in-domain evaluation.
 
@@ -116,7 +119,7 @@ def evaluate(logits, targets):
     return test_stats
 
 
-def evaluate_ood(id_logits, ood_logits):
+def evaluate_ood(id_logits: Tensor, ood_logits: Tensor) -> dict:
     """
     Calculates differenn metrics for ood-evaluation.
 
@@ -142,7 +145,7 @@ def evaluate_ood(id_logits, ood_logits):
 
 
 
-def build_model(args, **kwargs):
+def build_model(args: dict, **kwargs: dict) -> BaseModule:
     """
     Building the respective Module for the experiment.
     Args:
@@ -185,7 +188,8 @@ def build_model(args, **kwargs):
             lr_schedulers.append(lrs)
         model = ensemble.EnsembleModel(model_list=members, optimizer_list=optimizers, lr_scheduler_list=lr_schedulers)
     elif args.model.name == 'sngp':
-        model = sngp.resnet.resnet18_sngp(num_classes=num_classes, input_shape=(3, 32, 32), normalize_input=False, **args.model.spectral_norm, **args.model.gp)
+        # TODO: Will input_shape for resnet18_sngp change when using the imagenet-dataset?
+        model = sngp.resnet.resnet18_sngp(num_classes=num_classes, input_shape=(3, 32, 32), **args.model.spectral_norm, **args.model.gp)
         optimizer, lr_scheduler = get_optim_and_lrs(params=model.parameters(), args=args)
         model = sngp.SNGPModel(model=model, loss_fn=nn.CrossEntropyLoss(), optimizer=optimizer, lr_scheduler=lr_scheduler)
     else:
@@ -194,7 +198,7 @@ def build_model(args, **kwargs):
     return model
 
 
-def build_dataset(dataset: str='CIFAR10', data_dir: str='./data/') -> BaseData:
+def build_dataset(dataset: str='CIFAR10', data_dir: str='./data/', val_split: float=0.) -> BaseData:
     """
     Building the in-domain dataset.
 
@@ -206,13 +210,13 @@ def build_dataset(dataset: str='CIFAR10', data_dir: str='./data/') -> BaseData:
         dset (BaseData): The respective dataset.
     """
     if dataset == 'CIFAR10':
-        dset = datasets.cifar.CIFAR10(data_dir)
+        dset = datasets.cifar.CIFAR10(dataset_path=data_dir, val_split=val_split)
     elif dataset == 'CIFAR100':
-        dset = datasets.cifar.CIFAR100(data_dir)
+        dset = datasets.cifar.CIFAR100(dataset_path=data_dir, val_split=val_split)
     elif dataset == 'SVHN':
-        dset = datasets.svhn.SVHN(data_dir)
+        dset = datasets.svhn.SVHN(dataset_path=data_dir, val_split=val_split)
     elif dataset == 'Imagenet':
-        dset = datasets.imagenet.ImageNet(data_dir)
+        dset = datasets.imagenet.ImageNet(dataset_path=data_dir, val_split=val_split)
     else:
         raise NotImplementedError()
     return dset
