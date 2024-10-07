@@ -78,8 +78,7 @@ class SVHN(BaseData):
             dataset_path: str,
             transforms: BaseTransforms = None,
             val_split: float = 0.1,
-            seed: int = None
-    ) -> None:
+            seed: int = None) -> None:
         self.transforms = SVHNStandardTransforms() if transforms is None else transforms
         self.train_transform = self.transforms.train_transform
         self.eval_transform = self.transforms.eval_transform
