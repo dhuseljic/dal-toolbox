@@ -179,7 +179,7 @@ class LaplaceNet(LaplaceLinear):
                 logits = self(inputs.to(device))
             else:
                 logits = self.forward_monte_carlo(inputs.to(device))
-            all_logits.append(logits)
+            all_logits.append(logits.cpu())
         logits = torch.cat(all_logits)
         return logits
 

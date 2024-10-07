@@ -1,5 +1,6 @@
 import inspect
 
+import copy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -99,7 +100,17 @@ class LaplaceModel(BaseModule):
         return self.model.get_variances(*args, **kwargs)
 
     @torch.no_grad()
-    def update_posterior(self, dataloader, lmb=1, gamma=10, cov_likelihood='gaussian', update_type='second_order', from_representations=False, device='cpu'):
+    def update_posterior(
+        self,
+        dataloader,
+        lmb=1,
+        gamma=10,
+        cov_likelihood='gaussian',
+        update_type='second_order',
+        from_representations=False,
+        optimizer=None,
+        device='cpu'
+    ):
         # Set to eval to avoid precision matrix update
         self.eval()
         self.to(device)
@@ -140,7 +151,6 @@ class LaplaceModel(BaseModule):
             targets = torch.cat(targets_list)
             num_classes = logits.size(-1)
 
-
         # Get the laplace layer
         for m in self.model.modules():
             if isinstance(m, LaplaceLinear):
@@ -156,7 +166,18 @@ class LaplaceModel(BaseModule):
         elif update_type == 'second_order':
             new_mean, new_cov = second_order_update(
                 phis, targets_onehot, mean, cov, cov_likelihood=cov_likelihood, gamma=gamma, lmb=lmb)
-
+        elif update_type == 'optimizer':
+            if optimizer is None:
+                raise ValueError('You need to set the `optimizer` argument to use it for updating.')
+            with torch.enable_grad():
+                linear = copy.deepcopy(laplace_layer.layer)
+                for phi, target in zip(phis, targets):
+                    loss = F.cross_entropy(linear(phi), target)
+                    optimizer.zero_grad()
+                    loss.backward()
+                    optimizer.step()
+                new_mean = linear.weight.data
+            new_cov = cov.clone()
         laplace_layer.layer.weight.data = new_mean
         laplace_layer.covariance_matrix.data = new_cov
 
@@ -171,6 +192,39 @@ def first_order_update(features, targets_onehot, mean, gamma=1, lmb=1):
             tmp_3 = gamma*feature.clone()
             tmp_4 = (target_onehot - probas)
             mean += torch.outer(tmp_4, tmp_3)
+    return mean
+
+
+def kfac_update(features, targets_onehot, mean, gamma=1, lmb=1):
+    mean = mean.clone()
+
+    alpha = 0.9
+    A_running = torch.zeros(features.size(-1), features.size(-1))
+    G_running = torch.zeros(mean.size(0), mean.size(0))
+
+    for _ in range(lmb):
+        for feature, target_onehot in zip(features, targets_onehot):
+
+            logits = F.linear(feature, mean)
+            probas = logits.softmax(-1)
+
+            grad = probas - target_onehot
+            A = torch.outer(feature, feature)
+            G = torch.outer(grad, grad)
+
+            A_running = alpha * A_running + (1-alpha) * A
+            G_running = alpha * G_running + (1-alpha) * G
+
+            damping = 1e-3
+            A = A_running + damping * torch.eye(feature.size(-1))
+            G = G_running + damping * torch.eye(probas.size(-1))
+
+            A_inv = torch.inverse(A)
+            G_inv = torch.inverse(G)
+
+            grad_mean = torch.outer(grad, feature)
+            update = G_inv @ grad_mean @ A_inv
+            mean -= gamma*update
     return mean
 
 

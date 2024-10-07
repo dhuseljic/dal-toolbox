@@ -8,7 +8,6 @@ import logging
 import numpy as np
 from lightning import Trainer
 from omegaconf import OmegaConf
-from torch.utils.data.dataset import Dataset
 
 from dal_toolbox import metrics
 from dal_toolbox.active_learning import ActiveLearningDataModule
