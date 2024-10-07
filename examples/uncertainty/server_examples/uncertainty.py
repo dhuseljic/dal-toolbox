@@ -19,10 +19,6 @@ from dal_toolbox.models.utils.base import BaseModule
 from dal_toolbox.models.utils.callbacks import MetricLogger, MetricHistory
 from dal_toolbox.utils import seed_everything
 
-#TODO: remove after DEBUG
-from torch.utils.data import Subset
-
-
 
 @hydra.main(version_base=None, config_path="./configs", config_name="uncertainty")
 def main(args):
@@ -40,9 +36,9 @@ def main(args):
     logging.info(f'Building in-domain dataset {args.dataset} and ood-datasets {args.ood_datasets}!')
     dset = build_dataset(dataset=args.dataset, data_dir=args.data_dir)
     ood_dsets = build_ood_datasets(dsets=args.ood_datasets, data_dir=args.data_dir, transforms=dset.transforms)
-    train_loader = DataLoader(Subset(dset.train_dataset, range(200)), batch_size=args.model.train_batch_size, shuffle=True, drop_last=True)    
-    test_loader_id = DataLoader(Subset(dset.test_dataset, range(200)), batch_size=args.model.predict_batch_size)
-    test_loaders_ood = {n: DataLoader(Subset(ood_ds, range(200)), batch_size=args.model.predict_batch_size) for n, ood_ds in ood_dsets.items()}
+    train_loader = DataLoader(dset.train_dataset, batch_size=args.model.train_batch_size, shuffle=True, drop_last=True)    
+    test_loader_id = DataLoader(dset.test_dataset, batch_size=args.model.predict_batch_size)
+    test_loaders_ood = {n: DataLoader(ood_ds, batch_size=args.model.predict_batch_size) for n, ood_ds in ood_dsets.items()}
 
     # Build model and trainer
     logging.info(f'Building the model {args.model.name}!')
