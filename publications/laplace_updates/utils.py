@@ -11,7 +11,7 @@ from omegaconf import DictConfig
 
 from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, Snacks, DTD, Flowers102, TinyImageNet
 from dal_toolbox.datasets import ImageNet, StanfordDogs
-from dal_toolbox.models.laplace import LaplaceLayer, LaplaceModel
+from dal_toolbox.models.laplace import LaplaceLinear, LaplaceModel
 
 from sklearn.datasets import fetch_openml
 from sklearn.preprocessing import LabelEncoder, StandardScaler
@@ -220,7 +220,7 @@ def build_tabular_data(data_id, path='data/'):
     return TensorDataset(X_train, y_train), TensorDataset(X_test, y_test), num_classes
 
 
-class LaplaceNet(LaplaceLayer):
+class LaplaceNet(LaplaceLinear):
     use_mean_field = True
 
     @torch.no_grad()
@@ -237,6 +237,25 @@ class LaplaceNet(LaplaceLayer):
                 logits = self.forward_monte_carlo(inputs.to(device))
             all_logits.append(logits)
         logits = torch.cat(all_logits)
+        return logits
+
+    @torch.no_grad()
+    def get_variances(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_vars = []
+        for batch in dataloader:
+            inputs = batch[0]
+            _, cov = self.forward(inputs.to(device), return_cov=True)
+            vars = cov.diag()
+            all_vars.append(vars)
+        vars = torch.cat(all_vars)
+        return vars
+
+    def get_logits_from_representations(self, representations, device):
+        self.to(device)
+        self.eval()
+        logits = self.forward_mean_field(representations.to(device))
         return logits
 
     @torch.no_grad()
@@ -493,7 +512,7 @@ def build_model(args, **kwargs):
             cov_likelihood=args.likelihood,
             bias=True,
         )
-        if 'al' in args and args.al.strategy in ['bald', 'pseudo_bald', 'batch_bald']:
+        if 'al' in args and args.al.strategy in ['bald', 'pseudo_bald', 'varratio', 'pseudo_varratio']:
             LaplaceNet.use_mean_field = False
     elif args.model.name == 'dino_laplace':
         ssl_model = build_dino_model(args)

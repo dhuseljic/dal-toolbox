@@ -15,7 +15,6 @@ from ..utils import setup_rng
 
 
 class ActiveLearningDataModule(L.LightningDataModule):
-    # TODO(dhuseljic): Implement for LightningDataModule input.
     def __init__(
             self,
             train_dataset: Dataset,

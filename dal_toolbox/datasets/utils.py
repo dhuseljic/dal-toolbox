@@ -10,6 +10,36 @@ from dal_toolbox.datasets.base import BaseData
 from dal_toolbox.models.utils.base import BaseModule
 
 
+class DinoTransforms():
+    def __init__(self, size=None, center_crop_size=224):
+        if size:
+            # https://github.com/facebookresearch/dino/blob/main/eval_linear.py#L65-L70
+            dino_mean = (0.485, 0.456, 0.406)
+            dino_std = (0.229, 0.224, 0.225)
+            self.transform = torchvision.transforms.Compose([
+                torchvision.transforms.Resize(size, interpolation=3),
+                torchvision.transforms.CenterCrop(center_crop_size),
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Lambda(lambda x: x.repeat(3, 1, 1) if x.size(0) != 3 else x),
+                torchvision.transforms.Normalize(dino_mean, dino_std),
+            ])
+
+        else:
+            self.transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
+
+    @property
+    def train_transform(self):
+        return self.transform
+
+    @property
+    def query_transform(self):
+        return self.transform
+
+    @property
+    def eval_transform(self):
+        return self.transform
+
+
 class RepeatTransformations:
     def __init__(self, base_transforms, n_views=2):
         self.base_transforms = base_transforms

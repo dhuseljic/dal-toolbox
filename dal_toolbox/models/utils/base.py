@@ -86,43 +86,44 @@ class BaseModule(L.LightningModule, abc.ABC):
             metrics = {metric_name: metric(logits, targets) for metric_name, metric in self.val_metrics.items()}
             self.log_dict(self.val_metrics, prog_bar=True)
 
-    # TODO(dhuseljic): Discuss
-    @torch.inference_mode()
+    @torch.no_grad()
     def get_logits(self, *args, **kwargs):
-        if 'device' not in kwargs:
-            kwargs['device'] = 'cuda' if torch.cuda.is_available() else 'cpu'
         if not hasattr(self.model, 'get_logits'):
             raise NotImplementedError('The `get_logits` method is not implemented.')
         return self.model.get_logits(*args, **kwargs)
 
-    @torch.inference_mode()
+    @torch.no_grad()
     def get_representations(self, *args, **kwargs):
-        if 'device' not in kwargs:
-            kwargs['device'] = 'cuda' if torch.cuda.is_available() else 'cpu'
         if not hasattr(self.model, 'get_representations'):
             raise NotImplementedError('The `get_representations` method is not implemented.')
         return self.model.get_representations(*args, **kwargs)
 
-    @torch.inference_mode()
+    @torch.no_grad()
+    def get_representations_and_logits(self, *args, **kwargs):
+        if not hasattr(self.model, 'get_representations_and_logits'):
+            raise NotImplementedError('The `get_representations_and_logits` method is not implemented.')
+        return self.model.get_representations_and_logits(*args, **kwargs)
+
+    @torch.no_grad()
     def get_grad_representations(self, *args, **kwargs):
-        if 'device' not in kwargs:
-            kwargs['device'] = 'cuda' if torch.cuda.is_available() else 'cpu'
         if not hasattr(self.model, 'get_grad_representations'):
             raise NotImplementedError('The `get_grad_representations` method is not implemented.')
         return self.model.get_grad_representations(*args, **kwargs)
 
-    @torch.inference_mode()
+    @torch.no_grad()
     def get_topk_grad_representations(self, *args, **kwargs):
-        if 'device' not in kwargs:
-            kwargs['device'] = 'cuda' if torch.cuda.is_available() else 'cpu'
         if not hasattr(self.model, 'get_topk_grad_representations'):
             raise NotImplementedError('The `get_topk_grad_representations` method is not implemented.')
         return self.model.get_topk_grad_representations(*args, **kwargs)
 
-    @torch.inference_mode()
+    @torch.no_grad()
     def get_exp_grad_representations(self, *args, **kwargs):
-        if 'device' not in kwargs:
-            kwargs['device'] = 'cuda' if torch.cuda.is_available() else 'cpu'
         if not hasattr(self.model, 'get_exp_grad_representations'):
             raise NotImplementedError('The `get_exp_grad_representations` method is not implemented.')
         return self.model.get_exp_grad_representations(*args, **kwargs)
+
+    @torch.no_grad()
+    def get_logits_from_representations(self, *args, **kwargs):
+        if not hasattr(self.model, 'get_logits_from_representations'):
+            raise NotImplementedError('The `get_logits_from_representations` method is not implemented.')
+        return self.model.get_logits_from_representations(*args, **kwargs)
