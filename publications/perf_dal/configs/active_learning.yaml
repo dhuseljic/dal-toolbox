@@ -24,7 +24,7 @@ al:
   subset_size: 1000
   init_method: random
   num_init_samples: null
-  num_acq: 10
+  num_acq: 20
   acq_size: 10
   device: cpu
   optimal:
