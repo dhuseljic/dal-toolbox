@@ -39,8 +39,9 @@ def main(args):
     )
     al_strategy = build_al_strategy(args) 
     # TODO: init should be part of al_strategy
+    num_init = args.al.acq_size if args.al.num_init_samples is None else args.al.num_init_samples
     if args.al.init_method == 'random':
-        al_datamodule.random_init(n_samples=args.al.num_init_samples)
+        al_datamodule.random_init(n_samples=num_init)
     else:
         raise NotImplementedError()
 
