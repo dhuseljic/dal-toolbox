@@ -17,18 +17,14 @@ from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything
 from utils import build_datasets, flatten_cfg, build_model
 from torch.utils.data import DataLoader, Subset, ConcatDataset
-from scipy.optimize import linear_sum_assignment
-from sklearn.metrics import pairwise_distances
 from rich.progress import track
 
 logging.getLogger("lightning.pytorch").setLevel(logging.ERROR)
-
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
 def main(args):
     seed_everything(42)
     print(OmegaConf.to_yaml(args))
-
     train_ds, test_ds, num_classes = build_datasets(
         args, val_split=args.use_val_split, cache_features=args.cache_features)
 
@@ -41,28 +37,22 @@ def main(args):
         train_batch_size=args.model.train_batch_size,
         predict_batch_size=args.model.predict_batch_size,
     )
+    al_strategy = build_al_strategy(args) 
+    # TODO: init should be part of al_strategy
     if args.al.init_method == 'random':
         al_datamodule.random_init(n_samples=args.al.num_init_samples)
-    elif args.al.init_method == 'diverse_dense':
-        al_datamodule.diverse_dense_init(n_samples=args.al.num_init_samples)
-    elif args.al.init_method == 'none':
-        pass
     else:
         raise NotImplementedError()
-    al_strategy = build_al_strategy(args)
 
-    history = []
-    num_features = 384
+    num_features = len(train_ds[0][0])
     model = build_model(args, num_features=num_features, num_classes=num_classes)
     lightning_trainer_config = dict(
         max_epochs=args.model.num_epochs,
         barebones=True,
         callbacks=[MetricLogger()],
-        # default_root_dir=args.output_dir,
-        # enable_checkpointing=False,
-        # logger=False,
-        # enable_progress_bar=False,
     )
+
+    al_history = []
     for i_acq in range(0, args.al.num_acq+1):
         if i_acq != 0:
             print('Querying..')
@@ -83,13 +73,13 @@ def main(args):
         test_stats = evaluate(predictions)
         test_stats['query_time'] = etime - stime if i_acq != 0 else 0
         print(f'Cycle {i_acq}:', test_stats, flush=True)
-        history.append(test_stats)
+        al_history.append(test_stats)
 
     mlflow.set_tracking_uri(uri="{}".format(args.mlflow_uri))
     experiment_id = mlflow.set_experiment(args.experiment_name).experiment_id
     mlflow.start_run(experiment_id=experiment_id)
     mlflow.log_params(flatten_cfg(args))
-    for i_acq, test_stats in enumerate(history):
+    for i_acq, test_stats in enumerate(al_history):
         mlflow.log_metrics(test_stats, step=i_acq)
     mlflow.end_run()
 
@@ -167,13 +157,56 @@ class Optimal(Query):
         if loss == 'cross_entropy':
             self.loss_fn = torch.nn.CrossEntropyLoss()
         elif loss == 'expected_cross_entropy':
-            self.loss_fn = lambda logits, _: torch.mean(torch.sum(logits.softmax(-1) * logits.log_softmax(-1), dim=-1))
+            self.loss_fn = lambda logits, _: torch.mean(
+                torch.sum(logits.softmax(-1) * logits.log_softmax(-1), dim=-1))
         elif loss == 'zero_one':
             self.loss_fn = lambda logits, y: 1 - torch.mean((logits.argmax(dim=-1) == y).float())
         elif loss == 'expected_zero_one':
             self.loss_fn = lambda logits, _: torch.mean(1 - logits.softmax(-1).max(-1).values)
         else:
             raise NotImplementedError()
+
+    def select_batches(self, acq_size, unlabeled_features, labeled_features, labeled_labels):
+        # Selects the batches to evaluate on. We consider (i) random (ii) diverse, and (iii) informative ones.
+        num_random = self.num_batches // 3
+        num_diverse = self.num_batches // 3
+        num_informative = self.num_batches // 3
+
+        indices_batches = []
+
+        # Random batches
+        indices = [np.random.permutation(len(unlabeled_features))[:acq_size] for _ in range(num_random)]
+        indices_batches.extend(indices)
+
+        # Diverse batches: Random sampling from k-means clusters
+        from sklearn.cluster import KMeans
+        km = KMeans(n_clusters=acq_size, n_init='auto')
+        clusters = km.fit_predict(unlabeled_features)
+        indices = []
+        for _ in range(num_diverse):
+            idx = []
+            for i in range(acq_size):
+                indices_cluster = np.where(clusters == i)[0]
+                idx.append(self.rng.choice(indices_cluster))
+            indices.append(np.array(idx))
+        indices_batches.extend(indices)
+
+        # Informative batches: Highly uncertainty samples based on margin
+        from sklearn.linear_model import LogisticRegression
+        clf = LogisticRegression()
+        clf.fit(labeled_features, labeled_labels.view(-1, 1))
+        probas = clf.predict_proba(unlabeled_features)
+        probas = torch.from_numpy(probas)
+        top_probas, _ = torch.topk(probas, k=2, dim=-1)
+        uncertainty = 1 - (top_probas[:, 0] - top_probas[:, 1])
+        indicies_uncertain = np.where(uncertainty > uncertainty.mean())[0]
+
+        indices = []
+        for _ in range(num_informative):
+            indices.append(self.rng.choice(indicies_uncertain, size=acq_size, replace=False))
+        indices_batches.extend(indices)
+
+        return indices_batches
 
     @torch.no_grad()
     def query(self, *, model, al_datamodule, acq_size, return_utilities=False, **kwargs):
@@ -184,12 +217,11 @@ class Optimal(Query):
         unlabeled_logits = model.get_logits_from_representations(unlabeled_features, device=self.device)
 
         labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
-        # labeled_features = model.get_representations(labeled_dataloader, device=device)
+        labeled_features = model.get_representations(labeled_dataloader, device=self.device)
         # labeled_logits = model.get_logits_from_representations(labeled_features, device=device).cpu()
+        labeled_labels = torch.cat([batch[1] for batch in labeled_dataloader])
 
-        # Select batches (TODO: Smart selection, diverse batches)
-        indices_batches = [np.random.permutation(self.subset_size)[:acq_size]
-                           for _ in range(self.num_batches)]
+        indices_batches = self.select_batches(acq_size, unlabeled_features, labeled_features, labeled_labels)
 
         loss_batches = []
         init_params = model.state_dict()
@@ -213,13 +245,14 @@ class Optimal(Query):
 
                     train_ds1 = Subset(al_datamodule.train_dataset, indices=labeled_indices)
                     train_ds2 = Subset_(
-                        al_datamodule.train_dataset, 
+                        al_datamodule.train_dataset,
                         indices=np.array(unlabeled_indices)[indices],
                         labels=labels_batch
                     )
                     train_ds = ConcatDataset([train_ds1, train_ds2])
                     drop_last = len(train_ds) > al_datamodule.train_batch_size
-                    train_loader = DataLoader(train_ds, al_datamodule.train_batch_size, shuffle=True, drop_last=drop_last)
+                    train_loader = DataLoader(train_ds, al_datamodule.train_batch_size,
+                                              shuffle=True, drop_last=drop_last)
 
                     trainer.fit(model, train_loader)
                 else:
@@ -257,59 +290,11 @@ class Optimal(Query):
         loss = running_loss / num_samples
         return loss
 
-        # Updating the model
-        # Optimal: We just retrain with the new labels
-        # Non-optimal: We use Bayesian updates
 
-        # Evaluate the performance
-        # Optimal: We just use a validation dataset
-        # Non-Optimal: We need to approximate the performance without a validation dataset
-
-        # # MC sampling for one-step-lookahead
-        # mc_losses = []
-        # for labels in mc_labels:
-        #     # Incremental learning - p(y | x, L^+)
-        #     features_batch = unlabeled_features[indices]
-        #     model.load_state_dict(init_params)
-        #     model.update_posterior(
-        #         iter(zip(features_batch, labels)),
-        #         gamma=self.gamma,
-        #         from_representations=True,
-        #         device=self.device
-        #     )
-
-        #     # TODO: check if predictions are changing before and after
-        #     # Estimate new loss via validation set
-        #     model.to(self.device)
-        #     num_samples = 0
-        #     running_loss = 0
-        #     test_loader = al_datamodule.test_dataloader()
-        #     for batch in test_loader:
-        #         inputs, targets = batch[0].to(self.device), batch[1].to(self.device)
-        #         logits = model(inputs)
-        #         num_samples += len(inputs)
-        #         running_loss += len(inputs)*self.loss_fn(logits, targets).item()
-
-        #     mc_losses.append(running_loss / num_samples)
-        # all_losses.append(np.mean(mc_losses))
-
-        # combination_indices = np.array([np.random.permutation(self.subset_size)[:acq_size] for i in range(self.num_combinations)])
-        # # Compute distances from
-        # distances = []
-        # for batch_idx in self.batch_indices:
-        #     mask_batch = np.isin(np.array(labeled_indices), np.array(batch_idx))
-        #     X_batch = labeled_features[mask_batch]
-        #     dist = [batch_distance(X_batch, unlabeled_features[comb_idx]) for comb_idx in combination_indices]
-        #     distances.append(dist)
-        # np.array(distances).shape
-        # idx = np.argmax(np.min(distances, axis=0))
-        # local_indices = combination_indices[idx]
-
-
-def batch_distance(X1, X2):
-    cost_matrix = pairwise_distances(X1, X2)
-    row_ind, col_ind = linear_sum_assignment(cost_matrix)
-    return np.sum(cost_matrix[row_ind, col_ind])
+# def batch_distance(X1, X2):
+#     cost_matrix = pairwise_distances(X1, X2)
+#     row_ind, col_ind = linear_sum_assignment(cost_matrix)
+#     return np.sum(cost_matrix[row_ind, col_ind])
 
 
 class Subset_(Subset):
@@ -320,6 +305,7 @@ class Subset_(Subset):
 
     def __getitem__(self, idx):
         return super().__getitem__(idx)[0], self.labels[idx]
+
 
 if __name__ == '__main__':
     main()
