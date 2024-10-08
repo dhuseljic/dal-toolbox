@@ -1,0 +1,4 @@
+- model=labelsmoothing
+- output_dir=/mnt/stud/work/phahn/repositories/dal-toolbox/output/uncertainty/model_labelsmoothing/seed_2/
+- data_dir=/mnt/stud/work/phahn/datasets/
+- random_seed=2

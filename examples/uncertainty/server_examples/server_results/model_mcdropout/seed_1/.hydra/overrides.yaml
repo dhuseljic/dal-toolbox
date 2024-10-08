@@ -1,0 +1,4 @@
+- model=mcdropout
+- output_dir=/mnt/stud/work/phahn/repositories/dal-toolbox/output/uncertainty/model_mcdropout/seed_1/
+- data_dir=/mnt/stud/work/phahn/datasets/
+- random_seed=1

@@ -1,0 +1,4 @@
+- model=deterministic
+- output_dir=/mnt/stud/work/phahn/repositories/dal-toolbox/output/uncertainty/model_deterministic/seed_3/
+- data_dir=/mnt/stud/work/phahn/datasets/
+- random_seed=3

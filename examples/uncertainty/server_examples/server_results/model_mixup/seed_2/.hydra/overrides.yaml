@@ -1,0 +1,4 @@
+- model=mixup
+- output_dir=/mnt/stud/work/phahn/repositories/dal-toolbox/output/uncertainty/model_mixup/seed_2/
+- data_dir=/mnt/stud/work/phahn/datasets/
+- random_seed=2

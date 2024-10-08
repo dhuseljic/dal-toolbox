@@ -1,0 +1,32 @@
+dataset: CIFAR10
+ood_datasets:
+- SVHN
+- CIFAR100
+val_interval: 20
+val_split: 0
+random_seed: 1
+num_devices: 1
+output_dir: /mnt/stud/work/phahn/repositories/dal-toolbox/output/uncertainty/model_sngp/seed_1/
+data_dir: /mnt/stud/work/phahn/datasets/
+model:
+  name: sngp
+  train_batch_size: 64
+  predict_batch_size: 256
+  n_epochs: 200
+  spectral_norm:
+    use_spectral_norm: true
+    norm_bound: 6
+    n_power_iterations: 1
+  gp:
+    kernel_scale: 1
+    num_inducing: 1024
+    normalize_input: false
+    random_feature_type: orf
+    scale_random_features: false
+    cov_momentum: -1
+    ridge_penalty: 1
+    mean_field_factor: 75
+  optimizer:
+    lr: 0.1
+    weight_decay: 0.0005
+    momentum: 0.9
