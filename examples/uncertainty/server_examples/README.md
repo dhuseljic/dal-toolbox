@@ -19,13 +19,11 @@ The general base model for each method described below is a ResNet-18. Building 
 ## Results
 The following table shows results from experiments conducted on CIFAR10 with CIFAR100 and SVHN as out-of-distribution datasets.
 
-__TBD. when experiments are finished...__
-
-
-```
-python uncertainty.py \
-    model=resnet18 \
-    dataset=CIFAR10 \
-    ood_datasets=\['SVHN'\, 'CIFAR100'\] \
-    output_dir=./output
-```
+|Model          | ACC	     |   NLL	   |   Brier	| TCE	    | ACE	        | AUPR (SVHN)	| AUROC (SVHN)	| AUPR (CIFAR100)	|AUROC (CIFAR100)   |
+|---------------|------------|-------------|------------|-----------|---------------|---------------|---------------|-------------------|-------------------|
+|Deterministic	|   0.9518	 |   0.1875	   | 0.0773  	| 0.0281  	| 0.0340  	    | 0.9642  	    | 0.9319  	    |0.8665  	        |0.8797             |
+|Ensemble	    |   0.9607	 |   0.1309	   | 0.0605  	| 0.0087  	| 0.0170  	    | 0.9779  	    | 0.9582  	    |0.8970  	        |0.9086             |
+|Labelsmoothing	|   0.9526	 |   0.2021	   | 0.0752  	| 0.0424  	| 0.0355  	    | 0.9360  	    | 0.8488  	    |0.8411  	        |0.8131             |
+|MC-Dropout	    |   0.9445	 |   0.1698	   | 0.0824  	| 0.0089  	| 0.0153  	    | 0.9557  	    | 0.9202  	    |0.8812  	        |0.8978             |
+|Mixup	        |   0.9557	 |   0.2081	   | 0.0746  	| 0.0659  	| 0.0292  	    | 0.9620  	    | 0.9151  	    |0.8515  	        |0.8358             |
+|SNGP           |	0.9458	 |   0.1769	   | 0.0819  	| 0.0057  	| 0.0161  	    | 0.9779  	    | 0.9550  	    |0.8723  	        |0.8826             |
