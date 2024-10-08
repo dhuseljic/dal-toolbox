@@ -7,11 +7,6 @@ Next to the classic negative log likelihood (__NLL__) and classification accurac
 
 ## Methods to improve Uncertainty Metrics
 The general base model for each method described below is a ResNet-18. Building ontop of this, we provide the following methods to improve uncertainty metrics:
-- Label Smoothing
-- Mixup
-- SNGP
-- Ensembles
-- MCDropOut
 
 |Model          | Paper      |
 |---------------|------------|
