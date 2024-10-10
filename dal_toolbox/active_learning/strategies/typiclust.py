@@ -86,20 +86,25 @@ class TypiClust(Query):
         covered_clusters = np.unique(clusters[:len(labeled_indices)])
         if len(covered_clusters) > 0:
             cluster_sizes[covered_clusters] = 0
-        
+
         query_indices = []
         for i in range(acq_size):
             if cluster_sizes.max() == 0:
-                typicality = np.ones(...)
+                indices_ = np.arange(len(unlabeled_features))
+                indices_ = np.setdiff1d(indices_, query_indices)
+                idx = self.rng.choice(indices_)
+                query_indices.append(idx)
             else:
                 cluster_id = cluster_sizes.argmax()
                 cluster_indices = (clusters == cluster_id).nonzero()[0]
                 cluster_features = features[cluster_indices]
                 typicality = calculate_typicality(cluster_features, min(self.K_NN, len(cluster_indices) // 2))
-            idx = typicality.argmax()
-            idx = cluster_indices[idx]
-            query_indices.append(idx-len(labeled_features))
-            cluster_sizes[cluster_id] = 0
+
+                idx = typicality.argmax()
+                idx = cluster_indices[idx]
+                query_indices.append(idx-len(labeled_features))
+                cluster_sizes[cluster_id] = 0
+
         actual_indices = [unlabeled_indices[idx] for idx in query_indices]
         return actual_indices
 
