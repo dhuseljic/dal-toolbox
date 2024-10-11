@@ -42,23 +42,26 @@ class CIFAR10StandardTransformsWithoutNormalization(BaseTransforms):
 
 
 class CIFAR10SimCLRTransforms(BaseTransforms):
-    def __init__(self):
+    def __init__(self, colordiststr = 0.5):
         super().__init__()
+        self.mean = CIFAR10Transforms.mean.value
+        self.std = CIFAR10Transforms.std.value
+        self.color_jitter = torchvision.transforms.ColorJitter(0.8 * colordiststr, 0.8 * colordiststr, 0.8 * colordiststr, 0.2 * colordiststr)
 
     @property
     def train_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.RandomResizedCrop(size=32),
-            torchvision.transforms.RandomHorizontalFlip(p=0.5),
-            torchvision.transforms.ToTensor(),
-        ])
+        transform = RepeatTransformations(torchvision.transforms.Compose([torchvision.transforms.RandomResizedCrop(size=32), torchvision.transforms.RandomHorizontalFlip(p=0.5), 
+                                                                        torchvision.transforms.RandomApply([self.color_jitter], p=0.8), torchvision.transforms.RandomGrayscale(p=0.2), 
+                                                                        torchvision.transforms.RandomApply([torchvision.transforms.GaussianBlur(kernel_size=3)], p=0.5), torchvision.transforms.ToTensor(), 
+                                                                        torchvision.transforms.Normalize(self.mean, self.std)]))
         return transform
 
     @property
     def eval_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-        ])
+        transform = RepeatTransformations(torchvision.transforms.Compose([torchvision.transforms.RandomResizedCrop(size=32), torchvision.transforms.RandomHorizontalFlip(p=0.5), 
+                                                                        torchvision.transforms.RandomApply([self.color_jitter], p=0.8), torchvision.transforms.RandomGrayscale(p=0.2), 
+                                                                        torchvision.transforms.RandomApply([torchvision.transforms.GaussianBlur(kernel_size=3)], p=0.5), torchvision.transforms.ToTensor(), 
+                                                                        torchvision.transforms.Normalize(self.mean, self.std)]))
         return transform
 
     @property
@@ -291,23 +294,26 @@ class CIFAR100ContrastiveTransforms(CIFAR100StandardTransforms):
 
 
 class CIFAR100SimCLRTransforms(BaseTransforms):
-    def __init__(self):
+    def __init__(self, colordiststr = 0.5):
         super().__init__()
+        self.mean = CIFAR10Transforms.mean.value
+        self.std = CIFAR10Transforms.std.value
+        self.color_jitter = torchvision.transforms.ColorJitter(0.8 * colordiststr, 0.8 * colordiststr, 0.8 * colordiststr, 0.2 * colordiststr)
 
     @property
     def train_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.RandomResizedCrop(size=32),
-            torchvision.transforms.RandomHorizontalFlip(p=0.5),
-            torchvision.transforms.ToTensor(),
-        ])
+        transform = RepeatTransformations(torchvision.transforms.Compose([torchvision.transforms.RandomResizedCrop(size=32), torchvision.transforms.RandomHorizontalFlip(p=0.5), 
+                                                                        torchvision.transforms.RandomApply([self.color_jitter], p=0.8), torchvision.transforms.RandomGrayscale(p=0.2), 
+                                                                        torchvision.transforms.RandomApply([torchvision.transforms.GaussianBlur(kernel_size=3)], p=0.5), torchvision.transforms.ToTensor(), 
+                                                                        torchvision.transforms.Normalize(self.mean, self.std)]))
         return transform
 
     @property
     def eval_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-        ])
+        transform = RepeatTransformations(torchvision.transforms.Compose([torchvision.transforms.RandomResizedCrop(size=32), torchvision.transforms.RandomHorizontalFlip(p=0.5), 
+                                                                        torchvision.transforms.RandomApply([self.color_jitter], p=0.8), torchvision.transforms.RandomGrayscale(p=0.2), 
+                                                                        torchvision.transforms.RandomApply([torchvision.transforms.GaussianBlur(kernel_size=3)], p=0.5), torchvision.transforms.ToTensor(), 
+                                                                        torchvision.transforms.Normalize(self.mean, self.std)]))
         return transform
 
     @property
