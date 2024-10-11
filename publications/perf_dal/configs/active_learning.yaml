@@ -24,14 +24,15 @@ al:
   subset_size: 1000
   init_method: random
   num_init_samples: null
-  num_acq: 20
   acq_size: 10
+  num_acq: 20
   device: cpu
   optimal:
     num_batches: 300
-    gamma: 7
+    batch_types: [random, diverse, uncertain]
+    gamma: 10
     num_mc_labels: 5
-    use_true_labels: False
+    use_true_labels: True
     use_retraining: True
     num_retraining_epochs: 50
     use_val_ds: True

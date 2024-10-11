@@ -109,13 +109,14 @@ def build_al_strategy(args):
         al_strategy = Optimal(
             subset_size=args.al.subset_size,
             num_batches=args.al.optimal.num_batches,
-            gamma=args.al.optimal.gamma,
-            num_mc_labels=args.al.optimal.num_mc_labels,
+            batch_types=args.al.optimal.batch_types,
             use_true_labels=args.al.optimal.use_true_labels,
-            use_retraining=args.al.optimal.use_retraining,
-            num_retraining_epochs=args.al.optimal.num_retraining_epochs,
+            num_mc_labels=args.al.optimal.num_mc_labels,
             use_val_ds=args.al.optimal.use_val_ds,
             loss=args.al.optimal.loss,
+            use_retraining=args.al.optimal.use_retraining,
+            num_retraining_epochs=args.al.optimal.num_retraining_epochs,
+            gamma=args.al.optimal.gamma,
             device=device
         )
     elif args.al.strategy == 'margin':
@@ -133,6 +134,7 @@ class Optimal(Query):
     def __init__(self,
                  subset_size=None,
                  num_batches=200,
+                 batch_types=['random', 'diverse', 'uncertain'],
                  gamma=7,
                  num_mc_labels=None,
                  use_true_labels=True,
@@ -147,15 +149,16 @@ class Optimal(Query):
         self.subset_size = subset_size
         self.device = device
 
+        # Batch Selection
         self.num_batches = num_batches
-        self.num_mc_labels = num_mc_labels
-        self.gamma = gamma
+        self.batch_types = batch_types
 
+        # Look-Ahead
         self.use_true_labels = use_true_labels
-        self.use_retraining = use_retraining
-        self.num_retraining_epochs = num_retraining_epochs
-        self.use_val_ds = use_val_ds
+        self.num_mc_labels = num_mc_labels
 
+        # Performance Estimation
+        self.use_val_ds = use_val_ds
         if loss == 'cross_entropy':
             self.loss_fn = torch.nn.CrossEntropyLoss()
         elif loss == 'expected_cross_entropy':
@@ -168,7 +171,12 @@ class Optimal(Query):
         else:
             raise NotImplementedError()
 
-    def select_batches(self, acq_size, unlabeled_features, labeled_features, labeled_labels, batch_types=['random', 'diverse', 'uncertain']):
+        # Retraining
+        self.use_retraining = use_retraining
+        self.num_retraining_epochs = num_retraining_epochs
+        self.gamma = gamma
+
+    def select_batches(self, acq_size, unlabeled_features, labeled_features, labeled_labels, batch_types):
         num_batch_types = len(batch_types)
         num_batches = self.num_batches // num_batch_types
 
@@ -226,7 +234,13 @@ class Optimal(Query):
         # labeled_logits = model.get_logits_from_representations(labeled_features, device=device).cpu()
         labeled_labels = torch.cat([batch[1] for batch in labeled_dataloader])
 
-        indices_batches = self.select_batches(acq_size, unlabeled_features, labeled_features, labeled_labels)
+        indices_batches = self.select_batches(
+            acq_size,
+            unlabeled_features,
+            labeled_features,
+            labeled_labels,
+            self.batch_types
+        )
 
         loss_batches = []
         init_params = model.state_dict()
