@@ -4,23 +4,16 @@ defaults:
   - dataset: CIFAR10
   - al_strategy: random
 
+random_seed: 42
+val_interval: 25
+
 al_cycle:
   n_init: 100
   acq_size: 100
   n_acq: 9
   cold_start: True
-  init_strategy: random
-random_seed: 42
-dataset_path: ./data/
-val_interval: 25
 
-precomputed_features: False
-standardize_precomputed_features: False
-precomputed_features_dir: model_features_dict.pth
-finetuning: False
-finetuning_dir: model_features_dict.pth
-finetuning_lr: 1e-5
-
+data_dir: ./data/
 output_dir: ./output/
 hydra:
   run:

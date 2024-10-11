@@ -1,4 +1,4 @@
-name: resnet18_deterministic
+name: resnet18
 num_epochs: 200
 train_batch_size: 64
 predict_batch_size: 256
