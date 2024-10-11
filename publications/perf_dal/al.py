@@ -21,6 +21,7 @@ from rich.progress import track
 
 logging.getLogger("lightning.pytorch").setLevel(logging.ERROR)
 
+
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
 def main(args):
     seed_everything(42)
@@ -37,7 +38,7 @@ def main(args):
         train_batch_size=args.model.train_batch_size,
         predict_batch_size=args.model.predict_batch_size,
     )
-    al_strategy = build_al_strategy(args) 
+    al_strategy = build_al_strategy(args)
     # TODO: init should be part of al_strategy
     num_init = args.al.acq_size if args.al.num_init_samples is None else args.al.num_init_samples
     if args.al.init_method == 'random':
@@ -167,45 +168,48 @@ class Optimal(Query):
         else:
             raise NotImplementedError()
 
-    def select_batches(self, acq_size, unlabeled_features, labeled_features, labeled_labels):
-        # Selects the batches to evaluate on. We consider (i) random (ii) diverse, and (iii) informative ones.
-        num_random = self.num_batches // 3
-        num_diverse = self.num_batches // 3
-        num_informative = self.num_batches // 3
+    def select_batches(self, acq_size, unlabeled_features, labeled_features, labeled_labels, batch_types=['random', 'diverse', 'uncertain']):
+        num_batch_types = len(batch_types)
+        num_batches = self.num_batches // num_batch_types
 
         indices_batches = []
 
-        # Random batches
-        indices = [np.random.permutation(len(unlabeled_features))[:acq_size] for _ in range(num_random)]
+        # If there is a rest, add random batches
+        num_rest_batches = self.num_batches % num_batch_types
+        indices = [np.random.permutation(len(unlabeled_features))[:acq_size] for _ in range(num_rest_batches)]
         indices_batches.extend(indices)
 
-        # Diverse batches: Random sampling from k-means clusters
-        from sklearn.cluster import KMeans
-        km = KMeans(n_clusters=acq_size, n_init='auto')
-        clusters = km.fit_predict(unlabeled_features)
-        indices = []
-        for _ in range(num_diverse):
-            idx = []
-            for i in range(acq_size):
-                indices_cluster = np.where(clusters == i)[0]
-                idx.append(self.rng.choice(indices_cluster))
-            indices.append(np.array(idx))
-        indices_batches.extend(indices)
-
-        # Informative batches: Highly uncertainty samples based on margin
-        from sklearn.linear_model import LogisticRegression
-        clf = LogisticRegression()
-        clf.fit(labeled_features, labeled_labels.view(-1, 1))
-        probas = clf.predict_proba(unlabeled_features)
-        probas = torch.from_numpy(probas)
-        top_probas, _ = torch.topk(probas, k=2, dim=-1)
-        uncertainty = 1 - (top_probas[:, 0] - top_probas[:, 1])
-        indicies_uncertain = np.where(uncertainty > uncertainty.mean())[0]
-
-        indices = []
-        for _ in range(num_informative):
-            indices.append(self.rng.choice(indicies_uncertain, size=acq_size, replace=False))
-        indices_batches.extend(indices)
+        for batch_type in batch_types:
+            if batch_type == 'random':
+                indices = [np.random.permutation(len(unlabeled_features))[:acq_size]
+                           for _ in range(num_batches)]
+                indices_batches.extend(indices)
+            elif batch_type == 'diverse':
+                from sklearn.cluster import KMeans
+                km = KMeans(n_clusters=acq_size, n_init='auto')
+                clusters = km.fit_predict(unlabeled_features)
+                indices = []
+                for _ in range(num_batches):
+                    idx = []
+                    for i in range(acq_size):
+                        indices_cluster = (clusters == i).nonzero()[0]
+                        idx.append(self.rng.choice(indices_cluster))
+                    indices.append(np.array(idx))
+                indices_batches.extend(indices)
+            elif batch_type == 'uncertain':
+                from sklearn.linear_model import LogisticRegression
+                clf = LogisticRegression()
+                clf.fit(labeled_features, labeled_labels.view(-1, 1))
+                probas = clf.predict_proba(unlabeled_features)
+                probas = torch.from_numpy(probas)
+                top_probas, _ = torch.topk(probas, k=2, dim=-1)
+                margin_uncertainty = 1 - (top_probas[:, 0] - top_probas[:, 1])
+                indices_uncertain = np.where(margin_uncertainty > margin_uncertainty.median())[0]
+                indices = [self.rng.choice(indices_uncertain, size=acq_size, replace=False)
+                           for _ in range(num_batches)]
+                indices_batches.extend(indices)
+            else:
+                raise ValueError(f'Batch type {batch_type} not implemented')
 
         return indices_batches
 
@@ -290,12 +294,6 @@ class Optimal(Query):
             running_loss += len(inputs)*self.loss_fn(logits, targets).item()
         loss = running_loss / num_samples
         return loss
-
-
-# def batch_distance(X1, X2):
-#     cost_matrix = pairwise_distances(X1, X2)
-#     row_ind, col_ind = linear_sum_assignment(cost_matrix)
-#     return np.sum(cost_matrix[row_ind, col_ind])
 
 
 class Subset_(Subset):
