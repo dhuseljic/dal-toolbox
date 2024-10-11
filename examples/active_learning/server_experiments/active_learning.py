@@ -204,7 +204,7 @@ def build_al_strategy(name, args, num_classes=None, train_features=None, results
     #elif name == "alfamix":
     #    query = alfamix.AlfaMix(subset_size=subset_size)
     elif name == "falcun":
-        query = falcun.Falcun(subset_size=subset_size)
+        query = falcun.Falcun(subset_size=subset_size, gamma=args.al_strategy.gamma, custom_dist=args.al_strategy.custom_dist, deterministic=args.al_strategy.deterministic)
     elif name == "randomclust": # tested
         query = randomclust.RandomClust(subset_size=subset_size)
     elif name == "xpal" or name == "xpalclust": # TODO: Discuss what to do with these strategies
