@@ -56,6 +56,7 @@ def main(args):
     )
 
     al_history = []
+    artifacts_history = []
     for i_acq in range(0, args.al.num_acq+1):
         if i_acq != 0:
             print('Querying..')
@@ -75,20 +76,22 @@ def main(args):
         predictions = trainer.predict(model, dataloaders=al_datamodule.test_dataloader())
         test_stats = evaluate(predictions)
         test_stats['query_time'] = etime - stime if i_acq != 0 else 0
-        test_stats['query_indices'] = indices if i_acq != 0 else al_datamodule.labeled_indices
         if args.al.strategy == 'optimal':
             bought_dict = {f'bought_{k}': v for k, v in al_strategy.batch_type_count.items()}
             test_stats.update(bought_dict)
         print(f'Cycle {i_acq}:', test_stats, flush=True)
         al_history.append(test_stats)
+        artifacts = {'query_indices': indices if i_acq != 0 else al_datamodule.labeled_indices}
+        artifacts_history.append(artifacts)
 
     mlflow.set_tracking_uri(uri="{}".format(args.mlflow_uri))
     experiment_id = mlflow.set_experiment(args.experiment_name).experiment_id
     mlflow.start_run(experiment_id=experiment_id)
     mlflow.log_params(flatten_cfg(args))
     for i_acq, test_stats in enumerate(al_history):
-        mlflow.log_dict({'query_indices': test_stats.pop('query_indices')}, f'query_indices_{i_acq:02d}')
         mlflow.log_metrics(test_stats, step=i_acq, synchronous=False)
+        mlflow.log_dict(artifacts_history[i_acq], f'artifcats_cycle{i_acq:02d}')
+
     mlflow.end_run()
 
 
