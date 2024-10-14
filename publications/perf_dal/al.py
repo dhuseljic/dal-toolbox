@@ -75,7 +75,7 @@ def main(args):
         predictions = trainer.predict(model, dataloaders=al_datamodule.test_dataloader())
         test_stats = evaluate(predictions)
         test_stats['query_time'] = etime - stime if i_acq != 0 else 0
-        test_stats['query_indices'] = str(indices) if i_acq != 0 else str(al_datamodule.labeled_indices)
+        test_stats['query_indices'] = indices if i_acq != 0 else al_datamodule.labeled_indices
         if args.al.strategy == 'optimal':
             bought_dict = {f'bought_{k}': v for k, v in al_strategy.batch_type_count.items()}
             test_stats.update(bought_dict)
