@@ -8,7 +8,7 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from omegaconf import DictConfig
 
 from dal_toolbox.datasets import CIFAR10
-from dal_toolbox.datasets.utils import DinoTransforms, FeatureDataset
+from dal_toolbox.datasets.utils import DinoTransforms, FeatureDataset, PlainTransforms
 from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, Snacks, DTD, Flowers102, TinyImageNet
 from dal_toolbox.datasets import ImageNet, StanfordDogs
 
@@ -65,8 +65,11 @@ def build_datasets(args, val_split=False, cache_features=True):
     return train_ds, test_ds, num_classes
 
 
-def build_image_data(args):
-    transforms = DinoTransforms(size=(256, 256))
+def build_image_data(args, plain_transforms='False'):
+    if plain_transforms:
+        transforms = PlainTransforms(resize=(256, 256))
+    else:
+        transforms = DinoTransforms(size=(256, 256))
     if args.dataset_name == 'cifar10':
         data = CIFAR10(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'stl10':
