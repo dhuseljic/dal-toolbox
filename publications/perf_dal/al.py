@@ -19,6 +19,7 @@ from utils import build_datasets, flatten_cfg, build_model
 from torch.utils.data import DataLoader, Subset, ConcatDataset
 from rich.progress import track
 
+mlflow.config.enable_async_logging()
 logging.getLogger("lightning.pytorch").setLevel(logging.ERROR)
 
 
@@ -74,6 +75,7 @@ def main(args):
         predictions = trainer.predict(model, dataloaders=al_datamodule.test_dataloader())
         test_stats = evaluate(predictions)
         test_stats['query_time'] = etime - stime if i_acq != 0 else 0
+        test_stats['query_indices'] = str(indices) if i_acq != 0 else str(al_datamodule.labeled_indices)
         print(f'Cycle {i_acq}:', test_stats, flush=True)
         al_history.append(test_stats)
 
@@ -82,7 +84,13 @@ def main(args):
     mlflow.start_run(experiment_id=experiment_id)
     mlflow.log_params(flatten_cfg(args))
     for i_acq, test_stats in enumerate(al_history):
-        mlflow.log_metrics(test_stats, step=i_acq)
+        # TODO...
+        mlflow.log_dict({'query_indices': test_stats.pop('query_indices')}, 'query_indices')
+        if args.al.strategy == 'optimal':
+            mlflow.log_dict({'batch_type_count': al_strategy.batch_type_count}, 'batch_type_count')
+
+        mlflow.log_metrics(test_stats, step=i_acq, synchronous=False)
+
     mlflow.end_run()
 
 
@@ -152,6 +160,7 @@ class Optimal(Query):
         # Batch Selection
         self.num_batches = num_batches
         self.batch_types = batch_types
+        self.batch_type_count = {k: 0 for k in self.batch_types}
 
         # Look-Ahead
         self.use_true_labels = use_true_labels
@@ -291,6 +300,11 @@ class Optimal(Query):
             loss_batches.append(np.mean(loss_labels))
 
         best_idx = np.argmin(loss_batches)
+        
+        num_batch_per_type = self.num_batches // len(self.batch_types)
+        batch_type = self.batch_types[best_idx.item() // num_batch_per_type]
+        self.batch_type_count[batch_type] += 1
+        
         local_indices = indices_batches[best_idx]
         global_indices = [unlabeled_indices[idx] for idx in local_indices]
         return global_indices
