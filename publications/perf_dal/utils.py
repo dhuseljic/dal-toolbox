@@ -65,9 +65,9 @@ def build_datasets(args, val_split=False, cache_features=True):
     return train_ds, test_ds, num_classes
 
 
-def build_image_data(args, plain_transforms='False'):
+def build_image_data(args, plain_transforms=False):
     if plain_transforms:
-        transforms = PlainTransforms(resize=(256, 256))
+        transforms = PlainTransforms(resize=(224, 224))
     else:
         transforms = DinoTransforms(size=(256, 256))
     if args.dataset_name == 'cifar10':
