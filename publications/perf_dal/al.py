@@ -76,6 +76,9 @@ def main(args):
         test_stats = evaluate(predictions)
         test_stats['query_time'] = etime - stime if i_acq != 0 else 0
         test_stats['query_indices'] = str(indices) if i_acq != 0 else str(al_datamodule.labeled_indices)
+        if args.al.strategy == 'optimal':
+            bought_dict = {f'bought_{k}': v for k, v in al_strategy.batch_type_count.items()}
+            test_stats.update(bought_dict)
         print(f'Cycle {i_acq}:', test_stats, flush=True)
         al_history.append(test_stats)
 
@@ -84,13 +87,8 @@ def main(args):
     mlflow.start_run(experiment_id=experiment_id)
     mlflow.log_params(flatten_cfg(args))
     for i_acq, test_stats in enumerate(al_history):
-        # TODO...
-        mlflow.log_dict({'query_indices': test_stats.pop('query_indices')}, 'query_indices')
-        if args.al.strategy == 'optimal':
-            mlflow.log_dict({'batch_type_count': al_strategy.batch_type_count}, 'batch_type_count')
-
+        mlflow.log_dict({'query_indices': test_stats.pop('query_indices')}, f'query_indices_{i_acq:02d}')
         mlflow.log_metrics(test_stats, step=i_acq, synchronous=False)
-
     mlflow.end_run()
 
 
