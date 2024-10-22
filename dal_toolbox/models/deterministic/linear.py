@@ -11,8 +11,19 @@ class LinearModel(nn.Module):
         self.num_classes = num_classes
 
         self.linear = nn.Linear(self.in_dimension, self.num_classes)
+        self.dropout = nn.Dropout()
+
+    def set_dropout(self, p):
+        self.dropout = nn.Dropout(p=p)
 
     def forward(self, x, return_features=False):
+        out = self.linear(x)
+        if return_features:
+            out = (out, x)
+        return out
+    
+    def forward_dropout(self, x, return_features=False):
+        x = self.dropout(x)
         out = self.linear(x)
         if return_features:
             out = (out, x)
@@ -37,7 +48,7 @@ class LinearModel(nn.Module):
         return probas
 
     @torch.inference_mode()
-    def get_representations(self, dataloader, device, return_labels=False):
+    def get_representations(self, dataloader, return_labels=False):
         all_features = []
         all_labels = []
         for batch in dataloader:
@@ -51,6 +62,18 @@ class LinearModel(nn.Module):
             labels = torch.cat(all_labels)
             return features, labels
         return features
+    
+    @torch.inference_mode()
+    def get_representations_and_probas(self, dataloader):
+        all_features = []
+        all_probas = []
+        for batch in dataloader:
+            features = batch[0]
+            all_features.append(features.cpu())
+            all_probas.append(self(features).softmax(-1))
+        features = torch.cat(all_features)
+        probas = torch.cat(all_probas)
+        return features, probas
 
     @torch.inference_mode()
     def get_grad_representations(self, dataloader, device):
@@ -79,3 +102,23 @@ class LinearModel(nn.Module):
         # Concat all embeddings
         embedding = torch.cat(embedding)
         return embedding
+    
+
+    @torch.inference_mode()
+    def get_alfa_representations(self, dataloader):
+        self.eval()
+        gradients, embeddings, logits = [], [], []
+        for batch in dataloader:
+            embeds = batch[0]
+            embeddings.append(embeds)
+            with torch.inference_mode(False), torch.autocast("cuda", enabled=False):
+                embeds = embeds.clone().requires_grad_()
+                lgts = self.linear(embeds)
+                logits.append(lgts)
+                loss = F.cross_entropy(lgts, lgts.argmax(dim=1), reduction="sum")
+                grad = torch.autograd.grad(loss, embeds)[0]
+                gradients.append(grad)
+        gradients = torch.cat(gradients)
+        embeddings = torch.cat(embeddings)
+        logits = torch.cat(logits)
+        return gradients, embeddings, logits

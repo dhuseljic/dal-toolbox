@@ -2,8 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..utils.mixup import mixup
-
 
 class BasicBlock(nn.Module):
     expansion = 1
@@ -105,17 +103,57 @@ class ResNet18(nn.Module):
         if return_features:
             out = (out, features)
         return out
-
+    
     @torch.inference_mode()
-    def get_logits(self, dataloader, device):
+    def get_alpha_grad_representations(self, dataloader, device):
         self.to(device)
         self.eval()
-        all_logits = []
+
+        # Create a clone of last linear layer with gradients enabled
+        # TODO: Is there an easier way to do this?
+        with torch.inference_mode(False), torch.autocast("cuda", enabled=False):
+            linear = nn.Linear(512, 10, device='cuda')
+            linear.weight = nn.Parameter(self.linear.weight.clone().requires_grad_(True))  
+            linear.bias = nn.Parameter(self.linear.bias.clone().requires_grad_(True))  
+
+        gradients, all_logits, embeddings = [], [], []
+        for batch in dataloader:
+            x = batch[0].to(device)
+            _, emb = self(x, return_features=True)
+            with torch.inference_mode(False), torch.autocast("cuda", enabled=False):
+                emb = emb.clone().requires_grad_()
+                logits = linear(emb)
+                loss = F.cross_entropy(logits, logits.argmax(dim=1), reduction="sum")
+                grad = torch.autograd.grad(loss, emb)[0]
+
+            gradients.append(grad)
+            embeddings.append(emb)
+            all_logits.append(logits)
+
+        # Concat all batches
+        gradients = torch.cat(gradients)
+        embeddings = torch.cat(embeddings)
+        all_logits = torch.cat(all_logits)
+
+        return gradients, embeddings, all_logits
+
+    @torch.inference_mode()
+    def get_logits(self, dataloader, device, return_features=False):
+        self.to(device)
+        self.eval()
+        all_logits, all_features = [], []
         for batch in dataloader:
             inputs = batch[0]
-            logits = self(inputs.to(device))
+            if return_features:
+                logits, features = self(inputs.to(device), return_features=True)
+                all_features.append(features)
+            else:
+                logits = self(inputs.to(device))
             all_logits.append(logits)
         logits = torch.cat(all_logits)
+        if return_features:
+            features = torch.cat(all_features)
+            return logits, features
         return logits
 
     @torch.inference_mode()
@@ -172,6 +210,8 @@ class ResNet18(nn.Module):
         # Concat all embeddings
         embedding = torch.cat(embedding)
         return embedding
+
+
 
 # TODO (ynagel, dhuseljic) This is a lot of repeated code
 class ResNet50(nn.Module):

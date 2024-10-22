@@ -1,5 +1,5 @@
 name: falcun
-subset_size: 10_000
+subset_size: null
 gamma: 10
 deterministic: False
 custom_dist: distance

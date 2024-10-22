@@ -1,7 +1,0 @@
-name: xpalclust
-subset_size: 10_000
-alpha: 1e-3
-precomputed: False
-kernel:
-  name: rbf
-  gamma: calculate

@@ -2,9 +2,8 @@
 # Code partially from https://github.com/avihu111/TypiClust/blob/main/deep-al/pycls/al/typiclust.py
 
 import numpy as np
-import pandas as pd
 import torch
-from sklearn.cluster import MiniBatchKMeans, KMeans
+from sklearn.cluster import KMeans
 from sklearn.neighbors import NearestNeighbors
 
 from dal_toolbox.active_learning import ActiveLearningDataModule
@@ -14,7 +13,7 @@ from dal_toolbox.models.utils.base import BaseModule
 
 def get_nn(features, num_neighbors):
     features = features.numpy().astype(np.float32)
-    nn_calculator = NearestNeighbors(n_neighbors=num_neighbors + 1, metric='sqeuclidean', n_jobs=-1).fit(features)
+    nn_calculator = NearestNeighbors(n_neighbors=num_neighbors + 1, metric='sqeuclidean', n_jobs=16).fit(features)
     distances, indices = nn_calculator.kneighbors(features)
 
     # 0 index is the same sample, dropping it
@@ -39,12 +38,6 @@ def calculate_typicality(features, num_neighbors):
 def kmeans(features, num_clusters):
     km = KMeans(n_clusters=num_clusters, n_init='auto')
     km.fit_predict(features)
-    # if num_clusters <= 50:
-    #     km = KMeans(n_clusters=num_clusters, n_init='auto')
-    #     km.fit_predict(features)
-    # else:
-    #     km = MiniBatchKMeans(n_clusters=num_clusters, batch_size=5000, reassignment_ratio=0.0)
-    #     km.fit_predict(features)
     return km.labels_
 
 
@@ -53,9 +46,10 @@ class TypiClust(Query):
     MAX_NUM_CLUSTERS = 500
     K_NN = 20
 
-    def __init__(self, subset_size=None, random_seed=None):
+    def __init__(self, subset_size=None, random_seed=None, device='cpu'):
         super().__init__(random_seed=random_seed)
         self.subset_size = subset_size
+        self.device = device
 
     @torch.no_grad()
     def query(self,
@@ -69,42 +63,76 @@ class TypiClust(Query):
 
         num_clusters = min(len(labeled_indices) + acq_size, self.MAX_NUM_CLUSTERS)
 
-        unlabeled_features = model.get_representations(unlabeled_dataloader)
+        unlabeled_features = model.get_representations(unlabeled_dataloader, device=self.device)
         if len(labeled_indices) > 0:
-            labeled_features = model.get_representations(labeled_dataloader)
+            labeled_features = model.get_representations(labeled_dataloader, device=self.device)
         else:
             labeled_features = torch.Tensor([])
-
         features = torch.cat((labeled_features, unlabeled_features))
+
+        # See https://github.com/scikit-activeml/scikit-activeml/blob/master/skactiveml/pool/_typi_clust.py
         clusters = kmeans(features, num_clusters=num_clusters)
+        cluster_sizes = np.zeros(num_clusters)
+        cluster_ids, cluster_id_sizes = np.unique(clusters, return_counts=True)
+        cluster_sizes[cluster_ids] = cluster_id_sizes
+        covered_clusters = np.unique(clusters[:len(labeled_indices)])
+        if len(covered_clusters) > 0:
+            cluster_sizes[covered_clusters] = 0
 
-        labels = clusters.copy()
-        existing_indices = np.arange(len(labeled_indices))
-
-        # counting cluster sizes and number of labeled samples per cluster
-        cluster_ids, cluster_sizes = np.unique(labels, return_counts=True)
-        cluster_labeled_counts = np.bincount(labels[existing_indices], minlength=len(cluster_ids))
-        clusters_df = pd.DataFrame(
-            {'cluster_id': cluster_ids, 'cluster_size': cluster_sizes, 'existing_count': cluster_labeled_counts,
-             'neg_cluster_size': -1 * cluster_sizes})
-        # drop too small clusters
-        clusters_df = clusters_df[clusters_df.cluster_size > self.MIN_CLUSTER_SIZE]
-        # sort clusters by lowest number of existing samples, and then by cluster sizes (large to small)
-        clusters_df = clusters_df.sort_values(['existing_count', 'neg_cluster_size'])
-        labels[existing_indices] = -1
-
-        selected = []
-
+        query_indices = []
         for i in range(acq_size):
-            cluster = clusters_df.iloc[i % len(clusters_df)].cluster_id
-            indices = (labels == cluster).nonzero()[0]
-            rel_feats = features[indices]
-            # in case we have too small cluster, calculate density among half of the cluster
-            typicality = calculate_typicality(rel_feats, min(self.K_NN, len(indices) // 2))
-            idx = indices[typicality.argmax()]
-            selected.append(idx)
-            labels[idx] = -1
+            if cluster_sizes.max() == 0:
+                indices_ = np.arange(len(unlabeled_features))
+                indices_ = np.setdiff1d(indices_, query_indices)
+                idx = self.rng.choice(indices_)
+                query_indices.append(idx)
+            else:
+                cluster_id = cluster_sizes.argmax()
+                cluster_indices = (clusters == cluster_id).nonzero()[0]
+                cluster_features = features[cluster_indices]
+                typicality = calculate_typicality(cluster_features, min(self.K_NN, len(cluster_indices) // 2))
 
-        selected = np.array(selected)
-        actual_indices = [unlabeled_indices[i - len(labeled_indices)] for i in selected]
+                idx = typicality.argmax()
+                idx = cluster_indices[idx]
+                query_indices.append(idx-len(labeled_features))
+                cluster_sizes[cluster_id] = 0
+
+        actual_indices = [unlabeled_indices[idx] for idx in query_indices]
         return actual_indices
+
+
+def _typicality(X, uncovered_samples_mapping, k, eps=1e-7):
+    """
+    Calculation the typicality of samples `X` in uncovered clusters.
+
+    Parameters
+    ----------
+    X : array-like of shape (n_samples, n_features)
+        Training data set, usually complete, i.e., including the labeled and
+        unlabeled samples.
+    uncovered_samples_mapping : np.ndarray of shape (n_candidates,),
+    default=None
+       Index array that maps `candidates` to `X_for_cluster`.
+    k : int
+        k for computation of k nearst neighbors.
+    eps : float > 0, default=1e-7
+        Minimum distance sum to compute typicality.
+
+    Returns
+    -------
+    typicality : numpy.ndarray of shape (n_X)
+        The typicality of all uncovered samples in X
+    """
+    typicality = np.full(shape=X.shape[0], fill_value=-np.inf)
+    if len(uncovered_samples_mapping) == 1:
+        typicality[uncovered_samples_mapping] = 1
+        return typicality
+    k = np.min((len(uncovered_samples_mapping) - 1, k))
+    nn = NearestNeighbors(n_neighbors=k + 1).fit(X[uncovered_samples_mapping])
+    dist_matrix_sort_inc, _ = nn.kneighbors(
+        X[uncovered_samples_mapping], n_neighbors=k + 1, return_distance=True
+    )
+    knn = np.sum(dist_matrix_sort_inc, axis=1) + eps
+    typi = ((1 / k) * knn) ** (-1)
+    typicality[uncovered_samples_mapping] = typi
+    return typicality

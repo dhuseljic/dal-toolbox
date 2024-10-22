@@ -1,2 +1,4 @@
 name: dropquery
-subset_size: 10_000
+subset_size: null
+n_iter: 3
+p_drop: 0.75
