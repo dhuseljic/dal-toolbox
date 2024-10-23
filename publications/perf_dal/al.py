@@ -84,14 +84,13 @@ def main(args):
         artifacts = {'query_indices': indices if i_acq != 0 else al_datamodule.labeled_indices}
         artifacts_history.append(artifacts)
 
-    mlflow.set_tracking_uri(uri="{}".format(args.mlflow_uri))
+    mlflow.set_tracking_uri(uri=args.mlflow_uri)
     experiment_id = mlflow.set_experiment(args.experiment_name).experiment_id
     mlflow.start_run(experiment_id=experiment_id)
     mlflow.log_params(flatten_cfg(args))
     for i_acq, test_stats in enumerate(al_history):
-        mlflow.log_metrics(test_stats, step=i_acq, synchronous=False)
+        mlflow.log_metrics(test_stats, step=i_acq)
         mlflow.log_dict(artifacts_history[i_acq], f'artifcats_cycle{i_acq:02d}')
-
     mlflow.end_run()
 
 
@@ -187,6 +186,7 @@ class Optimal(Query):
         self.gamma = gamma
 
     def select_batches(self, acq_size, unlabeled_features, labeled_features, labeled_labels, batch_types):
+        # TODO: maybe focus more often on clusters with many samples? class distribution
         num_batch_types = len(batch_types)
         num_batches = self.num_batches // num_batch_types
 
@@ -203,17 +203,50 @@ class Optimal(Query):
                            for _ in range(num_batches)]
                 indices_batches.extend(indices)
             elif batch_type == 'diverse':
+                # KMeans with covered and uncovered clusters
                 from sklearn.cluster import KMeans
-                km = KMeans(n_clusters=acq_size, n_init='auto')
-                clusters = km.fit_predict(unlabeled_features)
+                num_clusters = acq_size + len(labeled_features)
+                km = KMeans(n_clusters=num_clusters, n_init='auto')
+                features = torch.cat((labeled_features, unlabeled_features))
+                clusters = km.fit_predict(features)
+                cluster_sizes = np.zeros(num_clusters)
+                cluster_ids, cluster_id_sizes = np.unique(clusters, return_counts=True)
+                cluster_sizes[cluster_ids] = cluster_id_sizes
+                covered_clusters = np.unique(clusters[:len(labeled_features)])
+                if len(covered_clusters) > 0:
+                    cluster_sizes[covered_clusters] = 0
+                unlabeled_clusters = clusters[len(labeled_features):]
+
+                # Random sample from uncovered clusters
                 indices = []
                 for _ in range(num_batches):
                     idx = []
-                    for i in range(acq_size):
-                        indices_cluster = (clusters == i).nonzero()[0]
-                        idx.append(self.rng.choice(indices_cluster))
+                    cluster_sizes_batch = cluster_sizes.copy()
+                    for _ in range(acq_size):
+                        if np.any(cluster_sizes_batch != 0):
+                            cluster_id = cluster_sizes_batch.argmax()
+                            cluster_indices = (unlabeled_clusters == cluster_id).nonzero()[0]
+                            idx.append(self.rng.choice(cluster_indices))
+                            cluster_sizes_batch[cluster_id] = 0
+                        else:
+                            indices_ = np.arange(len(unlabeled_features))
+                            indices_ = np.setdiff1d(indices_, idx)
+                            idx.append(self.rng.choice(indices_))
                     indices.append(np.array(idx))
                 indices_batches.extend(indices)
+                # Simpler exploration batches
+                # from sklearn.cluster import KMeans
+                # km = KMeans(n_clusters=acq_size, n_init='auto')
+                # clusters = km.fit_predict(unlabeled_features)
+                # indices = []
+                # for _ in range(num_batches):
+                #     idx = []
+                #     for i in range(acq_size):
+                #         indices_cluster = (clusters == i).nonzero()[0]
+                #         idx.append(self.rng.choice(indices_cluster))
+                #     indices.append(np.array(idx))
+                # indices_batches.extend(indices)
+
             elif batch_type == 'uncertain':
                 from sklearn.linear_model import LogisticRegression
                 clf = LogisticRegression()
