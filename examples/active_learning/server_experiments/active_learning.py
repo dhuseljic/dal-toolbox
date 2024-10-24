@@ -216,7 +216,7 @@ def build_al_strategy(name, args):
     elif name == "dropquery":
         query = dropquery.DropQuery(subset_size=subset_size, num_iter=args.al_strategy.n_iter, p_drop=args.al_strategy.p_drop)
     elif name == "alfamix":
-        query = alfamix.AlfaMix(subset_size=subset_size)
+        query = alfamix.AlfaMix(subset_size=subset_size, embed_dim=args.model.embed_dim)
     elif name == "falcun":
         query = falcun.Falcun(subset_size=subset_size, gamma=args.al_strategy.gamma, custom_dist=args.al_strategy.custom_dist, deterministic=args.al_strategy.deterministic)
     elif name == "randomclust":

@@ -7,14 +7,12 @@ import torch.nn.functional as F
 
 
 class AlfaMix(Query):
-    def __init__(self, subset_size=None):
+    def __init__(self, embed_dim, subset_size=None):
         super().__init__()
         self.subset_size = subset_size
         #D = params["features"].shape[1]
         #TODO: Check if this is equivalent
-        # Features are usually input samples, so the raw data. First dimension should be batch size, so second dimension may relate to input channels or image width/height ... what is it?
-        # The paper says, D is the dimensionality of the alpha vector
-        D = 64
+        D = embed_dim
         self.eps = 0.2 / np.sqrt(D)
 
     def _get_anchors(self, features: torch.Tensor, labels):
