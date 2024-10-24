@@ -76,7 +76,8 @@ def main(args):
             queried_indices[f'cycle{i_acq}'] = indices
 
         #  model cold start
-        model.reset_states()
+        if args.al_cycle.cold_start:
+            model.reset_states()
 
         # Train with updated annotations
         logger.info('Training..')

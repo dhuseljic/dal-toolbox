@@ -13,7 +13,7 @@ To train a model simply run: `python active_learning.py`
 This will use the standard hyperparameters specified in [configs/active_learning.yaml](configs/active_learning.yaml).
 You can change these parameters either by adjusting the config file, or passing different parameters to run, e.g. `python active_learning.py model=YOUR_MODEL`.
 
-### Hyperparameters
+## Hyperparameters
 
 | Argument                 | Standard Parameter       | Description                                                                             |
 |--------------------------|--------------------------|-----------------------------------------------------------------------------------------|
@@ -29,11 +29,10 @@ You can change these parameters either by adjusting the config file, or passing 
 | `al_cycle.acq_size`      | `100`                    | How many samples are queried in each AL cycle.                                          |
 | `al_cycle.n_acq`         | `9`                      | How many AL cycles to train.                                                            |
 | `al_cycle.cold_start`    | `True`                   | Whether to reset the model in each AL cycle.                                            |
-| `al_cycle.init_strategy` | `random`                 | How the samples in the initial labeled set are determined. Can be any AL strategy.      |
 
 It is also possible to use precomputed features (e.g. from a self-supervised task) for training. This can primarly be set by choosing `model=dinov2`.
 
-#### Models
+## Models
 
 The following models are implemented:
 
@@ -46,7 +45,6 @@ Furthermore, the following hyperparameters can be adjusted for each model:
 
 | Argument                       | Description                                                       |
 |--------------------------------|-------------------------------------------------------------------|
-| `model.name`                   | The name of the model.                                            |
 | `model.num_epochs`             | How many epochs the model should be trained for in each AL cycle. |
 | `model.train_batch_size`       | The batch size for training.                                      |
 | `model.predict_batch_size`     | The batch size for validation/testing.                            |
@@ -58,7 +56,7 @@ The standard parameters depend on each specific model and can be found in their 
 (For example, the config for the ResNet18 con be found in [configs/model/resnet18.yaml](configs/model/resnet18.yaml).)
 
 
-#### Datasets
+## Datasets
 
 The following datasets are implemented:
 
@@ -74,7 +72,7 @@ The following datasets are implemented:
 
 Keep in mind that ImageNet and its subsets are not automatically downloaded and have to be downloaded manually (See https://image-net.org/).
 
-#### Active learning strategies
+## Active Learning Strategies
 
 The following active learning strategies are implemented:
 
@@ -83,8 +81,8 @@ The following active learning strategies are implemented:
 | Random sampling           | `random`    |
 | Entropy sampling          | `entropy`   |
 | Margin sampling           | `margin` |
-| Least Confidence sampling | 'leastconfidence' |
-| Random Clust Sampling     | 'randomclust'|
+| Least Confidence sampling | `leastconfidence` |
+| Random Clust Sampling     | `randomclust` |
 | Core-Set [[4](#sources)]  | `coreset`   |
 | BADGE [[5](#sources)]     | `badge`     |
 | TypiClust [[6](#sources)] | `typiclust` |
