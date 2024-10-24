@@ -101,9 +101,11 @@ Here we see an overview of all baseline experiments performed.
 All slurm scripts used to run these experiments can be found [here](slurm/).
 
 
-| Dataset | Model  | Result Figure                                                           |
-|---------|--------|---------------------------------------------------------------------|
-| CIFAR10 | DinoV2 | <img src="./plots/dinov2_cifar10.png"/> |
+| Dataset   | Model  | Absolute Performance                                                    | Relative Performance                                                    |
+|---------  |--------|-------------------------------------------------------------------------|-------------------------------------------------------------------------|
+| CIFAR10   | DinoV2 | <img src="./plots/dinov2_CIFAR10_abs.png"/>                                | <img src="./plots/dinov2_CIFAR10_rel.png"/>                          |
+| CIFAR100 | DinoV2 | <img src="./plots/dinov2_CIFAR100_abs.png"/>                                | <img src="./plots/dinov2_CIFAR100_rel.png"/>                         |
+| SVHN      | DinoV2 | <img src="./plots/dinov2_SVHN_abs.png"/>                                | <img src="./plots/dinov2_SVHN_rel.png"/>                                |
 
 ## Sources
 
