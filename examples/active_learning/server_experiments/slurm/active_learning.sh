@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --ntasks=1
 #SBATCH --mem=64GB
-#SBATCH --array=0-35%4
+#SBATCH --array=0-32%4
 #SBATCH --output=/mnt/stud/work/phahn/repositories/dal-toolbox/logs/active_learning/%A_%a_%x.out
 
 # Active Environment, change to directory and print certain infos
@@ -14,7 +14,7 @@ source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 cd /mnt/stud/work/phahn/repositories/dal-toolbox/dal-toolbox/examples/active_learning/server_experiments/
 
 # Create tupel of variables
-queries=(random randomclust entropy leastconfidence margin coreset badge typiclust alfamix dropquery falcun cal)
+queries=(random randomclust entropy leastconfidence margin coreset badge typiclust alfamix dropquery falcun)
 random_seeds=(1 2 3)
 
 # Get the current task index from the job array and select instances of variables based on it
@@ -33,4 +33,5 @@ python -u active_learning.py \
         path.data_dir=$dataset_path \
         path.cache_dir=$cache_dir \
         random_seed=$seed \
-        query_strategy=$query \
+        al_strategy=$query \
+	model=dinov2 \
