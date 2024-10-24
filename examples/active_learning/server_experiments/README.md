@@ -1,11 +1,12 @@
-# Active Learning Baselines
+# Active Learning Server Experiment
 
 ## Installation
 
-First install all dependencies of `dal-toolbox`, which are located [here](../../requirements.txt).
-Then install the requirements specified in [requirements.txt](requirements.txt)
+First create a virtual environment with `python >= 3.9`.
+Then install the `dal-toolbox` with `pip install -e .` on the highest folder level.
+Finally install any additional requirements placed in [requirements.txt](requirements.txt) with `pip install -r requirements.txt`.
 
-## Training baselines
+## Usage
 
 To train a model simply run: `python active_learning.py`
 
@@ -93,9 +94,7 @@ The following active learning strategies are implemented:
 
 Furthermore, for each strategy, the hyperparameter `al_strategy.subset_size` can be adjusted, determining how many unlabeled samples the strategy considers in each AL cycle. These samples are chosen randomly from the whole unlabeled set in each cycle. It does improve efficiency of the querying process but at the cost of potentially missing valuable unlabeled datapoints.
 
-## Comparison with state-of-the-art
-
-## Complete overview
+## Baseline Results
 
 Here we see an overview of all baseline experiments performed.
 All slurm scripts used to run these experiments can be found [here](slurm/).
