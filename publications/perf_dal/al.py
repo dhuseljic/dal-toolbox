@@ -185,7 +185,7 @@ class Optimal(Query):
         self.num_retraining_epochs = num_retraining_epochs
         self.gamma = gamma
 
-    def select_batches(self, acq_size, unlabeled_features, labeled_features, labeled_labels, batch_types):
+    def select_batches(self, acq_size, unlabeled_features, unlabeled_logits, labeled_features, labeled_labels, batch_types):
         # TODO: maybe focus more often on clusters with many samples? class distribution
         num_batch_types = len(batch_types)
         num_batches = self.num_batches // num_batch_types
@@ -202,8 +202,8 @@ class Optimal(Query):
                 indices = [np.random.permutation(len(unlabeled_features))[:acq_size]
                            for _ in range(num_batches)]
                 indices_batches.extend(indices)
-            elif batch_type == 'diverse':
-                # KMeans with covered and uncovered clusters
+
+            elif batch_type == 'diverse': # KMeans with covered and uncovered clusters
                 from sklearn.cluster import KMeans
                 num_clusters = acq_size + len(labeled_features)
                 km = KMeans(n_clusters=num_clusters, n_init='auto')
@@ -234,25 +234,9 @@ class Optimal(Query):
                             idx.append(self.rng.choice(indices_))
                     indices.append(np.array(idx))
                 indices_batches.extend(indices)
-                # Simpler exploration batches
-                # from sklearn.cluster import KMeans
-                # km = KMeans(n_clusters=acq_size, n_init='auto')
-                # clusters = km.fit_predict(unlabeled_features)
-                # indices = []
-                # for _ in range(num_batches):
-                #     idx = []
-                #     for i in range(acq_size):
-                #         indices_cluster = (clusters == i).nonzero()[0]
-                #         idx.append(self.rng.choice(indices_cluster))
-                #     indices.append(np.array(idx))
-                # indices_batches.extend(indices)
 
             elif batch_type == 'uncertain':
-                from sklearn.linear_model import LogisticRegression
-                clf = LogisticRegression()
-                clf.fit(labeled_features, labeled_labels.view(-1, 1))
-                probas = clf.predict_proba(unlabeled_features)
-                probas = torch.from_numpy(probas)
+                probas = unlabeled_logits.softmax(-1)
                 top_probas, _ = torch.topk(probas, k=2, dim=-1)
                 margin_uncertainty = 1 - (top_probas[:, 0] - top_probas[:, 1])
                 indices_uncertain = np.where(margin_uncertainty > margin_uncertainty.median())[0]
@@ -265,7 +249,7 @@ class Optimal(Query):
         return indices_batches
 
     @torch.no_grad()
-    def query(self, *, model, al_datamodule, acq_size, return_utilities=False, **kwargs):
+    def query(self, *, model, al_datamodule, acq_size):
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(
             subset_size=self.subset_size)
         unlabeled_features = model.get_representations(unlabeled_dataloader, device=self.device)
@@ -274,12 +258,12 @@ class Optimal(Query):
 
         labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
         labeled_features = model.get_representations(labeled_dataloader, device=self.device)
-        # labeled_logits = model.get_logits_from_representations(labeled_features, device=device).cpu()
         labeled_labels = torch.cat([batch[1] for batch in labeled_dataloader])
 
         indices_batches = self.select_batches(
             acq_size,
             unlabeled_features,
+            unlabeled_logits,
             labeled_features,
             labeled_labels,
             self.batch_types
@@ -288,39 +272,32 @@ class Optimal(Query):
         loss_batches = []
         init_params = model.state_dict()
         for indices in track(indices_batches):
-            features_batch = unlabeled_features[indices]
 
-            if self.use_true_labels:
-                # Use true labels of batch for model training
+            if self.use_true_labels: # Use true labels of batch for model training
                 labels = unlabeled_labels[indices]
                 labels = labels.unsqueeze(0)
-            else:
-                # MC labels
+            else: # MC labels
                 categorical = torch.distributions.Categorical(logits=unlabeled_logits[indices])
                 labels = categorical.sample((self.num_mc_labels,))
 
             loss_labels = []
             for labels_batch in labels:
+
                 if self.use_retraining:
+                    retrain_indices = labeled_indices + [unlabeled_indices[idx] for idx in indices]
+                    custom_labels = torch.cat((labeled_labels, labels_batch))
+                    retrain_loader = al_datamodule.custom_dataloader(
+                        indices=retrain_indices, train=True, custom_labels=custom_labels)
                     model.reset_states(reset_model_parameters=True)
                     trainer = Trainer(barebones=True, max_epochs=self.num_retraining_epochs)
-
-                    train_ds1 = Subset(al_datamodule.train_dataset, indices=labeled_indices)
-                    train_ds2 = Subset_(
-                        al_datamodule.train_dataset,
-                        indices=np.array(unlabeled_indices)[indices],
-                        labels=labels_batch
-                    )
-                    train_ds = ConcatDataset([train_ds1, train_ds2])
-                    drop_last = len(train_ds) > al_datamodule.train_batch_size
-                    train_loader = DataLoader(train_ds, al_datamodule.train_batch_size,
-                                              shuffle=True, drop_last=drop_last)
-
-                    trainer.fit(model, train_loader)
+                    trainer.fit(model, retrain_loader)
                 else:
+                    retrain_indices = [unlabeled_indices[idx] for idx in indices]
+                    retrain_loader = al_datamodule.custom_dataloader(
+                        indices=retrain_indices, train=True, custom_labels=labels_batch)
                     model.load_state_dict(init_params)
-                    model.update_posterior(
-                        iter(zip(features_batch, labels_batch)),
+                    model.update_posterior( 
+                        retrain_loader,
                         gamma=self.gamma,
                         from_representations=True,
                         device=self.device
@@ -330,6 +307,7 @@ class Optimal(Query):
                     loss = self.evaluate_model(model, al_datamodule.val_dataloader())
                 else:
                     loss = self.evaluate_model(model, al_datamodule.labeled_dataloader()[0])
+
                 loss_labels.append(loss)
             loss_batches.append(np.mean(loss_labels))
 
@@ -358,14 +336,6 @@ class Optimal(Query):
         return loss
 
 
-class Subset_(Subset):
-    def __init__(self, dataset, indices, labels):
-        super().__init__(dataset, indices)
-        self.labels = labels
-        assert len(indices) == len(labels)
-
-    def __getitem__(self, idx):
-        return super().__getitem__(idx)[0], self.labels[idx]
 
 
 if __name__ == '__main__':
