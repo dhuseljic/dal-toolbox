@@ -10,13 +10,13 @@ from omegaconf import DictConfig
 from dal_toolbox.datasets import CIFAR10
 from dal_toolbox.datasets.utils import DinoTransforms, FeatureDataset, PlainTransforms
 from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, Snacks, DTD, Flowers102, TinyImageNet
-from dal_toolbox.datasets import ImageNet, StanfordDogs
+from dal_toolbox.datasets import ImageNet, StanfordDogs, CIFAR10LT
 
 from dal_toolbox.models.laplace import LaplaceLinear, LaplaceModel
 
 
 def build_datasets(args, val_split=False, cache_features=True):
-    image_datasets = ['cifar10', 'stl10', 'snacks', 'dtd', 'cifar100', 'food101', 'flowers102',
+    image_datasets = ['cifar10', 'cifar10-lt', 'stl10', 'snacks', 'dtd', 'cifar100', 'food101', 'flowers102',
                       'caltech101', 'stanford_dogs', 'tiny_imagenet', 'imagenet']
     text_datasets = ['agnews', 'dbpedia', 'banking77', 'clinc']
 
@@ -72,6 +72,8 @@ def build_image_data(args, plain_transforms=False):
         transforms = DinoTransforms(size=(256, 256))
     if args.dataset_name == 'cifar10':
         data = CIFAR10(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'cifar10-lt':
+        data = CIFAR10LT(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'stl10':
         data = STL10(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'snacks':

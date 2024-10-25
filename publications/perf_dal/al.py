@@ -59,7 +59,6 @@ def main(args):
     artifacts_history = []
     for i_acq in range(0, args.al.num_acq+1):
         if i_acq != 0:
-            print('Querying..')
             stime = time.time()
             indices = al_strategy.query(
                 model=model,
@@ -143,12 +142,12 @@ class Optimal(Query):
                  subset_size=None,
                  num_batches=200,
                  batch_types=['random', 'diverse', 'uncertain'],
-                 gamma=7,
                  num_mc_labels=None,
                  use_true_labels=True,
                  use_retraining=True,
                  use_val_ds=True,
                  num_retraining_epochs=10,
+                 gamma=10,
                  loss='cross_entropy',
                  device='cpu',
                  random_seed=None,
@@ -284,18 +283,18 @@ class Optimal(Query):
             for labels_batch in labels:
 
                 if self.use_retraining:
+                    model.reset_states(reset_model_parameters=True)
                     retrain_indices = labeled_indices + [unlabeled_indices[idx] for idx in indices]
                     custom_labels = torch.cat((labeled_labels, labels_batch))
                     retrain_loader = al_datamodule.custom_dataloader(
                         indices=retrain_indices, train=True, custom_labels=custom_labels)
-                    model.reset_states(reset_model_parameters=True)
                     trainer = Trainer(barebones=True, max_epochs=self.num_retraining_epochs)
                     trainer.fit(model, retrain_loader)
                 else:
+                    model.load_state_dict(init_params)
                     retrain_indices = [unlabeled_indices[idx] for idx in indices]
                     retrain_loader = al_datamodule.custom_dataloader(
                         indices=retrain_indices, train=True, custom_labels=labels_batch)
-                    model.load_state_dict(init_params)
                     model.update_posterior( 
                         retrain_loader,
                         gamma=self.gamma,

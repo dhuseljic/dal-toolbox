@@ -15,9 +15,7 @@ from .country211 import Country211
 from .tiny_imagenet import TinyImageNet
 from .stanford_dogs import StanfordDogs
 
-from .cifar import CIFAR10, CIFAR100, CIFAR10C
-from .cifar import CIFAR10SimCLR, CIFAR10WithoutNormalization, CIFAR100SimCLR
-from .cifar import CIFAR10Contrastive, CIFAR10Plain, CIFAR100Contrastive, CIFAR100Plain
+from .cifar import CIFAR10, CIFAR100, CIFAR10C, CIFAR10LT
 from .svhn import SVHN, SVHNSimCLR
 from .svhn import SVHNContrastive, SVHNPlain
 from .imagenet import ImageNet, ImageNetContrastive, ImageNetPlain, ImageNetDINO
