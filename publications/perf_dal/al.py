@@ -68,6 +68,11 @@ def main(args):
             etime = time.time()
             al_datamodule.update_annotations(indices)
 
+        artifacts = {
+            'query_indices': indices if i_acq != 0 else al_datamodule.labeled_indices,
+            'model': model.state_dict(),
+        }
+
         model.reset_states()
         trainer = Trainer(**lightning_trainer_config)
         trainer.fit(model, train_dataloaders=al_datamodule.train_dataloader())
@@ -78,9 +83,9 @@ def main(args):
         if args.al.strategy == 'optimal':
             bought_dict = {f'bought_{k}': v for k, v in al_strategy.batch_type_count.items()}
             test_stats.update(bought_dict)
+
         print(f'Cycle {i_acq}:', test_stats, flush=True)
         al_history.append(test_stats)
-        artifacts = {'query_indices': indices if i_acq != 0 else al_datamodule.labeled_indices}
         artifacts_history.append(artifacts)
 
     mlflow.set_tracking_uri(uri=args.mlflow_uri)
