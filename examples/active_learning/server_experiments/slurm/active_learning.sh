@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --ntasks=1
 #SBATCH --mem=64GB
-#SBATCH --array=0-107%4
+#SBATCH --array=0-164%4
 #SBATCH --output=/mnt/stud/work/phahn/repositories/dal-toolbox/logs/active_learning/%A_%a_%x.out
 
 # Active Environment, change to directory and print certain infos
@@ -16,25 +16,29 @@ cd /mnt/stud/work/phahn/repositories/dal-toolbox/dal-toolbox/examples/active_lea
 # Create tupel of variables
 queries=(random randomclust entropy leastconfidence margin coreset badge typiclust alfamix dropquery falcun)
 datasets=(CIFAR10 CIFAR100 SVHN)
-random_seeds=(1 2 3)
+query_sizes=(10 100 50)
+random_seeds=(1 2 3 4 5)
 
 # Get the current task index from the job array and select instances of variables based on it
 index=$SLURM_ARRAY_TASK_ID
 query=${queries[$index % 12]}
-dset=${datasets[$index / 12 % 3]}
-seed=${random_seeds[$index / 36]}
+dset=${datasets[$index / 12 % 4]}
+qs=${query_sizes[$index / 12 % 4]}
+seed=${random_seeds[$index / 48]}
 
 # Predefine certain paths
-dataset_path=/mnt/stud/work/phahn/datasets/
-output_dir=/mnt/stud/work/phahn/repositories/dal-toolbox/output/baselines_2/${dset}/${query}/seed_${seed}/
+data_dir=/mnt/stud/work/phahn/datasets/
+output_dir=/mnt/stud/work/phahn/repositories/dal-toolbox/output/baselines_new/${dset}/${query}/seed_${seed}/
 cache_dir=/mnt/stud/work/phahn/dino_cache/
 
 # Run experiment
 python -u active_learning.py \
         path.output_dir=$output_dir \
-        path.data_dir=$dataset_path \
+        path.data_dir=$data_dir \
         path.cache_dir=$cache_dir \
         random_seed=$seed \
         al_strategy=$query \
+        al_cycle.n_init=$qs \
+        al_cycle.acq_size=$qs \
 	model=dinov2 \
         dataset=$dset \

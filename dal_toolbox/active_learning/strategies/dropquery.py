@@ -17,7 +17,7 @@ class DropQuery(Query):
         labels = []
         model.model.set_dropout(p=self.p_drop)
         with torch.no_grad():
-            for i in range(self.num_iter):
+            for _ in range(self.num_iter):
                 lab = []
                 for batch in loader_unlabeled:
                     samples = batch[0]

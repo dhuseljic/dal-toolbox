@@ -8,15 +8,16 @@ random_seed: 42
 val_interval: 25
 
 al_cycle:
-  n_init: 100
-  acq_size: 100
-  n_acq: 9
+  n_init: 10
+  acq_size: 10
+  n_acq: 19
   cold_start: True
 
 path:
   data_dir: ./data/
   output_dir: ./output/
   cache_dir: ./cache/
+
 hydra:
   run:
     dir: ${path.output_dir}

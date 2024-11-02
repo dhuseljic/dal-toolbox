@@ -10,8 +10,6 @@ class AlfaMix(Query):
     def __init__(self, embed_dim, subset_size=None):
         super().__init__()
         self.subset_size = subset_size
-        #D = params["features"].shape[1]
-        #TODO: Check if this is equivalent
         D = embed_dim
         self.eps = 0.2 / np.sqrt(D)
 

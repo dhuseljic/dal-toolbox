@@ -182,6 +182,8 @@ def build_dataset(args):
         data = datasets.CIFAR100(args.path.data_dir, transforms=transforms)
     elif args.dataset.name == 'SVHN':
         data = datasets.SVHN(args.path.data_dir, transforms=transforms)
+    elif args.dataset.name == 'ImageNet':
+        data = datasets.ImageNet(args.path.data_dir, transforms=transforms)
     else:
         raise NotImplementedError(f"Dataset {args.dataset.name} is not implemented!")    
         
@@ -191,7 +193,7 @@ def build_dataset(args):
     if args.model.name == 'dinov2':
         model = build_dino_model(args)
         train_ds = FeatureDataset(model, train_ds, cache=True, cache_dir=args.path.cache_dir)
-        query_ds = train_ds
+        query_ds = train_ds #TODO: Check which transforms may be better here?
         val_ds = FeatureDataset(model, val_ds, cache=True, cache_dir=args.path.cache_dir)
         test_ds = FeatureDataset(model, test_ds, cache=True, cache_dir=args.path.cache_dir)
 

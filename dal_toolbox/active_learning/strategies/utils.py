@@ -5,12 +5,14 @@ import random
 
 
 def cluster_features(features, acq_size, weights=None):
+    # Fit kmeans on the input features
     kmeans = KMeans(n_clusters=acq_size)
     kmeans.fit(X=features, sample_weight=weights)
 
+    # Calculate the square_distances to the closest clusters
     all_sq_dist = kmeans.transform(X=features)
     all_sq_dist = torch.tensor(all_sq_dist)
-    sq_dist, cluster_idx = torch.max(all_sq_dist, dim=-1)
+    sq_dist, cluster_idx = torch.min(all_sq_dist, dim=-1)
 
     selected = []
     for i in range(acq_size):
