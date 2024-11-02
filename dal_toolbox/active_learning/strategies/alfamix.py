@@ -30,7 +30,9 @@ class AlfaMix(Query):
         for z_s in z_star:
             z_diff = z_s - z_u
             diff_norm = torch.norm(z_diff, dim=1, keepdim=True)
-            alpha = self.eps * diff_norm * z_grad / (grad_norm * z_diff)
+            temp_a = self.eps * diff_norm * z_grad
+            temp_b = (grad_norm * z_diff)
+            alpha =  temp_a / temp_b
             z_lerp = alpha * z_s + (1 - alpha) * z_u
 
             probs = model.model.linear(z_lerp).softmax(dim=1)
@@ -49,8 +51,7 @@ class AlfaMix(Query):
         z_star = self._get_anchors(z_l, y_l).to('cuda')
 
         # Retrieve gradient-embeddings, embeddings and pseudo-labels for the unlabeled data
-        grads, z_u, logits = model.model.get_alfa_representations(loader_unlabeled)
-        y_star = logits.softmax(-1).argmax(-1)
+        grads, z_u, y_star = model.model.get_alfa_representations(loader_unlabeled, device='cuda')
 
         candidates = self._get_candidates(z_u.to('cuda'), z_star.to('cuda'), grads.to('cuda'), y_star.to('cuda'), model=model.to('cuda'))
 

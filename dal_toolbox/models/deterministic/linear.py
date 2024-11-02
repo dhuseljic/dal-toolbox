@@ -48,13 +48,14 @@ class LinearModel(nn.Module):
         return probas
 
     @torch.inference_mode()
-    def get_representations(self, dataloader, return_labels=False):
+    def get_representations(self, dataloader, return_labels=False, device='cuda'):
+        self.to(device)
         all_features = []
         all_labels = []
         for batch in dataloader:
             features = batch[0]
             labels = batch[1]
-            all_features.append(features.cpu())
+            all_features.append(features.to(device))
             all_labels.append(labels)
         features = torch.cat(all_features)
 
@@ -90,14 +91,7 @@ class LinearModel(nn.Module):
             probas = logits.softmax(-1)
             max_indices = probas.argmax(-1)
 
-            for n in range(len(inputs)):
-                for c in range(self.num_classes):
-                    if c == max_indices[n]:
-                        embedding_batch[n, self.in_dimension * c: self.in_dimension * (c + 1)] = \
-                            features[n] * (1 - probas[n, c])
-                    else:
-                        embedding_batch[n, self.in_dimension * c: self.in_dimension * (c + 1)] = \
-                            features[n] * (-1 * probas[n, c])
+            embedding_batch = features * (1 - torch.gather(probas, 1, max_indices.view(-1, 1)))
             embedding.append(embedding_batch)
         # Concat all embeddings
         embedding = torch.cat(embedding)
@@ -105,20 +99,26 @@ class LinearModel(nn.Module):
     
 
     @torch.inference_mode()
-    def get_alfa_representations(self, dataloader):
+    def get_alfa_representations(self, dataloader, device):
         self.eval()
-        gradients, embeddings, logits = [], [], []
+        self.to(device)
+
+        grads, embeds, pseudo_labels = [], [], []
         for batch in dataloader:
-            embeds = batch[0]
-            embeddings.append(embeds)
-            with torch.inference_mode(False), torch.autocast("cuda", enabled=False):
-                embeds = embeds.clone().requires_grad_()
-                lgts = self.linear(embeds)
-                logits.append(lgts)
-                loss = F.cross_entropy(lgts, lgts.argmax(dim=1), reduction="sum")
-                grad = torch.autograd.grad(loss, embeds)[0]
-                gradients.append(grad)
-        gradients = torch.cat(gradients)
-        embeddings = torch.cat(embeddings)
-        logits = torch.cat(logits)
-        return gradients, embeddings, logits
+            inputs = batch[0]
+            logits = self(inputs.to(device)).cpu()
+            features = inputs.cpu()
+
+            probas = logits.softmax(-1)
+            max_indices = probas.argmax(-1)
+
+            grads_batch = features * (1 - torch.gather(probas, 1, max_indices.view(-1, 1)))
+            
+            grads.append(grads_batch)
+            embeds.append(features)
+            pseudo_labels.append(max_indices)
+        # Concat all gradient embeddings
+        grads = torch.cat(grads)
+        embeds = torch.cat(embeds)
+        pseudo_labels = torch.cat(pseudo_labels)
+        return grads, embeds, pseudo_labels
