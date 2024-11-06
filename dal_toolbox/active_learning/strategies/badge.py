@@ -13,7 +13,7 @@ class Badge(Query):
     def query(self, *, model, al_datamodule, acq_size, **kwargs):
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
 
-        grad_embedding = model.get_grad_representations(unlabeled_dataloader)
+        grad_embedding = model.get_grad_representations(unlabeled_dataloader).flatten(-2)
         chosen = kmeans_plusplus(grad_embedding.numpy(), acq_size, rng=self.rng)
 
         return [unlabeled_indices[idx] for idx in chosen]

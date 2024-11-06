@@ -15,6 +15,7 @@ al_cycle:
 
 path:
   data_dir: ./data/
+  imagenet_dir: ./imagenet/
   output_dir: ./output/
   cache_dir: ./cache/
 

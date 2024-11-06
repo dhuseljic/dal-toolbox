@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --ntasks=1
 #SBATCH --mem=64GB
-#SBATCH --array=0-439%4
+#SBATCH --array=0-1%4
 #SBATCH --output=/mnt/stud/work/phahn/repositories/dal-toolbox/logs/active_learning/%A_%a_%x.out
 
 # Active Environment, change to directory and print certain infos
@@ -21,10 +21,10 @@ random_seeds=(1 2 3 4 5 6 7 8 9 10)
 
 # Get the current task index from the job array and select instances of variables based on it
 index=$SLURM_ARRAY_TASK_ID
-query=${queries[$index % 11]}
-dset=${datasets[$index / 11 % 4]}
-qs=${query_sizes[$index / 11 % 4]}
-seed=${random_seeds[$index / 44]}
+query=random
+dset=imagenet
+qs=1000
+seed=1
 
 # Predefine certain paths
 data_dir=/mnt/stud/work/phahn/datasets/

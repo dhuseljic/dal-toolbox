@@ -183,7 +183,7 @@ def build_dataset(args):
     elif args.dataset.name == 'SVHN':
         data = datasets.SVHN(args.path.data_dir, transforms=transforms)
     elif args.dataset.name == 'ImageNet':
-        data = datasets.ImageNet(args.path.data_dir, transforms=transforms)
+        data = datasets.ImageNet(args.path.imagenet_dir, transforms=transforms)
     else:
         raise NotImplementedError(f"Dataset {args.dataset.name} is not implemented!")    
         

@@ -25,14 +25,12 @@ class AlfaMix(Query):
 
     def _get_candidates(self, z_u, z_star, z_grad, y_star, model):
         candidates = torch.zeros_like(y_star, dtype=torch.bool)
-        grad_norm = torch.norm(z_grad, dim=1, keepdim=True)
+        grad_norm = torch.linalg.vector_norm(z_grad, dim=-1, keepdim=True)
 
         for z_s in z_star:
             z_diff = z_s - z_u
-            diff_norm = torch.norm(z_diff, dim=1, keepdim=True)
-            temp_a = self.eps * diff_norm * z_grad
-            temp_b = (grad_norm * z_diff)
-            alpha =  temp_a / temp_b
+            diff_norm = torch.linalg.vector_norm(z_diff, dim=1, keepdim=True)
+            alpha = self.eps * (diff_norm * z_grad) / (grad_norm * z_diff)
             z_lerp = alpha * z_s + (1 - alpha) * z_u
 
             probs = model.model.linear(z_lerp).softmax(dim=1)
@@ -43,15 +41,16 @@ class AlfaMix(Query):
         return torch.nonzero(candidates).flatten()
 
     def query(self, model, al_datamodule, acq_size):
-        loader_unlabeled, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
-        loader_labeled, _ = al_datamodule.labeled_dataloader()
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
+        labeled_dataloader, _ = al_datamodule.labeled_dataloader()
 
         # Get the anchors, i.e., the centroids in the embedding space, of each observed class based on the labeled pool
-        z_l, y_l = model.model.get_representations(dataloader=loader_labeled, return_labels=True, device='cuda')
+        z_l, y_l = model.model.get_representations(dataloader=labeled_dataloader, return_labels=True, device='cuda')
         z_star = self._get_anchors(z_l, y_l).to('cuda')
 
         # Retrieve gradient-embeddings, embeddings and pseudo-labels for the unlabeled data
-        grads, z_u, y_star = model.model.get_alfa_representations(loader_unlabeled, device='cuda')
+        grads, z_u, y_star = model.model.get_grad_representations(unlabeled_dataloader, device='cuda', return_embeddings=True, return_pseudo_labels=True)
+        grads = grads.sum(1)
 
         candidates = self._get_candidates(z_u.to('cuda'), z_star.to('cuda'), grads.to('cuda'), y_star.to('cuda'), model=model.to('cuda'))
 

@@ -76,49 +76,41 @@ class LinearModel(nn.Module):
         probas = torch.cat(all_probas)
         return features, probas
 
+
     @torch.inference_mode()
-    def get_grad_representations(self, dataloader, device):
+    def get_grad_representations(self, dataloader, device, return_pseudo_labels=False, return_embeddings=False):
         self.eval()
         self.to(device)
 
-        embedding = []
+        embeddings, gradients, pseudo_labels = [], [], []
         for batch in dataloader:
-            inputs = batch[0]
-            embedding_batch = torch.empty([len(inputs), self.in_dimension * self.num_classes])
-            logits = self(inputs.to(device)).cpu()
-            features = inputs.cpu()
+            inputs = batch[0].to(device)
+            logits = self(inputs)
 
             probas = logits.softmax(-1)
             max_indices = probas.argmax(-1)
+            num_classes = logits.size(-1)
 
-            embedding_batch = features * (1 - torch.gather(probas, 1, max_indices.view(-1, 1)))
-            embedding.append(embedding_batch)
-        # Concat all embeddings
-        embedding = torch.cat(embedding)
-        return embedding
-    
+            factor = F.one_hot(max_indices, num_classes=num_classes) - probas
+            grad = (factor[:, :, None] * inputs[:, None, :])
 
-    @torch.inference_mode()
-    def get_alfa_representations(self, dataloader, device):
-        self.eval()
-        self.to(device)
+            gradients.append(grad.cpu())
+            if return_pseudo_labels:
+                pseudo_labels.append(probas.argmax(-1))
+            if return_embeddings:
+                embeddings.append(inputs)
 
-        grads, embeds, pseudo_labels = [], [], []
-        for batch in dataloader:
-            inputs = batch[0]
-            logits = self(inputs.to(device)).cpu()
-            features = inputs.cpu()
-
-            probas = logits.softmax(-1)
-            max_indices = probas.argmax(-1)
-
-            grads_batch = features * (1 - torch.gather(probas, 1, max_indices.view(-1, 1)))
-            
-            grads.append(grads_batch)
-            embeds.append(features)
-            pseudo_labels.append(max_indices)
-        # Concat all gradient embeddings
-        grads = torch.cat(grads)
-        embeds = torch.cat(embeds)
-        pseudo_labels = torch.cat(pseudo_labels)
-        return grads, embeds, pseudo_labels
+        # Concat all tensors and return according to the requests
+        gradients = torch.cat(gradients)
+        if return_embeddings:
+            embeddings = torch.cat(embeddings)
+            if return_pseudo_labels:
+                pseudo_labels = torch.cat(pseudo_labels)
+                return gradients, embeddings, pseudo_labels
+            else:
+                return gradients, embeddings
+        elif return_pseudo_labels:
+            pseudo_labels = torch.cat(pseudo_labels)
+            return gradients, pseudo_labels
+        else:
+            return gradients
