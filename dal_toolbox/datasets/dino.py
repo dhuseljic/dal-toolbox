@@ -105,7 +105,7 @@ class FeatureDataset:
         for idx in indices_to_hash:
             # change for text
             try:
-                sample = dataset.data[idx][0]
+                sample = dataset[idx][0]
             except:
                 sample = dataset.dataset.data[0]
             hasher.update(str(sample).encode())

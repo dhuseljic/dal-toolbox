@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --ntasks=1
 #SBATCH --mem=64GB
-#SBATCH --array=0-1%4
+#SBATCH --array=0-0%4
 #SBATCH --output=/mnt/stud/work/phahn/repositories/dal-toolbox/logs/active_learning/%A_%a_%x.out
 
 # Active Environment, change to directory and print certain infos
@@ -22,12 +22,13 @@ random_seeds=(1 2 3 4 5 6 7 8 9 10)
 # Get the current task index from the job array and select instances of variables based on it
 index=$SLURM_ARRAY_TASK_ID
 query=random
-dset=imagenet
+dset=ImageNet
 qs=1000
 seed=1
 
 # Predefine certain paths
 data_dir=/mnt/stud/work/phahn/datasets/
+imagenet_dir=/mnt/datasets/imagenet/ILSVRC2012/
 output_dir=/mnt/stud/work/phahn/repositories/dal-toolbox/output/baselines_new/${dset}/${query}/seed_${seed}/
 cache_dir=/mnt/stud/work/phahn/dino_cache/
 
@@ -36,6 +37,7 @@ python -u active_learning.py \
         path.output_dir=$output_dir \
         path.data_dir=$data_dir \
         path.cache_dir=$cache_dir \
+        path.imagenet_dir=$imagenet_dir \
         random_seed=$seed \
         al_strategy=$query \
         al_cycle.n_init=$qs \
