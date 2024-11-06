@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import time
+import copy
 
 import hydra
 import lightning as L
@@ -28,6 +29,7 @@ def main(args):
     logger.info('Using config: \n%s', OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
     os.makedirs(args.path.output_dir, exist_ok=True)
+    os.makedirs(args.path.storage_dir, exist_ok=True)
 
     # Necessary for logging
     results = {}
@@ -55,7 +57,20 @@ def main(args):
         train_batch_size=args.model.train_batch_size,
         predict_batch_size=args.model.predict_batch_size,
     )
-    al_datamodule.random_init(n_samples=args.al_cycle.n_init)
+    
+    # Ensure reproducability by loading a predefined al_datamodule
+    dm_path = os.path.join(args.path.storage_dir, 'dm_' + args.dataset.name + '_' + str(args.al_cycle.n_init) + '_seed' + str(args.random_seed) + '.json')
+    if os.path.exists(dm_path):
+        logging.info(f"Loading intial labeled pool from {dm_path}!")
+        with open(dm_path, 'r') as f:
+            dm_state_dict = json.load(f)
+        al_datamodule.load_state_dict(dm_state_dict)
+    else:
+        al_datamodule.random_init(n_samples=args.al_cycle.n_init)
+        logging.info(f"Saving intial labeled pool to {dm_path} for reproducability!")
+        dm_state_dict = al_datamodule.state_dict()
+        with open(dm_path, 'w') as f:
+            json.dump(dm_state_dict, f)
 
     # Active Learning Cycles
     for i_acq in range(0, args.al_cycle.n_acq + 1):
@@ -166,6 +181,17 @@ def build_model(args, num_classes):
         model = deterministic.linear.LinearModel(in_dimension=args.model.embed_dim, num_classes=num_classes)
     else:
         raise NotImplementedError(f"Model {args.model.name} not implemented.")
+    
+    # Load predefined weights if possible for ensuring reusability
+    initial_state_path = os.path.join(args.path.storage_dir, 'weights_' + args.model.name + '_' + str(num_classes) + '_seed' + str(args.random_seed) + '.pth')
+    if os.path.exists(initial_state_path):
+        logging.info(f"Loading intial model state from {initial_state_path}!")
+        initial_state = torch.load(initial_state_path, weights_only=True)
+        model.load_state_dict(initial_state)
+    else:
+        logging.info(f"Saving intial model state for reproducability to {initial_state_path}!")
+        initial_state = copy.deepcopy(model.state_dict())
+        torch.save(initial_state, initial_state_path)
 
     optimizer = torch.optim.SGD(params=model.parameters(), **args.model.optimizer)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)

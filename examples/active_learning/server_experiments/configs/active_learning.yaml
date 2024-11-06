@@ -18,6 +18,7 @@ path:
   imagenet_dir: ./imagenet/
   output_dir: ./output/
   cache_dir: ./cache/
+  storage_dir: ./storage/
 
 hydra:
   run:

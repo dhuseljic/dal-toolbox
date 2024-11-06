@@ -15,6 +15,7 @@ mlruns/
 mlflow/
 dev/
 cache/
+storage/
 server_results/
 *.db
 
