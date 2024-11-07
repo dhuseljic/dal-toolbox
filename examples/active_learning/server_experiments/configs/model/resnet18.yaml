@@ -5,5 +5,5 @@ train_batch_size: 64
 predict_batch_size: 256
 optimizer:
   lr: 0.1
-  weight_decay: 2e-4
+  weight_decay: 1e-4
   momentum: 0.9

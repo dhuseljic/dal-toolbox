@@ -30,6 +30,7 @@ def main(args):
     seed_everything(args.random_seed)
     os.makedirs(args.path.output_dir, exist_ok=True)
     os.makedirs(args.path.storage_dir, exist_ok=True)
+    os.makedirs(args.path.cache_dir, exist_ok=True)
 
     # Necessary for logging
     results = {}
@@ -213,15 +214,19 @@ def build_dataset(args):
     else:
         raise NotImplementedError(f"Dataset {args.dataset.name} is not implemented!")    
         
-    train_ds, query_ds, val_ds, test_ds = data.train_dataset, data.query_dataset, data.val_dataset, data.test_dataset
-
+    
     # Prepare feature extraction beforehand to save time when training linear layer.
     if args.model.name == 'dinov2':
         model = build_dino_model(args)
-        train_ds = FeatureDataset(model, train_ds, cache=True, cache_dir=args.path.cache_dir)
-        query_ds = train_ds #TODO: Check which transforms may be better here?
-        val_ds = FeatureDataset(model, val_ds, cache=True, cache_dir=args.path.cache_dir)
+        full_train_ds, test_ds = data.full_train_dataset(), data.test_dataset()
+        full_train_ds = FeatureDataset(model, full_train_ds, cache=True, cache_dir=args.path.cache_dir)
         test_ds = FeatureDataset(model, test_ds, cache=True, cache_dir=args.path.cache_dir)
+        train_indices, val_indices = data._get_train_val_indices(len(full_train_ds))
+        train_ds = torch.data.utils.Subset(full_train_ds, indices=train_indices.tolist())
+        val_ds = train_ds = torch.data.utils.Subset(full_train_ds, indices=val_indices.tolist())
+        query_ds = train_ds
+    else:
+        train_ds, query_ds, val_ds, test_ds = data.train_dataset, data.query_dataset, data.val_dataset, data.test_dataset
 
     return train_ds, query_ds, val_ds, test_ds, data.num_classes
 
@@ -250,8 +255,6 @@ def build_al_strategy(name, args):
         query = falcun.Falcun(subset_size=subset_size, gamma=args.al_strategy.gamma, custom_dist=args.al_strategy.custom_dist, deterministic=args.al_strategy.deterministic)
     elif name == "randomclust":
         query = randomclust.RandomClust(subset_size=subset_size)
-    elif name == "cal":
-        query = cal.CAL(subset_size=subset_size)
     else:
         raise NotImplementedError(f"Active learning strategy {name} is not implemented!")
     return query
