@@ -221,9 +221,24 @@ def build_dataset(args):
         full_train_ds, test_ds = data.full_train_dataset, data.test_dataset
         full_train_ds = FeatureDataset(model, full_train_ds, cache=True, cache_dir=args.path.cache_dir)
         test_ds = FeatureDataset(model, test_ds, cache=True, cache_dir=args.path.cache_dir)
-        train_indices, val_indices = data._get_train_val_indices(len(full_train_ds))
-        train_ds = torch.utils.data.Subset(full_train_ds, indices=train_indices.tolist())
-        val_ds = train_ds = torch.utils.data.Subset(full_train_ds, indices=val_indices.tolist())
+        
+        # Ensure reproducability by loading a predefined al_datamodule
+        ind_path = os.path.join(args.path.storage_dir, 'trainvalsplit_' + args.dataset.name + '_' + str(args.al_cycle.n_init) + '_seed' + str(args.random_seed) + '.json')
+        if os.path.exists(ind_path):
+            logging.info(f"Loading intial labeled pool from {ind_path}!")
+            with open(ind_path, 'r') as f:
+                ind = json.load(f)
+            train_indices, val_indices = ind['train_indices'], ind['val_indices']
+        else:
+            train_indices, val_indices = data._get_train_val_indices(len(full_train_ds))
+            train_indices, val_indices = train_indices.tolist(), val_indices.tolist()
+            logging.info(f"Saving intial labeled pool to {ind_path} for reproducability!")
+            ind = {'train_indices' : train_indices, 'val_indices' : val_indices}
+            with open(ind_path, 'w') as f:
+                json.dump(ind, f)
+
+        train_ds = torch.utils.data.Subset(full_train_ds, indices=train_indices)
+        val_ds = train_ds = torch.utils.data.Subset(full_train_ds, indices=val_indices)
         query_ds = train_ds
     else:
         train_ds, query_ds, val_ds, test_ds = data.train_dataset, data.query_dataset, data.val_dataset, data.test_dataset

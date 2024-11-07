@@ -24,7 +24,7 @@ dset=${datasets[$index]}
 data_dir=/mnt/stud/work/phahn/datasets/
 imagenet_dir=/mnt/datasets/imagenet/ILSVRC2012/
 output_dir=/mnt/stud/work/phahn/repositories/dal-toolbox/output/testing/${ds}/
-cache_dir=/mnt/stud/work/phahn/dino_cache/${ds}/
+cache_dir=/mnt/stud/work/phahn/dino_cache/
 storage_dir=/mnt/stud/work/phahn/storage/
 
 # Run experiment
