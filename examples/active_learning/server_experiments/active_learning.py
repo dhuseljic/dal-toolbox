@@ -222,8 +222,8 @@ def build_dataset(args):
         full_train_ds = FeatureDataset(model, full_train_ds, cache=True, cache_dir=args.path.cache_dir)
         test_ds = FeatureDataset(model, test_ds, cache=True, cache_dir=args.path.cache_dir)
         train_indices, val_indices = data._get_train_val_indices(len(full_train_ds))
-        train_ds = torch.data.utils.Subset(full_train_ds, indices=train_indices.tolist())
-        val_ds = train_ds = torch.data.utils.Subset(full_train_ds, indices=val_indices.tolist())
+        train_ds = torch.utils.data.Subset(full_train_ds, indices=train_indices.tolist())
+        val_ds = train_ds = torch.utils.data.Subset(full_train_ds, indices=val_indices.tolist())
         query_ds = train_ds
     else:
         train_ds, query_ds, val_ds, test_ds = data.train_dataset, data.query_dataset, data.val_dataset, data.test_dataset
