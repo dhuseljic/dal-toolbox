@@ -23,8 +23,8 @@ dset=${datasets[$index]}
 # Predefine certain paths
 data_dir=/mnt/stud/work/phahn/datasets/
 imagenet_dir=/mnt/datasets/imagenet/ILSVRC2012/
-output_dir=/mnt/stud/work/phahn/repositories/dal-toolbox/output/test/{$ds}/
-cache_dir=/mnt/stud/work/phahn/dino_cache/{$ds}/
+output_dir=/mnt/stud/work/phahn/repositories/dal-toolbox/output/testing/${ds}/
+cache_dir=/mnt/stud/work/phahn/dino_cache/${ds}/
 storage_dir=/mnt/stud/work/phahn/storage/
 
 # Run experiment

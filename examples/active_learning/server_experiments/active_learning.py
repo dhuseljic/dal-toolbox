@@ -218,7 +218,7 @@ def build_dataset(args):
     # Prepare feature extraction beforehand to save time when training linear layer.
     if args.model.name == 'dinov2':
         model = build_dino_model(args)
-        full_train_ds, test_ds = data.full_train_dataset(), data.test_dataset()
+        full_train_ds, test_ds = data.full_train_dataset, data.test_dataset
         full_train_ds = FeatureDataset(model, full_train_ds, cache=True, cache_dir=args.path.cache_dir)
         test_ds = FeatureDataset(model, test_ds, cache=True, cache_dir=args.path.cache_dir)
         train_indices, val_indices = data._get_train_val_indices(len(full_train_ds))
