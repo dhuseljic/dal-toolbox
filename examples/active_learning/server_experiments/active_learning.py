@@ -238,7 +238,7 @@ def build_dataset(args):
                 json.dump(ind, f)
 
         train_ds = torch.utils.data.Subset(full_train_ds, indices=train_indices)
-        val_ds = train_ds = torch.utils.data.Subset(full_train_ds, indices=val_indices)
+        val_ds = torch.utils.data.Subset(full_train_ds, indices=val_indices)
         query_ds = train_ds
     else:
         train_ds, query_ds, val_ds, test_ds = data.train_dataset, data.query_dataset, data.val_dataset, data.test_dataset
