@@ -14,7 +14,7 @@ from dal_toolbox import datasets
 from dal_toolbox import metrics
 from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.active_learning.strategies.random import RandomSampling
-from dal_toolbox.active_learning.strategies import uncertainty, coreset, badge, typiclust, randomclust, falcun, dropquery, alfamix, cal
+from dal_toolbox.active_learning.strategies import uncertainty, coreset, badge, typiclust, randomclust, falcun, dropquery, alfamix
 
 from dal_toolbox.models import deterministic
 from dal_toolbox.models.utils.callbacks import MetricLogger

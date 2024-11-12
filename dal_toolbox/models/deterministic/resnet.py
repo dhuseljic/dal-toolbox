@@ -82,6 +82,8 @@ class ResNet18(nn.Module):
         self.layer4 = self._make_layer(self.block, 512, self.num_blocks[3], stride=2)
         self.linear = nn.Linear(512 * self.block.expansion, self.num_classes)
 
+        self.dropout = nn.Dropout()
+
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1] * (num_blocks - 1)
         layers = []
@@ -100,6 +102,23 @@ class ResNet18(nn.Module):
         out = out.view(out.size(0), -1)
         features = out
         out = self.linear(out)
+        if return_features:
+            out = (out, features)
+        return out
+    
+    def set_dropout(self, p):
+        self.dropout = nn.Dropout(p=p)
+    
+    def forward_dropout(self, x, return_features=False):
+        out = self.maxpool(F.relu(self.bn1(self.conv1(x))))
+        out = self.layer1(out)
+        out = self.layer2(out)
+        out = self.layer3(out)
+        out = self.layer4(out)
+        out = F.avg_pool2d(out, 4)
+        out = out.view(out.size(0), -1)
+        features = out
+        out = self.linear(self.dropout(out))
         if return_features:
             out = (out, features)
         return out
@@ -182,34 +201,56 @@ class ResNet18(nn.Module):
         return features
 
     @torch.inference_mode()
-    def get_grad_representations(self, dataloader, device):
+    def get_grad_representations(self, dataloader, device, return_pseudo_labels=False, return_embeddings=False):
         self.eval()
         self.to(device)
-        feature_dim = 512
 
-        embedding = []
+        embeddings, gradients, pseudo_labels = [], [], []
         for batch in dataloader:
-            inputs = batch[0]
-            embedding_batch = torch.empty([len(inputs), feature_dim * self.num_classes])
-            logits, features = self(inputs.to(device), return_features=True)
-            logits = logits.cpu()
-            features = features.cpu()
+            inputs = batch[0].to(device)
+            logits, features = self(inputs, return_features=True)
 
             probas = logits.softmax(-1)
             max_indices = probas.argmax(-1)
+            num_classes = logits.size(-1)
 
-            # TODO: optimize code
-            # for each sample in a batch and for each class, compute the gradient wrt to weights
-            for n in range(len(inputs)):
-                for c in range(self.num_classes):
-                    if c == max_indices[n]:
-                        embedding_batch[n, feature_dim * c: feature_dim * (c + 1)] = features[n] * (1 - probas[n, c])
-                    else:
-                        embedding_batch[n, feature_dim * c: feature_dim * (c + 1)] = features[n] * (-1 * probas[n, c])
-            embedding.append(embedding_batch)
-        # Concat all embeddings
-        embedding = torch.cat(embedding)
-        return embedding
+            factor = F.one_hot(max_indices, num_classes=num_classes) - probas
+            grad = (factor[:, :, None] * features[:, None, :])
+
+            gradients.append(grad.cpu())
+            if return_pseudo_labels:
+                pseudo_labels.append(probas.argmax(-1).cpu())
+            if return_embeddings:
+                embeddings.append(features.cpu())
+
+        # Concat all tensors and return according to the requests
+        gradients = torch.cat(gradients)
+        if return_embeddings:
+            embeddings = torch.cat(embeddings)
+            if return_pseudo_labels:
+                pseudo_labels = torch.cat(pseudo_labels)
+                return gradients, embeddings, pseudo_labels
+            else:
+                return gradients, embeddings
+        elif return_pseudo_labels:
+            pseudo_labels = torch.cat(pseudo_labels)
+            return gradients, pseudo_labels
+        else:
+            return gradients
+        
+    @torch.inference_mode()
+    def get_representations_and_probas(self, dataloader):
+        all_features = []
+        all_probas = []
+        for batch in dataloader:
+            input = batch[0]
+            logits, features = self(input, return_features=True)
+            all_features.append(features.cpu())
+            all_probas.append(logits.softmax(-1))
+        features = torch.cat(all_features)
+        probas = torch.cat(all_probas)
+        return features, probas
+
 
 
 
