@@ -94,7 +94,7 @@ def main(args):
     mlflow.log_params(flatten_cfg(args))
     for i_acq, test_stats in enumerate(al_history):
         mlflow.log_metrics(test_stats, step=i_acq)
-        mlflow.log_dict(artifacts_history[i_acq], f'artifcats_cycle{i_acq:02d}')
+        mlflow.log_dict(artifacts_history[i_acq], f'artifacts_cycle{i_acq:02d}')
     mlflow.end_run()
 
 
