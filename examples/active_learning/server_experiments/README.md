@@ -103,6 +103,10 @@ All slurm scripts used to run these experiments can be found [here](slurm/).
 | CIFAR10   | DinoV2 | <img src="./plots/dinov2_CIFAR10_abs.png"/>                                | <img src="./plots/dinov2_CIFAR10_rel.png"/>                          |
 | CIFAR100 | DinoV2 | <img src="./plots/dinov2_CIFAR100_abs.png"/>                                | <img src="./plots/dinov2_CIFAR100_rel.png"/>                         |
 | SVHN      | DinoV2 | <img src="./plots/dinov2_SVHN_abs.png"/>                                | <img src="./plots/dinov2_SVHN_rel.png"/>                                |
+| ImageNet      | DinoV2 | <img src="./plots/dinov2_ImageNet_abs.png"/>                                | <img src="./plots/dinov2_ImageNet_rel.png"/>                                |
+| CIFAR10   | ResNet-18 | <img src="./plots/resnet18_CIFAR10_abs.png"/>                                | <img src="./plots/resnet18_CIFAR10_rel.png"/>                          |
+| CIFAR100 | ResNet-18 | <img src="./plots/resnet18_CIFAR100_abs.png"/>                                | <img src="./plots/resnet18_CIFAR100_rel.png"/>                         |
+| SVHN      | ResNet-18 | <img src="./plots/resnet18_SVHN_abs.png"/>                                | <img src="./plots/resnet18_SVHN_rel.png"/>                                |
 
 ## Sources
 
