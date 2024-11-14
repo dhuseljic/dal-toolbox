@@ -32,7 +32,7 @@ al:
     batch_types: [random, diverse, uncertain]
     gamma: 10
     num_mc_labels: 5
-    use_true_labels: True
+    look_ahead: true_labels 
     use_retraining: True
     num_retraining_epochs: 50
     use_val_ds: True

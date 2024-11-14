@@ -4,6 +4,7 @@ import torch
 import mlflow
 import copy
 import logging
+import itertools
 
 import numpy as np
 from lightning import Trainer
@@ -122,7 +123,7 @@ def build_al_strategy(args):
             subset_size=args.al.subset_size,
             num_batches=args.al.optimal.num_batches,
             batch_types=args.al.optimal.batch_types,
-            use_true_labels=args.al.optimal.use_true_labels,
+            look_ahead=args.al.optimal.look_ahead,
             num_mc_labels=args.al.optimal.num_mc_labels,
             use_val_ds=args.al.optimal.use_val_ds,
             loss=args.al.optimal.loss,
@@ -148,7 +149,7 @@ class Optimal(Query):
                  num_batches=200,
                  batch_types=['random', 'diverse', 'uncertain'],
                  num_mc_labels=None,
-                 use_true_labels=True,
+                 look_ahead='true_labels',
                  use_retraining=True,
                  use_val_ds=True,
                  num_retraining_epochs=10,
@@ -166,8 +167,8 @@ class Optimal(Query):
         self.batch_types = batch_types
         self.batch_type_count = {k: 0 for k in self.batch_types}
 
-        # Look-Ahead
-        self.use_true_labels = use_true_labels
+        # Look-Ahead - True labels, All comb, MC, Pseudo Labels
+        self.look_ahead = look_ahead
         self.num_mc_labels = num_mc_labels
 
         # Performance Estimation
@@ -276,13 +277,21 @@ class Optimal(Query):
         loss_batches = []
         init_params = model.state_dict()
         for indices in track(indices_batches):
-
-            if self.use_true_labels: # Use true labels of batch for model training
+            if self.look_ahead == 'true_labels': # Use true labels of batch for model training
                 labels = unlabeled_labels[indices]
                 labels = labels.unsqueeze(0)
-            else: # MC labels
+            elif self.look_ahead == 'pseudo_labels': # Use pseudo labels of model
+                logits = unlabeled_logits[indices]
+                labels = logits.argmax(-1)
+                labels = labels.unsqueeze(0)
+            elif self.look_ahead == 'mc_labels': # Samples labels via Monte Carlo
                 categorical = torch.distributions.Categorical(logits=unlabeled_logits[indices])
                 labels = categorical.sample((self.num_mc_labels,))
+            elif self.look_ahead == 'all_labels': # Go through all label combinations
+                num_classes = unlabeled_logits.size(-1)
+                labels = itertools.product(range(num_classes), repeat=acq_size)
+            else: 
+                raise NotImplementedError()
 
             loss_labels = []
             for labels_batch in labels:
