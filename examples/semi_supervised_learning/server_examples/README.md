@@ -10,8 +10,8 @@ Finally install any additional requirements placed in [requirements.txt](require
 
 To train a model simply run: `python main.py`
 
-This will use the standard hyperparameters specified in [configs/config.yaml](configs/active_learning.yaml).
-You can change these parameters either by adjusting the config file, or passing different parameters to run, e.g. `python active_learning.py model=YOUR_MODEL`.
+This will use the standard hyperparameters specified in [configs/config.yaml](configs/config.yaml).
+You can change these parameters either by adjusting the config file, or passing different parameters to run, e.g. `python main.py model=YOUR_MODEL`.
 
 ## Hyperparameters
 
