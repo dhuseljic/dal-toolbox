@@ -1,4 +1,4 @@
-# Active Learning Server Experiment
+# Semi-Supervised Learning Server Experiment
 
 ## Installation
 
@@ -19,7 +19,7 @@ You can change these parameters either by adjusting the config file, or passing 
 |--------------------------|--------------------------|-----------------------------------------------------------------------------------------|
 | `model`                  | `resnet18`                 | The model to train. Overview found [here](#models)                                      |
 | `dataset`                | `CIFAR10`                | The dataset to use. Overview found [here](#datasets)                                    |
-| `ssl_algorithm`            | `random`                 | The ssl_algorithm to use. Overview found [here](#ssl-algorithms) |
+| `ssl_algorithm`            | `pseudo_labels`                 | The ssl_algorithm to use. Overview found [here](#ssl-algorithms) |
 | `random_seed`            | `42`                     | The random seed for reproducibility.                                                    |
 | `val_interval`           | `25`                     | Every `val_interval` epochs the validation step is done.                                |
 | `data_dir`           | `./data/`                | The directory were the datasets are stored/downloaded.                                  |

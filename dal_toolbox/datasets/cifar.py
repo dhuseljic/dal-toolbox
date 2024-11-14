@@ -107,7 +107,7 @@ class CIFAR10StandardTransforms(BaseTransforms):
 
 class MultiTransform:
     def __init__(self, *transforms) -> None:
-        self.transforms = torchvision.transforms
+        self.transforms = transforms
 
     def __call__(self, x):
         return [transform(x) for transform in self.transforms]
