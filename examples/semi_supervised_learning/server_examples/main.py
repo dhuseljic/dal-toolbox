@@ -7,10 +7,8 @@ import lightning as L
 
 from torch.utils.data import DataLoader, RandomSampler, Subset
 from omegaconf import OmegaConf
-from torchvision import transforms
 from dal_toolbox import metrics
 from dal_toolbox.datasets import cifar
-from dal_toolbox.datasets.corruptions import RandAugment
 from dal_toolbox.datasets.utils import sample_balanced_subset
 from dal_toolbox.models.deterministic import resnet
 from dal_toolbox.models.deterministic.base_semi import DeterministicPseudoLabelModel, DeterministicPiModel, DeterministicFixMatchModel
@@ -19,7 +17,7 @@ from dal_toolbox.utils import seed_everything
 
 @hydra.main(version_base=None, config_path="./configs", config_name="config")
 def main(args):
-    # Initial Setup (Seed, create output folder, SummaryWriter and results-container init)
+    # Initial Setup
     logging.info('Using config: \n%s', OmegaConf.to_yaml(args))
     seed_everything(args.random_seed)
     os.makedirs(args.output_dir, exist_ok=True)
@@ -78,27 +76,18 @@ def build_model(args, num_classes):
 def build_datasets(args):
     if args.dataset == 'CIFAR10':
         if args.ssl_algorithm.name == 'pseudo_labels':
-            ssl_transforms = CIFAR10PseudoLabelTransforms()
+            ssl_transforms = cifar.CIFAR10PseudoLabelTransforms()
         elif args.ssl_algorithm.name == 'pi_model':
-            ssl_transforms = CIFAR10PIModelTransforms()
+            ssl_transforms = cifar.CIFAR10PIModelTransforms()
         elif args.ssl_algorithm.name == 'fixmatch':
-            ssl_transforms = CIFAR10PIModelTransforms()
+            ssl_transforms = cifar.CIFAR10PIModelTransforms()
         else:
             raise NotImplementedError
 
-        # Need to set seed so val splits are the same
-        data = cifar.CIFAR10(args.dataset_path, seed=args.random_seed)
-        ssl_data = cifar.CIFAR10(args.dataset_path, transforms=ssl_transforms, seed=args.random_seed)
+        data = cifar.CIFAR10(args.data_dir, seed=args.random_seed)
+        ssl_data = cifar.CIFAR10(args.data_dir, transforms=ssl_transforms, seed=args.random_seed)
     else:
         raise NotImplementedError()
-
-    # elif args.ssl_algorithm.name == 'flexmatch':
-    #     ds = FlexMatchWrapper(
-    #         ds=ds,
-    #         ds_path=args.dataset_path,
-    #         transforms_weak=transform_weak,
-    #         transforms_strong=transform_strong
-    #     )
     return data, ssl_data
 
 
@@ -118,74 +107,6 @@ def build_dataloaders(args, train_ds, train_ds_ssl):
     unlabeled_loader = DataLoader(train_ds_ssl, batch_size=unlabeled_batch_size, sampler=unlabeled_sampler)
 
     return labeled_loader, unlabeled_loader
-
-
-class MultiTransform:
-    def __init__(self, *transforms) -> None:
-        self.transforms = transforms
-
-    def __call__(self, x):
-        return [transform(x) for transform in self.transforms]
-
-
-class CIFAR10PseudoLabelTransforms(cifar.CIFAR10StandardTransforms):
-    def __init__(self):
-        super().__init__()
-        self.mean = cifar.CIFAR10Transforms.mean.value
-        self.std = cifar.CIFAR10Transforms.std.value
-
-    @property
-    def train_transform(self):
-        transform_weak = transforms.Compose([
-            transforms.Resize(32),
-            transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(self.mean, self.std),
-        ])
-        return transform_weak
-
-
-class CIFAR10PIModelTransforms(CIFAR10PseudoLabelTransforms):
-    @property
-    def train_transform(self):
-        transform_weak1 = transforms.Compose([
-            transforms.Resize(32),
-            transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(self.mean, self.std),
-        ])
-        transform_weak2 = transforms.Compose([
-            transforms.Resize(32),
-            transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(self.mean, self.std),
-        ])
-        return MultiTransform(transform_weak1, transform_weak2)
-
-
-class CIFAR10FixMatchTransforms(CIFAR10PIModelTransforms):
-    @property
-    def train_transform(self):
-        transform_weak = transforms.Compose([
-            transforms.Resize(32),
-            transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize(self.mean, self.std),
-        ])
-
-        transform_strong = transforms.Compose([
-            transforms.Resize(32),
-            transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
-            transforms.RandomHorizontalFlip(),
-            RandAugment(3, 5),
-            transforms.ToTensor(),
-            transforms.Normalize(self.mean, self.std)
-        ])
-        return MultiTransform(transform_weak, transform_strong)
 
 
 if __name__ == "__main__":

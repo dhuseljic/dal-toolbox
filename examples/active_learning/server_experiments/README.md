@@ -65,12 +65,9 @@ The following datasets are implemented:
 | CIFAR10 [[2](#sources)]     | `CIFAR10`     |
 | CIFAR100 [[2](#sources)]    | `CIFAR100`    |
 | SVHN  [[3](#sources)]       | `SVHN`        |
-| ImageNet [[7](#sources)]    | `ImageNet`    | ?
-| ImageNet50 [[8](#sources)]  | `ImageNet50`  | ?
-| ImageNet100 [[8](#sources)] | `ImageNet100` | ?
-| ImageNet200 [[8](#sources)] | `ImageNet200` | ?
+| ImageNet [[7](#sources)]    | `ImageNet`    |
 
-Keep in mind that ImageNet and its subsets are not automatically downloaded and have to be downloaded manually (See https://image-net.org/).
+Keep in mind that ImageNet is not automatically downloaded and has to be downloaded manually (See https://image-net.org/).
 
 ## Active Learning Strategies
 
