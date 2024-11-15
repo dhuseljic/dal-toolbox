@@ -16,15 +16,9 @@ class DropQuery(Query):
         # Get self.num_iter many forward propagations of each unlabeled sample and extract the resutling label prediction
         labels = []
         model.model.set_dropout(p=self.p_drop)
-        with torch.no_grad():
-            for _ in range(self.num_iter):
-                lab = []
-                for batch in loader_unlabeled:
-                    samples = batch[0]
-                    logits = model.model.forward_dropout(samples)
-                    lab.append(logits.softmax(-1).argmax(-1))
-                lab = torch.cat(lab)
-                labels.append(lab)
+        for _ in range(self.num_iter):
+            lab = model.get_logits(loader_unlabeled, device="cuda", apply_dropout=True).softmax(-1).argmax(-1).cpu()
+            labels.append(lab)
         labels = torch.stack(labels)
 
         # Then count the number of missmatches to the originally predicted label
@@ -37,26 +31,12 @@ class DropQuery(Query):
 
         # Return indexlist of unlabeled samples that are sufficiently uncertain
         return torch.nonzero(mismatch > thresh).flatten()
-    
-    def get_emb_probs(self, dataloader, model):
-        embeddings, probs = [], []
-        with torch.no_grad():
-            for batch in dataloader:
-                samples = batch[0]
-                log, emb = model(samples, return_features=True)
-                embeddings.append(emb)
-                probs.append(log.softmax(-1))
-
-        embeddings = torch.cat(embeddings)
-        probs = torch.cat(probs)
-
-        return embeddings, probs
 
     def query(self, *, model, al_datamodule, acq_size, **kwargs):
         loader_unlabeled, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
         num_unlabeled = len(unlabeled_indices)
 
-        embeddings, probs = self.get_emb_probs(dataloader=loader_unlabeled, model=model)
+        embeddings, probs = model.get_representations_and_probas(dataloader=loader_unlabeled, device="cuda")
         y_star = probs.argmax(dim=1)
         candidates = self._get_candidates(model, loader_unlabeled, y_star, acq_size)
 

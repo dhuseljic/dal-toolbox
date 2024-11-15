@@ -117,10 +117,6 @@ def main(args):
             "train_stats": train_stats,
             "validation_stats": validation_stats,
             "test_stats": test_stats,
-            "labeled_indices": al_datamodule.labeled_indices,
-            "n_labeled_samples": len(al_datamodule.labeled_indices),
-            "unlabeled_indices": al_datamodule.unlabeled_indices,
-            "n_unlabeled_samples": len(al_datamodule.unlabeled_indices),
         })
         results[f'cycle{i_acq}'] = cycle_results
 

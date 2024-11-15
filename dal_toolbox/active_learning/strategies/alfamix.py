@@ -44,14 +44,13 @@ class AlfaMix(Query):
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
         labeled_dataloader, _ = al_datamodule.labeled_dataloader()
 
-        # Get the anchors, i.e., the centroids in the embedding space, of each observed class based on the labeled pool
-        z_l, y_l = model.model.get_representations(dataloader=labeled_dataloader, return_labels=True, device='cuda')
-        z_star = self._get_anchors(z_l, y_l).to('cuda')
-
         # Retrieve gradient-embeddings, embeddings and pseudo-labels for the unlabeled data
-        grads, z_u, y_star = model.model.get_grad_representations(unlabeled_dataloader, device='cuda', return_embeddings=True, return_pseudo_labels=True)
-        grads = grads.sum(1)
+        grads, z_u, y_star = model.get_alfa_grad_representations(unlabeled_dataloader, device='cuda')
 
+        # Get the anchors, i.e., the centroids in the embedding space, of each observed class based on the labeled pool
+        z_l, y_l = model.get_representations(dataloader=labeled_dataloader, return_labels=True, device='cuda')
+        z_star = self._get_anchors(z_l, y_l).to('cuda')
+        
         candidates = self._get_candidates(z_u.to('cuda'), z_star.to('cuda'), grads.to('cuda'), y_star.to('cuda'), model=model.to('cuda'))
 
         # When there are not enough candidates, fill them up with random selection.

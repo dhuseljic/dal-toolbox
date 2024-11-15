@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --ntasks=1
 #SBATCH --mem=64GB
-#SBATCH --array=0-3%4
+#SBATCH --array=0-98%4
 #SBATCH --output=/mnt/stud/work/phahn/repositories/dal-toolbox/logs/active_learning/%A_%a_%x.out
 
 # Active Environment, change to directory and print certain infos
@@ -14,16 +14,25 @@ source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 cd /mnt/stud/work/phahn/repositories/dal-toolbox/dal-toolbox/examples/active_learning/server_experiments/
 
 # Create tupel of variables
-datasets=(CIFAR10 CIFAR100 SVHN ImageNet)
+queries=(random randomclust entropy leastconfidence margin coreset badge typiclust alfamix dropquery falcun)
+datasets=(CIFAR10 CIFAR100 SVHN)
+query_sizes=(250 250 250)
+n_queries=(9 9 9)
+random_seeds=(1 2 3)
 
 # Get the current task index from the job array and select instances of variables based on it
 index=$SLURM_ARRAY_TASK_ID
-dset=${datasets[$index]}
+query=${queries[$index % 11]}
+model=resnet18
+dset=${datasets[$index / 11 % 3]}
+qs=${query_sizes[$index / 11 % 3]}
+nq=${n_queries[$index / 11 % 3]}
+seed=${random_seeds[$index / 33]}
 
 # Predefine certain paths
 data_dir=/mnt/stud/work/phahn/datasets/
 imagenet_dir=/mnt/datasets/imagenet/ILSVRC2012/
-output_dir=/mnt/stud/work/phahn/repositories/dal-toolbox/output/testing/${ds}/
+output_dir=/mnt/stud/work/phahn/repositories/dal-toolbox/output/active_learning/baselines_new/${model}/${dset}/${query}/seed_${seed}/
 cache_dir=/mnt/stud/work/phahn/dino_cache/
 storage_dir=/mnt/stud/work/phahn/storage/
 
@@ -34,8 +43,11 @@ python -u active_learning.py \
         path.cache_dir=$cache_dir \
         path.storage_dir=$storage_dir \
         path.imagenet_dir=$imagenet_dir \
-        random_seed=42 \
-        al_strategy=random \
-        al_cycle.n_acq=0 \
-	model=dinov2 \
+        random_seed=$seed \
+        al_strategy=$query \
+        al_strategy.subset_size=10000 \
+        al_cycle.n_init=$qs \
+        al_cycle.acq_size=$qs \
+        al_cycle.n_acq=$nq \
+	model=$model \
         dataset=$dset \

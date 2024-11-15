@@ -18,7 +18,7 @@ class Falcun(Query):
 
     def query(self, *, model, al_datamodule, acq_size, **kwargs):
         loader_unlabeled, idxs_unlabeled = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
-        probs = model.model.get_probas(dataloader=loader_unlabeled, device='cuda')
+        probs = model.get_logits(dataloader=loader_unlabeled, device='cuda').softmax(-1)
         unc = self.get_unc(probs, uncertainty="margin")
 
         if self.deterministic and self.custom_dist == "unc":

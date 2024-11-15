@@ -92,7 +92,7 @@ class ResNet18(nn.Module):
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
 
-    def forward(self, x, return_features=False):
+    def forward(self, x, return_features=False, apply_dropout=False):
         out = self.maxpool(F.relu(self.bn1(self.conv1(x))))
         out = self.layer1(out)
         out = self.layer2(out)
@@ -101,6 +101,8 @@ class ResNet18(nn.Module):
         out = F.avg_pool2d(out, 4)
         out = out.view(out.size(0), -1)
         features = out
+        if apply_dropout:
+            out = self.dropout(out)
         out = self.linear(out)
         if return_features:
             out = (out, features)
@@ -109,65 +111,42 @@ class ResNet18(nn.Module):
     def set_dropout(self, p):
         self.dropout = nn.Dropout(p=p)
     
-    def forward_dropout(self, x, return_features=False):
-        out = self.maxpool(F.relu(self.bn1(self.conv1(x))))
-        out = self.layer1(out)
-        out = self.layer2(out)
-        out = self.layer3(out)
-        out = self.layer4(out)
-        out = F.avg_pool2d(out, 4)
-        out = out.view(out.size(0), -1)
-        features = out
-        out = self.linear(self.dropout(out))
-        if return_features:
-            out = (out, features)
-        return out
-    
-    @torch.inference_mode()
-    def get_alpha_grad_representations(self, dataloader, device):
+    # No context manager applied as alfamix requires grad calculations
+    def get_alfa_grad_representations(self, dataloader, device):
         self.to(device)
-        self.eval()
 
-        # Create a clone of last linear layer with gradients enabled
-        # TODO: Is there an easier way to do this?
-        with torch.inference_mode(False), torch.autocast("cuda", enabled=False):
-            linear = nn.Linear(512, 10, device='cuda')
-            linear.weight = nn.Parameter(self.linear.weight.clone().requires_grad_(True))  
-            linear.bias = nn.Parameter(self.linear.bias.clone().requires_grad_(True))  
-
-        gradients, all_logits, embeddings = [], [], []
+        embeddings, gradients, pseudo_labels = [], [], []
         for batch in dataloader:
-            x = batch[0].to(device)
-            _, emb = self(x, return_features=True)
-            with torch.inference_mode(False), torch.autocast("cuda", enabled=False):
-                emb = emb.clone().requires_grad_()
-                logits = linear(emb)
-                loss = F.cross_entropy(logits, logits.argmax(dim=1), reduction="sum")
-                grad = torch.autograd.grad(loss, emb)[0]
+            input = batch[0].to(device)
+            _, embedding = self(input, return_features=True)
+            logits = self.linear(embedding.requires_grad_())
+            preds = logits.softmax(-1).argmax(-1)
+            loss = F.cross_entropy(logits, preds, reduction="sum")
+            grads = torch.autograd.grad(loss, embedding)[0]
 
-            gradients.append(grad)
-            embeddings.append(emb)
-            all_logits.append(logits)
+            embeddings.append(embedding.cpu().detach())
+            gradients.append(grads.cpu())
+            pseudo_labels.append(preds.cpu())
 
-        # Concat all batches
+        # Concat all tensors and return
         gradients = torch.cat(gradients)
         embeddings = torch.cat(embeddings)
-        all_logits = torch.cat(all_logits)
-
-        return gradients, embeddings, all_logits
+        pseudo_labels = torch.cat(pseudo_labels)
+        
+        return gradients, embeddings, pseudo_labels
 
     @torch.inference_mode()
-    def get_logits(self, dataloader, device, return_features=False):
+    def get_logits(self, dataloader, device, return_features=False, apply_dropout=False):
         self.to(device)
         self.eval()
         all_logits, all_features = [], []
         for batch in dataloader:
-            inputs = batch[0]
+            inputs = batch[0].to(device)
             if return_features:
-                logits, features = self(inputs.to(device), return_features=True)
+                logits, features = self(inputs, return_features=True, apply_dropout=apply_dropout)
                 all_features.append(features)
             else:
-                logits = self(inputs.to(device))
+                logits = self(inputs, apply_dropout=apply_dropout)
             all_logits.append(logits)
         logits = torch.cat(all_logits)
         if return_features:
@@ -176,36 +155,27 @@ class ResNet18(nn.Module):
         return logits
 
     @torch.inference_mode()
-    def get_probas(self, dataloader, device):
-        logits = self.get_logits(dataloader=dataloader, device=device)
-        probas = logits.softmax(-1)
-        return probas
-
-    @torch.inference_mode()
     def get_representations(self, dataloader, device, return_labels=False):
         self.to(device)
-        self.eval()
-        all_features = []
-        all_labels = []
+
+        all_features, all_labels = [], []
         for batch in dataloader:
-            inputs = batch[0]
-            labels = batch[1]
+            inputs, labels = batch[0].to(device), batch[1]
             _, features = self(inputs.to(device), return_features=True)
             all_features.append(features.cpu())
             all_labels.append(labels)
-        features = torch.cat(all_features)
 
-        if return_labels:
-            labels = torch.cat(all_labels)
-            return features, labels
-        return features
+        features = torch.cat(all_features)
+        labels = torch.cat(all_labels)
+
+        return (features, labels) if return_labels else features
 
     @torch.inference_mode()
-    def get_grad_representations(self, dataloader, device, return_pseudo_labels=False, return_embeddings=False):
+    def get_grad_representations(self, dataloader, device):
         self.eval()
         self.to(device)
 
-        embeddings, gradients, pseudo_labels = [], [], []
+        gradients= []
         for batch in dataloader:
             inputs = batch[0].to(device)
             logits, features = self(inputs, return_features=True)
@@ -218,38 +188,27 @@ class ResNet18(nn.Module):
             grad = (factor[:, :, None] * features[:, None, :])
 
             gradients.append(grad.cpu())
-            if return_pseudo_labels:
-                pseudo_labels.append(probas.argmax(-1).cpu())
-            if return_embeddings:
-                embeddings.append(features.cpu())
 
         # Concat all tensors and return according to the requests
         gradients = torch.cat(gradients)
-        if return_embeddings:
-            embeddings = torch.cat(embeddings)
-            if return_pseudo_labels:
-                pseudo_labels = torch.cat(pseudo_labels)
-                return gradients, embeddings, pseudo_labels
-            else:
-                return gradients, embeddings
-        elif return_pseudo_labels:
-            pseudo_labels = torch.cat(pseudo_labels)
-            return gradients, pseudo_labels
-        else:
-            return gradients
+        return gradients
         
     @torch.inference_mode()
-    def get_representations_and_probas(self, dataloader):
-        all_features = []
-        all_probas = []
+    def get_representations_and_probas(self, dataloader, device):
+        self.to(device)
+
+        all_features, all_probas = [], []
         for batch in dataloader:
-            input = batch[0]
+            input = batch[0].to(device)
             logits, features = self(input, return_features=True)
+            probas = logits.softmax(-1)
             all_features.append(features.cpu())
-            all_probas.append(logits.softmax(-1))
+            all_probas.append(probas.cpu())
+            
         features = torch.cat(all_features)
         probas = torch.cat(all_probas)
         return features, probas
+        
 
 
 

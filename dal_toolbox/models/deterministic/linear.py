@@ -16,36 +16,48 @@ class LinearModel(nn.Module):
     def set_dropout(self, p):
         self.dropout = nn.Dropout(p=p)
 
-    def forward(self, x, return_features=False):
-        out = self.linear(x)
-        if return_features:
-            out = (out, x)
-        return out
-    
-    def forward_dropout(self, x, return_features=False):
-        x = self.dropout(x)
+    def forward(self, x, return_features=False, apply_dropout=False):
+        if apply_dropout:
+            x = self.dropout(x)
         out = self.linear(x)
         if return_features:
             out = (out, x)
         return out
 
-    @torch.inference_mode()
-    def get_logits(self, dataloader, device):
+    # No context manager applied as alfamix requires grad calculations
+    def get_alfa_grad_representations(self, dataloader, device):
         self.to(device)
-        self.eval()
+
+        embeddings, gradients, pseudo_labels = [], [], []
+        for batch in dataloader:
+            embedding = batch[0].to(device).requires_grad_()
+            logits = self(embedding)
+            preds = logits.softmax(-1).argmax(-1)
+            loss = F.cross_entropy(logits, preds, reduction="sum")
+            grads = torch.autograd.grad(loss, embedding)[0]
+
+            embeddings.append(embedding.cpu().detach())
+            gradients.append(grads.cpu())
+            pseudo_labels.append(preds.cpu())
+
+        # Concat all tensors and return
+        gradients = torch.cat(gradients)
+        embeddings = torch.cat(embeddings)
+        pseudo_labels = torch.cat(pseudo_labels)
+        
+        return gradients, embeddings, pseudo_labels
+
+    @torch.inference_mode()
+    def get_logits(self, dataloader, device, apply_dropout=False):
+        self.to(device)
+        self.train(apply_dropout)
         all_logits = []
         for batch in dataloader:
-            inputs = batch[0]
-            logits = self(inputs.to(device))
+            inputs = batch[0].to(device)
+            logits = self(inputs, apply_dropout=apply_dropout)
             all_logits.append(logits)
         logits = torch.cat(all_logits)
         return logits
-
-    @torch.inference_mode()
-    def get_probas(self, dataloader, device):
-        logits = self.get_logits(dataloader=dataloader, device=device)
-        probas = logits.softmax(-1)
-        return probas
 
     @torch.inference_mode()
     def get_representations(self, dataloader, return_labels=False, device='cuda'):
@@ -65,24 +77,27 @@ class LinearModel(nn.Module):
         return features
     
     @torch.inference_mode()
-    def get_representations_and_probas(self, dataloader):
-        all_features = []
-        all_probas = []
+    def get_representations_and_probas(self, dataloader, device):
+        self.to(device)
+
+        all_features, all_probas = [], []
         for batch in dataloader:
-            features = batch[0]
+            features = batch[0].to(device)
+            logits = self(features)
+            probas = logits.softmax(-1)
             all_features.append(features.cpu())
-            all_probas.append(self(features).softmax(-1))
+            all_probas.append(probas.cpu())
+            
         features = torch.cat(all_features)
         probas = torch.cat(all_probas)
         return features, probas
 
-
     @torch.inference_mode()
-    def get_grad_representations(self, dataloader, device, return_pseudo_labels=False, return_embeddings=False):
+    def get_grad_representations(self, dataloader, device):
         self.eval()
         self.to(device)
 
-        embeddings, gradients, pseudo_labels = [], [], []
+        gradients = []
         for batch in dataloader:
             inputs = batch[0].to(device)
             logits = self(inputs)
@@ -95,22 +110,7 @@ class LinearModel(nn.Module):
             grad = (factor[:, :, None] * inputs[:, None, :])
 
             gradients.append(grad.cpu())
-            if return_pseudo_labels:
-                pseudo_labels.append(probas.argmax(-1))
-            if return_embeddings:
-                embeddings.append(inputs)
 
         # Concat all tensors and return according to the requests
         gradients = torch.cat(gradients)
-        if return_embeddings:
-            embeddings = torch.cat(embeddings)
-            if return_pseudo_labels:
-                pseudo_labels = torch.cat(pseudo_labels)
-                return gradients, embeddings, pseudo_labels
-            else:
-                return gradients, embeddings
-        elif return_pseudo_labels:
-            pseudo_labels = torch.cat(pseudo_labels)
-            return gradients, pseudo_labels
-        else:
-            return gradients
+        return gradients
