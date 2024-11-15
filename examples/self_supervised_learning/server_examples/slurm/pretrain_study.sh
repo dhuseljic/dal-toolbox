@@ -5,22 +5,15 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=main
 #SBATCH --job-name=pretrain_study
-#SBATCH --output=/mnt/stud/work/phahn/repositories/dal-toolbox/logs/self_supervised_learning/%x_%A_%a.log
-#SBATCH --array=0-26%2
+#SBATCH --output=/mnt/stud/work/phahn/repositories/dal-toolbox/logs/self_supervised_learning/%x.log
 
 date;hostname;pwd
-source /mnt/stud/work/python/mconda/39/bin/activate base
-conda activate dal-toolbox
+source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 cd /mnt/stud/work/phahn/repositories/dal-toolbox/dal-toolbox/examples/self_supervised_learning/server_examples/
 
-models=(resnet18 wideresnet282 wideresnet2810)
-datasets=(CIFAR10 CIFAR100 SVHN)
-seeds=(1 2 3)
-
-index=$SLURM_ARRAY_TASK_ID
-model=${models[$index % 3]}
-dataset=${datasets[$index / 3 % 3]}
-seed=${seeds[$index / 9 % 3]}
+model=resnet18
+dataset=CIFAR10
+seed=1
 
 OUTPUT_DIR=/mnt/stud/work/phahn/repositories/dal-toolbox/output/self_supervised_learning/pretraining/${dataset}/${model}/seed_${seed}/
 DATA_DIR=/mnt/stud/work/phahn/datasets/
