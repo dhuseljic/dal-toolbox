@@ -80,7 +80,7 @@ def build_datasets(args):
         elif args.ssl_algorithm.name == 'pi_model':
             ssl_transforms = cifar.CIFAR10PIModelTransforms()
         elif args.ssl_algorithm.name == 'fixmatch':
-            ssl_transforms = cifar.CIFAR10PIModelTransforms()
+            ssl_transforms = cifar.CIFAR10FixMatchTransforms()
         else:
             raise NotImplementedError
 
