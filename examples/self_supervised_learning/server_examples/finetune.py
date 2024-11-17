@@ -33,7 +33,7 @@ def main(args):
     datamodule = build_finetune_datamodule(data_dir=args.data_dir, dataset=args.dataset)
     if args.subset_size:
         train_indices = random.sample(range(len(datamodule.train_dataset)), k=args.subset_size)
-        train_loader = DataLoader(Subset(datamodule.train_dataset, train_indices), batch_size=args.model.train_batch_size, shuffle=True, drop_last=True)
+        train_loader = DataLoader(Subset(datamodule.train_dataset, train_indices), batch_size=args.model.train_batch_size, shuffle=True, drop_last=(args.model.train_batch_size<args.subset_size))
     else:
         train_loader = DataLoader(datamodule.train_dataset, train_indices, batch_size=args.model.train_batch_size, shuffle=True, drop_last=True)
     test_loader = DataLoader(datamodule.test_dataset, batch_size=args.model.test_batch_size)

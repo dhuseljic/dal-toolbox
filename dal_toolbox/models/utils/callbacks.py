@@ -84,7 +84,10 @@ class MetricLogger(L.Callback):
         metrics['lr'] = trainer.optimizers[0].param_groups[0]['lr']
 
         for key, val in metrics.items():
-            batch_size = len(batch[0])
+            if type(batch) == dict:
+                batch_size = len(batch['labeled'][0])
+            else:
+                batch_size = len(batch[0])
             self.meters[key].update(val, n=batch_size)
 
         if self.train_step % self.log_interval == 0:
