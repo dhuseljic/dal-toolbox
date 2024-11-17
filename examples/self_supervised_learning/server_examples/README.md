@@ -69,7 +69,7 @@ Currently, only SimCLR [[4](#sources)] is supported by this repository as a Self
 
 ## Baseline Results
 
-Here we see an overview of all baseline experiments performed.
+Here we see an overview of all baseline experiments performed. For this, we pretrained each available model on CIFAR10 using SimCLR. Subsequently, we finetuned a linear layer on the extracted features with varying number of labeled samples. As a baseline reference, we also included the performance of the same models without pretraining, demonstrating the impact of SSL.
 All slurm scripts used to run these experiments can be found [here](slurm/).
 
 | Dataset   | Model            | Absolute Performance                                     |
