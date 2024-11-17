@@ -72,6 +72,12 @@ Currently, only SimCLR [[4](#sources)] is supported by this repository as a Self
 Here we see an overview of all baseline experiments performed.
 All slurm scripts used to run these experiments can be found [here](slurm/).
 
+| Dataset   | Model            | Absolute Performance                                     |
+|---------  |------------------|----------------------------------------------------------|
+| CIFAR10   | ResNet-18        | <img src="./plots/resnet18.png"/>                        | 
+| CIFAR10   | WideResNet-28-2  | <img src="./plots/wideresnet282.png"/>                   | 
+| CIFAR10   | WideResNet-28-10 | <img src="./plots/wideresnet2810.png"/>                  |
+
 
 ## Sources
 
