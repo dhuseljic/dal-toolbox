@@ -15,7 +15,7 @@ from dal_toolbox.datasets import ImageNet, StanfordDogs, CIFAR10LT
 from dal_toolbox.models.laplace import LaplaceLinear, LaplaceModel
 
 
-def build_datasets(args, val_split=False, cache_features=True):
+def build_datasets(args, cache_features=True):
     image_datasets = ['cifar10', 'cifar10-lt', 'stl10', 'snacks', 'dtd', 'cifar100', 'food101', 'flowers102',
                       'caltech101', 'stanford_dogs', 'tiny_imagenet', 'imagenet']
     text_datasets = ['agnews', 'dbpedia', 'banking77', 'clinc']
@@ -26,16 +26,13 @@ def build_datasets(args, val_split=False, cache_features=True):
             model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
 
             train_ds = FeatureDataset(model, data.train_dataset, cache=True, cache_dir=args.dataset_path)
-            if val_split:
-                test_ds = FeatureDataset(model, data.val_dataset, cache=True, cache_dir=args.dataset_path)
-            else:
-                test_ds = FeatureDataset(model, data.test_dataset, cache=True, cache_dir=args.dataset_path)
+            val_ds = FeatureDataset(model, data.val_dataset, cache=True, cache_dir=args.dataset_path)
+            test_ds = FeatureDataset(model, data.test_dataset, cache=True, cache_dir=args.dataset_path)
         else:
             train_ds = data.train_dataset
-            if val_split:
-                test_ds = data.val_dataset
-            else:
-                test_ds = data.test_dataset
+            val_ds = data.val_dataset
+            test_ds = data.test_dataset
+
         num_classes = data.num_classes
 
     elif args.dataset_name in text_datasets:
@@ -57,12 +54,10 @@ def build_datasets(args, val_split=False, cache_features=True):
         data = data.with_format("torch")
 
         model = BertSequenceClassifier(num_classes=num_classes)
-        train_ds = FeatureDataset(model, data["train"], cache=True,
-                                  cache_dir=args.dataset_path, task="text")
-        test_ds = FeatureDataset(model, data["test"], cache=True,
-                                 cache_dir=args.dataset_path, task="text")
+        train_ds = FeatureDataset(model, data["train"], cache=True, cache_dir=args.dataset_path, task="text")
+        test_ds = FeatureDataset(model, data["test"], cache=True, cache_dir=args.dataset_path, task="text")
 
-    return train_ds, test_ds, num_classes
+    return train_ds, val_ds, test_ds, num_classes
 
 
 def build_image_data(args, plain_transforms=False):

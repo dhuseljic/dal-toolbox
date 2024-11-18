@@ -28,14 +28,15 @@ logging.getLogger("lightning.pytorch").setLevel(logging.ERROR)
 def main(args):
     seed_everything(42)
     print(OmegaConf.to_yaml(args))
-    train_ds, test_ds, num_classes = build_datasets(
-        args, val_split=args.use_val_split, cache_features=args.cache_features)
+    train_ds, val_ds, test_ds, num_classes = build_datasets(args, cache_features=args.cache_features)
+    # Keep same train_ds and test_ds while changing the size of the validation dataset
+    val_ds, _ = torch.utils.data.random_split(val_ds, [args.val_split, 1 - args.val_split])
 
     seed_everything(args.random_seed)
     al_datamodule = ActiveLearningDataModule(
         train_dataset=train_ds,
         query_dataset=train_ds,
-        val_dataset=test_ds,
+        val_dataset=val_ds,
         test_dataset=test_ds,
         train_batch_size=args.model.train_batch_size,
         predict_batch_size=args.model.predict_batch_size,
@@ -68,7 +69,6 @@ def main(args):
             )
             etime = time.time()
             al_datamodule.update_annotations(indices)
-
         artifacts = {
             'query_indices': indices if i_acq != 0 else al_datamodule.labeled_indices,
             'model': model.state_dict(),
@@ -125,7 +125,7 @@ def build_al_strategy(args):
             batch_types=args.al.optimal.batch_types,
             look_ahead=args.al.optimal.look_ahead,
             num_mc_labels=args.al.optimal.num_mc_labels,
-            use_val_ds=args.al.optimal.use_val_ds,
+            perf_estimation=args.al.optimal.perf_estimation,
             loss=args.al.optimal.loss,
             use_retraining=args.al.optimal.use_retraining,
             num_retraining_epochs=args.al.optimal.num_retraining_epochs,
@@ -148,10 +148,10 @@ class Optimal(Query):
                  subset_size=None,
                  num_batches=200,
                  batch_types=['random', 'diverse', 'uncertain'],
-                 num_mc_labels=None,
                  look_ahead='true_labels',
+                 num_mc_labels=5,
+                 perf_estimation='val_ds',
                  use_retraining=True,
-                 use_val_ds=True,
                  num_retraining_epochs=10,
                  gamma=10,
                  loss='cross_entropy',
@@ -172,7 +172,7 @@ class Optimal(Query):
         self.num_mc_labels = num_mc_labels
 
         # Performance Estimation
-        self.use_val_ds = use_val_ds
+        self.perf_erstimation = perf_estimation
         if loss == 'cross_entropy':
             self.loss_fn = torch.nn.CrossEntropyLoss()
         elif loss == 'expected_cross_entropy':
@@ -208,7 +208,7 @@ class Optimal(Query):
                            for _ in range(num_batches)]
                 indices_batches.extend(indices)
 
-            elif batch_type == 'diverse': # KMeans with covered and uncovered clusters
+            elif batch_type == 'diverse':  # KMeans with covered and uncovered clusters
                 from sklearn.cluster import KMeans
                 num_clusters = acq_size + len(labeled_features)
                 km = KMeans(n_clusters=num_clusters, n_init='auto')
@@ -277,24 +277,26 @@ class Optimal(Query):
         loss_batches = []
         init_params = model.state_dict()
         for indices in track(indices_batches):
-            if self.look_ahead == 'true_labels': # Use true labels of batch for model training
+            if self.look_ahead == 'true_labels':  # Use true labels of batch for model training
                 labels = unlabeled_labels[indices]
                 labels = labels.unsqueeze(0)
-            elif self.look_ahead == 'pseudo_labels': # Use pseudo labels of model
+            elif self.look_ahead == 'pseudo_labels':  # Use pseudo labels of model
                 logits = unlabeled_logits[indices]
                 labels = logits.argmax(-1)
                 labels = labels.unsqueeze(0)
-            elif self.look_ahead == 'mc_labels': # Samples labels via Monte Carlo
+            elif self.look_ahead == 'mc_labels':  # Samples labels via Monte Carlo
                 categorical = torch.distributions.Categorical(logits=unlabeled_logits[indices])
                 labels = categorical.sample((self.num_mc_labels,))
-            elif self.look_ahead == 'all_labels': # Go through all label combinations
+            elif self.look_ahead == 'all_labels':  # Go through all label combinations
                 num_classes = unlabeled_logits.size(-1)
                 labels = itertools.product(range(num_classes), repeat=acq_size)
-            else: 
+            else:
                 raise NotImplementedError()
 
             loss_labels = []
             for labels_batch in labels:
+                if isinstance(labels_batch, tuple):
+                    labels_batch = torch.Tensor(labels_batch).long()
 
                 if self.use_retraining:
                     model.reset_states(reset_model_parameters=True)
@@ -309,27 +311,34 @@ class Optimal(Query):
                     retrain_indices = [unlabeled_indices[idx] for idx in indices]
                     retrain_loader = al_datamodule.custom_dataloader(
                         indices=retrain_indices, train=True, custom_labels=labels_batch)
-                    model.update_posterior( 
+                    model.update_posterior(
                         retrain_loader,
                         gamma=self.gamma,
                         from_representations=True,
                         device=self.device
                     )
 
-                if self.use_val_ds:
+                if self.perf_erstimation == 'val_ds':
                     loss = self.evaluate_model(model, al_datamodule.val_dataloader())
-                else:
+                elif self.perf_erstimation == 'test_ds':
+                    loss = self.evaluate_model(model, al_datamodule.test_dataloader())
+                elif self.perf_erstimation == 'unlabeled_ds':
+                    loss = self.evaluate_model(model, al_datamodule.unlabeled_dataloader()[0])
+                elif self.perf_erstimation == 'labeled_ds':
                     loss = self.evaluate_model(model, al_datamodule.labeled_dataloader()[0])
+                else:
+                    raise NotImplementedError(
+                        f'Performance estimation {self.perf_erstimation} not implemented.')
 
                 loss_labels.append(loss)
             loss_batches.append(np.mean(loss_labels))
 
         best_idx = np.argmin(loss_batches)
-        
+
         num_batch_per_type = self.num_batches // len(self.batch_types)
         batch_type = self.batch_types[best_idx.item() // num_batch_per_type]
         self.batch_type_count[batch_type] += 1
-        
+
         local_indices = indices_batches[best_idx]
         global_indices = [unlabeled_indices[idx] for idx in local_indices]
         return global_indices
@@ -347,8 +356,6 @@ class Optimal(Query):
             running_loss += len(inputs)*self.loss_fn(logits, targets).item()
         loss = running_loss / num_samples
         return loss
-
-
 
 
 if __name__ == '__main__':
