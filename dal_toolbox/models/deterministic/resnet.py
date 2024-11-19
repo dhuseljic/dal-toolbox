@@ -185,7 +185,7 @@ class ResNet18(nn.Module):
             num_classes = logits.size(-1)
 
             factor = F.one_hot(max_indices, num_classes=num_classes) - probas
-            grad = (factor[:, :, None] * features[:, None, :])
+            grad = (factor[:, :, None] * features[:, None, :]).flatten(-2)
 
             gradients.append(grad.cpu())
 

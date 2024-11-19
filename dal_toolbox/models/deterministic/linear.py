@@ -107,7 +107,7 @@ class LinearModel(nn.Module):
             num_classes = logits.size(-1)
 
             factor = F.one_hot(max_indices, num_classes=num_classes) - probas
-            grad = (factor[:, :, None] * inputs[:, None, :])
+            grad = (factor[:, :, None] * inputs[:, None, :]).flatten(-2)
 
             gradients.append(grad.cpu())
 
