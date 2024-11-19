@@ -129,7 +129,7 @@ def build_al_strategy(args):
             loss=args.al.optimal.loss,
             retraining=args.al.optimal.retraining,
             num_retraining_epochs=args.al.optimal.num_retraining_epochs,
-            update_gamma=args.al.optimal.gamma,
+            update_gamma=args.al.optimal.update_gamma,
             device=device,
         )
     elif args.al.strategy == 'margin':
