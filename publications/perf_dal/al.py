@@ -127,10 +127,10 @@ def build_al_strategy(args):
             num_mc_labels=args.al.optimal.num_mc_labels,
             perf_estimation=args.al.optimal.perf_estimation,
             loss=args.al.optimal.loss,
-            use_retraining=args.al.optimal.use_retraining,
+            retraining=args.al.optimal.retraining,
             num_retraining_epochs=args.al.optimal.num_retraining_epochs,
-            gamma=args.al.optimal.gamma,
-            device=device
+            update_gamma=args.al.optimal.gamma,
+            device=device,
         )
     elif args.al.strategy == 'margin':
         al_strategy = strategies.MarginSampling(subset_size=args.al.subset_size, device=device)
@@ -142,7 +142,6 @@ def build_al_strategy(args):
         raise NotImplementedError()
     return al_strategy
 
-
 class Optimal(Query):
     def __init__(self,
                  subset_size=None,
@@ -151,9 +150,9 @@ class Optimal(Query):
                  look_ahead='true_labels',
                  num_mc_labels=5,
                  perf_estimation='val_ds',
-                 use_retraining=True,
+                 retraining='train',
                  num_retraining_epochs=10,
-                 gamma=10,
+                 update_gamma=10,
                  loss='cross_entropy',
                  device='cpu',
                  random_seed=None,
@@ -186,9 +185,9 @@ class Optimal(Query):
             raise NotImplementedError()
 
         # Retraining
-        self.use_retraining = use_retraining
+        self.retraining = retraining
         self.num_retraining_epochs = num_retraining_epochs
-        self.gamma = gamma
+        self.update_gamma = update_gamma
 
     def select_batches(self, acq_size, unlabeled_features, unlabeled_logits, labeled_features, labeled_labels, batch_types):
         # TODO: maybe focus more often on clusters with many samples? class distribution
@@ -298,7 +297,7 @@ class Optimal(Query):
                 if isinstance(labels_batch, tuple):
                     labels_batch = torch.Tensor(labels_batch).long()
 
-                if self.use_retraining:
+                if self.retraining == 'train':
                     model.reset_states(reset_model_parameters=True)
                     retrain_indices = labeled_indices + [unlabeled_indices[idx] for idx in indices]
                     custom_labels = torch.cat((labeled_labels, labels_batch))
@@ -306,17 +305,19 @@ class Optimal(Query):
                         indices=retrain_indices, train=True, custom_labels=custom_labels)
                     trainer = Trainer(barebones=True, max_epochs=self.num_retraining_epochs)
                     trainer.fit(model, retrain_loader)
-                else:
+                elif self.retraining == 'update':
                     model.load_state_dict(init_params)
                     retrain_indices = [unlabeled_indices[idx] for idx in indices]
                     retrain_loader = al_datamodule.custom_dataloader(
                         indices=retrain_indices, train=True, custom_labels=labels_batch)
                     model.update_posterior(
                         retrain_loader,
-                        gamma=self.gamma,
+                        gamma=self.update_gamma,
                         from_representations=True,
                         device=self.device
                     )
+                else:
+                    raise NotImplementedError()
 
                 if self.perf_erstimation == 'val_ds':
                     loss = self.evaluate_model(model, al_datamodule.val_dataloader())

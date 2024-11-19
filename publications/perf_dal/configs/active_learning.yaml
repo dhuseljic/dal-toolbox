@@ -34,7 +34,7 @@ al:
     look_ahead: true_labels 
     perf_estimation: test_ds
     loss: cross_entropy
-    use_retraining: True
+    retraining: train
     num_retraining_epochs: 50
     gamma: 10
 
