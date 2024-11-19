@@ -9,7 +9,7 @@ from torchvision import transforms
 from rich.progress import track
 from omegaconf import DictConfig
 
-from dal_toolbox.models.laplace import LaplaceLayer, LaplaceModel
+from dal_toolbox.models.laplace import LaplaceLinear, LaplaceModel
 from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, ImageNet, TinyImageNet, Flowers102, StanfordDogs, Snacks
 
 from sklearn.datasets import fetch_openml
@@ -164,7 +164,7 @@ def build_tabular_data(data_id, path='data/'):
     return TensorDataset(X_train, y_train), TensorDataset(X_test, y_test), num_classes
 
 
-class LaplaceNet(LaplaceLayer):
+class LaplaceNet(LaplaceLinear):
     use_mean_field = True
 
     @torch.no_grad()
@@ -179,7 +179,7 @@ class LaplaceNet(LaplaceLayer):
                 logits = self(inputs.to(device))
             else:
                 logits = self.forward_monte_carlo(inputs.to(device))
-            all_logits.append(logits)
+            all_logits.append(logits.cpu())
         logits = torch.cat(all_logits)
         return logits
 

@@ -8,7 +8,7 @@ from dal_toolbox.utils import is_dist_avail_and_initialized
 from .random_features import mean_field_logits
 
 
-class LaplaceLayer(nn.Module):
+class LaplaceLinear(nn.Module):
     def __init__(self,
                  in_features: int,
                  out_features: int,
@@ -120,13 +120,19 @@ class LaplaceLayer(nn.Module):
             raise ValueError("Call eval mode before!")
         logits, cov = self.forward(x, return_cov=True)
 
+
         gp_mean = logits
         gp_var = cov.diag()
         gp_var = gp_var.unsqueeze(-1).expand_as(gp_mean)
         gp_std = torch.sqrt(gp_var)
 
         gaussian = torch.distributions.Normal(loc=gp_mean,  scale=gp_std)
-        mc_logits = gaussian.sample(sample_shape=(self.mc_samples,)).permute(1, 0, 2)
-        temperature = torch.sqrt(1 + self.mean_field_factor*gp_var)[:, None]
+        mc_logits = gaussian.sample(sample_shape=(self.mc_samples,))
+        mc_logits = mc_logits.permute(1, 0, 2)
+
+        # if self.mean_field_factor > 0:
+        #     temperature = torch.sqrt(1 + self.mean_field_factor*gp_var)[:, None]
+        # else:
+        temperature = 1
         mc_logits = mc_logits / temperature
         return mc_logits
