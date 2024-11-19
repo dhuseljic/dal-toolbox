@@ -2,11 +2,6 @@ random_seed: 42
 experiment_name: batch_al
 mlflow_uri: sqlite:///active_learning.db
 
-update_lmb: 1
-update_gamma: 10
-update_every: 1
-likelihood: gaussian
-
 dataset_path: /home/datasets
 dataset_name: cifar10
 val_split: 1
@@ -36,7 +31,7 @@ al:
     loss: cross_entropy
     retraining: train
     num_retraining_epochs: 50
-    gamma: 10
+    update_gamma: 10
 
 model:
   name: laplace
