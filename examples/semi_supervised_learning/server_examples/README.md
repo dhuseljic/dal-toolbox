@@ -80,7 +80,7 @@ Furthermore, for each algorithm, the hyperparameters `ssl_algorithm.u_ratio` and
 Here we see an overview of all baseline experiments performed.
 All slurm scripts used to run these experiments can be found [here](slurm/).
 
-TODO: Insert one single plot of Learning Curves concerning Supervised Baseline and each semi-sl algorithm? 
+To be done.
 
 ## Sources
 
