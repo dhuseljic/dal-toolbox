@@ -175,8 +175,7 @@ class Optimal(Query):
         if loss == 'cross_entropy':
             self.loss_fn = torch.nn.CrossEntropyLoss()
         elif loss == 'expected_cross_entropy':
-            self.loss_fn = lambda logits, _: torch.mean(
-                torch.sum(logits.softmax(-1) * logits.log_softmax(-1), dim=-1))
+            self.loss_fn = lambda logits, _: torch.mean(- torch.sum(logits.softmax(-1) * logits.log_softmax(-1), dim=-1))
         elif loss == 'zero_one':
             self.loss_fn = lambda logits, y: 1 - torch.mean((logits.argmax(dim=-1) == y).float())
         elif loss == 'expected_zero_one':
