@@ -4,7 +4,7 @@ from enum import Enum
 import torchvision
 
 from .base import BaseData, BaseTransforms
-from .corruptions import GaussianNoise
+from .corruptions import GaussianNoise, RandAugment
 from .utils import RepeatTransformations, PlainTransforms
 
 
@@ -42,23 +42,26 @@ class CIFAR10StandardTransformsWithoutNormalization(BaseTransforms):
 
 
 class CIFAR10SimCLRTransforms(BaseTransforms):
-    def __init__(self):
+    def __init__(self, colordiststr = 0.5):
         super().__init__()
+        self.mean = CIFAR10Transforms.mean.value
+        self.std = CIFAR10Transforms.std.value
+        self.color_jitter = torchvision.transforms.ColorJitter(0.8 * colordiststr, 0.8 * colordiststr, 0.8 * colordiststr, 0.2 * colordiststr)
 
     @property
     def train_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.RandomResizedCrop(size=32),
-            torchvision.transforms.RandomHorizontalFlip(p=0.5),
-            torchvision.transforms.ToTensor(),
-        ])
+        transform = RepeatTransformations(torchvision.transforms.Compose([torchvision.transforms.RandomResizedCrop(size=32), torchvision.transforms.RandomHorizontalFlip(p=0.5), 
+                                                                        torchvision.transforms.RandomApply([self.color_jitter], p=0.8), torchvision.transforms.RandomGrayscale(p=0.2), 
+                                                                        torchvision.transforms.RandomApply([torchvision.transforms.GaussianBlur(kernel_size=3)], p=0.5), torchvision.transforms.ToTensor(), 
+                                                                        torchvision.transforms.Normalize(self.mean, self.std)]))
         return transform
 
     @property
     def eval_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-        ])
+        transform = RepeatTransformations(torchvision.transforms.Compose([torchvision.transforms.RandomResizedCrop(size=32), torchvision.transforms.RandomHorizontalFlip(p=0.5), 
+                                                                        torchvision.transforms.RandomApply([self.color_jitter], p=0.8), torchvision.transforms.RandomGrayscale(p=0.2), 
+                                                                        torchvision.transforms.RandomApply([torchvision.transforms.GaussianBlur(kernel_size=3)], p=0.5), torchvision.transforms.ToTensor(), 
+                                                                        torchvision.transforms.Normalize(self.mean, self.std)]))
         return transform
 
     @property
@@ -100,10 +103,75 @@ class CIFAR10StandardTransforms(BaseTransforms):
             torchvision.transforms.Normalize(self.mean, self.std)
         ])
         return transform
+    
+
+class MultiTransform:
+    def __init__(self, *transforms) -> None:
+        self.transforms = transforms
+
+    def __call__(self, x):
+        return [transform(x) for transform in self.transforms]
+
+
+class CIFAR10PseudoLabelTransforms(CIFAR10StandardTransforms):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def train_transform(self):
+        transform_weak = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(32),
+            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std),
+        ])
+        return transform_weak
+
+
+class CIFAR10PIModelTransforms(CIFAR10StandardTransforms):
+    @property
+    def train_transform(self):
+        transform_weak1 = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(32),
+            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std),
+        ])
+        transform_weak2 = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(32),
+            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std),
+        ])
+        return MultiTransform(transform_weak1, transform_weak2)
+
+
+class CIFAR10FixMatchTransforms(CIFAR10StandardTransforms):
+    @property
+    def train_transform(self):
+        transform_weak = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(32),
+            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std),
+        ])
+
+        transform_strong = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(32),
+            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            torchvision.transforms.RandomHorizontalFlip(),
+            RandAugment(3, 5),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std)
+        ])
+        return MultiTransform(transform_weak, transform_strong)
 
 
 class CIFAR10(BaseData):
-
     def __init__(self,
                  dataset_path: str,
                  transforms: BaseTransforms = None,
@@ -195,7 +263,7 @@ class CIFAR10ContrastiveTransforms(CIFAR10StandardTransforms):
             # GaussianBlur not used in original paper, however, other papers assign it importance
             torchvision.transforms.RandomApply([torchvision.transforms.GaussianBlur(kernel_size=3)], p=0.5),
             torchvision.transforms.ToTensor(),
-            # transforms.Normalize(self.mean, self.std),  # TODO (dhuseljic) Discuss if this should be used
+            # torchvision.transforms.Normalize(self.mean, self.std),  # TODO (dhuseljic) Discuss if this should be used
         ])
         return RepeatTransformations(transform)
 
@@ -208,7 +276,7 @@ class CIFAR10Contrastive(CIFAR10):
     """
     Contrastive version of CIFAR10.
 
-    This means that the transforms are repeated twice for each image, resulting in two views for each input image.
+    This means that the torchvision.transforms are repeated twice for each image, resulting in two views for each input image.
     """
 
     def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None, cds=0.5) -> None:
@@ -269,7 +337,7 @@ class CIFAR100ContrastiveTransforms(CIFAR100StandardTransforms):
             # GaussianBlur not used in original paper, however, other papers assign it importance
             torchvision.transforms.RandomApply([torchvision.transforms.GaussianBlur(kernel_size=3)], p=0.5),
             torchvision.transforms.ToTensor(),
-            # transforms.Normalize(self.mean, self.std),  # TODO (dhuseljic) Discuss if this should be used
+            # torchvision.transforms.Normalize(self.mean, self.std),  # TODO (dhuseljic) Discuss if this should be used
         ])
         return RepeatTransformations(transform)
 
@@ -291,23 +359,26 @@ class CIFAR100ContrastiveTransforms(CIFAR100StandardTransforms):
 
 
 class CIFAR100SimCLRTransforms(BaseTransforms):
-    def __init__(self):
+    def __init__(self, colordiststr = 0.5):
         super().__init__()
+        self.mean = CIFAR10Transforms.mean.value
+        self.std = CIFAR10Transforms.std.value
+        self.color_jitter = torchvision.transforms.ColorJitter(0.8 * colordiststr, 0.8 * colordiststr, 0.8 * colordiststr, 0.2 * colordiststr)
 
     @property
     def train_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.RandomResizedCrop(size=32),
-            torchvision.transforms.RandomHorizontalFlip(p=0.5),
-            torchvision.transforms.ToTensor(),
-        ])
+        transform = RepeatTransformations(torchvision.transforms.Compose([torchvision.transforms.RandomResizedCrop(size=32), torchvision.transforms.RandomHorizontalFlip(p=0.5), 
+                                                                        torchvision.transforms.RandomApply([self.color_jitter], p=0.8), torchvision.transforms.RandomGrayscale(p=0.2), 
+                                                                        torchvision.transforms.RandomApply([torchvision.transforms.GaussianBlur(kernel_size=3)], p=0.5), torchvision.transforms.ToTensor(), 
+                                                                        torchvision.transforms.Normalize(self.mean, self.std)]))
         return transform
 
     @property
     def eval_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-        ])
+        transform = RepeatTransformations(torchvision.transforms.Compose([torchvision.transforms.RandomResizedCrop(size=32), torchvision.transforms.RandomHorizontalFlip(p=0.5), 
+                                                                        torchvision.transforms.RandomApply([self.color_jitter], p=0.8), torchvision.transforms.RandomGrayscale(p=0.2), 
+                                                                        torchvision.transforms.RandomApply([torchvision.transforms.GaussianBlur(kernel_size=3)], p=0.5), torchvision.transforms.ToTensor(), 
+                                                                        torchvision.transforms.Normalize(self.mean, self.std)]))
         return transform
 
     @property
@@ -363,7 +434,7 @@ class CIFAR100Contrastive(CIFAR100):
     """
     Contrastive version of CIFAR100.
 
-    This means that the transforms are repeated twice for each image, resulting in two views for each input image.
+    This means that the torchvision.transforms are repeated twice for each image, resulting in two views for each input image.
     """
 
     def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None, cds=1.0) -> None:

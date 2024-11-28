@@ -2,9 +2,8 @@
 # Code partially from https://github.com/avihu111/TypiClust/blob/main/deep-al/pycls/al/typiclust.py
 
 import numpy as np
-import pandas as pd
 import torch
-from sklearn.cluster import MiniBatchKMeans, KMeans
+from sklearn.cluster import KMeans
 from sklearn.neighbors import NearestNeighbors
 
 from dal_toolbox.active_learning import ActiveLearningDataModule
@@ -14,7 +13,7 @@ from dal_toolbox.models.utils.base import BaseModule
 
 def get_nn(features, num_neighbors):
     features = features.numpy().astype(np.float32)
-    nn_calculator = NearestNeighbors(n_neighbors=num_neighbors + 1, metric='sqeuclidean', n_jobs=-1).fit(features)
+    nn_calculator = NearestNeighbors(n_neighbors=num_neighbors + 1, metric='sqeuclidean', n_jobs=16).fit(features)
     distances, indices = nn_calculator.kneighbors(features)
 
     # 0 index is the same sample, dropping it
@@ -39,12 +38,6 @@ def calculate_typicality(features, num_neighbors):
 def kmeans(features, num_clusters):
     km = KMeans(n_clusters=num_clusters, n_init='auto')
     km.fit_predict(features)
-    # if num_clusters <= 50:
-    #     km = KMeans(n_clusters=num_clusters, n_init='auto')
-    #     km.fit_predict(features)
-    # else:
-    #     km = MiniBatchKMeans(n_clusters=num_clusters, batch_size=5000, reassignment_ratio=0.0)
-    #     km.fit_predict(features)
     return km.labels_
 
 
@@ -75,97 +68,37 @@ class TypiClust(Query):
             labeled_features = model.get_representations(labeled_dataloader, device=self.device)
         else:
             labeled_features = torch.Tensor([])
-
         features = torch.cat((labeled_features, unlabeled_features))
+
+        # See https://github.com/scikit-activeml/scikit-activeml/blob/master/skactiveml/pool/_typi_clust.py
         clusters = kmeans(features, num_clusters=num_clusters)
+        cluster_sizes = np.zeros(num_clusters)
+        cluster_ids, cluster_id_sizes = np.unique(clusters, return_counts=True)
+        cluster_sizes[cluster_ids] = cluster_id_sizes
+        covered_clusters = np.unique(clusters[:len(labeled_indices)])
+        if len(covered_clusters) > 0:
+            cluster_sizes[covered_clusters] = 0
 
-        labels = clusters.copy()
-        existing_indices = np.arange(len(labeled_indices))
-
-        # counting cluster sizes and number of labeled samples per cluster
-        cluster_ids, cluster_sizes = np.unique(labels, return_counts=True)
-        cluster_labeled_counts = np.bincount(labels[existing_indices], minlength=len(cluster_ids))
-        clusters_df = pd.DataFrame(
-            {'cluster_id': cluster_ids, 'cluster_size': cluster_sizes, 'existing_count': cluster_labeled_counts,
-             'neg_cluster_size': -1 * cluster_sizes})
-        # drop too small clusters
-        clusters_df = clusters_df[clusters_df.cluster_size > self.MIN_CLUSTER_SIZE]
-        # sort clusters by lowest number of existing samples, and then by cluster sizes (large to small)
-        clusters_df = clusters_df.sort_values(['existing_count', 'neg_cluster_size'])
-        labels[existing_indices] = -1
-
-        selected = []
-
-        for i in range(acq_size):
-            cluster = clusters_df.iloc[i % len(clusters_df)].cluster_id
-            indices = (labels == cluster).nonzero()[0]
-            rel_feats = features[indices]
-            
-            if len(rel_feats) == 0: # in case cluster is empty skip the cluster, random sample rest
-                continue
-
-            typicality = calculate_typicality(rel_feats, min(self.K_NN, len(indices) // 2))
-            idx = indices[typicality.argmax()]
-            selected.append(idx)
-            labels[idx] = -1
-
-        selected = np.array(selected)
-        actual_indices = [unlabeled_indices[i - len(labeled_indices)] for i in selected]
-
-        if len(selected) != acq_size:
-            # Randomly sample the rest
-            filtered_indices = set(unlabeled_indices).difference(actual_indices)
-            idx = self.rng.choice(list(filtered_indices), size=acq_size - len(selected), replace=False)
-            actual_indices  = actual_indices + idx.tolist()
-            
-        return actual_indices
-
-
-        n_clusters = len(labeled_sample_indices) + batch_size
-        cluster_algo_dict[self.n_cluster_param_name] = n_clusters
-        cluster_obj = self.cluster_algo(**cluster_algo_dict)
-
-        cluster_labels = cluster_obj.fit_predict(X)
-
-        # determine number of samples per cluster and mask clusters with
-        # labeled samples
-        cluster_sizes = np.zeros(n_clusters)
-        cluster_ids, cluster_ids_sizes = np.unique(
-            cluster_labels, return_counts=True
-        )
-        cluster_sizes[cluster_ids] = cluster_ids_sizes
-        covered_cluster = np.unique(
-            [cluster_labels[i] for i in labeled_sample_indices]
-        )
-        if len(covered_cluster) > 0:
-            cluster_sizes[covered_cluster] = 0
-
-        utilities = np.full(shape=(batch_size, X.shape[0]), fill_value=np.nan)
         query_indices = []
-        for i in range(batch_size):
+        for i in range(acq_size):
             if cluster_sizes.max() == 0:
-                typicality = np.ones(len(X))
+                indices_ = np.arange(len(unlabeled_features))
+                indices_ = np.setdiff1d(indices_, query_indices)
+                idx = self.rng.choice(indices_)
+                query_indices.append(idx)
             else:
-                cluster_id = rand_argmax(
-                    cluster_sizes, random_state=self.random_state_
-                )
-                is_cluster = cluster_labels == cluster_id
-                uncovered_samples_mapping = np.where(is_cluster)[0]
-                typicality = _typicality(X, uncovered_samples_mapping, self.k)
-            utilities[i, mapping] = typicality[mapping]
-            utilities[i, query_indices] = np.nan
-            idx = rand_argmax(
-                typicality[mapping], random_state=self.random_state_
-            )
-            idx = mapping[idx[0]]
+                cluster_id = cluster_sizes.argmax()
+                cluster_indices = (clusters == cluster_id).nonzero()[0]
+                cluster_features = features[cluster_indices]
+                typicality = calculate_typicality(cluster_features, min(self.K_NN, len(cluster_indices) // 2))
 
-            query_indices = np.append(query_indices, [idx]).astype(int)
-            cluster_sizes[cluster_id] = 0
+                idx = typicality.argmax()
+                idx = cluster_indices[idx]
+                query_indices.append(idx-len(labeled_features))
+                cluster_sizes[cluster_id] = 0
 
-        if return_utilities:
-            return query_indices, utilities
-        else:
-            return query_indices
+        actual_indices = [unlabeled_indices[idx] for idx in query_indices]
+        return actual_indices
 
 
 def _typicality(X, uncovered_samples_mapping, k, eps=1e-7):

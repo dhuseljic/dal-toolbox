@@ -3,7 +3,6 @@ defaults:
   - ssl_algorithm: pseudo_labels
 
 dataset: CIFAR10
-dataset_path: ./data/
 num_labeled: 40
 num_unlabeled: 50000
 val_interval: 1
@@ -11,6 +10,8 @@ random_seed: 42
 fast_dev_run: False
 
 output_dir: ./output/
+data_dir: ./data/
+
 hydra:
   run:
     dir: ${output_dir}

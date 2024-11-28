@@ -18,40 +18,17 @@ class CAL(Query):
         self.batch_size = batch_size
         self.device = device
 
-    def query(self, model, dataset, unlabeled_indices, labeled_indices, acq_size, **kwargs):
-        if not hasattr(model, 'get_representations_and_probas'):
-            raise ValueError('The method `get_representations_and_probas` is mandatory to use cal sampling.')
-
-        if self.subset_size:
-            unlabeled_indices = self.rng.sample(unlabeled_indices, k=self.subset_size)
-        
-        if "collator" in list(kwargs.keys()):
-            unlabeled_dataloader = DataLoader(
-                dataset, 
-                batch_size=self.batch_size*2, 
-                collate_fn=kwargs['collator'],
-                sampler=unlabeled_indices)
-            
-            labeled_dataloader = DataLoader(
-                dataset, 
-                batch_size=self.batch_size*2, 
-                collate_fn=kwargs['collator'],
-                sampler=labeled_indices)
-        else:
-            unlabeled_dataloader = DataLoader(dataset, batch_size=self.batch_size, sampler=unlabeled_indices)
-            labeled_dataloader = DataLoader(dataset, batch_size=self.batch_size, sampler=labeled_indices)
-
-        del kwargs
+    def query(self, model, al_datamodule, acq_size):
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
+        labeled_dataloader, _ = al_datamodule.labeled_dataloader()
 
         # get embeddings and probas for pool and labeled data
-        embs_pool, probas_pool = model.get_representations_and_probas(
-            unlabeled_dataloader, 
-            device=self.device)
-        embs_labeled, probas_labeled = model.get_representations_and_probas(
-            labeled_dataloader, 
-            device=self.device)
+        embs_pool, probas_pool = model.model.get_representations_and_probas(
+            unlabeled_dataloader)
+        embs_labeled, probas_labeled = model.model.get_representations_and_probas(
+            labeled_dataloader)
         # get true targets for labeled set 
-        y_labeled = torch.cat([i['labels'] for i in labeled_dataloader])
+        y_labeled = torch.cat([i[1] for i in labeled_dataloader])
 
         # mean kl divergence score to 10 nearest neighbors and difference to labeled for every instance in unlabeled 
         kl_scores = self.cal(

@@ -1,18 +1,22 @@
 defaults:
   - _self_
-  - model: wideresnet2810
+  - model: resnet18
 
 dataset: CIFAR10
-dataset_path: ./data/
-eval_interval: 5
+val_interval: 5
 
 device: cuda
 random_seed: 42
-val_batch_size: 128
 print_freq_eval: 100
 print_freq_train: 100
 
+load_pretrained_weights: False
+pretrained_weights_path: ./model/pretrained_weights.pth
+subset_size: null
+
 output_dir: ./output/
+data_dir: ./data/
+model_dir: ./model/
 hydra:
   run:
     dir: ${output_dir}
