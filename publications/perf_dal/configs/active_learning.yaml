@@ -18,7 +18,7 @@ al:
   strategy: random
   subset_size: 1000
   init_method: random
-  num_init_samples: null
+  num_init: null
   acq_size: 10
   num_acq: 20
   device: cpu
