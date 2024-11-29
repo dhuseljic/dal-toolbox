@@ -118,7 +118,7 @@ def build_al_strategy(args):
         args.al.num_init = args.al.acq_size if args.al.num_init is None else args.al.num_init
         args.al.num_acq = args.al.num_acq * args.al.acq_size
         args.al.acq_size = 1
-        al_strategy = CrossDomainOracle(subset_size=args.al.subset_size)
+        al_strategy = CrossDomainOracle(device=device)
     elif args.al.strategy == 'perf_dal_oracle':
         al_strategy = PerfDALOracle(
             subset_size=args.al.subset_size,

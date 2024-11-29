@@ -16,10 +16,15 @@ class CrossDomainOracle(Query):
     [1] T. Werner, J. Burchert, M. Stubbemann, and L. Schmidt-Thieme, “A Cross-Domain Benchmark for Active Learning,” in Neural Information Processing Systems Datasets and Benchmarks Track, 2024.
     """
 
-    def __init__(self, tau=20, num_retraining_epochs=50, eval_ds='test', loss='cross_entropy', subset_size=None, random_seed=None, device='cpu'):
+    def __init__(self,
+                 tau=20,
+                 num_retraining_epochs=50,
+                 eval_ds='test',
+                 loss='cross_entropy',
+                 random_seed=None,
+                 device='cpu',
+                 ):
         super().__init__(random_seed)
-        self.subset_size = subset_size
-
         self.tau = tau
         self.num_retraining_epochs = num_retraining_epochs
         self.eval_ds = eval_ds
@@ -35,17 +40,15 @@ class CrossDomainOracle(Query):
     def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size: int):
         if acq_size != 1:
             raise ValueError('The oracle is only defined for an acquisition size of 1.')
-
         if self.eval_ds == 'val':
             eval_dataloader = al_datamodule.val_dataloader()
         elif self.eval_ds == 'test':
             eval_dataloader = al_datamodule.test_dataloader()
         else:
             raise NotImplementedError(f'Evaluation dataset {self.eval_ds} not implemented')
-
-        _, unlabeded_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
+        _, unlabeded_indices = al_datamodule.unlabeled_dataloader()
         _, labeled_indices = al_datamodule.labeled_dataloader()
-        
+
         base_loss = self.evaluate_model(model, eval_dataloader)
 
         indices = self.rng.choice(unlabeded_indices, replace=False, size=self.tau)
@@ -59,8 +62,8 @@ class CrossDomainOracle(Query):
 
             loss = self.evaluate_model(model, eval_dataloader)
             all_losses.append(loss)
-        
-        if np.any(np.less(base_loss, all_losses)):
+
+        if np.any(np.less(all_losses, base_loss)):
             global_idx = indices[np.argmin(loss)]
             global_idx = [global_idx]
         else:
@@ -69,6 +72,7 @@ class CrossDomainOracle(Query):
 
     @torch.no_grad()
     def evaluate_model(self, model, dataloader):
+        model.eval()
         model.to(self.device)
         num_samples = 0
         running_loss = 0
