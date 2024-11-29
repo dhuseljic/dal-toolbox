@@ -52,6 +52,7 @@ class CrossDomainOracle(Query):
         base_loss = self.evaluate_model(model, eval_dataloader)
 
         indices = self.rng.choice(unlabeded_indices, replace=False, size=self.tau)
+
         all_losses = []
         for idx in indices:
             retrain_indices = np.append(labeled_indices, idx)
@@ -64,7 +65,7 @@ class CrossDomainOracle(Query):
             all_losses.append(loss)
 
         if np.any(np.less(all_losses, base_loss)):
-            global_idx = indices[np.argmin(loss)]
+            global_idx = indices[np.argmin(all_losses)]
             global_idx = [global_idx]
         else:
             global_idx = self.margin.query(model=model, al_datamodule=al_datamodule, acq_size=1)
