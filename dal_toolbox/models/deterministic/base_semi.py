@@ -104,8 +104,7 @@ class DeterministicPiModel(DeterministicModel):
         supervised_loss = self.loss_fn(logits, targets)
 
         unlabeled_batch = batch['unlabeled']
-        unlabeled_inputs_aug1 = unlabeled_batch[0]
-        unlabeled_inputs_aug2 = unlabeled_batch[1]
+        unlabeled_inputs_aug1, unlabeled_inputs_aug2 = unlabeled_batch[0]
 
         bn_backup = freeze_bn(self.model)
         unlabeled_logits_aug1 = self.model(unlabeled_inputs_aug1)
@@ -153,8 +152,7 @@ class DeterministicFixMatchModel(DeterministicModel):
 
         # Unsupervised
         unlabeled_batch = batch['unlabeled']
-        inputs_weak = unlabeled_batch[0]
-        inputs_strong = unlabeled_batch[1]
+        inputs_weak, inputs_strong = unlabeled_batch[0]
 
         logits_strong = self(inputs_strong)
         with torch.no_grad():

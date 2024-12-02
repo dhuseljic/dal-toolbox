@@ -45,10 +45,75 @@ class CIFAR10StandardTransforms(BaseTransforms):
             torchvision.transforms.Normalize(self.mean, self.std)
         ])
         return transform
+    
+
+class MultiTransform: # TODO to utils
+    def __init__(self, *transforms) -> None:
+        self.transforms = transforms
+
+    def __call__(self, x):
+        return [transform(x) for transform in self.transforms]
+
+
+class CIFAR10PseudoLabelTransforms(CIFAR10StandardTransforms):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def train_transform(self):
+        transform_weak = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(32),
+            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std),
+        ])
+        return transform_weak
+
+
+class CIFAR10PIModelTransforms(CIFAR10StandardTransforms):
+    @property
+    def train_transform(self):
+        transform_weak1 = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(32),
+            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std),
+        ])
+        transform_weak2 = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(32),
+            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std),
+        ])
+        return MultiTransform(transform_weak1, transform_weak2)
+
+
+class CIFAR10FixMatchTransforms(CIFAR10StandardTransforms):
+    @property
+    def train_transform(self):
+        transform_weak = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(32),
+            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std),
+        ])
+
+        transform_strong = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(32),
+            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            torchvision.transforms.RandomHorizontalFlip(),
+            RandAugment(3, 5),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std)
+        ])
+        return MultiTransform(transform_weak, transform_strong)
 
 
 class CIFAR10(BaseData):
-
     def __init__(self,
                  dataset_path: str,
                  transforms: BaseTransforms = None,
@@ -145,7 +210,6 @@ class CIFAR100StandardTransforms(BaseTransforms):
             torchvision.transforms.Normalize(self.mean, self.std)
         ])
         return transform
-
 
 class CIFAR100(BaseData):
 

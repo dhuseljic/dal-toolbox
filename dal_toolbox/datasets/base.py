@@ -42,7 +42,7 @@ class BaseData(ABC):
         self.query_dataset = Subset(self.full_train_dataset_query_transforms, indices=train_indices.tolist())
 
     def _get_train_val_indices(self, num_samples):
-        if 0 < self.val_split < 1:
+        if 0 <= self.val_split < 1:
             num_samples_train = int(num_samples * (1 - self.val_split))
         else:
             num_samples_train = num_samples - self.val_split

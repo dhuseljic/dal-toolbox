@@ -97,6 +97,14 @@ class BaseModule(L.LightningModule, abc.ABC):
         if not hasattr(self.model, 'get_representations'):
             raise NotImplementedError('The `get_representations` method is not implemented.')
         return self.model.get_representations(*args, **kwargs)
+    
+    @torch.inference_mode()
+    def get_representations_and_probas(self, *args, **kwargs):
+        if 'device' not in kwargs:
+            kwargs['device'] = 'cuda' if torch.cuda.is_available() else 'cpu'
+        if not hasattr(self.model, 'get_representations_and_probas'):
+            raise NotImplementedError('The `get_representations_and_probas` method is not implemented.')
+        return self.model.get_representations_and_probas(*args, **kwargs)
 
     @torch.no_grad()
     def get_representations_and_logits(self, *args, **kwargs):
@@ -121,6 +129,13 @@ class BaseModule(L.LightningModule, abc.ABC):
         if not hasattr(self.model, 'get_exp_grad_representations'):
             raise NotImplementedError('The `get_exp_grad_representations` method is not implemented.')
         return self.model.get_exp_grad_representations(*args, **kwargs)
+    
+    def get_alfa_grad_representations(self, *args, **kwargs):
+        if 'device' not in kwargs:
+            kwargs['device'] = 'cuda' if torch.cuda.is_available() else 'cpu'
+        if not hasattr(self.model, 'get_alfa_grad_representations'):
+            raise NotImplementedError('The `get_alfa_grad_representations` method is not implemented.')
+        return self.model.get_alfa_grad_representations(*args, **kwargs)
 
     @torch.no_grad()
     def get_logits_from_representations(self, *args, **kwargs):

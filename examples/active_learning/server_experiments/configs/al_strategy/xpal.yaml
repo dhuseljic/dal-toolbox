@@ -1,7 +1,0 @@
-name: xpal
-subset_size: 10_000
-alpha: 1e-11
-precomputed: True
-kernel:
-  name: rbf
-  gamma: 0.05
