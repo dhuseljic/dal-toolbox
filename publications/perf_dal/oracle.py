@@ -275,7 +275,8 @@ class PerfDALOracle(Query):
                 probas = unlabeled_logits.softmax(-1)
                 top_probas, _ = torch.topk(probas, k=2, dim=-1)
                 margin_uncertainty = 1 - (top_probas[:, 0] - top_probas[:, 1])
-                indices_uncertain = np.where(margin_uncertainty > margin_uncertainty.median())[0]
+                # indices_uncertain = np.where(margin_uncertainty > margin_uncertainty.median())[0]
+                indices_uncertain = np.where(margin_uncertainty > margin_uncertainty.quantile(.9))[0]
                 indices = [self.rng.choice(indices_uncertain, size=acq_size, replace=False)
                            for _ in range(num_batches)]
                 indices_batches.extend(indices)
