@@ -134,73 +134,9 @@ class PerfDALOracle(Query):
         self.num_retraining_epochs = num_retraining_epochs
         self.update_gamma = update_gamma
 
-    def select_batches(self, acq_size, unlabeled_features, unlabeled_logits, labeled_features, labeled_labels, batch_types):
-        # TODO: maybe focus more often on clusters with many samples? class distribution
-        num_batch_types = len(batch_types)
-        num_batches = self.num_batches // num_batch_types
-
-        indices_batches = []
-
-        # If there is a rest, add random batches
-        num_rest_batches = self.num_batches % num_batch_types
-        indices = [np.random.permutation(len(unlabeled_features))[:acq_size] for _ in range(num_rest_batches)]
-        indices_batches.extend(indices)
-
-        for batch_type in batch_types:
-            if batch_type == 'random':
-                indices = [np.random.permutation(len(unlabeled_features))[:acq_size]
-                           for _ in range(num_batches)]
-                indices_batches.extend(indices)
-
-            elif batch_type == 'diverse':  # KMeans with covered and uncovered clusters
-                from sklearn.cluster import KMeans
-                num_clusters = acq_size + len(labeled_features)
-                km = KMeans(n_clusters=num_clusters, n_init='auto')
-                features = torch.cat((labeled_features, unlabeled_features))
-                clusters = km.fit_predict(features)
-                cluster_sizes = np.zeros(num_clusters)
-                cluster_ids, cluster_id_sizes = np.unique(clusters, return_counts=True)
-                cluster_sizes[cluster_ids] = cluster_id_sizes
-                covered_clusters = np.unique(clusters[:len(labeled_features)])
-                if len(covered_clusters) > 0:
-                    cluster_sizes[covered_clusters] = 0
-                unlabeled_clusters = clusters[len(labeled_features):]
-
-                # Random sample from uncovered clusters
-                indices = []
-                for _ in range(num_batches):
-                    idx = []
-                    cluster_sizes_batch = cluster_sizes.copy()
-                    for _ in range(acq_size):
-                        if np.any(cluster_sizes_batch != 0):
-                            cluster_id = cluster_sizes_batch.argmax()
-                            cluster_indices = (unlabeled_clusters == cluster_id).nonzero()[0]
-                            idx.append(self.rng.choice(cluster_indices))
-                            cluster_sizes_batch[cluster_id] = 0
-                        else:
-                            indices_ = np.arange(len(unlabeled_features))
-                            indices_ = np.setdiff1d(indices_, idx)
-                            idx.append(self.rng.choice(indices_))
-                    indices.append(np.array(idx))
-                indices_batches.extend(indices)
-
-            elif batch_type == 'uncertain':
-                probas = unlabeled_logits.softmax(-1)
-                top_probas, _ = torch.topk(probas, k=2, dim=-1)
-                margin_uncertainty = 1 - (top_probas[:, 0] - top_probas[:, 1])
-                indices_uncertain = np.where(margin_uncertainty > margin_uncertainty.median())[0]
-                indices = [self.rng.choice(indices_uncertain, size=acq_size, replace=False)
-                           for _ in range(num_batches)]
-                indices_batches.extend(indices)
-            else:
-                raise ValueError(f'Batch type {batch_type} not implemented')
-
-        return indices_batches
-
     @torch.no_grad()
-    def query(self, *, model, al_datamodule, acq_size):
-        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(
-            subset_size=self.subset_size)
+    def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(self.subset_size)
         unlabeled_features = model.get_representations(unlabeled_dataloader, device=self.device)
         unlabeled_labels = torch.cat([batch[1] for batch in unlabeled_dataloader])
         unlabeled_logits = model.get_logits_from_representations(unlabeled_features, device=self.device)
@@ -209,7 +145,7 @@ class PerfDALOracle(Query):
         labeled_features = model.get_representations(labeled_dataloader, device=self.device)
         labeled_labels = torch.cat([batch[1] for batch in labeled_dataloader])
 
-        indices_batches = self.select_batches(
+        indices_batches, batches_counts = self.select_batches(
             acq_size,
             unlabeled_features,
             unlabeled_logits,
@@ -280,14 +216,73 @@ class PerfDALOracle(Query):
             loss_batches.append(np.mean(loss_labels))
 
         best_idx = np.argmin(loss_batches)
-
-        num_batch_per_type = self.num_batches // len(self.batch_types)
-        batch_type = self.batch_types[best_idx.item() // num_batch_per_type]
+        counts = np.cumsum(list(batches_counts.values()))
+        idx_batch_type = np.searchsorted(counts, best_idx, side='right').item()
+        batch_type = self.batch_types[idx_batch_type]
         self.batch_type_count[batch_type] += 1
 
         local_indices = indices_batches[best_idx]
         global_indices = [unlabeled_indices[idx] for idx in local_indices]
         return global_indices
+
+    def select_batches(self, acq_size, unlabeled_features, unlabeled_logits, labeled_features, labeled_labels, batch_types):
+        # TODO: maybe focus more often on clusters with many samples? class distribution
+        p = np.ones(len(self.batch_types)) / len(self.batch_types)
+        batches = np.random.choice(self.batch_types, p=p, size=self.num_batches)
+        batches_counts = {t: np.sum(t == batches).item() for t in self.batch_types}
+
+        indices_batches = []
+        for batch_type in batch_types:
+            num_batches = batches_counts[batch_type]
+            if batch_type == 'random':
+                indices = [np.random.permutation(len(unlabeled_features))[:acq_size]
+                           for _ in range(num_batches)]
+                indices_batches.extend(indices)
+
+            elif batch_type == 'diverse':  # KMeans with covered and uncovered clusters
+                from sklearn.cluster import KMeans
+                num_clusters = acq_size + len(labeled_features)
+                km = KMeans(n_clusters=num_clusters, n_init='auto')
+                features = torch.cat((labeled_features, unlabeled_features))
+                clusters = km.fit_predict(features)
+                cluster_sizes = np.zeros(num_clusters)
+                cluster_ids, cluster_id_sizes = np.unique(clusters, return_counts=True)
+                cluster_sizes[cluster_ids] = cluster_id_sizes
+                covered_clusters = np.unique(clusters[:len(labeled_features)])
+                if len(covered_clusters) > 0:
+                    cluster_sizes[covered_clusters] = 0
+                unlabeled_clusters = clusters[len(labeled_features):]
+
+                # Random sample from uncovered clusters
+                indices = []
+                for _ in range(num_batches):
+                    idx = []
+                    cluster_sizes_batch = cluster_sizes.copy()
+                    for _ in range(acq_size):
+                        if np.any(cluster_sizes_batch != 0):
+                            cluster_id = cluster_sizes_batch.argmax()
+                            cluster_indices = (unlabeled_clusters == cluster_id).nonzero()[0]
+                            idx.append(self.rng.choice(cluster_indices))
+                            cluster_sizes_batch[cluster_id] = 0
+                        else:
+                            indices_ = np.arange(len(unlabeled_features))
+                            indices_ = np.setdiff1d(indices_, idx)
+                            idx.append(self.rng.choice(indices_))
+                    indices.append(np.array(idx))
+                indices_batches.extend(indices)
+
+            elif batch_type == 'uncertain':
+                probas = unlabeled_logits.softmax(-1)
+                top_probas, _ = torch.topk(probas, k=2, dim=-1)
+                margin_uncertainty = 1 - (top_probas[:, 0] - top_probas[:, 1])
+                indices_uncertain = np.where(margin_uncertainty > margin_uncertainty.median())[0]
+                indices = [self.rng.choice(indices_uncertain, size=acq_size, replace=False)
+                           for _ in range(num_batches)]
+                indices_batches.extend(indices)
+            else:
+                raise ValueError(f'Batch type {batch_type} not implemented')
+
+        return np.array(indices_batches), batches_counts
 
     @torch.no_grad()
     def evaluate_model(self, model, dataloader):
