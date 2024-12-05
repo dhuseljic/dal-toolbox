@@ -160,6 +160,7 @@ class PerfDALOracle(Query):
             acq_size,
             unlabeled_features,
             unlabeled_logits,
+            unlabeled_labels,
             labeled_features,
             labeled_labels,
             self.batch_types
@@ -243,7 +244,7 @@ class PerfDALOracle(Query):
         global_indices = [unlabeled_indices[idx] for idx in local_indices]
         return global_indices
 
-    def select_batches(self, acq_size, unlabeled_features, unlabeled_logits, labeled_features, labeled_labels, batch_types):
+    def select_batches(self, acq_size, unlabeled_features, unlabeled_logits, unlabeled_labels, labeled_features, labeled_labels, batch_types):
         # TODO: maybe focus more often on clusters with many samples? class distribution
         batches = np.random.choice(self.batch_types, p=self.batch_types_ratio, size=self.num_batches)
         batches_counts = {t: np.sum(t == batches).item() for t in self.batch_types}
@@ -290,10 +291,11 @@ class PerfDALOracle(Query):
 
             elif batch_type == 'uncertain':
                 probas = unlabeled_logits.softmax(-1)
-                top_probas, _ = torch.topk(probas, k=2, dim=-1)
-                margin_uncertainty = 1 - (top_probas[:, 0] - top_probas[:, 1])
-                # indices_uncertain = np.where(margin_uncertainty > margin_uncertainty.median())[0]
-                indices_uncertain = np.where(margin_uncertainty > margin_uncertainty.quantile(.9))[0]
+                max_probas, pred_labels = probas.max(-1)
+                wrong_mask = (pred_labels != unlabeled_labels)
+                wrong_probas = wrong_mask.float() * max_probas
+                sorted_probas, indices = torch.sort(wrong_probas, descending=True)
+                indices_uncertain = indices[:acq_size*30]
                 indices = [self.rng.choice(indices_uncertain, size=acq_size, replace=False)
                            for _ in range(num_batches)]
                 indices_batches.extend(indices)
