@@ -91,6 +91,7 @@ class PerfDALOracle(Query):
     def __init__(self,
                  num_batches=200,
                  batch_types=['random', 'diverse', 'uncertain'],
+                 batch_types_ratio='equal',
                  look_ahead='true_labels',
                  num_mc_labels=5,
                  perf_estimation='val_ds',
@@ -110,7 +111,12 @@ class PerfDALOracle(Query):
         self.num_batches = num_batches
         self.batch_types = batch_types
         self.batch_type_count = {k: 0 for k in self.batch_types}
-
+        self.batch_types_ratio = batch_types_ratio
+        if self.batch_types_ratio == 'equal':
+            self.batch_types_ratio = np.ones(len(self.batch_types)) / len(self.batch_types)
+        if len(self.batch_types_ratio) != len(self.batch_type_count):
+            raise ValueError('Batch type ratio should be the same length as batch type count.')
+        
         # Look-Ahead - True labels, All comb, MC, Pseudo Labels
         self.look_ahead = look_ahead
         self.num_mc_labels = num_mc_labels
@@ -134,6 +140,9 @@ class PerfDALOracle(Query):
         self.num_retraining_epochs = num_retraining_epochs
         self.update_gamma = update_gamma
 
+        # Some helper
+        self.history = []
+
     @torch.no_grad()
     def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(self.subset_size)
@@ -144,6 +153,8 @@ class PerfDALOracle(Query):
         labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
         labeled_features = model.get_representations(labeled_dataloader, device=self.device)
         labeled_labels = torch.cat([batch[1] for batch in labeled_dataloader])
+
+        base_loss = self.evaluate_model(model, al_datamodule.test_dataloader())
 
         indices_batches, batches_counts = self.select_batches(
             acq_size,
@@ -211,7 +222,7 @@ class PerfDALOracle(Query):
                     loss = self.evaluate_model(model, al_datamodule.labeled_dataloader()[0])
                 else:
                     raise NotImplementedError(
-                        f'Performance estimation {self.perf_erstimation} not implemented.')
+                        f'Performance estimation {self.perf_estimation} not implemented.')
 
                 loss_labels.append(loss)
             loss_batches.append(np.mean(loss_labels))
@@ -222,14 +233,19 @@ class PerfDALOracle(Query):
         batch_type = self.batch_types[idx_batch_type]
         self.batch_type_count[batch_type] += 1
 
+        self.history.append({
+            'base_loss': base_loss,
+            'loss_batches': np.array(loss_batches).tolist(),
+            'bought_batch_type': batch_type,
+        })
+
         local_indices = indices_batches[best_idx]
         global_indices = [unlabeled_indices[idx] for idx in local_indices]
         return global_indices
 
     def select_batches(self, acq_size, unlabeled_features, unlabeled_logits, labeled_features, labeled_labels, batch_types):
         # TODO: maybe focus more often on clusters with many samples? class distribution
-        p = np.ones(len(self.batch_types)) / len(self.batch_types)
-        batches = np.random.choice(self.batch_types, p=p, size=self.num_batches)
+        batches = np.random.choice(self.batch_types, p=self.batch_types_ratio, size=self.num_batches)
         batches_counts = {t: np.sum(t == batches).item() for t in self.batch_types}
 
         indices_batches = []

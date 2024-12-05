@@ -79,6 +79,7 @@ def main(args):
         if args.al.strategy == 'perf_dal_oracle':
             bought_dict = {f'bought_{k}': v for k, v in al_strategy.batch_type_count.items()}
             test_stats.update(bought_dict)
+            artifacts['oracle_history'] = al_strategy.history
 
         print(f'Cycle {i_acq}:', test_stats, flush=True)
         al_history.append(test_stats)
@@ -120,8 +121,10 @@ def build_al_strategy(args):
         al_strategy = CrossDomainOracle(device=device)
     elif args.al.strategy == 'perf_dal_oracle':
         al_strategy = PerfDALOracle(
+            subset_size=args.al.subset_size,
             num_batches=args.al.optimal.num_batches,
             batch_types=args.al.optimal.batch_types,
+            batch_types_ratio=args.al.optimal.batch_types_ratio,
             look_ahead=args.al.optimal.look_ahead,
             num_mc_labels=args.al.optimal.num_mc_labels,
             perf_estimation=args.al.optimal.perf_estimation,
