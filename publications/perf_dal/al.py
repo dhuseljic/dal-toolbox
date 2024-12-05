@@ -38,7 +38,6 @@ def main(args):
         predict_batch_size=args.model.predict_batch_size,
     )
     al_strategy = build_al_strategy(args)
-    # TODO: init should be part of al_strategy
     args.al.num_init = args.al.acq_size if args.al.num_init is None else args.al.num_init
     if args.al.init_method == 'random':
         al_datamodule.random_init(n_samples=args.al.num_init)
@@ -77,7 +76,7 @@ def main(args):
         predictions = trainer.predict(model, dataloaders=al_datamodule.test_dataloader())
         test_stats = evaluate(predictions)
         test_stats['query_time'] = etime - stime if i_acq != 0 else 0
-        if args.al.strategy == 'optimal':
+        if args.al.strategy == 'perf_dal_oracle':
             bought_dict = {f'bought_{k}': v for k, v in al_strategy.batch_type_count.items()}
             test_stats.update(bought_dict)
 

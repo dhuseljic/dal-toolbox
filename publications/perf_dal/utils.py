@@ -40,14 +40,9 @@ def build_datasets(args, cache_features=True):
         tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased", use_fast=False)
 
         data = data.map(
-            lambda batch: tokenizer(
-                batch["text"],
-                truncation=True,
-                padding="max_length",
-                max_length=512
-            ),
-            batched=True,
-            batch_size=1000)
+            lambda batch: tokenizer(batch["text"], truncation=True, padding="max_length", max_length=512),
+            batched=True, batch_size=1000
+        )
 
         data = data.remove_columns(
             list(set(data['train'].column_names)-set(['input_ids', 'attention_mask', 'label'])))
@@ -128,7 +123,7 @@ class FeatureDataset:
                 print('Loading cached features from', file_name)
                 features, labels = torch.load(file_name, map_location='cpu')
             else:
-                features, labels = self.get_features(model, dataset, batch_size, device, task)  # change
+                features, labels = self.get_features(model, dataset, batch_size, device, task)
                 print('Saving features to cache file', file_name)
                 torch.save((features, labels), file_name)
         else:
@@ -228,11 +223,12 @@ class LaplaceNet(LaplaceLinear):
         all_logits = []
         for batch in dataloader:
             inputs = batch[0]
-            # TODO
-            if LaplaceNet.use_mean_field:
-                logits = self.forward_mean_field(inputs.to(device))
-            else:
-                logits = self.forward_monte_carlo(inputs.to(device))
+            logits = self(inputs.to(device))
+            # # TODO
+            # if LaplaceNet.use_mean_field:
+            #     logits = self.forward_mean_field(inputs.to(device))
+            # else:
+            #     logits = self.forward_monte_carlo(inputs.to(device))
             all_logits.append(logits)
         logits = torch.cat(all_logits)
         return logits

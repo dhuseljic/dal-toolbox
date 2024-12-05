@@ -89,7 +89,6 @@ class CrossDomainOracle(Query):
 
 class PerfDALOracle(Query):
     def __init__(self,
-                 subset_size=None,
                  num_batches=200,
                  batch_types=['random', 'diverse', 'uncertain'],
                  look_ahead='true_labels',
@@ -99,6 +98,7 @@ class PerfDALOracle(Query):
                  num_retraining_epochs=10,
                  update_gamma=10,
                  loss='cross_entropy',
+                 subset_size=None,
                  device='cpu',
                  random_seed=None,
                  ):
@@ -186,6 +186,7 @@ class PerfDALOracle(Query):
                         indices=retrain_indices, train=True, custom_labels=custom_labels)
                     trainer = Trainer(barebones=True, max_epochs=self.num_retraining_epochs)
                     trainer.fit(model, retrain_loader)
+
                 elif self.retraining == 'update':
                     model.load_state_dict(init_params)
                     retrain_indices = [unlabeled_indices[idx] for idx in indices]
@@ -214,8 +215,8 @@ class PerfDALOracle(Query):
 
                 loss_labels.append(loss)
             loss_batches.append(np.mean(loss_labels))
-
         best_idx = np.argmin(loss_batches)
+
         counts = np.cumsum(list(batches_counts.values()))
         idx_batch_type = np.searchsorted(counts, best_idx, side='right').item()
         batch_type = self.batch_types[idx_batch_type]
@@ -287,6 +288,7 @@ class PerfDALOracle(Query):
 
     @torch.no_grad()
     def evaluate_model(self, model, dataloader):
+        model.eval()
         model.to(self.device)
         num_samples = 0
         running_loss = 0
