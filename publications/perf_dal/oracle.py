@@ -238,6 +238,7 @@ class PerfDALOracle(Query):
             'base_loss': base_loss,
             'loss_batches': np.array(loss_batches).tolist(),
             'bought_batch_type': batch_type,
+            'batch_counts': batches_counts,
         })
 
         local_indices = indices_batches[best_idx]

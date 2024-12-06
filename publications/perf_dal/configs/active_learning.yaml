@@ -15,7 +15,7 @@ dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
 # dino_model_name: 'dinov2_vitg14' # 1100 M params - 1536 dimensions
 
 al:
-  strategy: random
+  strategy: perf_dal_oracle
   subset_size: 1000
   init_method: random
   num_init: null
@@ -25,7 +25,7 @@ al:
   optimal:
     num_batches: 300
     batch_types: [random,diverse,uncertain]
-    batch_types_ratio: 'equal'
+    batch_types_ratio: equal
     num_mc_labels: 5
     look_ahead: true_labels 
     perf_estimation: test_ds
