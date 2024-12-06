@@ -238,7 +238,7 @@ class PerfDALOracle(Query):
             'base_loss': base_loss,
             'loss_batches': np.array(loss_batches).tolist(),
             'bought_batch_type': batch_type,
-            'batch_counts': batches_counts,
+            'batches_counts': batches_counts,
         })
 
         local_indices = indices_batches[best_idx]
@@ -292,12 +292,11 @@ class PerfDALOracle(Query):
 
             elif batch_type == 'uncertain':
                 probas = unlabeled_logits.softmax(-1)
-                max_probas, pred_labels = probas.max(-1)
-                wrong_mask = (pred_labels != unlabeled_labels)
-                wrong_probas = wrong_mask.float() * max_probas
-                sorted_probas, indices = torch.sort(wrong_probas, descending=True)
-                indices_uncertain = indices[:acq_size*30]
-                indices = [self.rng.choice(indices_uncertain, size=acq_size, replace=False)
+                probas = unlabeled_logits.softmax(-1)
+                top_probas, _ = torch.topk(probas, k=2, dim=-1)
+                margin_uncertainty = 1 - (top_probas[:, 0] - top_probas[:, 1])
+                indices_difficult = np.where(margin_uncertainty > margin_uncertainty.quantile(.9))[0]
+                indices = [self.rng.choice(indices_difficult, size=acq_size, replace=False)
                            for _ in range(num_batches)]
                 indices_batches.extend(indices)
             else:
