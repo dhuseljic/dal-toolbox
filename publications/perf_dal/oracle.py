@@ -291,11 +291,12 @@ class PerfDALOracle(Query):
                 indices_batches.extend(indices)
 
             elif batch_type == 'uncertain':
-                probas = unlabeled_logits.softmax(-1)
-                probas = unlabeled_logits.softmax(-1)
-                top_probas, _ = torch.topk(probas, k=2, dim=-1)
-                margin_uncertainty = 1 - (top_probas[:, 0] - top_probas[:, 1])
-                indices_difficult = np.where(margin_uncertainty > margin_uncertainty.quantile(.9))[0]
+                # probas = unlabeled_logits.softmax(-1)
+                # top_probas, _ = torch.topk(probas, k=2, dim=-1)
+                # margin_uncertainty = 1 - (top_probas[:, 0] - top_probas[:, 1])
+                # indices_difficult = np.where(margin_uncertainty > margin_uncertainty.quantile(.9))[0]
+                unlabeled_predictions = unlabeled_logits.argmax(-1)
+                indices_difficult = np.where(unlabeled_predictions == unlabeled_labels)[0]
                 indices = [self.rng.choice(indices_difficult, size=acq_size, replace=False)
                            for _ in range(num_batches)]
                 indices_batches.extend(indices)
