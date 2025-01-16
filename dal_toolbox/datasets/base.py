@@ -81,3 +81,7 @@ class BaseData(ABC):
     @abstractmethod
     def test_dataset(self):
         pass
+
+    # @property
+    # def val_dataset(self):
+    #     return None

@@ -234,6 +234,15 @@ class PerfDALOracle(Query):
         batch_type = self.batch_types[idx_batch_type]
         self.batch_type_count[batch_type] += 1
 
+        # import pylab as plt
+        # plt.figure()
+        # plt.hist(loss_batches[:counts[0]], bins='auto', label='random', alpha=0.5)
+        # plt.hist(loss_batches[counts[0]:counts[1]], bins='auto', label='diverse', alpha=0.5)
+        # plt.hist(loss_batches[counts[1]:counts[2]], bins='auto', label='uncertain', alpha=0.5)
+        # plt.vlines(base_loss, *plt.ylim(), lw=3, colors='k', ls='--', label='Base Loss')
+        # plt.legend()
+        # plt.savefig('tmp.png')
+
         self.history.append({
             'base_loss': base_loss,
             'loss_batches': np.array(loss_batches).tolist(),
@@ -289,16 +298,63 @@ class PerfDALOracle(Query):
                             idx.append(self.rng.choice(indices_))
                     indices.append(np.array(idx))
                 indices_batches.extend(indices)
+                
+                # num_classes = unlabeled_logits.shape[-1]
+                # _, counts =  unlabeled_labels.unique(return_counts=True)
+                # true_class_dist = counts / counts.sum(-1)
+                # for _ in range(num_batches):
+                #     indices = []
+                #     indices_labels = []
+                #     for _ in range(acq_size):
+                #         class_counts = torch.zeros(num_classes) + 1e-10
+
+                #         labels, counts = labeled_labels.unique(return_counts=True)
+                #         class_counts[labels] += counts
+                #         class_counts
+
+                #         if len(indices) > 0:
+                #             indices_labels = unlabeled_labels[indices]
+                #             labels, counts = torch.Tensor(indices_labels).unique(return_counts=True)
+                #             class_counts[labels] += counts
+
+                #         empirical_dist = class_counts / class_counts.sum(-1)
+                #         sample_weights = true_class_dist / empirical_dist
+                #         sample_probas = sample_weights / sample_weights.sum()
+
+                #         # import pylab as plt
+                #         # plt.figure()
+                #         # plt.bar(range(0, 10), sample_probas)
+                #         # plt.ylim(0, 1)
+                #         # plt.savefig('tmp.png')
+
+                #         class_to_sample_from = self.rng.choice(num_classes, p=sample_probas.numpy())
+                #         indices_class = np.where(unlabeled_labels == class_to_sample_from)[0]
+                #         indices.append(self.rng.choice(indices_class))
+                #   indices_batches.append(indices)
 
             elif batch_type == 'uncertain':
-                # probas = unlabeled_logits.softmax(-1)
-                # top_probas, _ = torch.topk(probas, k=2, dim=-1)
-                # margin_uncertainty = 1 - (top_probas[:, 0] - top_probas[:, 1])
-                # indices_difficult = np.where(margin_uncertainty > margin_uncertainty.quantile(.9))[0]
-                unlabeled_predictions = unlabeled_logits.argmax(-1)
-                indices_difficult = np.where(unlabeled_predictions == unlabeled_labels)[0]
-                indices = [self.rng.choice(indices_difficult, size=acq_size, replace=False)
-                           for _ in range(num_batches)]
+                # 1. Get uncertainty, Cluster most uncertain
+                quantile = .9
+                probas = unlabeled_logits.softmax(-1)
+                top_probas, _ = torch.topk(probas, k=2, dim=-1)
+                margin_uncertainty = 1 - (top_probas[:, 0] - top_probas[:, 1])
+                indices_difficult = np.where(margin_uncertainty > margin_uncertainty.quantile(quantile))[0]
+
+                km = KMeans(n_clusters=acq_size, n_init='auto')
+                clusters = km.fit_predict(unlabeled_features[indices_difficult])
+                unique_clusters = np.unique(clusters)
+
+                local_indices = []
+                for cl in unique_clusters:
+                    local_indices_cluster = np.where(clusters == cl)[0]
+                    local_indices.append(self.rng.choice(local_indices_cluster, size=num_batches))
+                local_indices = np.stack(local_indices, axis=1)
+                indices = [indices_difficult[idx] for idx in local_indices]
+
+                # unlabeled_predictions = unlabeled_logits.argmax(-1)
+                # indices_difficult = np.where(unlabeled_predictions == unlabeled_labels)[0]
+                # indices = [self.rng.choice(indices_difficult, size=acq_size, replace=False)
+                #             for _ in range(num_batches)]
                 indices_batches.extend(indices)
             else:
                 raise ValueError(f'Batch type {batch_type} not implemented')
