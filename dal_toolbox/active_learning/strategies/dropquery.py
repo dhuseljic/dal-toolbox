@@ -2,6 +2,7 @@ from .query import Query
 from .utils import cluster_features, get_random_samples
 
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 
@@ -10,14 +11,22 @@ class DropQuery(Query):
         super().__init__()
         self.subset_size = subset_size
         self.num_iter = num_iter
-        self.p_drop = p_drop
+        self.dropout = nn.Dropout(p=p_drop)
 
     def _get_candidates(self, model, loader_unlabeled, y_star, acq_size):
+        # Move model to cuda
+        model = model.to("cuda")
+
         # Get self.num_iter many forward propagations of each unlabeled sample and extract the resutling label prediction
-        labels = []
-        model.model.set_dropout(p=self.p_drop)
+        labels = [] 
         for _ in range(self.num_iter):
-            lab = model.get_logits(loader_unlabeled, device="cuda", apply_dropout=True).softmax(-1).argmax(-1).cpu()
+            lab = []
+            for x, _, _ in loader_unlabeled:
+                x = x.to("cuda")
+                x_drop = self.dropout(x)
+                y = model(x_drop).softmax(-1).argmax(-1).cpu()
+                lab.append(y)
+            lab = torch.cat(lab)
             labels.append(lab)
         labels = torch.stack(labels)
 
