@@ -6,7 +6,7 @@ import numpy as np
 from lightning import Trainer
 from rich.progress import track
 from dal_toolbox.active_learning.strategies.query import Query
-from dal_toolbox.active_learning.strategies import MarginSampling
+from dal_toolbox.active_learning.strategies import MarginSampling, DropQuery, RandomSampling, TypiClust
 from dal_toolbox.active_learning.data import ActiveLearningDataModule
 
 
@@ -109,14 +109,21 @@ class PerfDALOracle(Query):
 
         # Batch Selection
         self.num_batches = num_batches
-        self.batch_types = batch_types
+        subset_size = 1000
+        self.strategies = [
+            RandomSampling(random_seed=self.random_seed),
+            MarginSampling(subset_size=subset_size, random_seed=self.random_seed, device=self.device),
+            TypiClust(subset_size=subset_size, random_seed=self.random_seed, device=self.device),
+            DropQuery(subset_size=subset_size),
+        ]
+        self.batch_types = [type(s).__name__.lower() for s in self.strategies]
         self.batch_type_count = {k: 0 for k in self.batch_types}
         self.batch_types_ratio = batch_types_ratio
         if self.batch_types_ratio == 'equal':
             self.batch_types_ratio = np.ones(len(self.batch_types)) / len(self.batch_types)
         if len(self.batch_types_ratio) != len(self.batch_type_count):
             raise ValueError('Batch type ratio should be the same length as batch type count.')
-        
+
         # Look-Ahead - True labels, All comb, MC, Pseudo Labels
         self.look_ahead = look_ahead
         self.num_mc_labels = num_mc_labels
@@ -156,15 +163,23 @@ class PerfDALOracle(Query):
 
         base_loss = self.evaluate_model(model, al_datamodule.test_dataloader())
 
-        indices_batches, batches_counts = self.select_batches(
-            acq_size,
-            unlabeled_features,
-            unlabeled_logits,
-            unlabeled_labels,
-            labeled_features,
-            labeled_labels,
-            self.batch_types
-        )
+        # indices_batches, batches_counts = self.select_batches(
+        #     acq_size,
+        #     unlabeled_features,
+        #     unlabeled_logits,
+        #     unlabeled_labels,
+        #     labeled_features,
+        #     labeled_labels,
+        #     self.batch_types
+        # )
+        indices_batches, batches_counts = self.select_strategy_batches(model, al_datamodule, acq_size)
+        # To local indices
+        indices_batches = [np.where(np.isin(unlabeled_indices, indices))[0] for indices in indices_batches]
+        # tmp = []
+        # for indices in indices_batches:
+        #     local_indices = np.array([np.where(idx == unlabeled_indices)[0][0] for idx in indices])
+        #     tmp.append(local_indices)
+        
 
         loss_batches = []
         init_params = model.state_dict()
@@ -298,52 +313,23 @@ class PerfDALOracle(Query):
                             idx.append(self.rng.choice(indices_))
                     indices.append(np.array(idx))
                 indices_batches.extend(indices)
-                
-                # num_classes = unlabeled_logits.shape[-1]
-                # _, counts =  unlabeled_labels.unique(return_counts=True)
-                # true_class_dist = counts / counts.sum(-1)
-                # for _ in range(num_batches):
-                #     indices = []
-                #     indices_labels = []
-                #     for _ in range(acq_size):
-                #         class_counts = torch.zeros(num_classes) + 1e-10
-
-                #         labels, counts = labeled_labels.unique(return_counts=True)
-                #         class_counts[labels] += counts
-                #         class_counts
-
-                #         if len(indices) > 0:
-                #             indices_labels = unlabeled_labels[indices]
-                #             labels, counts = torch.Tensor(indices_labels).unique(return_counts=True)
-                #             class_counts[labels] += counts
-
-                #         empirical_dist = class_counts / class_counts.sum(-1)
-                #         sample_weights = true_class_dist / empirical_dist
-                #         sample_probas = sample_weights / sample_weights.sum()
-
-                #         # import pylab as plt
-                #         # plt.figure()
-                #         # plt.bar(range(0, 10), sample_probas)
-                #         # plt.ylim(0, 1)
-                #         # plt.savefig('tmp.png')
-
-                #         class_to_sample_from = self.rng.choice(num_classes, p=sample_probas.numpy())
-                #         indices_class = np.where(unlabeled_labels == class_to_sample_from)[0]
-                #         indices.append(self.rng.choice(indices_class))
-                #   indices_batches.append(indices)
 
             elif batch_type == 'uncertain':
-                # 1. Get uncertainty, Cluster most uncertain
+                # Filter by Uncertainty
                 quantile = .9
                 probas = unlabeled_logits.softmax(-1)
                 top_probas, _ = torch.topk(probas, k=2, dim=-1)
                 margin_uncertainty = 1 - (top_probas[:, 0] - top_probas[:, 1])
                 indices_difficult = np.where(margin_uncertainty > margin_uncertainty.quantile(quantile))[0]
 
+                # Filter by wrong predictions
+                # unlabeled_predictions = unlabeled_logits.argmax(-1)
+                # indices_difficult = np.where(unlabeled_predictions != unlabeled_labels)[0]
+
+                # Cluster and select random per cluster
                 km = KMeans(n_clusters=acq_size, n_init='auto')
                 clusters = km.fit_predict(unlabeled_features[indices_difficult])
                 unique_clusters = np.unique(clusters)
-
                 local_indices = []
                 for cl in unique_clusters:
                     local_indices_cluster = np.where(clusters == cl)[0]
@@ -351,15 +337,26 @@ class PerfDALOracle(Query):
                 local_indices = np.stack(local_indices, axis=1)
                 indices = [indices_difficult[idx] for idx in local_indices]
 
-                # unlabeled_predictions = unlabeled_logits.argmax(-1)
-                # indices_difficult = np.where(unlabeled_predictions == unlabeled_labels)[0]
-                # indices = [self.rng.choice(indices_difficult, size=acq_size, replace=False)
-                #             for _ in range(num_batches)]
+                # Select random from filtered samples
+                # indices = [self.rng.choice(indices_difficult, size=acq_size, replace=False) for _ in range(num_batches)]
                 indices_batches.extend(indices)
             else:
                 raise ValueError(f'Batch type {batch_type} not implemented')
 
         return np.array(indices_batches), batches_counts
+
+    def select_strategy_batches(self, model, al_datamodule, acq_size):
+        batches = np.random.choice(self.batch_types, p=self.batch_types_ratio, size=self.num_batches)
+        batches_counts = {t: np.sum(t == batches).item() for t in self.batch_types}
+
+        indices = []
+        for strat_name, strat in zip(self.batch_types, self.strategies):
+            num_batches = batches_counts[strat_name]
+            indices_strat = [strat.query(model=model, al_datamodule=al_datamodule, acq_size=acq_size)
+                             for _ in range(num_batches)]
+            indices.extend(indices_strat)
+        indices = np.array(indices)
+        return indices, batches_counts
 
     @torch.no_grad()
     def evaluate_model(self, model, dataloader):

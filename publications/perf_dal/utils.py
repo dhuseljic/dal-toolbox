@@ -1,6 +1,7 @@
 import os
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from torch.utils.data import DataLoader
 from datasets import load_dataset
@@ -224,11 +225,6 @@ class LaplaceNet(LaplaceLinear):
         for batch in dataloader:
             inputs = batch[0]
             logits = self(inputs.to(device))
-            # # TODO
-            # if LaplaceNet.use_mean_field:
-            #     logits = self.forward_mean_field(inputs.to(device))
-            # else:
-            #     logits = self.forward_monte_carlo(inputs.to(device))
             all_logits.append(logits)
         logits = torch.cat(all_logits)
         return logits
@@ -243,6 +239,21 @@ class LaplaceNet(LaplaceLinear):
             all_representations.append(inputs)
         representations = torch.cat(all_representations)
         return representations
+
+    @torch.no_grad()
+    def get_representations_and_probas(self, dataloader, device):
+        self.to(device)
+        self.eval()
+        all_representations = []
+        all_logits = []
+        for batch in dataloader:
+            inputs = batch[0]
+            logits = self(inputs.to(device))
+            all_representations.append(inputs)
+            all_logits.append(logits)
+        representations = torch.cat(all_representations).cpu()
+        logits = torch.cat(all_logits).cpu()
+        return representations, logits.softmax(-1)
 
     @torch.no_grad()
     def get_logits_from_representations(self, representations, device):

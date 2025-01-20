@@ -7,33 +7,34 @@ import torch.nn.functional as F
 
 
 class DropQuery(Query):
-    def __init__(self, subset_size=None, num_iter=3, p_drop=0.75):
+    def __init__(self, subset_size=None, num_iter=3, p_drop=0.75, device='cpu'):
         super().__init__()
         self.subset_size = subset_size
         self.num_iter = num_iter
         self.dropout = nn.Dropout(p=p_drop)
+        self.device = device
 
     def _get_candidates(self, model, loader_unlabeled, y_star, acq_size):
         # Move model to cuda
-        model = model.to("cuda")
+        model = model.to(self.device)
 
         # Get self.num_iter many forward propagations of each unlabeled sample and extract the resutling label prediction
-        labels = [] 
+        labels = []
         for _ in range(self.num_iter):
-            lab = []
+            predictions = []
             for x, _, _ in loader_unlabeled:
-                x = x.to("cuda")
+                x = x.to(self.device)
                 x_drop = self.dropout(x)
-                y = model(x_drop).softmax(-1).argmax(-1).cpu()
-                lab.append(y)
-            lab = torch.cat(lab)
-            labels.append(lab)
+                pred = model(x_drop).softmax(-1).argmax(-1).cpu()
+                predictions.append(pred)
+            predictions = torch.cat(predictions)
+            labels.append(predictions)
         labels = torch.stack(labels)
 
         # Then count the number of missmatches to the originally predicted label
         mismatch = (y_star != labels).sum(dim=0)
 
-        # Countinously reduce the threshhold for missmatches to be selected as a candidate until threshhold is 1 or there are more then 25 times the query size of candidates 
+        # Countinously reduce the threshhold for missmatches to be selected as a candidate until threshhold is 1 or there are more then 25 times the query size of candidates
         thresh = self.num_iter // 2
         while (mismatch > thresh).sum() < 25 * acq_size and thresh > 0:
             thresh = thresh - 1
@@ -42,12 +43,12 @@ class DropQuery(Query):
         return torch.nonzero(mismatch > thresh).flatten()
 
     def query(self, *, model, al_datamodule, acq_size, **kwargs):
-        loader_unlabeled, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
         num_unlabeled = len(unlabeled_indices)
 
-        embeddings, probs = model.get_representations_and_probas(dataloader=loader_unlabeled, device="cuda")
+        embeddings, probs = model.get_representations_and_probas(unlabeled_dataloader, device=self.device)
         y_star = probs.argmax(dim=1)
-        candidates = self._get_candidates(model, loader_unlabeled, y_star, acq_size)
+        candidates = self._get_candidates(model, unlabeled_dataloader, y_star, acq_size)
 
         if len(candidates) < acq_size:
             delta = acq_size - len(candidates)
