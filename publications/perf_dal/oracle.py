@@ -348,7 +348,6 @@ class PerfDALOracle(Query):
 
         indices = []
         for strat_name, strat in zip(self.batch_types, self.strategies):
-            print(strat_name)
             num_batches = batches_counts[strat_name]
             indices_strat = [strat.query(model=model, al_datamodule=al_datamodule, acq_size=acq_size)
                              for _ in range(num_batches)]
