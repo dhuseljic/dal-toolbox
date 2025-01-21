@@ -6,7 +6,7 @@ import numpy as np
 from lightning import Trainer
 from rich.progress import track
 from dal_toolbox.active_learning.strategies.query import Query
-from dal_toolbox.active_learning.strategies import MarginSampling, DropQuery, RandomSampling, TypiClust
+from dal_toolbox.active_learning import strategies
 from dal_toolbox.active_learning.data import ActiveLearningDataModule
 
 
@@ -30,7 +30,7 @@ class CrossDomainOracle(Query):
         self.eval_ds = eval_ds
         self.device = device
 
-        self.margin = MarginSampling(device=self.device)
+        self.margin = strategies.MarginSampling(device=self.device)
         if loss == 'cross_entropy':
             self.loss_fn = torch.nn.CrossEntropyLoss()
         else:
@@ -100,6 +100,7 @@ class PerfDALOracle(Query):
                  update_gamma=10,
                  loss='cross_entropy',
                  subset_size=None,
+                 strat_subset_size=2500,
                  device='cpu',
                  random_seed=None,
                  ):
@@ -108,13 +109,16 @@ class PerfDALOracle(Query):
         self.device = device
 
         # Batch Selection
+        self.strat_subset_size = strat_subset_size
         self.num_batches = num_batches
-        subset_size = 1000
         self.strategies = [
-            RandomSampling(random_seed=self.random_seed),
-            MarginSampling(subset_size=subset_size, random_seed=self.random_seed, device=self.device),
-            TypiClust(subset_size=subset_size, random_seed=self.random_seed, device=self.device),
-            DropQuery(subset_size=subset_size),
+            strategies.RandomSampling(random_seed=self.random_seed),
+            strategies.MarginSampling(subset_size=self.strat_subset_size,
+                                      random_seed=self.random_seed, device=self.device),
+            strategies.TypiClust(subset_size=self.strat_subset_size,
+                                 random_seed=self.random_seed, device=self.device),
+            strategies.DropQuery(subset_size=self.strat_subset_size, device=self.device),
+            strategies.BaitSampling(subset_size=self.strat_subset_size, grad_likelihood='binary_cross_entropy', device=self.device),
         ]
         self.batch_types = [type(s).__name__.lower() for s in self.strategies]
         self.batch_type_count = {k: 0 for k in self.batch_types}
@@ -173,13 +177,6 @@ class PerfDALOracle(Query):
         #     self.batch_types
         # )
         indices_batches, batches_counts = self.select_strategy_batches(model, al_datamodule, acq_size)
-        # To local indices
-        indices_batches = [np.where(np.isin(unlabeled_indices, indices))[0] for indices in indices_batches]
-        # tmp = []
-        # for indices in indices_batches:
-        #     local_indices = np.array([np.where(idx == unlabeled_indices)[0][0] for idx in indices])
-        #     tmp.append(local_indices)
-        
 
         loss_batches = []
         init_params = model.state_dict()
@@ -351,12 +348,18 @@ class PerfDALOracle(Query):
 
         indices = []
         for strat_name, strat in zip(self.batch_types, self.strategies):
+            print(strat_name)
             num_batches = batches_counts[strat_name]
             indices_strat = [strat.query(model=model, al_datamodule=al_datamodule, acq_size=acq_size)
                              for _ in range(num_batches)]
             indices.extend(indices_strat)
         indices = np.array(indices)
+
+        # Convert global indices from strategies to local indices
+        indices = np.array([np.where(np.isin(al_datamodule.  unlabeled_indices, indices))[0]
+                           for indices in indices])
         return indices, batches_counts
+
 
     @torch.no_grad()
     def evaluate_model(self, model, dataloader):

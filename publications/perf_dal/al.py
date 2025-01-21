@@ -131,6 +131,7 @@ def build_al_strategy(args):
             retraining=args.al.optimal.retraining,
             num_retraining_epochs=args.al.optimal.num_retraining_epochs,
             update_gamma=args.al.optimal.update_gamma,
+            strat_subset_size=args.al.optimal.strat_subset_size,
             device=device,
         )
     elif args.al.strategy == 'margin':
