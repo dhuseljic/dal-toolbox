@@ -355,10 +355,13 @@ class PerfDALOracle(Query):
         indices = np.array(indices)
 
         # Convert global indices from strategies to local indices
-        indices = np.array([np.where(np.isin(al_datamodule.  unlabeled_indices, indices))[0]
-                           for indices in indices])
-        return indices, batches_counts
+        indices = np.array([np.where(np.isin(al_datamodule.  unlabeled_indices, indices))[0] for indices in indices])
 
+        interesting_indices = np.unique(indices)
+        indices = [self.rng.choice(interesting_indices, size=acq_size, replace=False) for _ in range(self.num_batches)]
+        indices = np.array(indices)
+
+        return indices, batches_counts
 
     @torch.no_grad()
     def evaluate_model(self, model, dataloader):
@@ -374,3 +377,55 @@ class PerfDALOracle(Query):
             running_loss += len(inputs)*self.loss_fn(logits, targets).item()
         loss = running_loss / num_samples
         return loss
+
+
+class RandomClass(Query):
+    def __init__(self, subset_size=None, random_seed=None, device='cpu'):
+        super().__init__(random_seed)
+        self.subset_size = subset_size
+        self.device = device
+
+    def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(self.subset_size)
+        unlabeled_labels = torch.cat([batch[1] for batch in unlabeled_dataloader])
+
+        labels, labels_counts = unlabeled_labels.unique(return_counts=True)
+        sort_idx = labels_counts.argsort(descending=True)
+        labels = labels[sort_idx]
+
+        indices = []
+        while len(indices) < acq_size:
+            for lbl in labels:
+                indices_lbl = np.where(unlabeled_labels == lbl)[0]
+                idx = self.rng.choice(indices_lbl)
+                indices.append(idx)
+            indices = np.array(indices)
+
+        global_indices = [unlabeled_indices[idx] for idx in indices]
+        return global_indices
+
+
+class TypiClass(Query):
+    def __init__(self, subset_size=None, random_seed=None, device='cpu'):
+        super().__init__(random_seed)
+        self.subset_size = subset_size
+        self.device = device
+
+    def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(self.subset_size)
+        unlabeled_features = model.get_representations(unlabeled_dataloader, device=self.device)
+        unlabeled_labels = torch.cat([batch[1] for batch in unlabeled_dataloader])
+        unlabeled_logits = model.get_logits_from_representations(unlabeled_features, device=self.device)
+
+        from dal_toolbox.active_learning.strategies.typiclust import calculate_typicality
+        indices = []
+        labels = unlabeled_labels.unique()
+        for lbl in labels:
+            indices_lbl = np.where(unlabeled_labels == lbl)[0]
+            unlabeled_features_lbl = unlabeled_features[indices_lbl]
+            typicality = calculate_typicality(unlabeled_features_lbl, len(indices_lbl)-1)
+            indices.append(indices_lbl[typicality.argmax()])
+        indices = np.array(indices)
+
+        global_indices = [unlabeled_indices[idx] for idx in indices]
+        return global_indices
