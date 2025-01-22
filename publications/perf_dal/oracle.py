@@ -356,10 +356,9 @@ class PerfDALOracle(Query):
 
         # Convert global indices from strategies to local indices
         indices = np.array([np.where(np.isin(al_datamodule.  unlabeled_indices, indices))[0] for indices in indices])
-
-        interesting_indices = np.unique(indices)
-        indices = [self.rng.choice(interesting_indices, size=acq_size, replace=False) for _ in range(self.num_batches)]
-        indices = np.array(indices)
+        # interesting_indices = np.unique(indices)
+        # indices = [self.rng.choice(interesting_indices, size=acq_size, replace=False) for _ in range(self.num_batches)]
+        # indices = np.array(indices)
 
         return indices, batches_counts
 
