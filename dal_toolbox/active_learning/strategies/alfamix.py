@@ -7,11 +7,12 @@ import torch.nn.functional as F
 
 
 class AlfaMix(Query):
-    def __init__(self, embed_dim, subset_size=None):
+    def __init__(self, embed_dim, subset_size=None, device='cpu'):
         super().__init__()
         self.subset_size = subset_size
         D = embed_dim
         self.eps = 0.2 / np.sqrt(D)
+        self.device=device
 
     def _get_anchors(self, features: torch.Tensor, labels):
         seen_classes = len(np.unique(labels))
@@ -45,13 +46,13 @@ class AlfaMix(Query):
         labeled_dataloader, _ = al_datamodule.labeled_dataloader()
 
         # Retrieve gradient-embeddings, embeddings and pseudo-labels for the unlabeled data
-        grads, z_u, y_star = model.get_alfa_grad_representations(unlabeled_dataloader, device='cuda')
+        grads, z_u, y_star = model.get_alfa_grad_representations(unlabeled_dataloader, device=self.device)
 
         # Get the anchors, i.e., the centroids in the embedding space, of each observed class based on the labeled pool
-        z_l, y_l = model.get_representations(dataloader=labeled_dataloader, return_labels=True, device='cuda')
-        z_star = self._get_anchors(z_l, y_l).to('cuda')
+        z_l, y_l = model.get_representations(dataloader=labeled_dataloader, return_labels=True, device=self.device)
+        z_star = self._get_anchors(z_l, y_l).to(self.device)
         
-        candidates = self._get_candidates(z_u.to('cuda'), z_star.to('cuda'), grads.to('cuda'), y_star.to('cuda'), model=model.to('cuda'))
+        candidates = self._get_candidates(z_u.to(self.device), z_star.to(self.device), grads.to(self.device), y_star.to(self.device), model=model.to(self.device))
 
         # When there are not enough candidates, fill them up with random selection.
         # Otherwise cluster them and pick the closest to the cluster centroids.
