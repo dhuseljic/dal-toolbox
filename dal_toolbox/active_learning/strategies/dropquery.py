@@ -46,8 +46,8 @@ class DropQuery(Query):
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
         num_unlabeled = len(unlabeled_indices)
 
-        embeddings, probs = model.get_representations_and_probas(unlabeled_dataloader, device=self.device)
-        y_star = probs.argmax(dim=1)
+        embeddings, logits = model.get_representations_and_logits(unlabeled_dataloader, device=self.device)
+        y_star = logits.softmax(-1).argmax(-1)
         candidates = self._get_candidates(model, unlabeled_dataloader, y_star, acq_size)
 
         if len(candidates) < acq_size:

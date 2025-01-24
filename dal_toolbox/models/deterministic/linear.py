@@ -77,20 +77,19 @@ class LinearModel(nn.Module):
         return features
     
     @torch.inference_mode()
-    def get_representations_and_probas(self, dataloader, device):
+    def get_representations_and_logits(self, dataloader, device):
         self.to(device)
 
-        all_features, all_probas = [], []
+        all_features, all_logits = [], []
         for batch in dataloader:
             features = batch[0].to(device)
             logits = self(features)
-            probas = logits.softmax(-1)
             all_features.append(features.cpu())
-            all_probas.append(probas.cpu())
+            all_logits.append(logits.cpu())
             
         features = torch.cat(all_features)
-        probas = torch.cat(all_probas)
-        return features, probas
+        logits = torch.cat(all_logits)
+        return features, logits
 
     @torch.inference_mode()
     def get_grad_representations(self, dataloader, device):
