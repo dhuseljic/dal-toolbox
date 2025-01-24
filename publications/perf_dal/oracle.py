@@ -263,7 +263,7 @@ class TypiClass(Query):
             lbl = next(cycled_labels)
             indices_lbl = np.where(unlabeled_labels == lbl)[0]
             candidates = indices_lbl[~np.isin(indices_lbl, indices)]
-            if len(candidates) < 0:
+            if len(candidates) <= 0:
                 continue
             unlabeled_features_lbl = unlabeled_features[candidates]
             typicality = calculate_typicality(unlabeled_features_lbl, len(candidates)-1)
