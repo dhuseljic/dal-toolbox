@@ -253,23 +253,27 @@ class TypiClass(Query):
 
         for lbl, count in zip(*labeled_labels.unique(return_counts=True)):
             self.class_counter[lbl.item()] = count.item()
-        sorted_class_counter = dict(sorted(self.class_counter.items(), key=lambda x: x[1]))
 
-        from itertools import cycle
         from dal_toolbox.active_learning.strategies.typiclust import calculate_typicality
         indices = []
-        cycled_labels = cycle(sorted_class_counter.keys())
-        while len(indices) != acq_size:
-            lbl = next(cycled_labels)
-            indices_lbl = np.where(unlabeled_labels == lbl)[0]
-            candidates = indices_lbl[~np.isin(indices_lbl, indices)]
-            if len(candidates) <= 0:
-                continue
-            unlabeled_features_lbl = unlabeled_features[candidates]
-            typicality = calculate_typicality(unlabeled_features_lbl, len(candidates)-1)
-            idx = candidates[typicality.argmax()]
-            # idx = self.rng.choice(candidates)
-            indices.append(idx)
+        while len(indices) < acq_size:
+            min_counts = min(self.class_counter.values())
+            min_labels = [lbl for lbl, cnt in self.class_counter.items() if cnt == min_counts]
+
+            for lbl in min_labels:
+                if len(indices) == acq_size:
+                    break
+
+                indices_lbl = np.where(unlabeled_labels == lbl)[0]
+                candidates = indices_lbl[~np.isin(indices_lbl, indices)]
+                if len(candidates) <= 0:
+                    self.class_counter.pop(lbl)
+                    continue
+                unlabeled_features_lbl = unlabeled_features[candidates]
+                typicality = calculate_typicality(unlabeled_features_lbl, len(candidates)-1)
+                idx = candidates[typicality.argmax()]
+                indices.append(idx)
+                self.class_counter[lbl] += 1
         indices = np.array(indices)
 
         global_indices = [unlabeled_indices[idx] for idx in indices]
