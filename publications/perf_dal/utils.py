@@ -241,7 +241,7 @@ class LaplaceNet(LaplaceLinear):
         return representations
 
     @torch.no_grad()
-    def get_representations_and_probas(self, dataloader, device):
+    def get_representations_and_logits(self, dataloader, device):
         self.to(device)
         self.eval()
         all_representations = []
@@ -253,7 +253,7 @@ class LaplaceNet(LaplaceLinear):
             all_logits.append(logits)
         representations = torch.cat(all_representations).cpu()
         logits = torch.cat(all_logits).cpu()
-        return representations, logits.softmax(-1)
+        return representations, logits
 
     @torch.no_grad()
     def get_logits_from_representations(self, representations, device):
