@@ -384,6 +384,29 @@ class LaplaceNet(LaplaceLinear):
 
         return embedding
 
+    @torch.enable_grad()
+    def get_alfa_grad_representations(self, dataloader, device):
+        self.to(device)
+
+        embeddings, gradients, pseudo_labels = [], [], []
+        for batch in dataloader:
+            features = batch[0].to(device).requires_grad_()
+            logits = self(features)
+            preds = logits.argmax(-1)
+            loss = F.cross_entropy(logits, preds, reduction="sum")
+            grads = torch.autograd.grad(loss, features)[0]
+
+            embeddings.append(features.cpu().detach())
+            gradients.append(grads.cpu())
+            pseudo_labels.append(preds.cpu())
+
+        # Concat all tensors and return
+        gradients = torch.cat(gradients)
+        embeddings = torch.cat(embeddings)
+        pseudo_labels = torch.cat(pseudo_labels)
+
+        return gradients, embeddings, pseudo_labels
+
 
 def build_model(args, **kwargs):
     num_features = kwargs['num_features']

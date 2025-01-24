@@ -121,9 +121,9 @@ def build_al_strategy(args):
         al_strategy = CrossDomainOracle(device=device)
     elif args.al.strategy == 'perf_dal_oracle':
         al_strategy = PerfDALOracle(
+            al_strategies=args.al.optimal.strategies,
             num_batches=args.al.optimal.num_batches,
-            batch_types=args.al.optimal.batch_types,
-            batch_types_ratio=args.al.optimal.batch_types_ratio,
+            strat_ratio=args.al.optimal.strat_ratio,
             look_ahead=args.al.optimal.look_ahead,
             num_mc_labels=args.al.optimal.num_mc_labels,
             perf_estimation=args.al.optimal.perf_estimation,
