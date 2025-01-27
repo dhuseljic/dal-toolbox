@@ -1,6 +1,7 @@
 import itertools
 
 import torch
+import torch.nn.functional as F
 import numpy as np
 
 from lightning import Trainer
@@ -82,6 +83,8 @@ class PerfDALOracle(Query):
                 strat = TypiClass(subset_size=self.strat_subset_size, device=self.device)
             elif strat_name == 'dropquery':
                 strat = strategies.DropQuery(subset_size=self.strat_subset_size, device=self.device)
+            elif strat_name == 'dropqueryclass':
+                strat = DropQueryClass(subset_size=self.strat_subset_size, device=self.device)
             elif strat_name == 'bait':
                 strat = strategies.BaitSampling(subset_size=self.strat_subset_size,
                                                 grad_likelihood='binary_cross_entropy', device=self.device)
@@ -250,7 +253,6 @@ class TypiClass(Query):
         labels = all_labels.unique()
         for lbl in labels:
             self.class_counter[lbl.item()] = 0
-
         for lbl, count in zip(*labeled_labels.unique(return_counts=True)):
             self.class_counter[lbl.item()] = count.item()
 
@@ -278,6 +280,62 @@ class TypiClass(Query):
 
         global_indices = [unlabeled_indices[idx] for idx in indices]
         return global_indices
+
+class DropQueryClass(strategies.DropQuery):
+    def query(self, *, model, al_datamodule, acq_size, **kwargs):
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
+        num_unlabeled = len(unlabeled_indices)
+        unlabeled_labels = torch.cat([batch[1] for batch in unlabeled_dataloader])
+
+        labeled_dataloader, _ = al_datamodule.labeled_dataloader()
+        labeled_labels = torch.cat([batch[1] for batch in labeled_dataloader])
+
+        embeddings, logits = model.get_representations_and_logits(unlabeled_dataloader, device=self.device)
+        y_star = logits.softmax(-1).argmax(-1)
+        candidates = self._get_candidates(model, unlabeled_dataloader, y_star, acq_size)
+
+        from dal_toolbox.active_learning.strategies.utils import get_random_samples, cluster_features
+        from sklearn.metrics.pairwise import euclidean_distances
+        if len(candidates) < acq_size:
+            delta = acq_size - len(candidates)
+            random_samples = get_random_samples(candidates, delta, num_unlabeled)
+            candidates = torch.cat([candidates, random_samples])
+            selected = torch.ones(len(candidates), dtype=torch.bool)
+        else:
+            candidate_vectors = F.normalize(embeddings[candidates]).numpy()
+            candidate_labels = unlabeled_labels[candidates]
+            # selected, _ = cluster_features(candidate_vectors, acq_size) # TODO change to classes
+
+            class_counter = {}
+            all_labels = torch.cat((unlabeled_labels, labeled_labels))
+            labels = all_labels.unique()
+            for lbl in labels:
+                class_counter[lbl.item()] = 0
+            for lbl, count in zip(*labeled_labels.unique(return_counts=True)):
+                class_counter[lbl.item()] = count.item()
+
+            selected = []
+            while len(selected) < acq_size:
+                min_counts = min(class_counter.values())
+                min_labels = [lbl for lbl, cnt in class_counter.items() if cnt == min_counts]
+                for lbl in min_labels:
+                    if len(selected) == acq_size:
+                        break
+                    indices = torch.nonzero(candidate_labels == lbl).ravel()
+                    indices = indices[~np.isin(indices, selected)]
+                    if len(indices) < 1:
+                        class_counter.pop(lbl)
+                        continue
+                    dist_mat = euclidean_distances(candidate_vectors[indices.tolist()])
+                    dist_sum = np.sum(dist_mat, axis=1)
+                    idx = dist_sum.argmin()
+                    selected.append(indices[idx])
+                    class_counter[lbl] += 1
+
+        selected_candidates = candidates[selected].tolist()
+        query_indices = [unlabeled_indices[i] for i in selected_candidates]
+        return query_indices
+
 
 # TypiClass
 # Sample high-loss samples

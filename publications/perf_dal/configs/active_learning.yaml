@@ -24,7 +24,7 @@ al:
   device: cpu
   optimal:
     num_batches: 100
-    strategies: [random,margin,typiclust,typiclass,dropquery,bait]
+    strategies: [random,margin,typiclust,typiclass,dropquery,dropqueryclass,bait]
     strat_subset_size: 1000
     strat_ratio: equal
     num_mc_labels: 5
