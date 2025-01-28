@@ -7,6 +7,7 @@ from . import imagenet_subsets
 from . import stl10
 
 from .stl10 import STL10
+from .dopanim import Dopanim
 from .snacks import Snacks
 from .dtd import DTD
 from .food import Food101

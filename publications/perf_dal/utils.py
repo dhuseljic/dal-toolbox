@@ -11,13 +11,13 @@ from omegaconf import DictConfig
 from dal_toolbox.datasets import CIFAR10
 from dal_toolbox.datasets.utils import DinoTransforms, FeatureDataset, PlainTransforms
 from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, Snacks, DTD, Flowers102, TinyImageNet
-from dal_toolbox.datasets import ImageNet, StanfordDogs, CIFAR10LT
+from dal_toolbox.datasets import ImageNet, StanfordDogs, CIFAR10LT, Dopanim
 
 from dal_toolbox.models.laplace import LaplaceLinear, LaplaceModel
 
 
 def build_datasets(args, cache_features=True):
-    image_datasets = ['cifar10', 'cifar10-lt', 'stl10', 'snacks', 'dtd', 'cifar100', 'food101', 'flowers102',
+    image_datasets = ['cifar10', 'cifar10-lt', 'stl10', 'dopanim', 'snacks', 'dtd', 'cifar100', 'food101', 'flowers102',
                       'caltech101', 'stanford_dogs', 'tiny_imagenet', 'imagenet']
     text_datasets = ['agnews', 'dbpedia', 'banking77', 'clinc']
 
@@ -67,6 +67,8 @@ def build_image_data(args, plain_transforms=False):
         data = CIFAR10LT(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'stl10':
         data = STL10(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'dopanim':
+        data = Dopanim(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'snacks':
         data = Snacks(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'dtd':
@@ -163,7 +165,7 @@ class FeatureDataset:
     @torch.no_grad()
     def get_features(self, model, dataset, batch_size, device, task=None):
         print('Getting ssl features..')
-        dataloader = DataLoader(dataset, batch_size=batch_size)
+        dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=8)
         features = []
         labels = []
         model.eval()
@@ -237,7 +239,7 @@ class LaplaceNet(LaplaceLinear):
         all_labels = []
         for batch in dataloader:
             inputs = batch[0]
-            labels = batch [1]
+            labels = batch[1]
             all_representations.append(inputs)
             all_labels.append(labels)
         representations = torch.cat(all_representations)
