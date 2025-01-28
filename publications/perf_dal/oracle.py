@@ -88,9 +88,8 @@ class PerfDALOracle(Query):
             elif strat_name == 'bait':
                 strat = strategies.BaitSampling(subset_size=self.strat_subset_size,
                                                 grad_likelihood='binary_cross_entropy', device=self.device)
-            # elif strat == 'alfamix':
-            #     strategies_list.append(strategies.AlfaMix(embed_dim=384,
-            #         subset_size=self.strat_subset_size, device=self.device))
+            elif strat_name  == 'alfamix':
+                strat = strategies.AlfaMix(384, subset_size=self.strat_subset_size, device=self.device)
             else:
                 raise NotImplementedError()
             strategies_list.append(strat)
@@ -329,7 +328,7 @@ class DropQueryClass(strategies.DropQuery):
                     dist_mat = euclidean_distances(candidate_vectors[indices.tolist()])
                     dist_sum = np.sum(dist_mat, axis=1)
                     idx = dist_sum.argmin()
-                    selected.append(indices[idx])
+                    selected.append(indices[idx].item())
                     class_counter[lbl] += 1
 
         selected_candidates = candidates[selected].tolist()

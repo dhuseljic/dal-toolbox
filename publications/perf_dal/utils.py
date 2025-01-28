@@ -230,15 +230,22 @@ class LaplaceNet(LaplaceLinear):
         return logits
 
     @torch.no_grad()
-    def get_representations(self, dataloader, device):
+    def get_representations(self, dataloader, device, return_labels=False):
         self.to(device)
         self.eval()
         all_representations = []
+        all_labels = []
         for batch in dataloader:
             inputs = batch[0]
+            labels = batch [1]
             all_representations.append(inputs)
+            all_labels.append(labels)
         representations = torch.cat(all_representations)
-        return representations
+        labels = torch.cat(all_labels)
+        out = representations
+        if return_labels:
+            out = (out, labels)
+        return out
 
     @torch.no_grad()
     def get_representations_and_logits(self, dataloader, device):
