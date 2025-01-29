@@ -13,7 +13,8 @@ from dal_toolbox.active_learning.data import ActiveLearningDataModule
 
 class PerfDALOracle(Query):
     def __init__(self,
-                 al_strategies=['random', 'margin', 'typiclust', 'typiclass', 'bait', 'dropquery', 'alfamix'],
+                 al_strategies=['random', 'margin', 'typiclust', 'bait', 'dropquery',
+                                'typiclass', 'dropqueryclass', 'loss'],
                  num_batches=200,
                  strat_ratio='equal',
                  look_ahead='true_labels',
@@ -79,17 +80,17 @@ class PerfDALOracle(Query):
                 strat = strategies.MarginSampling(subset_size=self.strat_subset_size, device=self.device)
             elif strat_name == 'typiclust':
                 strat = strategies.TypiClust(subset_size=self.strat_subset_size, device=self.device)
-            elif strat_name == 'typiclass':
-                strat = TypiClass(subset_size=self.strat_subset_size, device=self.device)
             elif strat_name == 'dropquery':
                 strat = strategies.DropQuery(subset_size=self.strat_subset_size, device=self.device)
-            elif strat_name == 'dropqueryclass':
-                strat = DropQueryClass(subset_size=self.strat_subset_size, device=self.device)
             elif strat_name == 'bait':
                 strat = strategies.BaitSampling(subset_size=self.strat_subset_size,
                                                 grad_likelihood='binary_cross_entropy', device=self.device)
-            elif strat_name  == 'alfamix':
-                strat = strategies.AlfaMix(384, subset_size=self.strat_subset_size, device=self.device)
+            elif strat_name == 'typiclass':
+                strat = TypiClass(subset_size=self.strat_subset_size, device=self.device)
+            elif strat_name == 'dropqueryclass':
+                strat = DropQueryClass(subset_size=self.strat_subset_size, device=self.device)
+            elif strat_name == 'loss':
+                strat = LossSampling(subset_size=self.strat_subset_size, device=self.device)
             else:
                 raise NotImplementedError()
             strategies_list.append(strat)
@@ -178,15 +179,15 @@ class PerfDALOracle(Query):
         batch_type = self.batch_types[idx_batch_type]
         self.batch_type_count[batch_type] += 1
 
-        # import pylab as plt
-        # plt.figure()
-        # for i, strat_name in enumerate(self.batch_types):
-        #     start_idx = 0 if i == 0 else counts[i - 1]
-        #     end_idx = counts[i]
-        #     plt.hist(loss_batches[start_idx:end_idx], bins='auto', label=strat_name, alpha=0.5)
-        # plt.vlines(base_loss, *plt.ylim(), lw=3, colors='k', ls='--', label='Base Loss')
-        # plt.legend()
-        # plt.savefig('tmp.png')
+        import pylab as plt
+        plt.figure()
+        for i, strat_name in enumerate(self.batch_types):
+            start_idx = 0 if i == 0 else counts[i - 1]
+            end_idx = counts[i]
+            plt.hist(loss_batches[start_idx:end_idx], bins='auto', label=strat_name, alpha=0.5)
+        plt.vlines(base_loss, *plt.ylim(), lw=3, colors='k', ls='--', label='Base Loss')
+        plt.legend()
+        plt.savefig('tmp.png')
 
         self.history.append({
             'base_loss': base_loss,
@@ -280,9 +281,11 @@ class TypiClass(Query):
         global_indices = [unlabeled_indices[idx] for idx in indices]
         return global_indices
 
+
 class DropQueryClass(strategies.DropQuery):
     def query(self, *, model, al_datamodule, acq_size, **kwargs):
-        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(
+            subset_size=self.subset_size)
         num_unlabeled = len(unlabeled_indices)
         unlabeled_labels = torch.cat([batch[1] for batch in unlabeled_dataloader])
 
@@ -303,41 +306,78 @@ class DropQueryClass(strategies.DropQuery):
         else:
             candidate_vectors = F.normalize(embeddings[candidates]).numpy()
             candidate_labels = unlabeled_labels[candidates]
-            # selected, _ = cluster_features(candidate_vectors, acq_size) # TODO change to classes
-
-            class_counter = {}
-            all_labels = torch.cat((unlabeled_labels, labeled_labels))
-            labels = all_labels.unique()
-            for lbl in labels:
-                class_counter[lbl.item()] = 0
-            for lbl, count in zip(*labeled_labels.unique(return_counts=True)):
-                class_counter[lbl.item()] = count.item()
-
-            selected = []
-            while len(selected) < acq_size:
-                min_counts = min(class_counter.values())
-                min_labels = [lbl for lbl, cnt in class_counter.items() if cnt == min_counts]
-                for lbl in min_labels:
-                    if len(selected) == acq_size:
-                        break
-                    indices = torch.nonzero(candidate_labels == lbl).ravel()
-                    indices = indices[~np.isin(indices, selected)]
-                    if len(indices) < 1:
-                        class_counter.pop(lbl)
-                        continue
-                    dist_mat = euclidean_distances(candidate_vectors[indices.tolist()])
-                    dist_sum = np.sum(dist_mat, axis=1)
-                    idx = dist_sum.argmin()
-                    selected.append(indices[idx].item())
-                    class_counter[lbl] += 1
+            selected = select_samples_per_class(
+                candidate_features=candidate_vectors,
+                candidate_labels=candidate_labels,
+                unlabeled_labels=unlabeled_labels,
+                labeled_labels=labeled_labels,
+                acq_size=acq_size,
+            )
 
         selected_candidates = candidates[selected].tolist()
         query_indices = [unlabeled_indices[i] for i in selected_candidates]
         return query_indices
 
 
-# TypiClass
-# Sample high-loss samples
+class LossSampling(Query):
+    def __init__(self, subset_size=None, random_seed=None, device='cpu'):
+        super().__init__(random_seed)
+        self.subset_size = subset_size
+        self.device = device
+
+    def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(self.subset_size)
+        unlabeled_features, unlabeled_logits = model.get_representations_and_logits(
+            unlabeled_dataloader, device=self.device)
+        unlabeled_labels = torch.cat([batch[1] for batch in unlabeled_dataloader])
+        labeled_dataloader, _ = al_datamodule.labeled_dataloader()
+        labeled_labels = torch.cat([batch[1] for batch in labeled_dataloader])
+
+        losses = torch.nn.functional.cross_entropy(unlabeled_logits, unlabeled_labels, reduction='none')
+        quartile = losses.quantile(0.75)
+        candidates = torch.where(losses > quartile)[0]
+        selected = select_samples_per_class(
+            candidate_features=unlabeled_features[candidates],
+            candidate_labels=unlabeled_labels[candidates],
+            unlabeled_labels=unlabeled_labels,
+            labeled_labels=labeled_labels,
+            acq_size=acq_size,
+        )
+        indices = candidates[selected]
+        # indices = self.rng.choice(indices, size=acq_size, replace=False)
+        return [unlabeled_indices[idx] for idx in indices]
+
+
+def select_samples_per_class(candidate_features, candidate_labels, unlabeled_labels, labeled_labels, acq_size):
+    from sklearn.metrics.pairwise import euclidean_distances
+    class_counter = {}
+    all_labels = torch.cat((unlabeled_labels, labeled_labels))
+    labels = all_labels.unique()
+    for lbl in labels:
+        class_counter[lbl.item()] = 0
+    for lbl, count in zip(*labeled_labels.unique(return_counts=True)):
+        class_counter[lbl.item()] = count.item()
+
+    selected = []
+    while len(selected) < acq_size:
+        min_counts = min(class_counter.values())
+        min_labels = [lbl for lbl, cnt in class_counter.items() if cnt == min_counts]
+        for lbl in min_labels:
+            if len(selected) == acq_size:
+                break
+            indices = torch.nonzero(candidate_labels == lbl).ravel()
+            indices = indices[~np.isin(indices, selected)]
+            if len(indices) < 1:
+                class_counter.pop(lbl)
+                continue
+            dist_mat = euclidean_distances(candidate_features[indices.tolist()])
+            dist_sum = np.sum(dist_mat, axis=1)
+            idx = dist_sum.argmin()
+            selected.append(indices[idx].item())
+            class_counter[lbl] += 1
+    return selected
+
+
 # Missclassifiations
 # Gradient-Based
 # Label Coverage
