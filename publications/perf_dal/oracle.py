@@ -13,7 +13,7 @@ from dal_toolbox.active_learning.data import ActiveLearningDataModule
 
 class PerfDALOracle(Query):
     def __init__(self,
-                 al_strategies=['random', 'margin', 'typiclust', 'bait', 'dropquery',
+                 al_strategies=['random', 'margin', 'badge', 'typiclust', 'bait', 'dropquery',
                                 'typiclass', 'dropqueryclass', 'loss'],
                  num_batches=200,
                  strat_ratio='equal',
@@ -78,6 +78,8 @@ class PerfDALOracle(Query):
                 strat = strategies.RandomSampling()
             elif strat_name == 'margin':
                 strat = strategies.MarginSampling(subset_size=self.strat_subset_size, device=self.device)
+            elif strat_name == 'badge':
+                strat = strategies.Badge(subset_size=self.strat_subset_size, device=self.device)
             elif strat_name == 'typiclust':
                 strat = strategies.TypiClust(subset_size=self.strat_subset_size, device=self.device)
             elif strat_name == 'dropquery':
@@ -99,9 +101,9 @@ class PerfDALOracle(Query):
     @ torch.no_grad()
     def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(self.subset_size)
-        unlabeled_features = model.get_representations(unlabeled_dataloader, device=self.device)
+        unlabeled_features, unlabeled_logits = model.get_representations_and_logits(
+            unlabeled_dataloader, device=self.device)
         unlabeled_labels = torch.cat([batch[1] for batch in unlabeled_dataloader])
-        unlabeled_logits = model.get_logits_from_representations(unlabeled_features, device=self.device)
 
         labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
         labeled_features = model.get_representations(labeled_dataloader, device=self.device)
