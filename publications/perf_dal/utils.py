@@ -261,6 +261,7 @@ class LaplaceNet(LaplaceLinear):
             all_representations.append(inputs)
             all_logits.append(logits)
         representations = torch.cat(all_representations).cpu()
+
         logits = torch.cat(all_logits).cpu()
         return representations, logits
 
