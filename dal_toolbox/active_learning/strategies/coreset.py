@@ -1,7 +1,4 @@
 import torch
-
-from torch.utils.data import DataLoader
-
 from .query import Query
 
 
@@ -15,10 +12,12 @@ class CoreSet(Query):
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
         labeled_dataloader, _ = al_datamodule.labeled_dataloader()
 
-        features_unlabeled = model.get_representations(unlabeled_dataloader, device=self.device)
-        features_labeled = model.get_representations(labeled_dataloader, device=self.device)
+        unlabeled_outputs = model.get_model_outputs(unlabeled_dataloader, output_types=[
+                                                    'features'], device=self.device)
+        labeled_outputs = model.get_model_outputs(labeled_dataloader, output_types=[
+                                                  'features'], device=self.device)
 
-        chosen = self.kcenter_greedy(features_unlabeled, features_labeled, acq_size)
+        chosen = self.kcenter_greedy(unlabeled_outputs['features'], labeled_outputs['features'], acq_size)
         return [unlabeled_indices[idx] for idx in chosen]
 
     def kcenter_greedy(self, features_unlabeled: torch.Tensor, features_labeled: torch.Tensor, acq_size: int):

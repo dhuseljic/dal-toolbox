@@ -8,17 +8,20 @@ from sklearn.preprocessing import MinMaxScaler
 
 
 class Falcun(Query):
-    def __init__(self, subset_size, gamma=10, deterministic=False, custom_dist="distance"):
+    def __init__(self, subset_size, gamma=10, deterministic=False, custom_dist="distance", device="cpu"):
         super().__init__()
         self.subset_size = subset_size
         self.deterministic = deterministic
         self.gamma = gamma
         self.custom_dist = custom_dist
+        self.device = device
 
 
     def query(self, *, model, al_datamodule, acq_size, **kwargs):
-        loader_unlabeled, idxs_unlabeled = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
-        probs = model.get_logits(dataloader=loader_unlabeled, device='cuda').softmax(-1)
+        unlabeled_dataloader, idxs_unlabeled = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
+        outputs = model.get_model_outputs(unlabeled_dataloader, ['logits'], device=self.device)
+        logits = outputs['logits']
+        probs = logits.softmax(-1)
         unc = self.get_unc(probs, uncertainty="margin")
 
         if self.deterministic and self.custom_dist == "unc":

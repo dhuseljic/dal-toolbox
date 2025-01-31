@@ -34,7 +34,7 @@ class AlfaMix(Query):
             alpha = self.eps * (diff_norm * z_grad) / (grad_norm * z_diff)
             z_lerp = alpha * z_s + (1 - alpha) * z_u
 
-            probs = model.model.linear(z_lerp).softmax(dim=1)
+            probs = model.model.forward_head(z_lerp).softmax(dim=1)
             y_pred = torch.argmax(probs, dim=1)
             mismatch_idx = torch.nonzero(y_pred != y_star).flatten()
             candidates[mismatch_idx] = True
@@ -46,10 +46,17 @@ class AlfaMix(Query):
         labeled_dataloader, _ = al_datamodule.labeled_dataloader()
 
         # Retrieve gradient-embeddings, embeddings and pseudo-labels for the unlabeled data
-        grads, z_u, y_star = model.get_alfa_grad_representations(unlabeled_dataloader, device=self.device)
+        unlabeled_outputs = model.get_model_outputs(unlabeled_dataloader, output_types=['features', 'logits'], device=self.device)
+        z_u = unlabeled_outputs['features'].requires_grad_()
+        logits = model.model.forward_head(z_u)
+        y_star = logits.softmax(-1).argmax(-1)
+        loss = F.cross_entropy(logits, y_star, reduction="sum")
+        grads = torch.autograd.grad(loss, z_u)[0]
+        z_u = z_u.detach()
 
         # Get the anchors, i.e., the centroids in the embedding space, of each observed class based on the labeled pool
-        z_l, y_l = model.get_representations(dataloader=labeled_dataloader, return_labels=True, device=self.device)
+        z_l = model.get_model_outputs(labeled_dataloader, output_types=['features'], device=self.device)['features']
+        y_l = torch.cat([batch[1] for batch in labeled_dataloader])
         z_star = self._get_anchors(z_l, y_l).to(self.device)
         
         candidates = self._get_candidates(z_u.to(self.device), z_star.to(self.device), grads.to(self.device), y_star.to(self.device), model=model.to(self.device))

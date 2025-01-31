@@ -68,7 +68,7 @@ class TypiClust(Query):
         unlabeled_features = unlabeled_outputs['features']
         if len(labeled_indices) > 0:
             labeled_outputs = model.get_model_outputs(labeled_dataloader, ['features'], device=self.device)
-            labeled_features = labeled_outputs ['features']
+            labeled_features = labeled_outputs['features']
         else:
             labeled_features = torch.Tensor([])
         features = torch.cat((labeled_features, unlabeled_features))

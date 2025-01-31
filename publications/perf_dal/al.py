@@ -134,12 +134,22 @@ def build_al_strategy(args):
             strat_subset_size=args.al.optimal.strat_subset_size,
             device=device,
         )
+    elif args.al.strategy == 'alfamix':
+        al_strategy = strategies.AlfaMix(embed_dim=384, subset_size=args.al.subset_size, device=device)
+    elif args.al.strategy == 'badge':
+        al_strategy = strategies.Badge(subset_size=args.al.subset_size)
+    elif args.al.strategy == 'bait':
+        al_strategy = strategies.BaitSampling(subset_size=args.al.subset_size, grad_likelihood='binary_cross_entropy', device=device)
+    elif args.al.strategy == 'coreset':
+        al_strategy = strategies.CoreSet(subset_size=args.al.subset_size, device=device)
+    elif args.al.strategy == 'dropquery':
+        al_strategy = strategies.DropQuery(subset_size=args.al.subset_size, device=device)
+    elif args.al.strategy == 'falcun':
+        al_strategy = strategies.Falcun(subset_size=args.al.subset_size, device=device)
     elif args.al.strategy == 'margin':
         al_strategy = strategies.MarginSampling(subset_size=args.al.subset_size, device=device)
     elif args.al.strategy == 'typiclust':
         al_strategy = strategies.TypiClust(subset_size=args.al.subset_size)
-    elif args.al.strategy == 'badge':
-        al_strategy = strategies.Badge(subset_size=args.al.subset_size)
     else:
         raise NotImplementedError()
     return al_strategy

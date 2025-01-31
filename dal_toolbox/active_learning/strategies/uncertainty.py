@@ -30,7 +30,6 @@ class UncertaintySampling(Query, ABC):
             subset_size=self.subset_size)
         outputs = model.get_model_outputs(unlabeled_dataloader, output_types=['logits'], device=self.device)
         logits = outputs['logits']
-        # logits = model.get_logits(unlabeled_dataloader, device=self.device)
         scores = self.get_utilities(logits)
         _, indices = scores.topk(acq_size)
 
