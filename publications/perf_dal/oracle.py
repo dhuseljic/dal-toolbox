@@ -70,6 +70,10 @@ class PerfDALOracle(Query):
         self.num_retraining_epochs = num_retraining_epochs
         self.update_gamma = update_gamma
 
+        # Noise filter
+        self.i_iter = 0
+        self.noise_quantiles = np.linspace(0.5, 1, 20)
+
         # Some helper
         self.history = []
 
@@ -241,7 +245,8 @@ class PerfDALOracle(Query):
         return indices, batches_counts
 
     def filter_noisy_samples(self, al_datamodule, unlabeled_features, labeled_features, unlabeled_labels, labeled_labels):
-        self.denoise_quantile = .5
+        self.denoise_quantile = self.noise_quantiles[self.i_iter]
+        self.i_iter += 1
         al_dm = deepcopy(al_datamodule)
 
         # Train Model
@@ -260,13 +265,13 @@ class PerfDALOracle(Query):
         al_dm.unlabeled_indices = [al_dm.unlabeled_indices[idx] for idx in indices]
 
         # Plot denoised TSNE
-        from sklearn.manifold import TSNE
-        tsne = TSNE(random_state=42)
-        X_tsne = tsne.fit_transform(unlabeled_features[indices])
-        import pylab as plt
-        plt.figure()
-        plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=unlabeled_labels[indices], cmap='tab20', s=50)
-        plt.savefig('tmp.png')
+        # from sklearn.manifold import TSNE
+        # tsne = TSNE(random_state=42)
+        # X_tsne = tsne.fit_transform(unlabeled_features[indices])
+        # import pylab as plt
+        # plt.figure()
+        # plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=unlabeled_labels[indices], cmap='tab20', s=50)
+        # plt.savefig('tmp.png')
 
         return al_dm
 
