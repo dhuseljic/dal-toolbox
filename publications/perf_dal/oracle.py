@@ -72,7 +72,7 @@ class PerfDALOracle(Query):
 
         # Noise filter
         self.i_iter = 0
-        self.noise_quantiles = np.linspace(0.5, 1, 20)
+        self.noise_quantiles = np.linspace(1, 1, 20)
 
         # Some helper
         self.history = []
