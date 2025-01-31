@@ -216,206 +216,26 @@ def flatten_cfg(cfg, parent_key='', sep='.'):
     return dict(items)
 
 
-class LaplaceNet(LaplaceLinear):
+class LaplaceNet(nn.Module):
     use_mean_field = True
 
-    @torch.no_grad()
-    def get_logits(self, dataloader, device):
-        self.to(device)
-        self.eval()
-        all_logits = []
-        for batch in dataloader:
-            inputs = batch[0]
-            logits = self(inputs.to(device))
-            all_logits.append(logits)
-        logits = torch.cat(all_logits)
+    def __init__(self, in_features, out_features, **kwargs):
+        super().__init__()
+        self.layer = LaplaceLinear(in_features, out_features, **kwargs)
+
+    def forward_features(self, x):
+        return x
+
+    def forward_head(self, x):
+        return self.layer(x)
+
+    def forward_mean_field(self, x):
+        return self.layer.forward_mean_field(x)
+
+    def forward(self, x):
+        features = self.forward_features(x)
+        logits = self.forward_head(features)
         return logits
-
-    @torch.no_grad()
-    def get_representations(self, dataloader, device, return_labels=False):
-        self.to(device)
-        self.eval()
-        all_representations = []
-        all_labels = []
-        for batch in dataloader:
-            inputs = batch[0]
-            labels = batch[1]
-            all_representations.append(inputs)
-            all_labels.append(labels)
-        representations = torch.cat(all_representations)
-        labels = torch.cat(all_labels)
-        out = representations
-        if return_labels:
-            out = (out, labels)
-        return out
-
-    @torch.no_grad()
-    def get_representations_and_logits(self, dataloader, device):
-        self.to(device)
-        self.eval()
-        all_representations = []
-        all_logits = []
-        for batch in dataloader:
-            inputs = batch[0]
-            logits = self(inputs.to(device))
-            all_representations.append(inputs)
-            all_logits.append(logits)
-        representations = torch.cat(all_representations).cpu()
-
-        logits = torch.cat(all_logits).cpu()
-        return representations, logits
-
-    @torch.no_grad()
-    def get_logits_from_representations(self, representations, device):
-        self.to(device)
-        self.eval()
-        # TODO
-        logits = self.forward_mean_field(representations.to(device))
-        return logits
-
-    @torch.inference_mode()
-    def get_grad_representations(self, dataloader, device):
-        self.eval()
-        self.to(device)
-
-        embedding = []
-        for batch in dataloader:
-            inputs = batch[0].to(device)
-            logits = self(inputs)
-
-            features = inputs
-            probas = logits.softmax(-1)
-            max_indices = probas.argmax(-1)
-            num_classes = logits.size(-1)
-
-            factor = F.one_hot(max_indices, num_classes=num_classes) - probas
-            embedding_batch = (factor[:, :, None] * features[:, None, :]).flatten(-2)
-
-            embedding.append(embedding_batch.cpu())
-
-        # Concat all embeddings
-        embedding = torch.cat(embedding)
-        return embedding
-
-    @torch.no_grad()
-    def get_topk_grad_representations(self, dataloader, device, topk, grad_likelihood='cross_entropy', normalize_top_probas=True):
-        self.eval()
-        self.to(device)
-
-        embedding = []
-        for batch in dataloader:
-            inputs = batch[0].to(device)
-            logits = self(inputs)
-
-            features = inputs
-            probas = logits.softmax(-1)
-            num_classes = logits.size(-1)
-            probas_topk, top_preds = probas.topk(k=topk)
-
-            if grad_likelihood == 'cross_entropy':
-                factor = (torch.eye(num_classes, device=device)[:, None] - probas)
-                batch_indices = torch.arange(len(top_preds)).unsqueeze(-1).expand(-1, top_preds.size(1))
-                factor = factor[top_preds, batch_indices]
-
-                embedding_batch = torch.einsum("njh,nd->njhd", factor, features).flatten(2)
-                if normalize_top_probas:
-                    probas_topk /= probas_topk.sum(-1, keepdim=True)
-                embedding_batch = torch.sqrt(probas_topk)[:, :, None] * embedding_batch
-
-            elif grad_likelihood == 'binary_cross_entropy':
-                # We assume multiple independet binary cross entropy for highest probabilities
-                if topk > 2:
-                    raise ValueError('When using the binary cross entropy, topk must be 1 or 2.')
-                max_probas = probas_topk[:, 0]
-                factor = torch.eye(topk, device=device)[0] - max_probas[:, None]
-                embedding_batch = torch.einsum("nk,nd->nkd", factor, features).flatten(2)
-
-                probas_topk = torch.stack((max_probas, 1 - max_probas), dim=1)[:, :topk]
-                if normalize_top_probas:
-                    probas_topk /= probas_topk.sum(-1, keepdim=True)
-                embedding_batch = torch.sqrt(probas_topk)[:, :, None] * embedding_batch
-
-            elif grad_likelihood == 'cross_entropy_unbiased':
-
-                cat = torch.distributions.Categorical(probas)
-                factor = (torch.eye(num_classes, device=device)[:, None] - probas)
-                batch_indices = torch.arange(len(top_preds)).unsqueeze(-1).expand(-1, top_preds.size(1))
-                sampled_labels = cat.sample((topk,)).T
-                factor = factor[sampled_labels, batch_indices]
-
-                embedding_batch = torch.einsum("njh,nd->njhd", factor, features).flatten(2)
-            else:
-
-                raise NotImplementedError()
-
-            embedding.append(embedding_batch.cpu())
-        embedding = torch.cat(embedding)
-
-        return embedding
-
-    @torch.no_grad()
-    def get_exp_grad_representations(self, dataloader, device, grad_likelihood='cross_entropy'):
-        self.eval()
-        self.to(device)
-
-        embedding = []
-        for batch in dataloader:
-            inputs = batch[0].to(device)
-            logits = self(inputs)
-
-            features = inputs
-            probas = logits.softmax(-1)
-            num_classes = logits.size(-1)
-
-            if grad_likelihood == 'cross_entropy':
-                factor = (torch.eye(num_classes, device=device)[:, None] - probas)
-                embedding_batch = torch.einsum("jnh,nd->njhd", factor, features).flatten(2)
-                embedding_batch = torch.sqrt(probas)[:, :, None] * embedding_batch
-
-            elif grad_likelihood == 'binary_cross_entropy':
-                max_probas = probas.max(dim=-1).values
-
-                factor = torch.eye(2, device=device)[0] - max_probas[:, None]
-                embedding_batch = torch.einsum("nk,nd->nkd", factor, features).flatten(2)
-                probas_ = torch.stack((max_probas, 1 - max_probas), dim=1)
-                embedding_batch = torch.sqrt(probas_)[:, :, None] * embedding_batch
-            elif grad_likelihood == 'test':
-                c = 10
-                top_probas = probas.topk(c).values
-                top_probas = top_probas / top_probas.sum(-1, keepdim=True)
-                factor = (torch.eye(c, device=device)[:, None] - top_probas)
-                embedding_batch = torch.einsum("jnh,nd->njhd", factor, features).flatten(2)
-
-            else:
-                raise NotImplementedError()
-
-            embedding.append(embedding_batch.cpu())
-        embedding = torch.cat(embedding)
-
-        return embedding
-
-    @torch.enable_grad()
-    def get_alfa_grad_representations(self, dataloader, device):
-        self.to(device)
-
-        embeddings, gradients, pseudo_labels = [], [], []
-        for batch in dataloader:
-            features = batch[0].to(device).requires_grad_()
-            logits = self(features)
-            preds = logits.argmax(-1)
-            loss = F.cross_entropy(logits, preds, reduction="sum")
-            grads = torch.autograd.grad(loss, features)[0]
-
-            embeddings.append(features.cpu().detach())
-            gradients.append(grads.cpu())
-            pseudo_labels.append(preds.cpu())
-
-        # Concat all tensors and return
-        gradients = torch.cat(gradients)
-        embeddings = torch.cat(embeddings)
-        pseudo_labels = torch.cat(pseudo_labels)
-
-        return gradients, embeddings, pseudo_labels
 
 
 class LaplaceMLP(nn.Module):
@@ -429,7 +249,7 @@ class LaplaceMLP(nn.Module):
         out = self.layer1(x)
         out = self.act(out)
         return out
-    
+
     def forward_head(self, x, mean_field=False):
         if mean_field:
             out = self.layer2.forward_mean_field(x)
@@ -446,110 +266,6 @@ class LaplaceMLP(nn.Module):
         features = self.forward_features(x)
         mean_field_logits = self.forward_head(features, mean_field=True)
         return mean_field_logits
-
-    @torch.no_grad()
-    def get_logits(self, dataloader, device):
-        self.to(device)
-        self.eval()
-        all_logits = []
-        for batch in dataloader:
-            inputs = batch[0].to(device)
-            logits = self.forward(inputs)
-            all_logits.append(logits)
-        logits = torch.cat(all_logits)
-        return logits
-
-    @torch.no_grad()
-    def get_representations(self, dataloader, device, return_labels=False):
-        self.to(device)
-        self.eval()
-        all_features = []
-        all_labels = []
-        for batch in dataloader:
-            inputs = batch[0].to(device)
-            labels = batch[1]
-            features = self.forward_features(inputs)
-            all_features.append(features.cpu())
-            all_labels.append(labels)
-        features = torch.cat(all_features)
-        labels = torch.cat(all_labels)
-        out = features
-        if return_labels:
-            out = (out, labels)
-        return out
-
-    @torch.no_grad()
-    def get_representations_and_logits(self, dataloader, device):
-        self.to(device)
-        self.eval()
-        all_features = []
-        all_logits = []
-        for batch in dataloader:
-            inputs = batch[0].to(device)
-            features = self.forward_features(inputs)
-            logits = self.forward_head(features)
-            all_features.append(features.cpu())
-            all_logits.append(logits.cpu())
-        features = torch.cat(all_features)
-        logits = torch.cat(all_logits)
-        return features, logits
-
-    @torch.inference_mode()
-    def get_grad_representations(self, dataloader, device):
-        self.eval()
-        self.to(device)
-
-        embedding = []
-        for batch in dataloader:
-            inputs = batch[0].to(device)
-
-            features = self.forward_features(inputs)
-            logits = self.forward_head(features)
-
-            probas = logits.softmax(-1)
-            max_indices = probas.argmax(-1)
-            num_classes = logits.size(-1)
-
-            factor = F.one_hot(max_indices, num_classes=num_classes) - probas
-            embedding_batch = (factor[:, :, None] * features[:, None, :]).flatten(-2)
-            embedding.append(embedding_batch.cpu())
-        embedding = torch.cat(embedding)
-        return embedding
-
-    @torch.no_grad()
-    def get_exp_grad_representations(self, dataloader, device, grad_likelihood='cross_entropy'):
-        self.eval()
-        self.to(device)
-
-        embedding = []
-        for batch in dataloader:
-            inputs = batch[0].to(device)
-
-            features = self.forward_features(inputs)
-            logits = self.forward_head(features)
-            probas = logits.softmax(-1)
-            num_classes = logits.size(-1)
-
-            if grad_likelihood == 'cross_entropy':
-                factor = (torch.eye(num_classes, device=device)[:, None] - probas)
-                embedding_batch = torch.einsum("jnh,nd->njhd", factor, features).flatten(2)
-                embedding_batch = torch.sqrt(probas)[:, :, None] * embedding_batch
-
-            elif grad_likelihood == 'binary_cross_entropy':
-                max_probas = probas.max(dim=-1).values
-
-                factor = torch.eye(2, device=device)[0] - max_probas[:, None]
-                embedding_batch = torch.einsum("nk,nd->nkd", factor, features).flatten(2)
-                probas_ = torch.stack((max_probas, 1 - max_probas), dim=1)
-                embedding_batch = torch.sqrt(probas_)[:, :, None] * embedding_batch
-
-            else:
-                raise NotImplementedError()
-
-            embedding.append(embedding_batch.cpu())
-        embedding = torch.cat(embedding)
-
-        return embedding
 
 
 def build_model(args, **kwargs):

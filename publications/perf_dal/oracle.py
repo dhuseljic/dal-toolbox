@@ -102,30 +102,33 @@ class PerfDALOracle(Query):
             strategies_list.append(strat)
         return strategies_list
 
-    @ torch.no_grad()
+    @torch.no_grad()
     def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(self.subset_size)
-        unlabeled_features, unlabeled_logits = model.get_representations_and_logits(
-            unlabeled_dataloader, device=self.device)
-        unlabeled_labels = torch.cat([batch[1] for batch in unlabeled_dataloader])
+        unlabeled_outputs = model.get_model_outputs(unlabeled_dataloader, output_types=[
+                                                    'logits', 'features', 'labels'], device=self.device)
+        unlabeled_logits = unlabeled_outputs['logits']
+        unlabeled_features = unlabeled_outputs['features']
+        unlabeled_labels = unlabeled_outputs['labels']
 
         labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
-        labeled_features = model.get_representations(labeled_dataloader, device=self.device)
-        labeled_labels = torch.cat([batch[1] for batch in labeled_dataloader])
+        labeled_outputs = model.get_model_outputs(labeled_dataloader, output_types=[
+                                                  'features', 'labels'], device=self.device)
+        labeled_features = labeled_outputs['features']
+        labeled_labels = labeled_outputs['labels']
 
         base_loss = self.evaluate_model(model, al_datamodule.test_dataloader())
 
         al_datamodule = self.filter_noisy_samples(
             al_datamodule,
-            unlabeled_features,
-            labeled_features,
-            unlabeled_labels,
-            labeled_labels
+            unlabeled_features=unlabeled_features,
+            labeled_features=labeled_features,
+            unlabeled_labels=unlabeled_labels,
+            labeled_labels=labeled_labels,
         )
         unlabeled_indices = al_datamodule.unlabeled_indices
 
-        indices_batches, batches_counts, indices_per_strat = self.select_strategy_batches(
-            model, al_datamodule, acq_size)
+        indices_batches, batches_counts = self.select_strategy_batches(model, al_datamodule, acq_size)
 
         loss_batches = []
         init_params = model.state_dict()
@@ -221,23 +224,24 @@ class PerfDALOracle(Query):
         batches_counts = {t: np.sum(t == batches).item() for t in self.batch_types}
 
         indices = []
-        indices_per_strat = {}
         for strat_name, strat in zip(self.batch_types, self.strategies):
             num_batches = batches_counts[strat_name]
-            indices_strat = [strat.query(model=model, al_datamodule=al_datamodule, acq_size=acq_size)
-                             for _ in range(num_batches)]
+
+            indices_strat = []
+            for _ in range(num_batches):
+                idx = strat.query(model=model, al_datamodule=al_datamodule, acq_size=acq_size)
+                indices_strat.append(idx)
+
             indices.extend(indices_strat)
-            indices_per_strat[strat_name] = np.array(
-                [np.where(np.isin(al_datamodule.unlabeled_indices, idx))[0] for idx in indices_strat])  # TODO
         indices = np.array(indices)
 
         # Convert global indices from strategies to local indices
         indices = np.array([np.where(np.isin(al_datamodule.unlabeled_indices, idx))[0] for idx in indices])
 
-        return indices, batches_counts, indices_per_strat
+        return indices, batches_counts
 
     def filter_noisy_samples(self, al_datamodule, unlabeled_features, labeled_features, unlabeled_labels, labeled_labels):
-        self.denoise_quantile = .3
+        self.denoise_quantile = .5
         al_dm = deepcopy(al_datamodule)
 
         # Train Model
@@ -290,14 +294,16 @@ class TypiClass(Query):
 
     def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(self.subset_size)
-        unlabeled_features = model.get_representations(unlabeled_dataloader, device=self.device)
-        unlabeled_labels = torch.cat([batch[1] for batch in unlabeled_dataloader])
-        len(unlabeled_indices)
-        len(al_datamodule.unlabeled_indices)
-        unlabeled_indices
 
-        labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
-        labeled_labels = torch.cat([batch[1] for batch in labeled_dataloader])
+        unlabeled_outputs = model.get_model_outputs(
+            unlabeled_dataloader, output_types=['features', 'labels'], device=self.device)
+        unlabeled_features = unlabeled_outputs['features']
+        unlabeled_labels = unlabeled_outputs['labels']
+
+        labeled_dataloader, _ = al_datamodule.labeled_dataloader()
+        labeled_outputs = model.get_model_outputs(
+            labeled_dataloader, output_types=['labels'], device=self.device)
+        labeled_labels = labeled_outputs['labels']
 
         indices = select_samples_per_class(
             candidate_features=unlabeled_features,
@@ -313,17 +319,21 @@ class TypiClass(Query):
 
 class DropQueryClass(strategies.DropQuery):
     def query(self, *, model, al_datamodule, acq_size, **kwargs):
-        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(
-            subset_size=self.subset_size)
+        unlabeled_loader, unlabeled_indices = al_datamodule.unlabeled_dataloader(self.subset_size)
+        labeled_loader, _ = al_datamodule.labeled_dataloader()
         num_unlabeled = len(unlabeled_indices)
-        unlabeled_labels = torch.cat([batch[1] for batch in unlabeled_dataloader])
 
-        labeled_dataloader, _ = al_datamodule.labeled_dataloader()
-        labeled_labels = torch.cat([batch[1] for batch in labeled_dataloader])
+        unlabeled_outputs = model.get_model_outputs(
+            unlabeled_loader, output_types=['features', 'logits', 'labels'], device=self.device)
+        unlabeled_features = unlabeled_outputs['features']
+        unlabeled_logits = unlabeled_outputs['logits']
+        unlabeled_labels = unlabeled_outputs['labels']
 
-        embeddings, logits = model.get_representations_and_logits(unlabeled_dataloader, device=self.device)
-        y_star = logits.softmax(-1).argmax(-1)
-        candidates = self._get_candidates(model, unlabeled_dataloader, y_star, acq_size)
+        labeled_outputs = model.get_model_outputs(labeled_loader, output_types=['labels'], device=self.device)
+        labeled_labels = labeled_outputs['labels']
+
+        y_star = unlabeled_logits.softmax(-1).argmax(-1)
+        candidates = self._get_candidates(model, unlabeled_loader, y_star, acq_size)
 
         from dal_toolbox.active_learning.strategies.utils import get_random_samples
         if len(candidates) < acq_size:
@@ -332,7 +342,7 @@ class DropQueryClass(strategies.DropQuery):
             candidates = torch.cat([candidates, random_samples])
             selected = torch.ones(len(candidates), dtype=torch.bool)
         else:
-            candidate_vectors = F.normalize(embeddings[candidates]).numpy()
+            candidate_vectors = F.normalize(unlabeled_features[candidates]).numpy()
             # candidate_vectors = embeddings[candidates]
             candidate_labels = unlabeled_labels[candidates]
             selected = select_samples_per_class(
@@ -355,12 +365,17 @@ class LossSampling(Query):
         self.device = device
 
     def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
-        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(self.subset_size)
-        unlabeled_features, unlabeled_logits = model.get_representations_and_logits(
-            unlabeled_dataloader, device=self.device)
-        unlabeled_labels = torch.cat([batch[1] for batch in unlabeled_dataloader])
-        labeled_dataloader, _ = al_datamodule.labeled_dataloader()
-        labeled_labels = torch.cat([batch[1] for batch in labeled_dataloader])
+        unlabeled_loader, unlabeled_indices = al_datamodule.unlabeled_dataloader(self.subset_size)
+        labeled_loader, _ = al_datamodule.labeled_dataloader()
+
+        unlabeled_outputs = model.get_model_outputs(
+            unlabeled_loader, output_types=['features', 'logits', 'labels'], device=self.device)
+        unlabeled_features = unlabeled_outputs['features']
+        unlabeled_logits = unlabeled_outputs['logits']
+        unlabeled_labels = unlabeled_outputs['labels']
+
+        labeled_outputs = model.get_model_outputs(labeled_loader, output_types=['labels'], device=self.device)
+        labeled_labels = labeled_outputs['labels']
 
         losses = torch.nn.functional.cross_entropy(unlabeled_logits, unlabeled_labels, reduction='none')
         quartile = losses.quantile(0.75)

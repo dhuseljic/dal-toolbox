@@ -64,9 +64,11 @@ class TypiClust(Query):
 
         num_clusters = min(len(labeled_indices) + acq_size, self.MAX_NUM_CLUSTERS)
 
-        unlabeled_features = model.get_representations(unlabeled_dataloader, device=self.device)
+        unlabeled_outputs = model.get_model_outputs(unlabeled_dataloader, ['features'], device=self.device)
+        unlabeled_features = unlabeled_outputs['features']
         if len(labeled_indices) > 0:
-            labeled_features = model.get_representations(labeled_dataloader, device=self.device)
+            labeled_outputs = model.get_model_outputs(labeled_dataloader, ['features'], device=self.device)
+            labeled_features = labeled_outputs ['features']
         else:
             labeled_features = torch.Tensor([])
         features = torch.cat((labeled_features, unlabeled_features))

@@ -46,7 +46,9 @@ class DropQuery(Query):
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
         num_unlabeled = len(unlabeled_indices)
 
-        embeddings, logits = model.get_representations_and_logits(unlabeled_dataloader, device=self.device)
+        outputs = model.get_model_outputs(unlabeled_dataloader, ['features', 'logits'], device=self.device)
+        features = outputs['features']
+        logits = outputs['logits']
         y_star = logits.softmax(-1).argmax(-1)
         candidates = self._get_candidates(model, unlabeled_dataloader, y_star, acq_size)
 
@@ -56,7 +58,7 @@ class DropQuery(Query):
             candidates = torch.cat([candidates, random_samples])
             selected = torch.ones(len(candidates), dtype=torch.bool)
         else:
-            candidate_vectors = F.normalize(embeddings[candidates]).numpy()
+            candidate_vectors = F.normalize(features[candidates]).numpy()
             selected, _ = cluster_features(candidate_vectors, acq_size)
 
         selected_candidates = candidates[selected].tolist()

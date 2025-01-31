@@ -1,4 +1,5 @@
 import numpy as np
+import torch.nn.functional as F
 
 from .query import Query
 # from rich.progress import track
@@ -13,8 +14,19 @@ class Badge(Query):
 
     def query(self, *, model, al_datamodule, acq_size, **kwargs):
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
+        # grad_embedding = model.get_grad_representations(unlabeled_dataloader, device=self.device)
 
-        grad_embedding = model.get_grad_representations(unlabeled_dataloader, device=self.device)
+        outputs = model.get_model_outputs(unlabeled_dataloader, output_types=['features', 'logits'], device=self.device)
+        features = outputs['features']
+        logits = outputs['logits']
+
+        probas = logits.softmax(-1)
+        max_indices = probas.argmax(-1)
+        num_classes = logits.size(-1)
+
+        factor = F.one_hot(max_indices, num_classes=num_classes) - probas
+        grad_embedding = (factor[:, :, None] * features[:, None, :]).flatten(-2)
+
         chosen = kmeans_plusplus(grad_embedding.numpy(), acq_size, rng=self.rng)
 
         return [unlabeled_indices[idx] for idx in chosen]
