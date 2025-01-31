@@ -7,6 +7,7 @@ import numpy as np
 from copy import deepcopy
 from lightning import Trainer
 from rich.progress import track
+from sklearn.linear_model import LogisticRegression
 from dal_toolbox.active_learning.strategies.query import Query
 from dal_toolbox.active_learning import strategies
 from dal_toolbox.active_learning.data import ActiveLearningDataModule
@@ -103,7 +104,6 @@ class PerfDALOracle(Query):
 
     @ torch.no_grad()
     def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
-        al_datamodule = deepcopy(al_datamodule)
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(self.subset_size)
         unlabeled_features, unlabeled_logits = model.get_representations_and_logits(
             unlabeled_dataloader, device=self.device)
@@ -115,42 +115,17 @@ class PerfDALOracle(Query):
 
         base_loss = self.evaluate_model(model, al_datamodule.test_dataloader())
 
-        # Noise sample filter
-        from sklearn.linear_model import LogisticRegression
-        clf = LogisticRegression(C=.001)
-        all_features = torch.cat((unlabeled_features, labeled_features))
-        all_labels = torch.cat((unlabeled_labels, labeled_labels))
-        clf.fit(all_features, all_labels)
-        probas = clf.predict_proba(all_features)
-        # torch.mean((probas.argmax(-1) == all_labels).float())
-        unlabeled_probas = clf.predict_proba(unlabeled_features)
-        unlabeled_entropy = - np.sum(unlabeled_probas * np.log(unlabeled_probas), axis=-1)
-        mask = unlabeled_entropy < np.quantile(unlabeled_entropy, q=.5)
-        denoised_indices = np.where(mask)[0]
-        al_datamodule.unlabeled_indices = [unlabeled_indices[idx] for idx in denoised_indices]
+        al_datamodule = self.filter_noisy_samples(
+            al_datamodule,
+            unlabeled_features,
+            labeled_features,
+            unlabeled_labels,
+            labeled_labels
+        )
         unlabeled_indices = al_datamodule.unlabeled_indices
-        # from sklearn.manifold import TSNE
-        # tsne = TSNE(random_state=42)
-        # X_tsne = tsne.fit_transform(unlabeled_features[mask])
-        # import pylab as plt
-        # plt.figure()
-        # plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=unlabeled_labels[mask], cmap='tab20', s=50)
-        # # plt.scatter(X_tsne[idx, 0], X_tsne[idx, 1], c='turquoise', s=100, marker='*', lw=1, ec='k')
-        # plt.savefig('tmp.png')
-
 
         indices_batches, batches_counts, indices_per_strat = self.select_strategy_batches(
             model, al_datamodule, acq_size)
-
-        # from sklearn.manifold import TSNE
-        # tsne = TSNE(random_state=42)
-        # X_tsne = tsne.fit_transform(unlabeled_features)
-        # import pylab as plt
-        # idx = indices_per_strat['randomsampling'][2]
-        # plt.figure()
-        # plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=unlabeled_labels, cmap='Set1', s=50)
-        # plt.scatter(X_tsne[idx, 0], X_tsne[idx, 1], c='turquoise', s=100, marker='*', lw=1, ec='k')
-        # plt.savefig('tmp.png')
 
         loss_batches = []
         init_params = model.state_dict()
@@ -252,13 +227,44 @@ class PerfDALOracle(Query):
             indices_strat = [strat.query(model=model, al_datamodule=al_datamodule, acq_size=acq_size)
                              for _ in range(num_batches)]
             indices.extend(indices_strat)
-            indices_per_strat[strat_name] = np.array([np.where(np.isin(al_datamodule.unlabeled_indices, idx))[0] for idx in indices_strat]) # TODO
+            indices_per_strat[strat_name] = np.array(
+                [np.where(np.isin(al_datamodule.unlabeled_indices, idx))[0] for idx in indices_strat])  # TODO
         indices = np.array(indices)
 
         # Convert global indices from strategies to local indices
         indices = np.array([np.where(np.isin(al_datamodule.unlabeled_indices, idx))[0] for idx in indices])
 
         return indices, batches_counts, indices_per_strat
+
+    def filter_noisy_samples(self, al_datamodule, unlabeled_features, labeled_features, unlabeled_labels, labeled_labels):
+        self.denoise_quantile = .3
+        al_dm = deepcopy(al_datamodule)
+
+        # Train Model
+        clf = LogisticRegression(C=.001)
+        all_features = torch.cat((unlabeled_features, labeled_features))
+        all_labels = torch.cat((unlabeled_labels, labeled_labels))
+        clf.fit(all_features, all_labels)
+
+        # Filter uncertain samples
+        unlabeled_probas = clf.predict_proba(unlabeled_features)
+        unlabeled_entropy = - np.sum(unlabeled_probas * np.log(unlabeled_probas), axis=-1)
+        thresh = np.quantile(unlabeled_entropy, q=self.denoise_quantile)
+        indices = np.where(unlabeled_entropy < thresh)[0]
+
+        # Update unlabeled indices
+        al_dm.unlabeled_indices = [al_dm.unlabeled_indices[idx] for idx in indices]
+
+        # Plot denoised TSNE
+        from sklearn.manifold import TSNE
+        tsne = TSNE(random_state=42)
+        X_tsne = tsne.fit_transform(unlabeled_features[indices])
+        import pylab as plt
+        plt.figure()
+        plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=unlabeled_labels[indices], cmap='tab20', s=50)
+        plt.savefig('tmp.png')
+
+        return al_dm
 
     @torch.no_grad()
     def evaluate_model(self, model, dataloader):
@@ -400,8 +406,6 @@ def select_samples_per_class(candidate_features, candidate_labels, unlabeled_lab
             selected.append(indices[idx].item())
             class_counter[lbl] += 1
     return selected
-
-
 
 
 # class GradientSampling(Query):
