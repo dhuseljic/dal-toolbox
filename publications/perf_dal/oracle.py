@@ -72,7 +72,7 @@ class PerfDALOracle(Query):
 
         # Noise filter
         self.i_iter = 0
-        self.noise_quantiles = np.linspace(1, 1, 20)
+        self.noise_quantiles = np.linspace(0.5, 1, 20)
 
         # Some helper
         self.history = []
@@ -123,14 +123,14 @@ class PerfDALOracle(Query):
 
         base_loss = self.evaluate_model(model, al_datamodule.test_dataloader())
 
-        al_datamodule = self.filter_noisy_samples(
-            al_datamodule,
-            unlabeled_features=unlabeled_features,
-            labeled_features=labeled_features,
-            unlabeled_labels=unlabeled_labels,
-            labeled_labels=labeled_labels,
-        )
-        unlabeled_indices = al_datamodule.unlabeled_indices
+        # al_datamodule = self.filter_noisy_samples(
+        #     al_datamodule,
+        #     unlabeled_features=unlabeled_features,
+        #     labeled_features=labeled_features,
+        #     unlabeled_labels=unlabeled_labels,
+        #     labeled_labels=labeled_labels,
+        # )
+        # unlabeled_indices = al_datamodule.unlabeled_indices
 
         indices_batches, batches_counts = self.select_strategy_batches(model, al_datamodule, acq_size)
 
@@ -338,7 +338,7 @@ class DropQueryClass(strategies.DropQuery):
         labeled_labels = labeled_outputs['labels']
 
         y_star = unlabeled_logits.softmax(-1).argmax(-1)
-        candidates = self._get_candidates(model, unlabeled_loader, y_star, acq_size)
+        candidates = self._get_candidates(model, unlabeled_features, y_star, acq_size)
 
         from dal_toolbox.active_learning.strategies.utils import get_random_samples
         if len(candidates) < acq_size:
