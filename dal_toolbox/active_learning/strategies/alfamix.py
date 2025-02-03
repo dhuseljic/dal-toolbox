@@ -12,7 +12,7 @@ class AlfaMix(Query):
         self.subset_size = subset_size
         D = embed_dim
         self.eps = 0.2 / np.sqrt(D)
-        self.device=device
+        self.device = device
 
     def _get_anchors(self, features: torch.Tensor, labels):
         seen_classes = len(np.unique(labels))
@@ -41,25 +41,35 @@ class AlfaMix(Query):
 
         return torch.nonzero(candidates).flatten()
 
+    @torch.no_grad()
     def query(self, model, al_datamodule, acq_size):
-        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
+        if not hasattr(model.model, 'forward_head'):
+            raise RuntimeError("""The attribute 'forward_head' is required to use AlfaMix, but it was not 
+                               found in model. Please ensure it is defined.""")
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(
+            subset_size=self.subset_size)
         labeled_dataloader, _ = al_datamodule.labeled_dataloader()
 
         # Retrieve gradient-embeddings, embeddings and pseudo-labels for the unlabeled data
-        unlabeled_outputs = model.get_model_outputs(unlabeled_dataloader, output_types=['features', 'logits'], device=self.device)
-        z_u = unlabeled_outputs['features'].requires_grad_()
-        logits = model.model.forward_head(z_u)
-        y_star = logits.softmax(-1).argmax(-1)
-        loss = F.cross_entropy(logits, y_star, reduction="sum")
-        grads = torch.autograd.grad(loss, z_u)[0]
-        z_u = z_u.detach()
+        unlabeled_outputs = model.get_model_outputs(unlabeled_dataloader, output_types=[
+                                                    'features', 'logits'], device=self.device)
+        with torch.enable_grad():
+            z_u = unlabeled_outputs['features'].requires_grad_()
+            logits = model.model.forward_head(z_u)
+            y_star = logits.softmax(-1).argmax(-1)
+            loss = F.cross_entropy(logits, y_star, reduction="sum")
+            grads = torch.autograd.grad(loss, z_u)[0]
+            z_u = z_u.detach()
 
         # Get the anchors, i.e., the centroids in the embedding space, of each observed class based on the labeled pool
-        z_l = model.get_model_outputs(labeled_dataloader, output_types=['features'], device=self.device)['features']
-        y_l = torch.cat([batch[1] for batch in labeled_dataloader])
+        labeled_outputs = model.get_model_outputs(labeled_dataloader, output_types=[
+                                                  'features', 'labels'], device=self.device)
+        z_l = labeled_outputs['features']
+        y_l = labeled_outputs['labels']
         z_star = self._get_anchors(z_l, y_l).to(self.device)
-        
-        candidates = self._get_candidates(z_u.to(self.device), z_star.to(self.device), grads.to(self.device), y_star.to(self.device), model=model.to(self.device))
+
+        candidates = self._get_candidates(z_u.to(self.device), z_star.to(self.device), grads.to(
+            self.device), y_star.to(self.device), model=model.to(self.device))
 
         # When there are not enough candidates, fill them up with random selection.
         # Otherwise cluster them and pick the closest to the cluster centroids.
