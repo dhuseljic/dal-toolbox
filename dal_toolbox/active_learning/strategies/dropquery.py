@@ -5,6 +5,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from torch.utils.data import DataLoader
+
 
 class DropQuery(Query):
     def __init__(self, subset_size=None, num_iter=3, p_drop=0.75, device='cpu'):
@@ -14,18 +16,18 @@ class DropQuery(Query):
         self.dropout = nn.Dropout(p=p_drop)
         self.device = device
 
-    def _get_candidates(self, model, loader_unlabeled, y_star, acq_size):
-        # Move model to cuda
+    def _get_candidates(self, model, features, y_star, acq_size):
         model = model.to(self.device)
+        feature_loader = DataLoader(features, batch_size=64, shuffle=False)
 
-        # Get self.num_iter many forward propagations of each unlabeled sample and extract the resutling label prediction
+        # Get self.num_iter forward propagations of each unlabeled sample and extract the prediction
         labels = []
         for _ in range(self.num_iter):
             predictions = []
-            for x, _, _ in loader_unlabeled:
-                x = x.to(self.device)
-                x_drop = self.dropout(x)
-                pred = model(x_drop).softmax(-1).argmax(-1).cpu()
+            for feature in feature_loader:
+                feature = feature.to(self.device)
+                feature_drop = self.dropout(feature)
+                pred = model.model.forward_head(feature_drop).softmax(-1).argmax(-1).cpu()
                 predictions.append(pred)
             predictions = torch.cat(predictions)
             labels.append(predictions)
@@ -43,14 +45,19 @@ class DropQuery(Query):
         return torch.nonzero(mismatch > thresh).flatten()
 
     def query(self, *, model, al_datamodule, acq_size, **kwargs):
-        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
+        if not hasattr(model.model, 'forward_head'):
+            raise RuntimeError("""The attribute 'forward_head' is required to use DropQuery, but it was not 
+                               found in model. Please ensure it is defined.""")
+
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(
+            subset_size=self.subset_size)
         num_unlabeled = len(unlabeled_indices)
 
         outputs = model.get_model_outputs(unlabeled_dataloader, ['features', 'logits'], device=self.device)
         features = outputs['features']
         logits = outputs['logits']
         y_star = logits.softmax(-1).argmax(-1)
-        candidates = self._get_candidates(model, unlabeled_dataloader, y_star, acq_size)
+        candidates = self._get_candidates(model, features, y_star, acq_size)
 
         if len(candidates) < acq_size:
             delta = acq_size - len(candidates)
