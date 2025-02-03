@@ -135,7 +135,7 @@ def build_al_strategy(args):
             device=device,
         )
     elif args.al.strategy == 'alfamix':
-        al_strategy = strategies.AlfaMix(embed_dim=384, subset_size=args.al.subset_size, device=device)
+        al_strategy = strategies.AlfaMix(subset_size=args.al.subset_size, device=device)
     elif args.al.strategy == 'badge':
         al_strategy = strategies.Badge(subset_size=args.al.subset_size)
     elif args.al.strategy == 'bait':

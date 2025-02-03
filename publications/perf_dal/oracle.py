@@ -90,6 +90,8 @@ class PerfDALOracle(Query):
                 strat = strategies.Badge(subset_size=self.strat_subset_size, device=self.device)
             elif strat_name == 'typiclust':
                 strat = strategies.TypiClust(subset_size=self.strat_subset_size, device=self.device)
+            elif strat_name== 'alfamix':
+                strat = strategies.AlfaMix(subset_size=self.strat_subset_size, device=self.device)
             elif strat_name == 'dropquery':
                 strat = strategies.DropQuery(subset_size=self.strat_subset_size, device=self.device)
             elif strat_name == 'bait':
@@ -348,7 +350,6 @@ class DropQueryClass(strategies.DropQuery):
             selected = torch.ones(len(candidates), dtype=torch.bool)
         else:
             candidate_vectors = F.normalize(unlabeled_features[candidates]).numpy()
-            # candidate_vectors = embeddings[candidates]
             candidate_labels = unlabeled_labels[candidates]
             selected = select_samples_per_class(
                 candidate_features=candidate_vectors,

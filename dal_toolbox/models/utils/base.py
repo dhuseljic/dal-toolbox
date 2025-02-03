@@ -106,6 +106,7 @@ class BaseModule(L.LightningModule, abc.ABC):
             inputs = batch[0].to(device)
             labels = batch[1]
 
+            # TODO: Check what is required and only propagate necessary items
             features = self.model.forward_features(inputs)
             logits = self.model.forward_head(features)
 
