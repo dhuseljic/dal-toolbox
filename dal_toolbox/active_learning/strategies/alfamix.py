@@ -7,11 +7,9 @@ import torch.nn.functional as F
 
 
 class AlfaMix(Query):
-    def __init__(self, embed_dim, subset_size=None, device='cpu'):
+    def __init__(self, subset_size=None, device='cpu'):
         super().__init__()
         self.subset_size = subset_size
-        D = embed_dim
-        self.eps = 0.2 / np.sqrt(D)
         self.device = device
 
     def _get_anchors(self, features: torch.Tensor, labels):
@@ -28,10 +26,13 @@ class AlfaMix(Query):
         candidates = torch.zeros_like(y_star, dtype=torch.bool)
         grad_norm = torch.linalg.vector_norm(z_grad, dim=-1, keepdim=True)
 
+        D = z_u.size(-1)
+        eps = 0.2 / np.sqrt(D)
+
         for z_s in z_star:
             z_diff = z_s - z_u
             diff_norm = torch.linalg.vector_norm(z_diff, dim=1, keepdim=True)
-            alpha = self.eps * (diff_norm * z_grad) / (grad_norm * z_diff)
+            alpha = eps * (diff_norm * z_grad) / (grad_norm * z_diff)
             z_lerp = alpha * z_s + (1 - alpha) * z_u
 
             probs = model.model.forward_head(z_lerp).softmax(dim=1)
