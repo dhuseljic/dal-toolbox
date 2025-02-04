@@ -72,7 +72,7 @@ class PerfDALOracle(Query):
 
         # Noise filter
         self.i_iter = 0
-        self.noise_quantiles = np.linspace(0.5, 1, 20)
+        self.noise_quantiles = np.linspace(1, 1, 20)
 
         # Some helper
         self.history = []
@@ -110,29 +110,19 @@ class PerfDALOracle(Query):
 
     @torch.no_grad()
     def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
+        al_datamodule = self.filter_noisy_samples(al_datamodule, model)
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(self.subset_size)
         unlabeled_outputs = model.get_model_outputs(unlabeled_dataloader, output_types=[
                                                     'logits', 'features', 'labels'], device=self.device)
         unlabeled_logits = unlabeled_outputs['logits']
-        unlabeled_features = unlabeled_outputs['features']
         unlabeled_labels = unlabeled_outputs['labels']
 
         labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
         labeled_outputs = model.get_model_outputs(labeled_dataloader, output_types=[
                                                   'features', 'labels'], device=self.device)
-        labeled_features = labeled_outputs['features']
         labeled_labels = labeled_outputs['labels']
 
         base_loss = self.evaluate_model(model, al_datamodule.test_dataloader())
-
-        # al_datamodule = self.filter_noisy_samples(
-        #     al_datamodule,
-        #     unlabeled_features=unlabeled_features,
-        #     labeled_features=labeled_features,
-        #     unlabeled_labels=unlabeled_labels,
-        #     labeled_labels=labeled_labels,
-        # )
-        # unlabeled_indices = al_datamodule.unlabeled_indices
 
         indices_batches, batches_counts = self.select_strategy_batches(model, al_datamodule, acq_size)
 
@@ -246,21 +236,28 @@ class PerfDALOracle(Query):
 
         return indices, batches_counts
 
-    def filter_noisy_samples(self, al_datamodule, unlabeled_features, labeled_features, unlabeled_labels, labeled_labels):
+    def filter_noisy_samples(self, al_datamodule, model):
         self.denoise_quantile = self.noise_quantiles[self.i_iter]
         self.i_iter += 1
         al_dm = deepcopy(al_datamodule)
+        
+        u_dl, u_indices = al_dm.unlabeled_dataloader()
+        u_outputs = model.get_model_outputs(u_dl, ['features', 'labels'], self.device)
+
+        l_dl, l_indices = al_dm.labeled_dataloader()
+        l_outputs = model.get_model_outputs(l_dl, ['features', 'labels'], self.device)
 
         # Train Model
-        clf = LogisticRegression(C=.001)
-        all_features = torch.cat((unlabeled_features, labeled_features))
-        all_labels = torch.cat((unlabeled_labels, labeled_labels))
+        clf = LogisticRegression(C=.0001)
+        all_features = torch.cat((u_outputs['features'], l_outputs['features']))
+        all_labels = torch.cat((u_outputs['labels'], l_outputs['labels']))
         clf.fit(all_features, all_labels)
+        # (clf.predict(all_features) == all_labels).float().mean()
 
         # Filter uncertain samples
-        unlabeled_probas = clf.predict_proba(unlabeled_features)
+        unlabeled_probas = clf.predict_proba(u_outputs['features'])
         unlabeled_entropy = - np.sum(unlabeled_probas * np.log(unlabeled_probas), axis=-1)
-        thresh = np.quantile(unlabeled_entropy, q=self.denoise_quantile)
+        thresh = np.quantile(unlabeled_entropy, q=1)
         indices = np.where(unlabeled_entropy < thresh)[0]
 
         # Update unlabeled indices

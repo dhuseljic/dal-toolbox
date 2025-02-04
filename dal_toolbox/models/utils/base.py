@@ -89,13 +89,6 @@ class BaseModule(L.LightningModule, abc.ABC):
                        for metric_name, metric in self.val_metrics.items()}
             self.log_dict(self.val_metrics, prog_bar=True)
 
-    def get_alfa_grad_representations(self, *args, **kwargs):
-        if 'device' not in kwargs:
-            kwargs['device'] = 'cuda' if torch.cuda.is_available() else 'cpu'
-        if not hasattr(self.model, 'get_alfa_grad_representations'):
-            raise NotImplementedError('The `get_alfa_grad_representations` method is not implemented.')
-        return self.model.get_alfa_grad_representations(*args, **kwargs)
-
     @torch.no_grad()
     def get_model_outputs(self, dataloader, output_types: list, device: str, **kwargs):
         self.eval()
@@ -119,5 +112,6 @@ class BaseModule(L.LightningModule, abc.ABC):
                     outputs['labels'].append(labels)
                 else:
                     raise NotImplementedError()
-        outputs = {key: torch.cat(val) if isinstance(val[0], torch.Tensor) else val for key, val in outputs.items()}
+        outputs = {key: torch.cat(val) if isinstance(
+            val[0], torch.Tensor) else val for key, val in outputs.items()}
         return outputs
