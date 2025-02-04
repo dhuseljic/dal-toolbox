@@ -257,8 +257,8 @@ class PerfDALOracle(Query):
         # Filter uncertain samples
         unlabeled_probas = clf.predict_proba(u_outputs['features'])
         unlabeled_entropy = - np.sum(unlabeled_probas * np.log(unlabeled_probas), axis=-1)
-        thresh = np.quantile(unlabeled_entropy, q=1)
-        indices = np.where(unlabeled_entropy < thresh)[0]
+        thresh = np.quantile(unlabeled_entropy, q=self.denoise_quantile)
+        indices = np.where(unlabeled_entropy <= thresh)[0]
 
         # Update unlabeled indices
         al_dm.unlabeled_indices = [al_dm.unlabeled_indices[idx] for idx in indices]
