@@ -72,7 +72,8 @@ class PerfDALOracle(Query):
 
         # Noise filter
         self.i_iter = 0
-        self.noise_quantiles = np.linspace(.5, 1, 20)
+        self.denoise_warmup = 5
+        self.denoise_quantiles = np.linspace(.5, 1, self.denoise_warmup)
 
         # Some helper
         self.history = []
@@ -237,7 +238,9 @@ class PerfDALOracle(Query):
         return indices, batches_counts
 
     def filter_noisy_samples(self, al_datamodule, model):
-        self.denoise_quantile = self.noise_quantiles[self.i_iter]
+        if self.i_iter > (self.denoise_warmup-1):
+            return al_datamodule
+        self.denoise_quantile = self.denoise_quantiles[self.i_iter]
         self.i_iter += 1
         al_dm = deepcopy(al_datamodule)
         
