@@ -82,9 +82,9 @@ def build_image_data(args, plain_transforms=False):
     elif args.dataset_name == 'stanford_dogs':
         data = StanfordDogs(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'tiny_imagenet':
-        data = TinyImageNet(args.dataset_path, transforms=transforms)
+        data = TinyImageNet(args.imagenet_path, transforms=transforms)
     elif args.dataset_name == 'imagenet':
-        data = ImageNet(args.dataset_path, transforms=transforms)
+        data = ImageNet(args.imagenet_path, transforms=transforms)
     else:
         raise NotImplementedError()
     return data

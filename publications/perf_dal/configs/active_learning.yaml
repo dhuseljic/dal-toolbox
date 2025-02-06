@@ -3,6 +3,7 @@ experiment_name: batch_al
 mlflow_uri: sqlite:///active_learning.db
 
 dataset_path: /home/datasets
+imagenet_path: /mnt/datasets/imagenet/ILSVRC2012/
 dataset_name: cifar10
 val_split: 1
 cache_features: True
