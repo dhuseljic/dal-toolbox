@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=optimal_al_baselines
 #SBATCH --partition=main
-#SBATCH --output=/mnt/stud/work/phahn/dal-toolbox/logs/perf_dal/%A_%a_%x.log
+#SBATCH --output=/mnt/stud/work/phahn/repositories/dal-toolbox/logs/perf_dal/%A_%a_%x.log
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64gb
@@ -31,7 +31,7 @@ if [ "$idx" -eq 0 ]; then
 fi
 
 date;hostname
-cd /mnt/stud/work/phahn/repositories/dal-toolbox/publications/perf_dal
+cd /mnt/stud/work/phahn/repositories/dal-toolbox/dal-toolbox/publications/perf_dal
 srun python al.py \
     dataset_name=$dataset_name \
     dataset_path=/mnt/stud/work/phahn/datasets \
