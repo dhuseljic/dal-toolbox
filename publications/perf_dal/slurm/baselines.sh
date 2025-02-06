@@ -19,11 +19,11 @@ subset_sizes=(1000 Null 1000 Null Null 1000 1000 1000 2500)
 random_seeds=(1 2 3 4 5 6 7 8 9 10)
 
 index=$SLURM_ARRAY_TASK_ID
-al_strategy=${query_strategies[$index % 9]}
-dataset_name=${datasets[$index / 9 % 9]}
-acq_size=${acq_sizes[$index / 9 % 9]}
-subset_size=${subset_sizes[$index / 9 % 9]}
-random_seeds=${random_seed[$index / 81]}
+dataset_name=${datasets[$index % 9]}
+acq_size=${acq_sizes[$index % 9]}
+subset_size=${subset_sizes[$index % 9]}
+al_strategy=${query_strategies[$index / 9 % 9]}
+random_seed=${random_seeds[$index / 81]}
 val_split=1
 
 if [ $index -eq 0 ]; then
