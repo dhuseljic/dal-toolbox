@@ -26,7 +26,7 @@ subset_size=${subset_sizes[$index / 9 % 9]}
 random_seeds=${random_seed[$index / 81]}
 val_split=1
 
-if [ $idx -eq 0 ]; then
+if [ $index -eq 0 ]; then
     python -c "import mlflow; mlflow.set_tracking_uri(r'$mlflow_uri'); mlflow.set_experiment(r'$mlflow_exp_name')"
 fi
 
