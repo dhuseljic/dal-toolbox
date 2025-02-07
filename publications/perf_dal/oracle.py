@@ -73,7 +73,7 @@ class PerfDALOracle(Query):
         # Noise filter
         self.i_iter = 0
         self.denoise_warmup = 5
-        self.denoise_quantiles = np.linspace(.5, 1, self.denoise_warmup)
+        self.denoise_quantiles = np.linspace(.3, 1, self.denoise_warmup)
 
         # Some helper
         self.history = []
@@ -88,10 +88,11 @@ class PerfDALOracle(Query):
             elif strat_name == 'coreset':
                 strat = strategies.CoreSet(subset_size=self.strat_subset_size, device=self.device)
             elif strat_name == 'badge':
+                # strat = GTBadge(subset_size=self.strat_subset_size, device=self.device)
                 strat = strategies.Badge(subset_size=self.strat_subset_size, device=self.device)
             elif strat_name == 'typiclust':
                 strat = strategies.TypiClust(subset_size=self.strat_subset_size, device=self.device)
-            elif strat_name== 'alfamix':
+            elif strat_name == 'alfamix':
                 strat = strategies.AlfaMix(subset_size=self.strat_subset_size, device=self.device)
             elif strat_name == 'dropquery':
                 strat = strategies.DropQuery(subset_size=self.strat_subset_size, device=self.device)
@@ -111,7 +112,7 @@ class PerfDALOracle(Query):
 
     @torch.no_grad()
     def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
-        al_datamodule = self.filter_noisy_samples(al_datamodule, model)
+        # al_datamodule = self.filter_noisy_samples(al_datamodule, model)
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(self.subset_size)
         unlabeled_outputs = model.get_model_outputs(unlabeled_dataloader, output_types=[
                                                     'logits', 'features', 'labels'], device=self.device)
@@ -226,6 +227,8 @@ class PerfDALOracle(Query):
 
             indices_strat = []
             for _ in range(num_batches):
+                strat.subset_size = self.rng.randint(
+                    2*acq_size, min(len(al_datamodule.unlabeled_indices), 5000))
                 idx = strat.query(model=model, al_datamodule=al_datamodule, acq_size=acq_size)
                 indices_strat.append(idx)
 
@@ -243,7 +246,7 @@ class PerfDALOracle(Query):
         self.denoise_quantile = self.denoise_quantiles[self.i_iter]
         self.i_iter += 1
         al_dm = deepcopy(al_datamodule)
-        
+
         u_dl, u_indices = al_dm.unlabeled_dataloader()
         u_outputs = model.get_model_outputs(u_dl, ['features', 'labels'], self.device)
 
@@ -269,10 +272,10 @@ class PerfDALOracle(Query):
         # Plot denoised TSNE
         # from sklearn.manifold import TSNE
         # tsne = TSNE(random_state=42)
-        # X_tsne = tsne.fit_transform(unlabeled_features[indices])
+        # X_tsne = tsne.fit_transform(u_outputs['features'][indices])
         # import pylab as plt
         # plt.figure()
-        # plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=unlabeled_labels[indices], cmap='tab20', s=50)
+        # plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=u_outputs['labels'][indices], cmap='tab20', s=50)
         # plt.savefig('tmp.png')
 
         return al_dm
@@ -291,6 +294,72 @@ class PerfDALOracle(Query):
             running_loss += len(inputs)*self.loss_fn(logits, targets).item()
         loss = running_loss / num_samples
         return loss
+
+
+class GTBadge(strategies.Badge):
+    def query(self, *, model, al_datamodule, acq_size, **kwargs):
+        unlabeled_loader, unlabeled_indices = al_datamodule.unlabeled_dataloader(self.subset_size)
+        labeled_loader, _ = al_datamodule.labeled_dataloader()
+
+        test_loader = al_datamodule.test_dataloader()
+
+        u_outputs = model.get_model_outputs(unlabeled_loader, output_types=[
+                                            'features', 'logits', 'labels'], device=self.device)
+        # l_outputs = model.get_model_outputs(labeled_loader, output_types=['labels'], device=self.device)
+        t_outputs = model.get_model_outputs(test_loader, output_types=[
+                                            'logits', 'labels'], device=self.device)
+
+        preds = t_outputs['logits'].argmax(-1)
+        classes = t_outputs['labels'].unique()
+        class_accuracy = {}
+        for cls in classes:
+            mask = t_outputs['labels'] == cls
+            total = mask.sum().item()
+            correct = (preds[mask] == t_outputs['labels'][mask]).sum().item()
+            class_accuracy[cls.item()] = correct / total if total > 0 else 0
+
+        weights = [(1 - val)**2 for val in class_accuracy.values()]
+        weights = weights / np.sum(weights)
+
+        # import pylab as plt
+        # plt.figure()
+        # plt.bar(range(len(weights)), weights)
+        # plt.savefig('tmp.png')
+
+        sampled_classes = np.random.choice(classes, size=acq_size, p=weights).tolist()
+        chosen = []
+        while len(chosen) < acq_size:
+            for cls in sampled_classes:
+                if len(chosen) == acq_size:
+                    break
+                indices_cls = (cls == u_outputs['labels']).nonzero().ravel()
+                if np.all(np.isin(indices_cls, chosen)):
+                    sampled_classes.remove(cls)
+                    continue
+                indices_cls = indices_cls[~np.isin(indices_cls, chosen)]
+                idx = self.rng.choice(indices_cls)
+                chosen.append(idx)
+
+        # u_features = u_outputs['features']
+        # u_logits = u_outputs['logits']
+        # u_probas = u_logits.softmax(-1)
+
+        # max_indices = u_probas.argmax(-1)
+        # num_classes = u_logits.size(-1)
+
+        # factor = F.one_hot(u_outputs['labels'], num_classes=num_classes) - u_probas
+        # grad_embedding = (factor[:, :, None] * u_features[:, None, :]).flatten(-2)
+
+        # # chosen = kmeans_plusplus(grad_embedding.numpy(), acq_size, rng=self.rng)
+        # chosen = select_samples_per_class(
+        #     grad_embedding,
+        #     u_outputs['labels'],
+        #     u_outputs['labels'],
+        #     l_outputs['labels'],
+        #     acq_size,
+        # )
+
+        return [unlabeled_indices[idx] for idx in chosen]
 
 
 class TypiClass(Query):
