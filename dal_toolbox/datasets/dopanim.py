@@ -34,6 +34,7 @@ class Dopanim(BaseData):
         return 47
 
     def download_datasets(self):
+        #TODO: Test if this works
         pass
         # _Dopanim(self.dataset_path, version="train", download=True)
         # _Dopanim(self.dataset_path, version="test", download=True)
