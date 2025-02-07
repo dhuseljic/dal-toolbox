@@ -10,7 +10,7 @@
 source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 
 mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perf_dal.db'
-mlflow_exp_name='image_baselines_v1'
+mlflow_exp_name='image_baselines'
 
 query_strategies=(alfamix badge bait coreset dropquery margin random typiclust)
 datasets=(cifar10 stl10 snacks dtd food101 flowers102 cifar100 imagenet)
@@ -39,5 +39,4 @@ srun python al.py \
     al.subset_size=$subset_size \
     mlflow_uri=$mlflow_uri \
     experiment_name=$mlflow_exp_name \
-    random_seed=$random_seed \
-    trust_remote_code=True
+    random_seed=$random_seed
