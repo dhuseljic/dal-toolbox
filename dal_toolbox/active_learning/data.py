@@ -100,7 +100,7 @@ class ActiveLearningDataModule(L.LightningDataModule):
         """Returns a dataloader for the unlabeled pool where instances are not augmentated."""
         unlabeled_indices = self.unlabeled_indices
         if subset_size is not None:
-            unlabeled_indices = self.rng.choice(unlabeled_indices, size=subset_size, replace=False)
+            unlabeled_indices = self.rng.choice(unlabeled_indices, size=min(len(unlabeled_indices), subset_size), replace=False)
             unlabeled_indices = unlabeled_indices.tolist()
         loader = DataLoader(self.query_dataset, batch_size=self.predict_batch_size,
                             sampler=unlabeled_indices, collate_fn=self.collator)
@@ -110,7 +110,7 @@ class ActiveLearningDataModule(L.LightningDataModule):
         """Returns a dataloader for the labeled pool where instances are not augmentated."""
         labeled_indices = self.labeled_indices
         if subset_size is not None:
-            labeled_indices = self.rng.choice(labeled_indices, size=subset_size, replace=False)
+            labeled_indices = self.rng.choice(labeled_indices, size=min(len(labeled_indices), subset_size), replace=False)
             labeled_indices = labeled_indices.tolist()
         loader = DataLoader(self.query_dataset, batch_size=self.predict_batch_size,
                             sampler=labeled_indices, collate_fn=self.collator)

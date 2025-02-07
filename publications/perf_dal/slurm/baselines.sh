@@ -39,4 +39,5 @@ srun python al.py \
     al.subset_size=$subset_size \
     mlflow_uri=$mlflow_uri \
     experiment_name=$mlflow_exp_name \
-    random_seed=$random_seed
+    random_seed=$random_seed \
+    trust_remote_code=True
