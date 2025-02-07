@@ -15,6 +15,10 @@ from dal_toolbox.datasets import ImageNet, StanfordDogs, CIFAR10LT, Dopanim
 
 from dal_toolbox.models.laplace import LaplaceLinear, LaplaceModel
 
+# TODO: Check if thats a valid fix for imagenet server issues of too many files open
+# import torch.multiprocessing
+# torch.multiprocessing.set_sharing_strategy('file_system')
+
 
 def build_datasets(args, cache_features=True):
     image_datasets = ['cifar10', 'cifar10-lt', 'stl10', 'dopanim', 'snacks', 'dtd', 'cifar100', 'food101', 'flowers102',
@@ -164,8 +168,8 @@ class FeatureDataset:
 
     @torch.no_grad()
     def get_features(self, model, dataset, batch_size, device, task=None):
-        print('Getting ssl features..')
-        dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=8)
+        print('Getting ssl features..' + ('' if 'imagenet' not in dataset.dataset.root else 'for IMAGENET!'))
+        dataloader = DataLoader(dataset, batch_size=batch_size if 'imagenet' not in dataset.dataset.root else 128, num_workers=8 if 'imagenet' not in dataset.dataset.root else 0) # TODO: Maybe increase number of workers or set to 0 for imagenet
         features = []
         labels = []
         model.eval()
