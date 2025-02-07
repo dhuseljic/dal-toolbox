@@ -16,8 +16,8 @@ from dal_toolbox.datasets import ImageNet, StanfordDogs, CIFAR10LT, Dopanim
 from dal_toolbox.models.laplace import LaplaceLinear, LaplaceModel
 
 # TODO: Check if thats a valid fix for imagenet server issues of too many files open
-# import torch.multiprocessing
-# torch.multiprocessing.set_sharing_strategy('file_system')
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 
 def build_datasets(args, cache_features=True):
