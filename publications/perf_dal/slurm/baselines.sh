@@ -14,8 +14,8 @@ mlflow_exp_name='image_baselines_v1'
 
 query_strategies=(alfamix badge bait coreset dropquery margin random typiclust)
 datasets=(cifar10 stl10 snacks dtd food101 flowers102 cifar100 imagenet)
-acq_sizes=(10 10 50 20 50 100 100 100 1000)
-subset_sizes=(1000 Null 1000 Null Null 1000 1000 1000 2500)
+acq_sizes=(10 10 20 50 100 100 100 1000)
+subset_sizes=(1000 Null Null Null 1000 1000 1000 2500)
 random_seeds=(1 2 3 4 5 6 7 8 9 10)
 
 index=$SLURM_ARRAY_TASK_ID
