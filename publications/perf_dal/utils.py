@@ -117,7 +117,7 @@ def build_text_data(args):
 
 class FeatureDataset:
 
-    def __init__(self, model, dataset, cache=False, cache_dir=None, batch_size=256, device='cuda', task=None):
+    def __init__(self, model, dataset, cache=False, cache_dir=None, batch_size=128, device='cuda', task=None, num_workers=16):
         if cache:
             if cache_dir is None:
                 home_dir = os.path.expanduser('~')
@@ -130,11 +130,11 @@ class FeatureDataset:
                 print('Loading cached features from', file_name)
                 features, labels = torch.load(file_name, map_location='cpu')
             else:
-                features, labels = self.get_features(model, dataset, batch_size, device, task)
+                features, labels = self.get_features(model, dataset, batch_size, device, task, num_workers)
                 print('Saving features to cache file', file_name)
                 torch.save((features, labels), file_name)
         else:
-            features, labels = self.get_features(model, dataset, batch_size, device)
+            features, labels = self.get_features(model, dataset, batch_size, device, task, num_workers)
 
         self.features = features
         self.labels = labels
@@ -167,9 +167,9 @@ class FeatureDataset:
         return self.features[idx], self.labels[idx]
 
     @torch.no_grad()
-    def get_features(self, model, dataset, batch_size, device, task=None):
-        print('Getting ssl features..' + ('' if 'imagenet' not in dataset.dataset.root else 'for IMAGENET!'))
-        dataloader = DataLoader(dataset, batch_size=batch_size if 'imagenet' not in dataset.dataset.root else 128, num_workers=8 if 'imagenet' not in dataset.dataset.root else 0) # TODO: Maybe increase number of workers or set to 0 for imagenet
+    def get_features(self, model, dataset, batch_size, device, task=None, num_workers=8):
+        print('Getting ssl features..')
+        dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers)
         features = []
         labels = []
         model.eval()
