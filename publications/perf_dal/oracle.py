@@ -15,8 +15,7 @@ from dal_toolbox.active_learning.data import ActiveLearningDataModule
 
 class PerfDALOracle(Query):
     def __init__(self,
-                 al_strategies=['random', 'margin', 'badge', 'typiclust', 'bait', 'dropquery',
-                                'typiclass', 'dropqueryclass', 'loss'],
+                 al_strategies=['random', 'typiclust', 'dropquery', 'bait'], #'typiclass', 'dropqueryclass', 'loss', 'margin', 'badge'],
                  num_batches=200,
                  strat_ratio='equal',
                  look_ahead='true_labels',
