@@ -12,7 +12,7 @@ source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perf_dal.db'
 mlflow_exp_name='image_lazy_oracle_S'
 
-datasets=(cifar10 stl10 snacks flower102 dtd food101 cifar100 imagenet)
+datasets=(cifar10 stl10 snacks flowers102 dtd food101 cifar100 imagenet)
 acq_sizes=(10 10 20 40 50 100 100 1000)
 subset_sizes=(1000 Null Null Null Null 1000 1000 2500)
 random_seeds=(1 2 3 4 5 6 7 8 9 10)
