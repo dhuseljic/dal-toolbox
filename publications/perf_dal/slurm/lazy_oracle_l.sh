@@ -39,6 +39,7 @@ srun python al.py \
     al.optimal.strat_subset_size=$subset_size \
     al.acq_size=$acq_size \
     al.subset_size=$subset_size \
+    al.device=cuda \
     mlflow_uri=$mlflow_uri \
     experiment_name=$mlflow_exp_name \
     random_seed=$random_seed
