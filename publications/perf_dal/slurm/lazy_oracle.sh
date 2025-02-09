@@ -6,24 +6,25 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64gb
 #SBATCH --gres=gpu:1
-#SBATCH --array=0-59%4
+#SBATCH --array=0-299%4
 source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 
-mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perf_dal.db'
-mlflow_exp_name='image_oracle_lazy_m'
+mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perf_dal_new.db'
+mlflow_exp_name='image_oracle_lazy'
+al_strategy=perf_dal_oracle
 
 datasets=(cifar10 stl10 snacks dtd food101 cifar100)
 acq_sizes=(10 10 20 50 100 100)
-subset_sizes=(1000 1000 1000 500 1000 1000)
+subset_sizes=(2500 1000 1000 500 2500 2500)
+num_batches=(4 16 32 64 128)
 random_seeds=(1 2 3 4 5 6 7 8 9 10)
 
 index=$SLURM_ARRAY_TASK_ID
 dataset_name=${datasets[$index % 6]}
 acq_size=${acq_sizes[$index % 6]}
 subset_size=${subset_sizes[$index % 6]}
-al_strategy=perf_dal_oracle
-num_batches=16
-random_seed=${random_seeds[$index / 6]}
+num_bat=${num_batches[$index / 6 % 5]}
+random_seed=${random_seeds[$index / 30]}
 
 if [ $index -eq 0 ]; then
     python -c "import mlflow; mlflow.set_tracking_uri(r'$mlflow_uri'); mlflow.set_experiment(r'$mlflow_exp_name')"

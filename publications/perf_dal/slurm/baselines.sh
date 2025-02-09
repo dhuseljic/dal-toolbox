@@ -9,21 +9,21 @@
 #SBATCH --array=0-559%4
 source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 
-mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perf_dal.db'
+mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perf_dal_new.db'
 mlflow_exp_name='image_baselines'
 
 query_strategies=(alfamix badge bait coreset dropquery margin random typiclust)
-datasets=(cifar10 stl10 snacks dtd food101 cifar100 imagenet)
-acq_sizes=(10 10 20 50 100 100 1000)
-subset_sizes=(1000 Null Null Null 1000 1000 2500)
+datasets=(cifar10 stl10 snacks dtd food101 cifar100)
+acq_sizes=(10 10 20 50 100 100)
+subset_sizes=(1000 Null Null Null 1000 1000)
 random_seeds=(1 2 3 4 5 6 7 8 9 10)
 
 index=$SLURM_ARRAY_TASK_ID
-dataset_name=${datasets[$index % 7]}
-acq_size=${acq_sizes[$index % 7]}
-subset_size=${subset_sizes[$index % 7]}
-al_strategy=${query_strategies[$index / 7 % 8]}
-random_seed=${random_seeds[$index / 56]}
+dataset_name=${datasets[$index % 6]}
+acq_size=${acq_sizes[$index % 6]}
+subset_size=${subset_sizes[$index % 6]}
+al_strategy=${query_strategies[$index / 6 % 8]}
+random_seed=${random_seeds[$index / 48]}
 
 if [ $index -eq 0 ]; then
     python -c "import mlflow; mlflow.set_tracking_uri(r'$mlflow_uri'); mlflow.set_experiment(r'$mlflow_exp_name')"

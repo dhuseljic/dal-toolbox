@@ -25,7 +25,7 @@ class PerfDALOracle(Query):
                  num_retraining_epochs=10,
                  update_gamma=10,
                  loss='cross_entropy',
-                 subset_size=20000,
+                 subset_size=None,
                  strat_subset_size=2500,
                  device='cpu',
                  random_seed=None,

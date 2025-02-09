@@ -298,7 +298,7 @@ def build_model(args, **kwargs):
     ]
 
     if args.optimizer.name == 'SGD':
-        optimizer = torch.optim.SGD(params, lr=args.optimizer.lr,
+        optimizer = torch.optim.SGD(params, lr=args.optimizer.lr, nesterov=args.optimizer.nesterov,
                                     momentum=args.optimizer.momentum, weight_decay=args.optimizer.weight_decay)
     elif args.optimizer.name == 'Adam':
         optimizer = torch.optim.Adam(params, lr=args.optimizer.lr,

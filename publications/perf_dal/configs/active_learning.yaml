@@ -38,17 +38,18 @@ al:
 
 model:
   name: laplace
-  num_epochs: 200
+  num_epochs: 50
   train_batch_size: 64
   predict_batch_size: 128
   mean_field_factor: 0.4
   mc_samples: 10_000
 
 optimizer: 
-  name: RAdam
+  name: SGD
   lr: 1e-2
-  weight_decay: 1e-4
+  weight_decay: 1e-3
   momentum: 0.9
+  nesterov: True
   lr_backbone: 1e-5
   finetune_backbone: False
 
