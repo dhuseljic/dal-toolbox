@@ -36,7 +36,7 @@ srun python al.py \
     dataset_name=$dataset_name \
     dataset_path=/mnt/stud/work/phahn/datasets \
     al.strategy=$al_strategy \
-    al.optimal.num_batches=$num_batches \
+    al.optimal.num_batches=$num_bat \
     al.optimal.strat_subset_size=$subset_size \
     al.acq_size=$acq_size \
     al.device=cuda \
