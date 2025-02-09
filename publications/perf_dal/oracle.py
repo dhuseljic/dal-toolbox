@@ -25,7 +25,7 @@ class PerfDALOracle(Query):
                  num_retraining_epochs=10,
                  update_gamma=10,
                  loss='cross_entropy',
-                 subset_size=None,
+                 subset_size=20000,
                  strat_subset_size=2500,
                  device='cpu',
                  random_seed=None,
@@ -110,8 +110,10 @@ class PerfDALOracle(Query):
 
     @torch.no_grad()
     def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
-        al_datamodule = self.filter_noisy_samples(al_datamodule, model)
+        # TODO: Left uncertainty filter out for now
+        # al_datamodule = self.filter_noisy_samples(al_datamodule, model)
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(self.subset_size)
+        al_datamodule.unlabeled_indices = unlabeled_indices
         unlabeled_outputs = model.get_model_outputs(unlabeled_dataloader, output_types=[
                                                     'logits', 'features', 'labels'], device=self.device)
         unlabeled_logits = unlabeled_outputs['logits']
@@ -124,7 +126,7 @@ class PerfDALOracle(Query):
 
         base_loss = self.evaluate_model(model, al_datamodule.test_dataloader())
 
-        indices_batches, batches_counts = self.select_strategy_batches(model, al_datamodule, acq_size)
+        indices_batches, batches_counts = self.select_strategy_batches(model, al_datamodule, acq_size, unlabeled_indices)
 
         loss_batches = []
         init_params = model.state_dict()
@@ -215,7 +217,7 @@ class PerfDALOracle(Query):
         global_indices = [unlabeled_indices[idx] for idx in local_indices]
         return global_indices
 
-    def select_strategy_batches(self, model, al_datamodule, acq_size):
+    def select_strategy_batches(self, model, al_datamodule, acq_size, unlabeled_indices):
         batches = np.random.choice(self.batch_types, p=self.strat_ratio, size=self.num_batches)
         batches_counts = {t: np.sum(t == batches).item() for t in self.batch_types}
 
@@ -232,8 +234,9 @@ class PerfDALOracle(Query):
         indices = np.array(indices)
 
         # Convert global indices from strategies to local indices
-        indices = np.array([np.where(np.isin(al_datamodule.unlabeled_indices, idx))[0] for idx in indices])
-
+        masks = [np.isin(unlabeled_indices, idx) for idx in indices]
+        indices = [np.where(mask)[0] for mask in masks]
+        indices = np.array(indices)
         return indices, batches_counts
 
     def filter_noisy_samples(self, al_datamodule, model):

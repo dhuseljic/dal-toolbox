@@ -295,8 +295,8 @@ def select_topk(repr_unlabeled, acq_size, fisher_all, fisher_labeled, lmb, num_l
 
 
 def get_exp_grad_representations(logits, features, grad_likelihood='cross_entropy', device='cpu'):
-    #
-    probas = logits.softmax(-1)
+    probas = logits.softmax(-1).to(device)
+    features = features.to(device)
     num_classes = logits.size(-1)
 
     if grad_likelihood == 'cross_entropy':

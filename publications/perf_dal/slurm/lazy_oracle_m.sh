@@ -10,7 +10,7 @@
 source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 
 mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perf_dal.db'
-mlflow_exp_name='image_oracle_lazy_M'
+mlflow_exp_name='image_oracle_lazy_M_v1'
 
 datasets=(cifar10 stl10 snacks flowers102 dtd food101 cifar100 imagenet)
 acq_sizes=(10 10 20 40 50 100 100 1000)
@@ -38,7 +38,6 @@ srun python al.py \
     al.optimal.num_batches=$num_batches \
     al.optimal.strat_subset_size=$subset_size \
     al.acq_size=$acq_size \
-    al.subset_size=$subset_size \
     al.device=cuda \
     mlflow_uri=$mlflow_uri \
     experiment_name=$mlflow_exp_name \

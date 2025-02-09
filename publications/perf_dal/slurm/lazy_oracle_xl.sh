@@ -10,7 +10,7 @@
 source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 
 mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perf_dal.db'
-mlflow_exp_name='image_oracle_lazy_S_v1'
+mlflow_exp_name='image_oracle_lazy_XL_v1'
 
 datasets=(cifar10 stl10 snacks flowers102 dtd food101 cifar100 imagenet)
 acq_sizes=(10 10 20 40 50 100 100 1000)
@@ -22,7 +22,7 @@ dataset_name=${datasets[$index % 8]}
 acq_size=${acq_sizes[$index % 8]}
 subset_size=${subset_sizes[$index % 8]}
 al_strategy=perf_dal_oracle
-num_batches=4
+num_batches=160
 random_seed=${random_seeds[$index / 8]}
 
 if [ $index -eq 0 ]; then
