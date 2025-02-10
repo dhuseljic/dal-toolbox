@@ -27,6 +27,7 @@ al:
     num_batches: 100
     strategies: [random,typiclust,dropquery,bait]
     strat_subset_size: 1000
+    vary_strat_subset_size: False
     strat_ratio: equal
     num_mc_labels: 5
     look_ahead: true_labels 
