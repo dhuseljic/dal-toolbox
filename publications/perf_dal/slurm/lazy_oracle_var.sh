@@ -24,7 +24,7 @@ dataset_name=${datasets[$index % 6]}
 acq_size=${acq_sizes[$index % 6]}
 subset_size=${subset_sizes[$index % 6]}
 num_bat=${num_batches[$index / 6 % 4]}
-random_seed=${random_seeds[$index / 240]}
+random_seed=${random_seeds[$index / 24]}
 
 if [ $index -eq 0 ]; then
     python -c "import mlflow; mlflow.set_tracking_uri(r'$mlflow_uri'); mlflow.set_experiment(r'$mlflow_exp_name')"
