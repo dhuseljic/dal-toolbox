@@ -225,10 +225,13 @@ class PerfDALOracle(Query):
         for strat_name, strat in zip(self.batch_types, self.strategies):
             num_batches = batches_counts[strat_name]
 
+            ss_min = acq_size*5
+            ss_max = min(len(al_datamodule.unlabeled_indices), self.strat_subset_size)
+            subset_range = np.linspace(ss_min, ss_max, num_batches, dtype=int)
+
             indices_strat = []
-            for _ in range(num_batches):
-                strat.subset_size = self.rng.randint(
-                    2*acq_size, min(len(al_datamodule.unlabeled_indices), 5000))
+            for i_batch in range(num_batches):
+                strat.subset_size = subset_range[i_batch]
                 idx = strat.query(model=model, al_datamodule=al_datamodule, acq_size=acq_size)
                 indices_strat.append(idx)
 
@@ -294,72 +297,6 @@ class PerfDALOracle(Query):
             running_loss += len(inputs)*self.loss_fn(logits, targets).item()
         loss = running_loss / num_samples
         return loss
-
-
-class GTBadge(strategies.Badge):
-    def query(self, *, model, al_datamodule, acq_size, **kwargs):
-        unlabeled_loader, unlabeled_indices = al_datamodule.unlabeled_dataloader(self.subset_size)
-        labeled_loader, _ = al_datamodule.labeled_dataloader()
-
-        test_loader = al_datamodule.test_dataloader()
-
-        u_outputs = model.get_model_outputs(unlabeled_loader, output_types=[
-                                            'features', 'logits', 'labels'], device=self.device)
-        # l_outputs = model.get_model_outputs(labeled_loader, output_types=['labels'], device=self.device)
-        t_outputs = model.get_model_outputs(test_loader, output_types=[
-                                            'logits', 'labels'], device=self.device)
-
-        preds = t_outputs['logits'].argmax(-1)
-        classes = t_outputs['labels'].unique()
-        class_accuracy = {}
-        for cls in classes:
-            mask = t_outputs['labels'] == cls
-            total = mask.sum().item()
-            correct = (preds[mask] == t_outputs['labels'][mask]).sum().item()
-            class_accuracy[cls.item()] = correct / total if total > 0 else 0
-
-        weights = [(1 - val)**2 for val in class_accuracy.values()]
-        weights = weights / np.sum(weights)
-
-        # import pylab as plt
-        # plt.figure()
-        # plt.bar(range(len(weights)), weights)
-        # plt.savefig('tmp.png')
-
-        sampled_classes = np.random.choice(classes, size=acq_size, p=weights).tolist()
-        chosen = []
-        while len(chosen) < acq_size:
-            for cls in sampled_classes:
-                if len(chosen) == acq_size:
-                    break
-                indices_cls = (cls == u_outputs['labels']).nonzero().ravel()
-                if np.all(np.isin(indices_cls, chosen)):
-                    sampled_classes.remove(cls)
-                    continue
-                indices_cls = indices_cls[~np.isin(indices_cls, chosen)]
-                idx = self.rng.choice(indices_cls)
-                chosen.append(idx)
-
-        # u_features = u_outputs['features']
-        # u_logits = u_outputs['logits']
-        # u_probas = u_logits.softmax(-1)
-
-        # max_indices = u_probas.argmax(-1)
-        # num_classes = u_logits.size(-1)
-
-        # factor = F.one_hot(u_outputs['labels'], num_classes=num_classes) - u_probas
-        # grad_embedding = (factor[:, :, None] * u_features[:, None, :]).flatten(-2)
-
-        # # chosen = kmeans_plusplus(grad_embedding.numpy(), acq_size, rng=self.rng)
-        # chosen = select_samples_per_class(
-        #     grad_embedding,
-        #     u_outputs['labels'],
-        #     u_outputs['labels'],
-        #     l_outputs['labels'],
-        #     acq_size,
-        # )
-
-        return [unlabeled_indices[idx] for idx in chosen]
 
 
 class TypiClass(Query):
@@ -496,37 +433,6 @@ def select_samples_per_class(candidate_features, candidate_labels, unlabeled_lab
             selected.append(indices[idx].item())
             class_counter[lbl] += 1
     return selected
-
-
-# class GradientSampling(Query):
-#     def __init__(self, subset_size=None, random_seed=None, device='cpu'):
-#         super().__init__(random_seed)
-#         self.subset_size = subset_size
-#         self.device = device
-#
-#     def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
-#         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(self.subset_size)
-#         unlabeled_features, unlabeled_logits = model.get_representations_and_logits(
-#             unlabeled_dataloader, device=self.device)
-#         unlabeled_labels = torch.cat([batch[1] for batch in unlabeled_dataloader])
-#
-#         labeled_dataloader, _ = al_datamodule.labeled_dataloader()
-#         labeled_labels = torch.cat([batch[1] for batch in labeled_dataloader])
-#
-#         num_classes = unlabeled_logits.size(-1)
-#         unlabeled_probas = unlabeled_logits.softmax(-1)
-#         factor = F.one_hot(unlabeled_labels, num_classes=num_classes) - unlabeled_probas
-#         embedding_batch = (factor[:, :, None] * unlabeled_features[:, None, :]).flatten(-2)
-#
-#         indices = select_samples_per_class(
-#             candidate_features=embedding_batch,
-#             candidate_labels=unlabeled_labels,
-#             unlabeled_labels=unlabeled_labels,
-#             labeled_labels=labeled_labels,
-#             acq_size=acq_size,
-#         )
-#         # indices = self.rng.choice(indices, size=acq_size, replace=False)
-#         return [unlabeled_indices[idx] for idx in indices]
 
 
 class CrossDomainOracle(Query):

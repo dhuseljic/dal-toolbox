@@ -31,12 +31,11 @@ class Dopanim(BaseData):
 
     @property
     def num_classes(self):
-        return 47
+        return 15
 
     def download_datasets(self):
-        pass
-        # _Dopanim(self.dataset_path, version="train", download=True)
-        # _Dopanim(self.dataset_path, version="test", download=True)
+        _Dopanim(self.dataset_path, version="train", download=True)
+        _Dopanim(self.dataset_path, version="test", download=True)
 
     @property
     def full_train_dataset(self):
