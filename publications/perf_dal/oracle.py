@@ -227,11 +227,11 @@ class PerfDALOracle(Query):
 
             ss_min = acq_size*5
             ss_max = min(len(al_datamodule.unlabeled_indices), self.strat_subset_size)
-            subset_range = np.linspace(ss_min, ss_max, num_batches, dtype=int)
+            subset_range = self.rng.choice(range(ss_min, ss_max), size=num_batches, replace=False)
 
             indices_strat = []
             for i_batch in range(num_batches):
-                strat.subset_size = subset_range[i_batch]
+                # strat.subset_size = subset_range[i_batch]
                 idx = strat.query(model=model, al_datamodule=al_datamodule, acq_size=acq_size)
                 indices_strat.append(idx)
 
