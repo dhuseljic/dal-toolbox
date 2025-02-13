@@ -11,7 +11,7 @@ source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 
 mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perf_dal_new.db'
 mlflow_exp_name='image_oracle_cross_domain'
-al_strategy=perf_dal_oracle
+al_strategy=cross_domain_oracle
 
 datasets=(cifar10 stl10 snacks dtd)
 acq_sizes=(10 10 20 50)
