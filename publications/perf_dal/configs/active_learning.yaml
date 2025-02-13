@@ -44,9 +44,9 @@ model:
   mc_samples: 10_000
 
 optimizer: 
-  name: RAdam
+  name: SGD
   lr: 1e-2
-  weight_decay: 1e-4
+  weight_decay: 1e-3
   momentum: 0.9
   lr_backbone: 1e-5
   finetune_backbone: False
