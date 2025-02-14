@@ -81,7 +81,7 @@ class PerfDALOracle(Query):
         self.history = []
 
     def build_al_strategies(self, al_strategies):
-        strategies_list = []
+        strategies_list = [] # TODO: Use all sampling strategies
         for strat_name in al_strategies:
             if strat_name == 'random':
                 strat = strategies.RandomSampling()
@@ -113,8 +113,6 @@ class PerfDALOracle(Query):
 
     @torch.no_grad()
     def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
-        # TODO: Left uncertainty filter out for now
-        # al_datamodule = self.filter_noisy_samples(al_datamodule, model)
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(self.subset_size)
         al_datamodule.unlabeled_indices = unlabeled_indices
         unlabeled_outputs = model.get_model_outputs(unlabeled_dataloader, output_types=[
@@ -231,7 +229,7 @@ class PerfDALOracle(Query):
             indices_strat = []
             for _ in range(num_batches):
                 if self.vary_strat_subset_size:
-                    strat.subset_size = random.choice(seq=range(2*acq_size, min(len(unlabeled_indices), 10000)))
+                    strat.subset_size = random.choice(seq=range(2*acq_size, min(len(unlabeled_indices), self.max_subset_size))) # TODO: Var in config einfügen
                 idx = strat.query(model=model, al_datamodule=al_datamodule, acq_size=acq_size)
                 indices_strat.append(idx)
 
