@@ -6,21 +6,24 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64gb
 #SBATCH --gres=gpu:1
-#SBATCH --array=0-24%4
+#SBATCH --array=0-159%4
 source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 
 mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perf_dal_new.db'
-mlflow_exp_name='flowers102_ablation'
+mlflow_exp_name='image_baselines'
 
-acq_sizes=(10 20 30 40)
-random_seeds=(1 2 3 4 5)
+query_strategies=(alfamix badge bait coreset dropquery margin random typiclust)
+datasets=(flowers102 imagenet)
+acq_sizes=(25 1000)
+subset_sizes=(Null 5000)
+random_seeds=(1 2 3 4 5 6 7 8 9 10)
 
 index=$SLURM_ARRAY_TASK_ID
-dataset_name=flowers102
-al_strategy=random
-subset_size=None
-acq_size=${acq_sizes[$index % 5]}
-random_seed=${random_seeds[$index / 5]}
+dataset_name=${datasets[$index % 2]}
+acq_size=${acq_sizes[$index % 2]}
+subset_size=${subset_sizes[$index % 2]}
+al_strategy=${query_strategies[$index / 2 % 8]}
+random_seed=${random_seeds[$index / 16]}
 
 if [ $index -eq 0 ]; then
     python -c "import mlflow; mlflow.set_tracking_uri(r'$mlflow_uri'); mlflow.set_experiment(r'$mlflow_exp_name')"
