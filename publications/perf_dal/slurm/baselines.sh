@@ -38,5 +38,6 @@ srun python al.py \
     al.acq_size=$acq_size \
     al.subset_size=$subset_size \
     mlflow_uri=$mlflow_uri \
+    al.device=cuda \
     experiment_name=$mlflow_exp_name \
     random_seed=$random_seed
