@@ -15,7 +15,7 @@ al_strategy=perf_dal_oracle
 
 datasets=(flowers102 imagenet)
 acq_sizes=(25 1000)
-subset_sizes=(Null 5000)
+subset_sizes=(500 5000)
 num_batches=(4 16 32 64 128)
 random_seeds=(1 2 3 4 5 6 7 8 9 10)
 
