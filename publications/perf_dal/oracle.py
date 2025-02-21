@@ -28,6 +28,7 @@ class PerfDALOracle(Query):
                  loss='cross_entropy',
                  subset_size=None,
                  strat_subset_size=2500,
+                 max_subset_size=5000,
                  vary_strat_subset_size=False,
                  device='cpu',
                  random_seed=None,
@@ -38,6 +39,7 @@ class PerfDALOracle(Query):
 
         # Batch Selection
         self.strat_subset_size = strat_subset_size
+        self.max_subset_size = max_subset_size
         self.vary_strat_subset_size = vary_strat_subset_size
         self.strategies = self.build_al_strategies(al_strategies)
         self.num_batches = num_batches
@@ -229,7 +231,7 @@ class PerfDALOracle(Query):
             indices_strat = []
             for _ in range(num_batches):
                 if self.vary_strat_subset_size:
-                    strat.subset_size = random.choice(seq=range(2*acq_size, min(len(unlabeled_indices), self.max_subset_size))) # TODO: Var in config einfügen
+                    strat.subset_size = random.choice(seq=range(2*acq_size, min(len(unlabeled_indices), self.max_subset_size)))
                 idx = strat.query(model=model, al_datamodule=al_datamodule, acq_size=acq_size)
                 indices_strat.append(idx)
 
