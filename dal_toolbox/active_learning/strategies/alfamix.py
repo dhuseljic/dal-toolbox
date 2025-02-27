@@ -55,7 +55,7 @@ class AlfaMix(Query):
         unlabeled_outputs = model.get_model_outputs(unlabeled_dataloader, output_types=[
                                                     'features', 'logits'], device=self.device)
         with torch.enable_grad():
-            z_u = unlabeled_outputs['features'].requires_grad_()
+            z_u = unlabeled_outputs['features'].requires_grad_().to(self.device)
             logits = model.model.forward_head(z_u)
             y_star = logits.softmax(-1).argmax(-1)
             loss = F.cross_entropy(logits, y_star, reduction="sum")
