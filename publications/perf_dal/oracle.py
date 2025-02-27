@@ -15,7 +15,7 @@ from dal_toolbox.active_learning.data import ActiveLearningDataModule
 
 class PerfDALOracle(Query):
     def __init__(self,
-                 al_strategies=['random', 'typiclust', 'dropquery', 'bait'], #'typiclass', 'dropqueryclass', 'loss', 'margin', 'badge'],
+                 al_strategies=['random', 'typiclust', 'dropquery', 'bait', 'typiclass', 'dropqueryclass', 'loss', 'margin', 'badge', 'coreset', 'alfamix'],
                  num_batches=200,
                  strat_ratio='equal',
                  look_ahead='true_labels',
@@ -82,7 +82,7 @@ class PerfDALOracle(Query):
         self.history = []
 
     def build_al_strategies(self, al_strategies):
-        strategies_list = [] # TODO: Use all sampling strategies
+        strategies_list = []
         for strat_name in al_strategies:
             if strat_name == 'random':
                 strat = strategies.RandomSampling()
