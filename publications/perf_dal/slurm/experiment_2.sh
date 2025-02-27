@@ -51,6 +51,7 @@ srun python al.py \
     al.optimal.strategies=$sel_strats \
     al.optimal.vary_strat_subset_size=$var_sss \
     al.optimal.num_batches=$n_bat \
+    al.optimal.strat_subset_size=5000 \
     mlflow_uri=$mlflow_uri \
     al.device=cuda \
     experiment_name=$mlflow_exp_name \

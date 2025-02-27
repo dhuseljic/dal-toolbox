@@ -219,7 +219,7 @@ class PerfDALOracle(Query):
             num_batches = batches_counts[strat_name]
 
             ss_min = acq_size*4
-            ss_max = min(len(al_datamodule.unlabeled_indices), self.strat_subset_size)
+            ss_max = min(len(al_datamodule.unlabeled_indices), self.max_subset_size)
             subset_range = self.rng.choice(range(ss_min, ss_max), size=num_batches, replace=False)
 
             indices_strat = []
