@@ -16,7 +16,7 @@ al_strategy='perf_dal_oracle'
 selection_strategies=(\[random\] \[random,typiclust,dropquery,bait,typiclass,dropqueryclass,loss,margin,badge,coreset,alfamix\] \[random,typiclust,dropquery,bait,typiclass,dropqueryclass,loss,margin,badge,coreset,alfamix\])
 vary_subset_size=(False False True)
 
-num_batches=(10 50 100)
+num_batches=(11 55 110)
 
 datasets=(cifar10 dtd)
 acq_sizes=(10 50)
@@ -51,7 +51,6 @@ srun python al.py \
     al.optimal.strategies=$sel_strats \
     al.optimal.vary_strat_subset_size=$var_sss \
     al.optimal.num_batches=$n_bat \
-    al.optimal.strat_subset_size=5000 \
     mlflow_uri=$mlflow_uri \
     al.device=cuda \
     experiment_name=$mlflow_exp_name \
