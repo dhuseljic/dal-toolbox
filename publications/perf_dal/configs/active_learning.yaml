@@ -32,7 +32,7 @@ al:
     num_mc_labels: 5
     look_ahead: true_labels 
     perf_estimation: test_ds
-    loss: cross_entropy
+    loss: zero_one
     retraining: train
     num_retraining_epochs: 50
     update_gamma: 10
@@ -48,7 +48,7 @@ model:
 optimizer: 
   name: SGD
   lr: 1e-2
-  weight_decay: 1e-3
+  weight_decay: 1e-4
   momentum: 0.9
   nesterov: True
   lr_backbone: 1e-5

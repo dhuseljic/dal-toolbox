@@ -31,7 +31,7 @@ class Dopanim(BaseData):
 
     @property
     def num_classes(self):
-        return 47
+        return 15
 
     def download_datasets(self):
         #TODO: Test if this works

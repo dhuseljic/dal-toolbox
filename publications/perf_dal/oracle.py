@@ -1,5 +1,4 @@
 import itertools
-import random
 
 import torch
 import torch.nn.functional as F
@@ -77,7 +76,7 @@ class PerfDALOracle(Query):
         # Noise filter
         self.i_iter = 0
         self.denoise_warmup = 5
-        self.denoise_quantiles = np.linspace(.5, 1, self.denoise_warmup)
+        self.denoise_quantiles = np.linspace(.3, 1, self.denoise_warmup)
 
         # Some helper
         self.history = []
@@ -92,10 +91,11 @@ class PerfDALOracle(Query):
             elif strat_name == 'coreset':
                 strat = strategies.CoreSet(subset_size=self.strat_subset_size, device=self.device)
             elif strat_name == 'badge':
+                # strat = GTBadge(subset_size=self.strat_subset_size, device=self.device)
                 strat = strategies.Badge(subset_size=self.strat_subset_size, device=self.device)
             elif strat_name == 'typiclust':
                 strat = strategies.TypiClust(subset_size=self.strat_subset_size, device=self.device)
-            elif strat_name== 'alfamix':
+            elif strat_name == 'alfamix':
                 strat = strategies.AlfaMix(subset_size=self.strat_subset_size, device=self.device)
             elif strat_name == 'dropquery':
                 strat = strategies.DropQuery(subset_size=self.strat_subset_size, device=self.device)
@@ -199,16 +199,6 @@ class PerfDALOracle(Query):
         batch_type = self.batch_types[idx_batch_type]
         self.batch_type_count[batch_type] += 1
 
-        # import pylab as plt
-        # plt.figure()
-        # for i, strat_name in enumerate(self.batch_types):
-        #     start_idx = 0 if i == 0 else counts[i - 1]
-        #     end_idx = counts[i]
-        #     plt.hist(loss_batches[start_idx:end_idx], bins='auto', label=strat_name, alpha=0.5)
-        # plt.vlines(base_loss, *plt.ylim(), lw=3, colors='k', ls='--', label='Base Loss')
-        # plt.legend()
-        # plt.savefig('tmp.png')
-
         self.history.append({
             'base_loss': base_loss,
             'loss_batches': np.array(loss_batches).tolist(),
@@ -228,10 +218,14 @@ class PerfDALOracle(Query):
         for strat_name, strat in zip(self.batch_types, self.strategies):
             num_batches = batches_counts[strat_name]
 
+            ss_min = acq_size*4
+            ss_max = min(len(al_datamodule.unlabeled_indices), self.strat_subset_size)
+            subset_range = self.rng.choice(range(ss_min, ss_max), size=num_batches, replace=False)
+
             indices_strat = []
-            for _ in range(num_batches):
+            for i_batch in range(num_batches):
                 if self.vary_strat_subset_size:
-                    strat.subset_size = random.choice(seq=range(2*acq_size, min(len(unlabeled_indices), self.max_subset_size)))
+                    strat.subset_size = subset_range[i_batch]
                 idx = strat.query(model=model, al_datamodule=al_datamodule, acq_size=acq_size)
                 indices_strat.append(idx)
 
@@ -250,7 +244,7 @@ class PerfDALOracle(Query):
         self.denoise_quantile = self.denoise_quantiles[self.i_iter]
         self.i_iter += 1
         al_dm = deepcopy(al_datamodule)
-        
+
         u_dl, u_indices = al_dm.unlabeled_dataloader()
         u_outputs = model.get_model_outputs(u_dl, ['features', 'labels'], self.device)
 
@@ -272,15 +266,6 @@ class PerfDALOracle(Query):
 
         # Update unlabeled indices
         al_dm.unlabeled_indices = [al_dm.unlabeled_indices[idx] for idx in indices]
-
-        # Plot denoised TSNE
-        # from sklearn.manifold import TSNE
-        # tsne = TSNE(random_state=42)
-        # X_tsne = tsne.fit_transform(unlabeled_features[indices])
-        # import pylab as plt
-        # plt.figure()
-        # plt.scatter(X_tsne[:, 0], X_tsne[:, 1], c=unlabeled_labels[indices], cmap='tab20', s=50)
-        # plt.savefig('tmp.png')
 
         return al_dm
 
@@ -434,37 +419,6 @@ def select_samples_per_class(candidate_features, candidate_labels, unlabeled_lab
             selected.append(indices[idx].item())
             class_counter[lbl] += 1
     return selected
-
-
-# class GradientSampling(Query):
-#     def __init__(self, subset_size=None, random_seed=None, device='cpu'):
-#         super().__init__(random_seed)
-#         self.subset_size = subset_size
-#         self.device = device
-#
-#     def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
-#         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(self.subset_size)
-#         unlabeled_features, unlabeled_logits = model.get_representations_and_logits(
-#             unlabeled_dataloader, device=self.device)
-#         unlabeled_labels = torch.cat([batch[1] for batch in unlabeled_dataloader])
-#
-#         labeled_dataloader, _ = al_datamodule.labeled_dataloader()
-#         labeled_labels = torch.cat([batch[1] for batch in labeled_dataloader])
-#
-#         num_classes = unlabeled_logits.size(-1)
-#         unlabeled_probas = unlabeled_logits.softmax(-1)
-#         factor = F.one_hot(unlabeled_labels, num_classes=num_classes) - unlabeled_probas
-#         embedding_batch = (factor[:, :, None] * unlabeled_features[:, None, :]).flatten(-2)
-#
-#         indices = select_samples_per_class(
-#             candidate_features=embedding_batch,
-#             candidate_labels=unlabeled_labels,
-#             unlabeled_labels=unlabeled_labels,
-#             labeled_labels=labeled_labels,
-#             acq_size=acq_size,
-#         )
-#         # indices = self.rng.choice(indices, size=acq_size, replace=False)
-#         return [unlabeled_indices[idx] for idx in indices]
 
 
 class CrossDomainOracle(Query):
