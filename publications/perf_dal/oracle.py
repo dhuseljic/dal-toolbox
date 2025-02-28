@@ -65,6 +65,8 @@ class PerfDALOracle(Query):
             self.loss_fn = lambda logits, y: 1 - torch.mean((logits.argmax(dim=-1) == y).float())
         elif loss == 'expected_zero_one':
             self.loss_fn = lambda logits, _: torch.mean(1 - logits.softmax(-1).max(-1).values)
+        elif loss == 'brier':
+            self.loss_fn = lambda logits, y: torch.mean(torch.sum((logits.softmax(-1) - torch.nn.functional.one_hot(y, num_classes=logits.shape[-1])) ** 2, dim=-1))
         else:
             raise NotImplementedError()
 
@@ -172,7 +174,7 @@ class PerfDALOracle(Query):
                     model.update_posterior(
                         retrain_loader,
                         gamma=self.update_gamma,
-                        from_representations=True,
+                        from_features=True,
                         device=self.device
                     )
                 else:
