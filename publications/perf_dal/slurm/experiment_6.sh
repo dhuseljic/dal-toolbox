@@ -43,7 +43,6 @@ srun python al.py \
     dataset_path=/mnt/stud/work/phahn/datasets \
     al.strategy=$al_strategy \
     al.acq_size=$acq_size \
-    al.num_acq=$num_acq \
     al.subset_size=$subset_size \
     al.optimal.strategies=$sel_strats \
     al.optimal.vary_strat_subset_size=$var_sss \
