@@ -6,21 +6,22 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64gb
 #SBATCH --gres=gpu:1
-#SBATCH --array=0-59%4
+#SBATCH --array=0-39%4
 source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 
 mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perf_dal.db'
-mlflow_exp_name='experiment_4'
+mlflow_exp_name='experiment_5'
 al_strategy='perf_dal_oracle'
 sel_strats=\[random,typiclust,dropquery,bait,typiclass,dropqueryclass,loss,margin,badge,coreset,alfamix\]
 n_bat=110
 var_sss=True
+loss_fn=cross_entropy
 
 datasets=(cifar10 dtd)
 acq_sizes=(10 50)
 subset_sizes=(1000 Null)
 
-loss_functions=(cross_entropy zero_one brier)
+train_methods=(train update)
 
 random_seeds=(1 2 3 4 5 6 7 8 9 10)
 
@@ -29,9 +30,9 @@ dataset_name=${datasets[$index % 2]}
 acq_size=${acq_sizes[$index % 2]}
 subset_size=${subset_sizes[$index % 2]}
 
-loss_fn=${loss_functions[$index / 2 % 3]}
+training=${train_methods[$index / 2 % 2]}
 
-random_seed=${random_seeds[$index / 6]}
+random_seed=${random_seeds[$index / 4]}
 
 if [ $index -eq 0 ]; then
     python -c "import mlflow; mlflow.set_tracking_uri(r'$mlflow_uri'); mlflow.set_experiment(r'$mlflow_exp_name')"
@@ -50,6 +51,7 @@ srun python al.py \
     al.optimal.vary_strat_subset_size=$var_sss \
     al.optimal.num_batches=$n_bat \
     al.optimal.loss=$loss_fn \
+    al.optimal.training=$training \
     mlflow_uri=$mlflow_uri \
     al.device=cuda \
     experiment_name=$mlflow_exp_name \
