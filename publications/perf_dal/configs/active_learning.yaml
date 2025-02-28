@@ -31,9 +31,9 @@ al:
     look_ahead: true_labels 
     perf_estimation: test_ds
     loss: zero_one
-    retraining: train
+    retraining: update
     num_retraining_epochs: 50
-    update_gamma: 10
+    update_gamma: 20
 
 model:
   name: laplace

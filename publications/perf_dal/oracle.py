@@ -169,7 +169,7 @@ class PerfDALOracle(Query):
                     model.update_posterior(
                         retrain_loader,
                         gamma=self.update_gamma,
-                        from_representations=True,
+                        from_features=True,
                         device=self.device
                     )
                 else:

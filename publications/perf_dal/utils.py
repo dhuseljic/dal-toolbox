@@ -226,8 +226,12 @@ class LaplaceNet(nn.Module):
     def forward_features(self, x):
         return x
 
-    def forward_head(self, x):
-        return self.layer(x)
+    def forward_head(self, x, mean_field=False):
+        if mean_field:
+            out = self.layer.forward_mean_field(x)
+        else:
+            out = self.layer(x)
+        return out
 
     def forward_mean_field(self, x):
         return self.layer.forward_mean_field(x)
