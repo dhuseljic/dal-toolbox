@@ -28,10 +28,10 @@ index=$SLURM_ARRAY_TASK_ID
 dataset_name=${datasets[$index % 2]}
 subset_size=${subset_sizes[$index % 2]}
 
-acq_size=${acq_sizes[$index / 2 % 3]}
-num_acq=${num_acqs[$index / 2 % 3]}
+acq_size=${acq_sizes[$index % 2]}
+num_acq=${num_acqs[$index % 2]}
 
-random_seed=${random_seeds[$index / 6]}
+random_seed=${random_seeds[$index / 2]}
 
 if [ $index -eq 0 ]; then
     python -c "import mlflow; mlflow.set_tracking_uri(r'$mlflow_uri'); mlflow.set_experiment(r'$mlflow_exp_name')"
