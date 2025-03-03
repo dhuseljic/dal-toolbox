@@ -16,9 +16,6 @@ sel_strats=\[random,typiclust,dropquery,bait,typiclass,dropqueryclass,loss,margi
 n_bat=110
 var_sss=True
 
-acq_sizes=(5)
-num_acqs=(40)
-
 datasets=(cifar10 stl10)
 subset_sizes=(1000 Null)
 
@@ -28,8 +25,8 @@ index=$SLURM_ARRAY_TASK_ID
 dataset_name=${datasets[$index % 2]}
 subset_size=${subset_sizes[$index % 2]}
 
-acq_size=${acq_sizes[$index % 2]}
-num_acq=${num_acqs[$index % 2]}
+acq_size=5
+num_acq=40
 
 random_seed=${random_seeds[$index / 2]}
 
