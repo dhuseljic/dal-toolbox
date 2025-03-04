@@ -13,7 +13,7 @@ mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perf_dal.db'
 mlflow_exp_name='experiment_8'
 al_strategy='perf_dal_oracle'
 var_sss=True
-num_batches=110
+n_bat=110
 
 selection_strategies=(\[random,bait\] \[random,bait,dropqueryclass\] \[random,dropquery,bait,dropqueryclass\] \[random,typiclust,dropquery,bait,typiclass,dropqueryclass\] \[random,typiclust,dropquery,bait,typiclass,dropqueryclass,alfamix\] \[random,typiclust,dropquery,bait,typiclass,dropqueryclass,coreset,alfamix\] \[random,typiclust,dropquery,bait,typiclass,dropqueryclass,badge,coreset,alfamix\] \[random,typiclust,dropquery,bait,typiclass,dropqueryclass,margin,badge,coreset,alfamix\])
 
