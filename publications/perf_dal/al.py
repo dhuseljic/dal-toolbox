@@ -13,7 +13,7 @@ from dal_toolbox.active_learning import strategies
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything
 
-from oracle import CrossDomainOracle, PerfDALOracle
+from oracle import CrossDomainOracle, PerfDALOracle, SimulatedAnnealingOracle
 from utils import build_datasets, flatten_cfg, build_model
 
 mlflow.config.enable_async_logging()
@@ -37,8 +37,8 @@ def main(args):
         train_batch_size=args.model.train_batch_size,
         predict_batch_size=args.model.predict_batch_size,
     )
-    al_strategy = build_al_strategy(args)
     args.al.num_init = args.al.acq_size if args.al.num_init is None else args.al.num_init
+    al_strategy = build_al_strategy(args)
     if args.al.init_method == 'random':
         al_datamodule.random_init(n_samples=args.al.num_init)
     else:
@@ -115,10 +115,14 @@ def build_al_strategy(args):
     if args.al.strategy == 'random':
         al_strategy = strategies.RandomSampling()
     elif args.al.strategy == 'cross_domain_oracle':
-        args.al.num_init = args.al.acq_size if args.al.num_init is None else args.al.num_init
         args.al.num_acq = args.al.num_acq * args.al.acq_size
         args.al.acq_size = 1
         al_strategy = CrossDomainOracle(device=device)
+    elif args.al.strategy == 'simulated_annealing_oracle':
+        al_strategy = SimulatedAnnealingOracle(
+            num_acq=args.al.num_acq,
+            acq_size=args.al.acq_size,
+            sa_steps=10, greedy_steps=10, linear_annealing_factor=0.1, device=device)
     elif args.al.strategy == 'perf_dal_oracle':
         al_strategy = PerfDALOracle(
             al_strategies=args.al.optimal.strategies,

@@ -6,6 +6,7 @@ import numpy as np
 
 from copy import deepcopy
 from lightning import Trainer
+from collections import defaultdict
 from rich.progress import track
 from sklearn.linear_model import LogisticRegression
 from dal_toolbox.active_learning.strategies.query import Query
@@ -438,7 +439,7 @@ def select_samples_per_class(candidate_features, candidate_labels, unlabeled_lab
 class CrossDomainOracle(Query):
     """Implementation of the oracle used in [1].
 
-    [1] T. Werner, J. Burchert, M. Stubbemann, and L. Schmidt-Thieme, “A Cross-Domain Benchmark for Active Learning,” in Neural Information Processing Systems Datasets and Benchmarks Track, 2024.
+    [1] T. Werner et al. A Cross-Domain Benchmark for Active Learning. NeurIPS Datasets and Benchmarks Track, 2024.
     """
 
     def __init__(self,
@@ -510,3 +511,123 @@ class CrossDomainOracle(Query):
             running_loss += len(inputs)*self.loss_fn(logits, targets).item()
         loss = running_loss / num_samples
         return loss
+
+
+class SimulatedAnnealingOracle(Query):
+    """Implementation of the oracle used in [1].
+
+    [1] Zhou, Yilun, et al. Towards understanding the behaviors of optimal deep active learning algorithms. AISTATS. 2021.
+    """
+
+    def __init__(self,
+                 num_acq,
+                 acq_size,
+                 sa_steps=25000,
+                 greedy_steps=5000,
+                 linear_annealing_factor=0.1,
+                 random_seed=None,
+                 device='cpu',
+                 ):
+        super().__init__(random_seed)
+        self.num_acq = num_acq
+        self.acq_size = acq_size
+        self.sa_steps = sa_steps
+        self.greedy_steps = greedy_steps
+        self.linear_annealing_factor = linear_annealing_factor
+        self.device = device
+
+        self.num_retraining_epochs = 200
+        self.search_done = False
+        self.i_acq = 0
+
+    @torch.no_grad()
+    def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size: int):
+        u_loader, u_indices = al_datamodule.unlabeled_dataloader()
+
+        if self.search_done:
+            indices = self.batches[self.i_acq]
+            self.i_acq += 1
+            return indices
+        shuffle_idx = self.rng.permutation(len(u_indices))
+        current_policy = np.array(u_indices)[shuffle_idx]
+        current_quality = self.quality(model, al_datamodule, policy=current_policy)
+
+        best_policy, best_quality = current_policy, current_quality
+
+        for t in track(range(self.sa_steps), 'Simulated Annealing Search'):
+            new_policy = self.propose_new_policy(policy=current_policy)
+            new_quality = self.quality(model, al_datamodule, policy=new_policy)
+
+            delta_quality = (new_quality - current_quality)
+            u = self.rng.rand()
+            if u < np.exp(self.linear_annealing_factor * t * delta_quality):
+                current_policy, current_quality = new_policy, new_quality
+                if best_quality < current_quality:
+                    best_policy, best_quality = current_policy, current_quality
+        
+        # Greedy refinement
+        for t in track(range(self.greedy_steps), 'Greedy Refinment'):
+            new_policy = self.propose_new_policy(best_policy)
+            new_quality = self.quality(model, al_datamodule, policy=new_policy)
+            if new_quality > best_quality:
+                best_policy, best_quality = new_policy, new_quality
+
+        self.search_done = True
+        self.policy = best_policy
+        self.batches = [self.policy[i_acq*acq_size:(i_acq+1)*acq_size] for i_acq in range(self.num_acq)]
+        indices = self.batches[self.i_acq].tolist()
+        self.i_acq += 1
+        return indices
+
+    def propose_new_policy(self, policy):
+        policy = policy.copy()
+        swap_between_batches = (self.rng.rand() > 0.5)
+        if swap_between_batches:  # Swap data point between batch
+            b1, b2 = self.rng.randint(0, self.num_acq, size=2)
+            while b1 == b2:
+                b2 = self.rng.randint(0, self.num_acq)
+            i1, i2 = self.rng.randint(0, self.acq_size, size=2)
+            idx1 = self.acq_size*b1 + i1
+            idx2 = self.acq_size*b2 + i2
+
+        else:  # Swap data point from outside
+            b1 = self.rng.randint(0, self.num_acq)
+            i1 = self.rng.randint(0, self.acq_size)
+            idx1 = self.acq_size*b1 + i1
+            idx2 = self.rng.randint(self.acq_size*self.num_acq, len(policy))
+
+        policy[idx1], policy[idx2] = policy[idx2], policy[idx1]
+        return policy
+
+    def quality(self, model, al_datamodule, policy):
+        learning_curves = defaultdict(list)
+
+        _, l_indices = al_datamodule.labeled_dataloader()
+        for i_acq in range(self.num_acq):
+            new_indices = policy[:(i_acq+1)*self.acq_size]
+
+            model.reset_states(reset_model_parameters=True)
+            retrain_indices = np.concat((l_indices, new_indices))
+            retrain_loader = al_datamodule.custom_dataloader(retrain_indices, train=True)
+            trainer = Trainer(barebones=True, max_epochs=self.num_retraining_epochs)
+            trainer.fit(model, retrain_loader)
+
+            acc = self.evaluate_model(model, al_datamodule.test_dataloader())
+            learning_curves['accuracy'].append(acc)
+        quality = np.mean(learning_curves['accuracy'])
+        return quality
+
+    @torch.no_grad()
+    def evaluate_model(self, model, dataloader):
+        model.eval()
+        model.to(self.device)
+        num_samples = 0
+        running_corrects = 0
+        for batch in dataloader:
+            inputs, targets = batch[0].to(self.device), batch[1].to(self.device)
+            logits = model(inputs)
+
+            num_samples += len(inputs)
+            running_corrects += (logits.argmax(-1) == targets).sum().item()
+        acc = running_corrects / num_samples
+        return acc
