@@ -122,7 +122,7 @@ def build_al_strategy(args):
         al_strategy = SimulatedAnnealingOracle(
             num_acq=args.al.num_acq,
             acq_size=args.al.acq_size,
-            sa_steps=10, greedy_steps=10, linear_annealing_factor=0.1, device=device)
+            sa_steps=20, greedy_steps=10, linear_annealing_factor=0.1, device=device)
     elif args.al.strategy == 'perf_dal_oracle':
         al_strategy = PerfDALOracle(
             al_strategies=args.al.optimal.strategies,
