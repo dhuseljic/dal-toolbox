@@ -607,7 +607,7 @@ class SimulatedAnnealingOracle(Query):
             new_indices = policy[:(i_acq+1)*self.acq_size]
 
             model.reset_states(reset_model_parameters=True)
-            retrain_indices = np.concat((l_indices, new_indices))
+            retrain_indices = np.append(l_indices, new_indices)
             retrain_loader = al_datamodule.custom_dataloader(retrain_indices, train=True)
             trainer = Trainer(barebones=True, max_epochs=self.num_retraining_epochs)
             trainer.fit(model, retrain_loader)
