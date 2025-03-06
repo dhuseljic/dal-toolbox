@@ -542,45 +542,45 @@ class SimulatedAnnealingOracle(Query):
 
     @torch.no_grad()
     def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size: int):
-        u_loader, u_indices = al_datamodule.unlabeled_dataloader()
+        self.annealing_search(model, al_datamodule, acq_size)
+        indices = self.queried_batches[self.i_acq]
+        self.i_acq += 1
+        return indices
 
+    def annealing_search(self, model, al_datamodule, acq_size):
         if self.search_done:
-            indices = self.batches[self.i_acq]
-            self.i_acq += 1
-            return indices
+            return
+        _, u_indices = al_datamodule.unlabeled_dataloader()
         shuffle_idx = self.rng.permutation(len(u_indices))
-        current_policy = np.array(u_indices)[shuffle_idx]
-        current_quality = self.quality(model, al_datamodule, policy=current_policy)
 
-        best_policy, best_quality = current_policy, current_quality
+        current_order = np.array(u_indices)[shuffle_idx]
+        current_quality = self.quality(model, al_datamodule, order=current_order)
+
+        best_order, best_quality = current_order, current_quality
 
         for t in track(range(self.sa_steps), 'Simulated Annealing Search'):
-            new_policy = self.propose_new_policy(policy=current_policy)
-            new_quality = self.quality(model, al_datamodule, policy=new_policy)
+            new_order = self.propose_new_order(order=current_order)
+            new_quality = self.quality(model, al_datamodule, order=new_order)
 
             delta_quality = (new_quality - current_quality)
             u = self.rng.rand()
             if u < np.exp(self.linear_annealing_factor * t * delta_quality):
-                current_policy, current_quality = new_policy, new_quality
+                current_order, current_quality = new_order, new_quality
                 if best_quality < current_quality:
-                    best_policy, best_quality = current_policy, current_quality
-        
+                    best_order, best_quality = current_order, current_quality
+
         # Greedy refinement
         for t in track(range(self.greedy_steps), 'Greedy Refinment'):
-            new_policy = self.propose_new_policy(best_policy)
-            new_quality = self.quality(model, al_datamodule, policy=new_policy)
+            new_order = self.propose_new_order(best_order)
+            new_quality = self.quality(model, al_datamodule, order=new_order)
             if new_quality > best_quality:
-                best_policy, best_quality = new_policy, new_quality
-
+                best_order, best_quality = new_order, new_quality
+        
         self.search_done = True
-        self.policy = best_policy
-        self.batches = [self.policy[i_acq*acq_size:(i_acq+1)*acq_size] for i_acq in range(self.num_acq)]
-        indices = self.batches[self.i_acq].tolist()
-        self.i_acq += 1
-        return indices
+        self.queried_batches = [best_order[i_acq*acq_size:(i_acq+1)*acq_size] for i_acq in range(self.num_acq)]
 
-    def propose_new_policy(self, policy):
-        policy = policy.copy()
+    def propose_new_order(self, order):
+        order = order.copy()
         swap_between_batches = (self.rng.rand() > 0.5)
         if swap_between_batches:  # Swap data point between batch
             b1, b2 = self.rng.randint(0, self.num_acq, size=2)
@@ -594,17 +594,17 @@ class SimulatedAnnealingOracle(Query):
             b1 = self.rng.randint(0, self.num_acq)
             i1 = self.rng.randint(0, self.acq_size)
             idx1 = self.acq_size*b1 + i1
-            idx2 = self.rng.randint(self.acq_size*self.num_acq, len(policy))
+            idx2 = self.rng.randint(self.acq_size*self.num_acq, len(order))
 
-        policy[idx1], policy[idx2] = policy[idx2], policy[idx1]
-        return policy
+        order[idx1], order[idx2] = order[idx2], order[idx1]
+        return order
 
-    def quality(self, model, al_datamodule, policy):
+    def quality(self, model, al_datamodule, order):
         learning_curves = defaultdict(list)
 
         _, l_indices = al_datamodule.labeled_dataloader()
         for i_acq in range(self.num_acq):
-            new_indices = policy[:(i_acq+1)*self.acq_size]
+            new_indices = order[:(i_acq+1)*self.acq_size]
 
             model.reset_states(reset_model_parameters=True)
             retrain_indices = np.append(l_indices, new_indices)
