@@ -34,6 +34,10 @@ al:
     retraining: update
     num_retraining_epochs: 50
     update_gamma: 20
+  simulated_annealing:
+    sa_steps: 1000
+    greedy_steps: 200
+    linear_annealing_factor: 0.1
 
 model:
   name: laplace

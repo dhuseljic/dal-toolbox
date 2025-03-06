@@ -122,7 +122,11 @@ def build_al_strategy(args):
         al_strategy = SimulatedAnnealingOracle(
             num_acq=args.al.num_acq,
             acq_size=args.al.acq_size,
-            sa_steps=1000, greedy_steps=200, linear_annealing_factor=0.1, device=device)
+            sa_steps=args.al.simulated_annealing.sa_steps,
+            greedy_steps=args.al.simulated_annealing.greedy_steps,
+            linear_annealing_factor=args.al.simulated_annealing.linear_annealing_factor,
+            device=device
+        )
     elif args.al.strategy == 'perf_dal_oracle':
         al_strategy = PerfDALOracle(
             al_strategies=args.al.optimal.strategies,
@@ -143,7 +147,8 @@ def build_al_strategy(args):
     elif args.al.strategy == 'badge':
         al_strategy = strategies.Badge(subset_size=args.al.subset_size)
     elif args.al.strategy == 'bait':
-        al_strategy = strategies.BaitSampling(subset_size=args.al.subset_size, grad_likelihood='binary_cross_entropy', device=device)
+        al_strategy = strategies.BaitSampling(
+            subset_size=args.al.subset_size, grad_likelihood='binary_cross_entropy', device=device)
     elif args.al.strategy == 'coreset':
         al_strategy = strategies.CoreSet(subset_size=args.al.subset_size, device=device)
     elif args.al.strategy == 'dropquery':
