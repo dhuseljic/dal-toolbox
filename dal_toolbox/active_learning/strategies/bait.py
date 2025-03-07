@@ -248,7 +248,11 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
         elif is_block_diag:
             raise NotImplementedError()
         else:
-            innerInv = torch.inverse(-1 * torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2))
+            mat = -1 * torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2)
+            try:
+                innerInv = torch.inverse(mat)
+            except RuntimeError:
+                innerInv = torch.linalg.pinv(mat) # sometimes mat is singular
             traceEst = torch.diagonal(xt_ @ currentInv @ fisher_all @ currentInv @
                                       xt_.transpose(1, 2) @ innerInv, dim1=-2, dim2=-1).sum(-1)
         delInd = torch.argmin(-1 * traceEst).item()
