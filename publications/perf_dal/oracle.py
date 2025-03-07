@@ -570,7 +570,7 @@ class SimulatedAnnealingOracle(Query):
                     best_order, best_quality = current_order, current_quality
 
         # Greedy refinement
-        for t in track(range(self.greedy_steps), 'Greedy Refinment'):
+        for t in track(range(self.greedy_steps), 'Greedy Refinement'):
             new_order = self.propose_new_order(best_order)
             new_quality = self.quality(model, al_datamodule, order=new_order)
             if new_quality > best_quality:
