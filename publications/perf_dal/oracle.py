@@ -581,7 +581,7 @@ class SimulatedAnnealingOracle(Query):
 
     def propose_new_order(self, order):
         order = order.copy()
-        swap_between_batches = (self.rng.rand() > 0.5)
+        swap_between_batches = (self.rng.rand() > 0.5) and self.num_acq > 1
         if swap_between_batches:  # Swap data point between batch
             b1, b2 = self.rng.randint(0, self.num_acq, size=2)
             while b1 == b2:
