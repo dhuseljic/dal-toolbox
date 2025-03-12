@@ -31,9 +31,9 @@ dataset_name=${datasets[$index % 2]}
 acq_size=${acq_sizes[$index % 2]}
 subset_size=${subset_sizes[$index % 2]}
 
-loss_fn=${loss_functions[%index / 2 % 2]}
+loss_fn=${loss_functions[$index / 2 % 2]}
 
-gam=${loss_functions[%index / 4 % 5]}
+gam=${gammas[$index / 4 % 5]}
 
 random_seed=${random_seeds[$index / 20]}
 
