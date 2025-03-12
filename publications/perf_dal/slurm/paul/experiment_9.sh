@@ -54,7 +54,7 @@ srun python al.py \
     al.optimal.num_batches=$n_bat \
     al.optimal.update_gamma=$gam \
     al.optimal.loss=$loss_fn \
-    al.optimal.training=$training \
+    al.optimal.retraining=$training \
     mlflow_uri=$mlflow_uri \
     al.device=cuda \
     experiment_name=$mlflow_exp_name \
