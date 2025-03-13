@@ -51,3 +51,4 @@ srun python al.py \
     al.optimal.num_batches=$n_bat \
     al.optimal.loss=$loss_fn \
     al.optimal.retraining=$training \
+    al.optimal.strategies=$sel_strats \
