@@ -2,6 +2,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision
 
 from torch.utils.data import DataLoader
 from datasets import load_dataset
@@ -28,7 +29,12 @@ def build_datasets(args, cache_features=True):
     if args.dataset_name in image_datasets:
         data = build_image_data(args)
         if cache_features:
-            model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
+            if args.backbone == 'dinov2':
+                model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
+            elif args.backbone == 'swinv2':
+                model = torchvision.models.swin_v2_b(weights=torchvision.models.Swin_V2_B_Weights.IMAGENET1K_V1)
+            else:
+                raise NotImplementedError(f'This backbone ({args.backbone}) is not available!')
 
             train_ds = FeatureDataset(model, data.train_dataset, cache=True, cache_dir=args.dataset_path)
             val_ds = FeatureDataset(model, data.val_dataset, cache=True, cache_dir=args.dataset_path)
@@ -65,6 +71,7 @@ def build_image_data(args, plain_transforms=False):
         transforms = PlainTransforms(resize=(224, 224))
     else:
         transforms = DinoTransforms(size=(256, 256))
+
     if args.dataset_name == 'cifar10':
         data = CIFAR10(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'cifar10-lt':

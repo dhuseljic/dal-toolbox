@@ -15,6 +15,8 @@ dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
 # dino_model_name: 'dinov2_vitl14' # 300 M params - 1024 dimensions
 # dino_model_name: 'dinov2_vitg14' # 1100 M params - 1536 dimensions
 
+backbone: dinov2
+
 al:
   strategy: perf_dal_oracle
   subset_size: 1000
