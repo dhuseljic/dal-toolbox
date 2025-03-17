@@ -24,7 +24,7 @@ subset_sizes=(1000 Null)
 
 vary_subsetsize=(False True)
 
-selection_strategies=\[\[random,alfamix\],\[random,bait\],\[random,badge\],\[random,coreset\],\[random,dropquery\],\[random,dropqueryclass\],\[random,margin\],\[random,loss\],\[random,typiclust\]\]
+selection_strategies=(\[random,alfamix\] \[random,bait\] \[random,badge\] \[random,coreset\] \[random,dropquery\] \[random,dropqueryclass\] \[random,margin\] \[random,loss\] \[random,typiclust\])
 
 random_seeds=(1 2 3 4 5 6 7 8 9 10)
 
