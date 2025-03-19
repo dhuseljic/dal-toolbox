@@ -10,7 +10,7 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from omegaconf import DictConfig
 
 from dal_toolbox.datasets import CIFAR10
-from dal_toolbox.datasets.utils import DinoTransforms, FeatureDataset, PlainTransforms
+from dal_toolbox.datasets.utils import DinoTransforms, SwinV2Transforms, ConvNextTransforms, FeatureDataset, PlainTransforms
 from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, Snacks, DTD, Flowers102, TinyImageNet
 from dal_toolbox.datasets import ImageNet, StanfordDogs, CIFAR10LT, Dopanim
 
@@ -33,6 +33,8 @@ def build_datasets(args, cache_features=True):
                 model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
             elif args.backbone == 'swinv2':
                 model = torchvision.models.swin_v2_b(weights=torchvision.models.Swin_V2_B_Weights.IMAGENET1K_V1)
+            elif args.backbone == 'convnext':
+                model = torchvision.models.convnext_base(weights=torchvision.models.ConvNeXt_Base_Weights.IMAGENET1K_V1)
             else:
                 raise NotImplementedError(f'This backbone ({args.backbone}) is not available!')
 
@@ -70,7 +72,14 @@ def build_image_data(args, plain_transforms=False):
     if plain_transforms:
         transforms = PlainTransforms(resize=(224, 224))
     else:
-        transforms = DinoTransforms(size=(256, 256))
+        if args.backbone == 'dinov2':
+            transforms = DinoTransforms(size=(256, 256))
+        elif args.backbone == 'swinv2':
+            transforms = SwinV2Transforms()
+        elif args.backbone == 'convnext':
+            transforms = ConvNextTransforms()
+        else:
+            raise ValueError(f"{args.backbone}-backbone not implemented!")
 
     if args.dataset_name == 'cifar10':
         data = CIFAR10(args.dataset_path, transforms=transforms)

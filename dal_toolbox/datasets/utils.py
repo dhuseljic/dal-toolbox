@@ -10,6 +10,60 @@ from dal_toolbox.datasets.base import BaseData
 from dal_toolbox.models.utils.base import BaseModule
 
 
+class SwinV2Transforms():
+    def __init__(self):
+        dino_mean = (0.485, 0.456, 0.406)
+        dino_std = (0.229, 0.224, 0.225)
+        size = 272
+        center_crop_size = 256
+        self.transform = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(size, interpolation=torchvision.transforms.InterpolationMode.BICUBIC),
+            torchvision.transforms.CenterCrop(center_crop_size),
+            torchvision.transforms.ToTensor(), # This automatically scales images to the range [0., 1.]
+            torchvision.transforms.Lambda(lambda x: x.repeat(3, 1, 1) if x.size(0) != 3 else x),
+            torchvision.transforms.Normalize(dino_mean, dino_std),
+        ])
+
+    @property
+    def train_transform(self):
+        return self.transform
+
+    @property
+    def query_transform(self):
+        return self.transform
+
+    @property
+    def eval_transform(self):
+        return self.transform
+
+
+class ConvNextTransforms():
+    def __init__(self):
+        dino_mean = (0.485, 0.456, 0.406)
+        dino_std = (0.229, 0.224, 0.225)
+        size = 232
+        center_crop_size = 224
+        self.transform = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(size),
+            torchvision.transforms.CenterCrop(center_crop_size),
+            torchvision.transforms.ToTensor(), # This automatically scales images to the range [0., 1.]
+            torchvision.transforms.Lambda(lambda x: x.repeat(3, 1, 1) if x.size(0) != 3 else x),
+            torchvision.transforms.Normalize(dino_mean, dino_std),
+        ])
+
+    @property
+    def train_transform(self):
+        return self.transform
+
+    @property
+    def query_transform(self):
+        return self.transform
+
+    @property
+    def eval_transform(self):
+        return self.transform
+
+
 class DinoTransforms():
     def __init__(self, size=None, center_crop_size=224):
         if size:
@@ -149,7 +203,7 @@ class FeatureDataset(Dataset):
     def __len__(self) -> int:
         return len(self.features)
 
-    def __getitem__(self, idx: int) -> (torch.Tensor, torch.Tensor):
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         return self.features[idx], self.labels[idx]
 
 
