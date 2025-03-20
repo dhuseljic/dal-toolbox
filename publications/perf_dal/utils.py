@@ -1,8 +1,8 @@
 import os
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import torchvision
+
+from transformers import ConvNextV2ForImageClassification
 
 from torch.utils.data import DataLoader
 from datasets import load_dataset
@@ -10,7 +10,7 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from omegaconf import DictConfig
 
 from dal_toolbox.datasets import CIFAR10
-from dal_toolbox.datasets.utils import DinoTransforms, SwinV2Transforms, ConvNextTransforms, FeatureDataset, PlainTransforms
+from dal_toolbox.datasets.utils import DinoTransforms, ConvNextTransforms, FeatureDataset, PlainTransforms
 from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, Snacks, DTD, Flowers102, TinyImageNet
 from dal_toolbox.datasets import ImageNet, StanfordDogs, CIFAR10LT, Dopanim
 
@@ -31,16 +31,15 @@ def build_datasets(args, cache_features=True):
         if cache_features:
             if args.backbone == 'dinov2':
                 model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
-            elif args.backbone == 'swinv2':
-                model = torchvision.models.swin_v2_b(weights=torchvision.models.Swin_V2_B_Weights.IMAGENET1K_V1)
-            elif args.backbone == 'convnext':
-                model = torchvision.models.convnext_base(weights=torchvision.models.ConvNeXt_Base_Weights.IMAGENET1K_V1)
+            elif args.backbone == 'convnextv2':
+                model = ConvNextV2ForImageClassification.from_pretrained("facebook/convnextv2-tiny-1k-224")
+                model.classifier = nn.Identity()
             else:
                 raise NotImplementedError(f'This backbone ({args.backbone}) is not available!')
 
-            train_ds = FeatureDataset(model, data.train_dataset, cache=True, cache_dir=args.dataset_path)
-            val_ds = FeatureDataset(model, data.val_dataset, cache=True, cache_dir=args.dataset_path)
-            test_ds = FeatureDataset(model, data.test_dataset, cache=True, cache_dir=args.dataset_path)
+            train_ds = FeatureDataset(model, data.train_dataset, cache=True, cache_dir=args.dataset_path, backbone=args.backbone)
+            val_ds = FeatureDataset(model, data.val_dataset, cache=True, cache_dir=args.dataset_path, backbone=args.backbone)
+            test_ds = FeatureDataset(model, data.test_dataset, cache=True, cache_dir=args.dataset_path, backbone=args.backbone)
         else:
             train_ds = data.train_dataset
             val_ds = data.val_dataset
@@ -74,9 +73,7 @@ def build_image_data(args, plain_transforms=False):
     else:
         if args.backbone == 'dinov2':
             transforms = DinoTransforms(size=(256, 256))
-        elif args.backbone == 'swinv2':
-            transforms = SwinV2Transforms()
-        elif args.backbone == 'convnext':
+        elif args.backbone == 'convnextv2':
             transforms = ConvNextTransforms()
         else:
             raise ValueError(f"{args.backbone}-backbone not implemented!")
@@ -133,7 +130,8 @@ def build_text_data(args):
 
 class FeatureDataset:
 
-    def __init__(self, model, dataset, cache=False, cache_dir=None, batch_size=128, device='cuda', task=None, num_workers=16):
+    def __init__(self, model, dataset, cache=False, cache_dir=None, batch_size=128, device='cuda', task=None, num_workers=16, backbone='dinov2'):
+        self.backbone = backbone
         if cache:
             if cache_dir is None:
                 home_dir = os.path.expanduser('~')
@@ -197,7 +195,10 @@ class FeatureDataset:
                 features.append(model(input_ids, attention_mask).to('cpu'))
                 labels.append(batch["label"])
             else:
-                features.append(model(batch[0].to(device)).to('cpu'))
+                out = model(batch[0].to(device))
+                if self.backbone == 'convnextv2':
+                    out = out.logits
+                features.append(out.to('cpu'))
                 labels.append(batch[-1])
 
         features = torch.cat(features)
