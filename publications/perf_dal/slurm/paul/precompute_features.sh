@@ -25,7 +25,7 @@ acq_size=${acq_sizes[$index % 9]}
 subset_size=${subset_sizes[$index % 9]}
 
 al_strategy=random
-model=convnextv2
+backbone=convnextv2
 random_seed=${random_seeds[$index / 9]}
 
 if [ $index -eq 0 ]; then
@@ -45,4 +45,4 @@ srun python al.py \
     al.device=cuda \
     experiment_name=$mlflow_exp_name \
     random_seed=$random_seed \
-    backbone=convnext \
+    backbone=$backbone
