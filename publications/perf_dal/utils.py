@@ -32,7 +32,7 @@ def build_datasets(args, cache_features=True):
             if args.backbone == 'dinov2':
                 model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
             elif args.backbone == 'convnextv2':
-                model = ConvNextV2ForImageClassification.from_pretrained("facebook/convnextv2-tiny-1k-224")
+                model = ConvNextV2ForImageClassification.from_pretrained("facebook/convnextv2-base-1k-224")
                 model.classifier = nn.Identity()
             else:
                 raise NotImplementedError(f'This backbone ({args.backbone}) is not available!')
