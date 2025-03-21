@@ -1,6 +1,7 @@
 import os
 import torch
 import torch.nn as nn
+import logging
 
 from transformers import ConvNextV2ForImageClassification
 
@@ -27,13 +28,17 @@ def build_datasets(args, cache_features=True):
     text_datasets = ['agnews', 'dbpedia', 'banking77', 'clinc']
 
     if args.dataset_name in image_datasets:
+        logging.info('Building Data!')
         data = build_image_data(args)
         if cache_features:
+            logging.info('Building Backbone!')
             if args.backbone == 'dinov2':
                 model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
+                logging.info('Selected DINOV2 as a backbone!')
             elif args.backbone == 'convnextv2':
                 model = ConvNextV2ForImageClassification.from_pretrained("facebook/convnextv2-base-1k-224")
                 model.classifier = nn.Identity()
+                logging.info('Selected ConvNextV2 as a backbone!')
             else:
                 raise NotImplementedError(f'This backbone ({args.backbone}) is not available!')
 
