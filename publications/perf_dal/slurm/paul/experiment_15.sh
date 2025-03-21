@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=optimal_al_baselines
 #SBATCH --partition=main
-#SBATCH --output=/mnt/stud/work/phahn/repositories/dal-toolbox/logs/perf_dal_new/%A_%a_%x.log
+#SBATCH --output=/mnt/stud/work/phahn/repositories/dal-toolbox/logs/perf_dal_new_2/%A_%a_%x.log
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64gb
