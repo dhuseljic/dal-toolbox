@@ -45,4 +45,5 @@ srun python al.py \
     al.device=cuda \
     experiment_name=$mlflow_exp_name \
     random_seed=$random_seed \
-    backbone=$backbone
+    backbone=$backbone \
+    model_cache_dir=/mnt/stud/work/phahn/repositories/dal-toolbox/storage/ \

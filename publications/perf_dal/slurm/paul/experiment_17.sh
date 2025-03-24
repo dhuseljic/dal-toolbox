@@ -6,13 +6,18 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64gb
 #SBATCH --gres=gpu:1
-#SBATCH --array=0-719%4
+#SBATCH --array=0-89%4
 source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 
 mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perf_dal.db'
-mlflow_exp_name='experiment_16'
+mlflow_exp_name='experiment_17'
 
-query_strategies=(alfamix badge bait coreset dropquery margin random typiclust)
+al_strategy='perf_dal_oracle'
+sel_strats=\[random,typiclust,dropquery,bait,typiclass,dropqueryclass,badge,coreset,alfamix\]
+var_sss=True
+n_bat=110
+training=train
+loss_fn=brier
 
 datasets=(cifar10 stl10 snacks flowers102 dtd food101 cifar100 tiny_imagenet imagenet)
 acq_sizes=(10 10 20 25 50 100 100 200 1000)
@@ -24,8 +29,7 @@ index=$SLURM_ARRAY_TASK_ID
 dataset_name=${datasets[$index % 9]}
 acq_size=${acq_sizes[$index % 9]}
 subset_size=${subset_sizes[$index % 9]}
-al_strategy=${query_strategies[$index / 9 % 8]}
-random_seed=${random_seeds[$index / 72]}
+random_seed=${random_seeds[$index / 9]}
 
 if [ $index -eq 0 ]; then
     python -c "import mlflow; mlflow.set_tracking_uri(r'$mlflow_uri'); mlflow.set_experiment(r'$mlflow_exp_name')"
@@ -43,5 +47,10 @@ srun python al.py \
     al.device=cuda \
     experiment_name=$mlflow_exp_name \
     random_seed=$random_seed \
+    al.optimal.vary_strat_subset_size=$var_sss \
+    al.optimal.num_batches=$n_bat \
+    al.optimal.loss=$loss_fn \
+    al.optimal.retraining=$training \
+    al.optimal.strategies=$sel_strats \
     backbone=convnextv2 \
     model_cache_dir=/mnt/stud/work/phahn/repositories/dal-toolbox/storage/ \

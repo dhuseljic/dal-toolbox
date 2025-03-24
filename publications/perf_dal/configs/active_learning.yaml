@@ -8,6 +8,7 @@ dataset_name: cifar10
 val_split: .1
 cache_features: True
 feature_cache_dir: null
+model_cache_dir: null
 num_workers: 0
 
 dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions

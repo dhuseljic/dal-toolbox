@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import logging
 
-from transformers import ConvNextV2ForImageClassification
+from transformers import ConvNextV2ForImageClassification, Swinv2ForImageClassification
 
 from torch.utils.data import DataLoader
 from datasets import load_dataset
@@ -36,9 +36,13 @@ def build_datasets(args, cache_features=True):
                 model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
                 logging.info('Selected DINOV2 as a backbone!')
             elif args.backbone == 'convnextv2':
-                model = ConvNextV2ForImageClassification.from_pretrained("facebook/convnextv2-base-1k-224")
+                model = ConvNextV2ForImageClassification.from_pretrained("facebook/convnextv2-base-1k-224", cache_dir=args.model_cache_dir)
                 model.classifier = nn.Identity()
                 logging.info('Selected ConvNextV2 as a backbone!')
+            elif args.backbone == 'swinv2':
+                model = Swinv2ForImageClassification.from_pretrained("microsoft/swinv2-base-patch4-window8-256", cache_dir=args.model_cache_dir)
+                model.classifier = nn.Identity()
+                logging.info('Selected SwinTV2 as a backbone!')
             else:
                 raise NotImplementedError(f'This backbone ({args.backbone}) is not available!')
 
@@ -80,6 +84,8 @@ def build_image_data(args, plain_transforms=False):
             transforms = DinoTransforms(size=(256, 256))
         elif args.backbone == 'convnextv2':
             transforms = ConvNextTransforms()
+        elif args.backbone == 'swinv2':
+            transforms = DinoTransforms(size=(256, 256))
         else:
             raise ValueError(f"{args.backbone}-backbone not implemented!")
 
@@ -201,7 +207,7 @@ class FeatureDataset:
                 labels.append(batch["label"])
             else:
                 out = model(batch[0].to(device))
-                if self.backbone == 'convnextv2':
+                if self.backbone in ['convnextv2', 'swinv2']:
                     out = out.logits
                 features.append(out.to('cpu'))
                 labels.append(batch[-1])
