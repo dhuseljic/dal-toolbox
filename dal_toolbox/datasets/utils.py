@@ -2,27 +2,48 @@ import warnings
 
 import numpy as np
 import torch
+
+import timm
+
 import torchvision
 from torch.utils.data import Dataset, DataLoader
+
+from transformers import AutoImageProcessor
 
 from dal_toolbox.datasets.base import BaseTransforms
 from dal_toolbox.datasets.base import BaseData
 from dal_toolbox.models.utils.base import BaseModule
 
 
-class ConvNextTransforms():
+class SwinV2Transforms():
     def __init__(self):
-        dino_mean = (0.485, 0.456, 0.406)
-        dino_std = (0.229, 0.224, 0.225)
-        size = 256
-        center_crop_size = 224
-        self.transform = torchvision.transforms.Compose([
-            torchvision.transforms.Resize(size, interpolation=torchvision.transforms.InterpolationMode.BICUBIC),
-            torchvision.transforms.CenterCrop(center_crop_size),
-            torchvision.transforms.ToTensor(), # This automatically scales images to the range [0., 1.]
-            torchvision.transforms.Lambda(lambda x: x.repeat(3, 1, 1) if x.size(0) != 3 else x),
-            torchvision.transforms.Normalize(dino_mean, dino_std),
-        ])
+        image_processor = AutoImageProcessor.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256")
+        self.transform = image_processor
+
+    @property
+    def train_transform(self):
+        return self.transform
+
+    @property
+    def query_transform(self):
+        return self.transform
+
+    @property
+    def eval_transform(self):
+        return self.transform
+
+
+class ConvNextV2Transforms():
+    def __init__(self):
+        model = timm.create_model(
+                    'convnextv2_base.fcmae',
+                    pretrained=True,
+                )
+        model = model.eval()
+
+        # get model specific transforms (normalization, resize)
+        data_config = timm.data.resolve_model_data_config(model)
+        self.transform = timm.data.create_transform(**data_config, is_training=False)
 
     @property
     def train_transform(self):

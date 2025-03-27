@@ -3,15 +3,15 @@ import torch
 import torch.nn as nn
 import logging
 
-from transformers import ConvNextV2ForImageClassification, Swinv2ForImageClassification
+import timm
 
 from torch.utils.data import DataLoader
 from datasets import load_dataset
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, ResNetModel, Swinv2ForImageClassification
 from omegaconf import DictConfig
 
 from dal_toolbox.datasets import CIFAR10
-from dal_toolbox.datasets.utils import DinoTransforms, ConvNextTransforms, FeatureDataset, PlainTransforms
+from dal_toolbox.datasets.utils import DinoTransforms, ConvNextV2Transforms, FeatureDataset, PlainTransforms, SwinV2Transforms
 from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, Snacks, DTD, Flowers102, TinyImageNet
 from dal_toolbox.datasets import ImageNet, StanfordDogs, CIFAR10LT, Dopanim
 
@@ -36,13 +36,18 @@ def build_datasets(args, cache_features=True):
                 model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
                 logging.info('Selected DINOV2 as a backbone!')
             elif args.backbone == 'convnextv2':
-                model = ConvNextV2ForImageClassification.from_pretrained("facebook/convnextv2-base-1k-224", cache_dir=args.model_cache_dir)
-                model.classifier = nn.Identity()
+                model = timm.create_model(
+                    'convnextv2_base.fcmae',
+                    pretrained=True,
+                )
+                model = model.eval()
                 logging.info('Selected ConvNextV2 as a backbone!')
+            elif args.backbone == 'simclr':
+                model = ResNetModel.from_pretrained('lightly-ai/simclrv1-imagenet1k-resnet50-4x')
+                logging.info('Selected SimCLR as a backbone!')
             elif args.backbone == 'swinv2':
-                model = Swinv2ForImageClassification.from_pretrained("microsoft/swinv2-base-patch4-window8-256", cache_dir=args.model_cache_dir)
+                model = Swinv2ForImageClassification.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256")
                 model.classifier = nn.Identity()
-                logging.info('Selected SwinTV2 as a backbone!')
             else:
                 raise NotImplementedError(f'This backbone ({args.backbone}) is not available!')
 
@@ -83,9 +88,11 @@ def build_image_data(args, plain_transforms=False):
         if args.backbone == 'dinov2':
             transforms = DinoTransforms(size=(256, 256))
         elif args.backbone == 'convnextv2':
-            transforms = ConvNextTransforms()
+            transforms = ConvNextV2Transforms()
+        elif args.backbone == 'simclr':
+            transforms = PlainTransforms(resize=(224, 224))
         elif args.backbone == 'swinv2':
-            transforms = DinoTransforms(size=(256, 256))
+            transforms = SwinV2Transforms()
         else:
             raise ValueError(f"{args.backbone}-backbone not implemented!")
 
@@ -206,9 +213,13 @@ class FeatureDataset:
                 features.append(model(input_ids, attention_mask).to('cpu'))
                 labels.append(batch["label"])
             else:
-                out = model(batch[0].to(device))
-                if self.backbone in ['convnextv2', 'swinv2']:
-                    out = out.logits
+                if self.backbone == 'convnextv2':
+                    output = model.forward_features(batch[0].to(device))
+                    out = model.forward_head(output, pre_logits=True)
+                elif self.backbone == 'swinv2':
+                    out = model(batch[0]['pixel_values'][0].to(device)).logits
+                else:
+                    out = model(batch[0].to(device))
                 features.append(out.to('cpu'))
                 labels.append(batch[-1])
 
