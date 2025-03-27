@@ -46,7 +46,7 @@ def build_datasets(args, cache_features=True):
                 model = ResNetModel.from_pretrained('lightly-ai/simclrv1-imagenet1k-resnet50-4x')
                 logging.info('Selected SimCLR as a backbone!')
             elif args.backbone == 'swinv2':
-                model = Swinv2ForImageClassification.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256")
+                model = Swinv2ForImageClassification.from_pretrained("microsoft/swinv2-base-patch4-window8-256")
                 model.classifier = nn.Identity()
             else:
                 raise NotImplementedError(f'This backbone ({args.backbone}) is not available!')

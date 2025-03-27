@@ -54,3 +54,4 @@ srun python al.py \
     al.optimal.strategies=$sel_strats \
     backbone=swinv2 \
     model_cache_dir=/mnt/stud/work/phahn/repositories/dal-toolbox/storage/ \
+    optimizer.lr=0.1 \

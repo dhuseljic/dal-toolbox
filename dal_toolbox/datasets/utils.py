@@ -17,7 +17,7 @@ from dal_toolbox.models.utils.base import BaseModule
 
 class SwinV2Transforms():
     def __init__(self):
-        image_processor = AutoImageProcessor.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256")
+        image_processor = AutoImageProcessor.from_pretrained("microsoft/swinv2-base-patch4-window8-256")
         self.transform = image_processor
 
     @property

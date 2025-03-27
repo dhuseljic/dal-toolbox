@@ -45,3 +45,4 @@ srun python al.py \
     random_seed=$random_seed \
     backbone=swinv2 \
     model_cache_dir=/mnt/stud/work/phahn/repositories/dal-toolbox/storage/ \
+    optimizer.lr=0.1 \
