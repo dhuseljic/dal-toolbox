@@ -3,15 +3,13 @@ import torch
 import torch.nn as nn
 import logging
 
-import timm
-
 from torch.utils.data import DataLoader
 from datasets import load_dataset
-from transformers import AutoModelForSequenceClassification, AutoTokenizer, ResNetModel, Swinv2ForImageClassification
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, Swinv2ForImageClassification
 from omegaconf import DictConfig
 
 from dal_toolbox.datasets import CIFAR10
-from dal_toolbox.datasets.utils import DinoTransforms, ConvNextV2Transforms, FeatureDataset, PlainTransforms, SwinV2Transforms
+from dal_toolbox.datasets.utils import DinoTransforms, FeatureDataset, PlainTransforms, SwinV2Transforms
 from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, Snacks, DTD, Flowers102, TinyImageNet
 from dal_toolbox.datasets import ImageNet, StanfordDogs, CIFAR10LT, Dopanim
 

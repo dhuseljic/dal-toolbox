@@ -3,8 +3,6 @@ import warnings
 import numpy as np
 import torch
 
-import timm
-
 import torchvision
 from torch.utils.data import Dataset, DataLoader
 
