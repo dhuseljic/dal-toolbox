@@ -17,7 +17,6 @@ from dal_toolbox.datasets import ImageNet, StanfordDogs, CIFAR10LT, Dopanim
 
 from dal_toolbox.models.laplace import LaplaceLinear, LaplaceModel
 
-# TODO: Check if thats a valid fix for imagenet server issues of too many files open
 import torch.multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
 
@@ -35,16 +34,6 @@ def build_datasets(args, cache_features=True):
             if args.backbone == 'dinov2':
                 model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
                 logging.info('Selected DINOV2 as a backbone!')
-            elif args.backbone == 'convnextv2':
-                model = timm.create_model(
-                    'convnextv2_base.fcmae',
-                    pretrained=True,
-                )
-                model = model.eval()
-                logging.info('Selected ConvNextV2 as a backbone!')
-            elif args.backbone == 'simclr':
-                model = ResNetModel.from_pretrained('lightly-ai/simclrv1-imagenet1k-resnet50-4x')
-                logging.info('Selected SimCLR as a backbone!')
             elif args.backbone == 'swinv2':
                 model = Swinv2ForImageClassification.from_pretrained("microsoft/swinv2-base-patch4-window8-256")
                 model.classifier = nn.Identity()
@@ -87,10 +76,6 @@ def build_image_data(args, plain_transforms=False):
     else:
         if args.backbone == 'dinov2':
             transforms = DinoTransforms(size=(256, 256))
-        elif args.backbone == 'convnextv2':
-            transforms = ConvNextV2Transforms()
-        elif args.backbone == 'simclr':
-            transforms = PlainTransforms(resize=(224, 224))
         elif args.backbone == 'swinv2':
             transforms = SwinV2Transforms()
         else:
@@ -213,10 +198,8 @@ class FeatureDataset:
                 features.append(model(input_ids, attention_mask).to('cpu'))
                 labels.append(batch["label"])
             else:
-                if self.backbone == 'convnextv2':
-                    output = model.forward_features(batch[0].to(device))
-                    out = model.forward_head(output, pre_logits=True)
-                elif self.backbone == 'swinv2':
+                if self.backbone == 'swinv2':
+                    # Make sure the classifier layer is set to identity in order for logits == features
                     out = model(batch[0]['pixel_values'][0].to(device)).logits
                 else:
                     out = model(batch[0].to(device))

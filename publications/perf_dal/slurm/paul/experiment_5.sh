@@ -9,7 +9,7 @@
 #SBATCH --array=0-39%4
 source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 
-mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perf_dal.db'
+mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perf_dal_2.db'
 mlflow_exp_name='experiment_5'
 al_strategy='perf_dal_oracle'
 sel_strats=\[random,typiclust,dropquery,bait,typiclass,dropqueryclass,loss,margin,badge,coreset,alfamix\]

@@ -9,15 +9,15 @@
 #SBATCH --array=0-59%4
 source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 
-mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perf_dal.db'
+mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perf_dal_2.db'
 mlflow_exp_name='experiment_3'
 al_strategy='perf_dal_oracle'
 sel_strats=\[random,typiclust,dropquery,bait,typiclass,dropqueryclass,loss,margin,badge,coreset,alfamix\]
 n_bat=110
 var_sss=True
 
-acq_sizes=(10 20 40)
-num_acqs=(20 10 5)
+acq_sizes=(5 10 20 40)
+num_acqs=(40 20 10 5)
 
 datasets=(cifar10 stl10)
 subset_sizes=(1000 Null)

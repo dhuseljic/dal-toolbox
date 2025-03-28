@@ -17,33 +17,9 @@ from dal_toolbox.models.utils.base import BaseModule
 
 class SwinV2Transforms():
     def __init__(self):
+        # TODO: Find solution to grey_scale images of TinyImageNet
         image_processor = AutoImageProcessor.from_pretrained("microsoft/swinv2-base-patch4-window8-256")
         self.transform = image_processor
-
-    @property
-    def train_transform(self):
-        return self.transform
-
-    @property
-    def query_transform(self):
-        return self.transform
-
-    @property
-    def eval_transform(self):
-        return self.transform
-
-
-class ConvNextV2Transforms():
-    def __init__(self):
-        model = timm.create_model(
-                    'convnextv2_base.fcmae',
-                    pretrained=True,
-                )
-        model = model.eval()
-
-        # get model specific transforms (normalization, resize)
-        data_config = timm.data.resolve_model_data_config(model)
-        self.transform = timm.data.create_transform(**data_config, is_training=False)
 
     @property
     def train_transform(self):
