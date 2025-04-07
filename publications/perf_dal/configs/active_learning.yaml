@@ -29,7 +29,7 @@ al:
     num_batches: 110
     strategies: [random,typiclust,dropquery,bait,typiclass,dropqueryclass,loss,margin,badge,coreset,alfamix]
     strat_subset_size: 1000
-    vary_strat_subset_size: False
+    vary_strat_subset_size: True
     strat_ratio: equal
     num_mc_labels: 5
     look_ahead: true_labels 
