@@ -22,7 +22,7 @@ logging.getLogger("lightning.pytorch").setLevel(logging.ERROR)
 
 @hydra.main(version_base=None, config_path="./configs", config_name="active_learning")
 def main(args):
-    seed_everything(args.random_seed)
+    seed_everything(42)
     print(OmegaConf.to_yaml(args))
     train_ds, val_ds, test_ds, num_classes = build_datasets(args, cache_features=args.cache_features)
     # Keep same train_ds and test_ds while changing the size of the validation dataset
