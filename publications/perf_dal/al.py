@@ -55,6 +55,9 @@ def main(args):
     al_history = []
     artifacts_history = []
     for i_acq in range(0, args.al.num_acq+1):
+        # if i_acq == 11:
+        #     sum([d['query_time'] for d in al_history])
+        #     print(len(al_datamodule.labeled_indices))
         if i_acq != 0:
             stime = time.time()
             indices = al_strategy.query(
@@ -82,6 +85,7 @@ def main(args):
             artifacts['oracle_history'] = al_strategy.history
 
         print(f'Cycle {i_acq}:', test_stats, flush=True)
+
         al_history.append(test_stats)
         artifacts_history.append(artifacts)
 
@@ -117,14 +121,14 @@ def build_al_strategy(args):
     elif args.al.strategy == 'cross_domain_oracle':
         args.al.num_acq = args.al.num_acq * args.al.acq_size
         args.al.acq_size = 1
-        al_strategy = CrossDomainOracle(device=device)
+        al_strategy = CrossDomainOracle(tau=args.al.cdo.tau, device=device)
     elif args.al.strategy == 'simulated_annealing_oracle':
         al_strategy = SimulatedAnnealingOracle(
             num_acq=args.al.num_acq,
             acq_size=args.al.acq_size,
-            sa_steps=args.al.simulated_annealing.sa_steps,
-            greedy_steps=args.al.simulated_annealing.greedy_steps,
-            linear_annealing_factor=args.al.simulated_annealing.linear_annealing_factor,
+            sa_steps=args.al.sas.sa_steps,
+            greedy_steps=args.al.sas.greedy_steps,
+            linear_annealing_factor=args.al.sas.linear_annealing_factor,
             device=device
         )
     elif args.al.strategy == 'perf_dal_oracle':
