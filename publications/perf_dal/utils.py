@@ -10,7 +10,7 @@ from omegaconf import DictConfig
 
 from dal_toolbox.datasets import CIFAR10
 from dal_toolbox.datasets.utils import DinoTransforms, FeatureDataset, PlainTransforms, SwinV2Transforms
-from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, Snacks, DTD, Flowers102, TinyImageNet
+from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, Snacks, DTD, Flowers102, TinyImageNet, MNIST
 from dal_toolbox.datasets import ImageNet, StanfordDogs, CIFAR10LT, Dopanim
 
 from dal_toolbox.models.laplace import LaplaceLinear, LaplaceModel
@@ -21,7 +21,7 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 
 def build_datasets(args, cache_features=True):
     image_datasets = ['cifar10', 'cifar10-lt', 'stl10', 'dopanim', 'snacks', 'dtd', 'cifar100', 'food101', 'flowers102',
-                      'caltech101', 'stanford_dogs', 'tiny_imagenet', 'imagenet']
+                      'caltech101', 'stanford_dogs', 'tiny_imagenet', 'imagenet', 'mnist']
     text_datasets = ['agnews', 'dbpedia', 'banking77', 'clinc']
 
     if args.dataset_name in image_datasets:
@@ -103,6 +103,8 @@ def build_image_data(args, plain_transforms=False):
         data = TinyImageNet(args.imagenet_path, transforms=transforms)
     elif args.dataset_name == 'imagenet':
         data = ImageNet(args.imagenet_path, transforms=transforms)
+    elif args.dataset_name == 'mnist':
+        data = MNIST(args.dataset_path, transforms=transforms)
     else:
         raise NotImplementedError()
     return data

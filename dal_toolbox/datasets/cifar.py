@@ -2,6 +2,7 @@ from enum import Enum
 
 import numpy as np
 import torchvision
+from .corruptions import RandAugment
 
 from PIL import Image
 from .base import BaseData, BaseTransforms

@@ -12,12 +12,15 @@ from dal_toolbox.datasets.base import BaseTransforms
 from dal_toolbox.datasets.base import BaseData
 from dal_toolbox.models.utils.base import BaseModule
 
+import torch
 
 class SwinV2Transforms():
     def __init__(self):
-        # TODO: Find solution to grey_scale images of TinyImageNet
-        image_processor = AutoImageProcessor.from_pretrained("microsoft/swinv2-base-patch4-window8-256")
-        self.transform = image_processor
+        self.image_processor = AutoImageProcessor.from_pretrained("microsoft/swinv2-base-patch4-window8-256")
+        self.transform = torchvision.transforms.Compose([
+            torchvision.transforms.Lambda(lambda x: x.convert('RGB') if x.mode != 'RGB' else x),              # First create three channels if black and white
+            self.image_processor                  # then apply processor
+        ])
 
     @property
     def train_transform(self):
