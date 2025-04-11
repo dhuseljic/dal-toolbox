@@ -11,9 +11,9 @@ from enum import Enum
 
 from .base import BaseData, BaseTransforms
 
-# class DopanimTransforms(Enum):
-#     mean: tuple = (0.485, 0.456, 0.406)
-#     std: tuple = (0.229, 0.224, 0.225)
+class DopanimTransforms(Enum):
+    mean: tuple = (0.485, 0.456, 0.406)
+    std: tuple = (0.229, 0.224, 0.225)
 
 
 class Dopanim(BaseData):
@@ -34,10 +34,9 @@ class Dopanim(BaseData):
         return 15
 
     def download_datasets(self):
-        #TODO: Test if this works
-        pass
-        # _Dopanim(self.dataset_path, version="train", download=True)
-        # _Dopanim(self.dataset_path, version="test", download=True)
+        # TODO: Test if this works
+        _Dopanim(self.dataset_path, version="train", download=True)
+        _Dopanim(self.dataset_path, version="test", download=True)
 
     @property
     def full_train_dataset(self):
