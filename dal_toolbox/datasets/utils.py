@@ -14,9 +14,38 @@ from dal_toolbox.models.utils.base import BaseModule
 
 import torch
 
-class SwinV2Transforms():
+class ViTMAETransforms():
     def __init__(self):
-        self.image_processor = AutoImageProcessor.from_pretrained("microsoft/swinv2-base-patch4-window8-256")
+        self.image_processor = AutoImageProcessor.from_pretrained("facebook/vit-mae-base")
+        
+        self.transform = torchvision.transforms.Compose([
+            torchvision.transforms.Lambda(lambda x: x.convert('RGB') if x.mode != 'RGB' else x),              # First create three channels if black and white
+            self.image_processor                  # then apply processor
+        ])
+
+    @property
+    def train_transform(self):
+        return self.transform
+
+    @property
+    def query_transform(self):
+        return self.transform
+
+    @property
+    def eval_transform(self):
+        return self.transform
+
+class SwinV2Transforms():
+    def __init__(self, backbone):
+        if backbone == 'swinv2':
+            self.image_processor = AutoImageProcessor.from_pretrained("microsoft/swinv2-base-patch4-window8-256")
+        elif backbone == 'swinv2-t':
+            self.image_processor = AutoImageProcessor.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256")
+        elif backbone == 'swinv2-s':
+            self.image_processor = AutoImageProcessor.from_pretrained("microsoft/swinv2-small-patch4-window8-256")
+        else:
+            raise AssertionError("Wrong backbone!")
+        
         self.transform = torchvision.transforms.Compose([
             torchvision.transforms.Lambda(lambda x: x.convert('RGB') if x.mode != 'RGB' else x),              # First create three channels if black and white
             self.image_processor                  # then apply processor

@@ -5,11 +5,11 @@ import logging
 
 from torch.utils.data import DataLoader
 from datasets import load_dataset
-from transformers import AutoModelForSequenceClassification, AutoTokenizer, Swinv2ForImageClassification
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, Swinv2ForImageClassification, ViTForImageClassification
 from omegaconf import DictConfig
 
 from dal_toolbox.datasets import CIFAR10
-from dal_toolbox.datasets.utils import DinoTransforms, FeatureDataset, PlainTransforms, SwinV2Transforms
+from dal_toolbox.datasets.utils import DinoTransforms, FeatureDataset, PlainTransforms, SwinV2Transforms, ViTMAETransforms
 from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, Snacks, DTD, Flowers102, TinyImageNet, MNIST
 from dal_toolbox.datasets import ImageNet, StanfordDogs, CIFAR10LT, Dopanim
 
@@ -34,6 +34,15 @@ def build_datasets(args, cache_features=True):
                 logging.info('Selected DINOV2 as a backbone!')
             elif args.backbone == 'swinv2':
                 model = Swinv2ForImageClassification.from_pretrained("microsoft/swinv2-base-patch4-window8-256")
+                model.classifier = nn.Identity()
+            elif args.backbone == 'swinv2-t':
+                model = Swinv2ForImageClassification.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256")
+                model.classifier = nn.Identity()
+            elif args.backbone == 'swinv2-s':
+                model = Swinv2ForImageClassification.from_pretrained("microsoft/swinv2-small-patch4-window8-256")
+                model.classifier = nn.Identity()
+            elif args.backbone == 'vit-mae':
+                model = ViTForImageClassification.from_pretrained("facebook/vit-mae-base")
                 model.classifier = nn.Identity()
             else:
                 raise NotImplementedError(f'This backbone ({args.backbone}) is not available!')
@@ -74,8 +83,10 @@ def build_image_data(args, plain_transforms=False):
     else:
         if args.backbone == 'dinov2':
             transforms = DinoTransforms(size=(256, 256))
-        elif args.backbone == 'swinv2':
-            transforms = SwinV2Transforms()
+        elif 'swinv2' in args.backbone:
+            transforms = SwinV2Transforms(args.backbone)
+        elif args.backbone == 'vit-mae':
+            transforms = ViTMAETransforms()
         else:
             raise ValueError(f"{args.backbone}-backbone not implemented!")
 
@@ -198,7 +209,7 @@ class FeatureDataset:
                 features.append(model(input_ids, attention_mask).to('cpu'))
                 labels.append(batch["label"])
             else:
-                if self.backbone == 'swinv2':
+                if 'swinv2' in self.backbone or self.backbone == 'vit-mae':
                     # Make sure the classifier layer is set to identity in order for logits == features
                     out = model(batch[0]['pixel_values'][0].to(device)).logits
                 else:
