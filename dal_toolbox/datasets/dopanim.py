@@ -34,7 +34,8 @@ class Dopanim(BaseData):
         return 15
 
     def download_datasets(self):
-        # TODO: Test if this works
+        # Note (by Paul): When working on the server, setting download to true may run into issues with multiple experiments trying to unzip and move to the same file.
+        # A quick workaround is using one job only while setting download on true and keeping it on false for the rest of the experiments.
         _Dopanim(self.dataset_path, version="train", download=False)
         _Dopanim(self.dataset_path, version="test", download=False)
 
