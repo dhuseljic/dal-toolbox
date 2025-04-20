@@ -31,7 +31,7 @@ subset_size=${subset_sizes[$index % 1]}
 acq_size=${acq_sizes[$index % 1]}
 num_acq=${num_acqs[$index % 1]}
 
-random_seed=${random_seeds[$index / 3]}
+random_seed=${random_seeds[$index]}
 
 if [ $index -eq 0 ]; then
     python -c "import mlflow; mlflow.set_tracking_uri(r'$mlflow_uri'); mlflow.set_experiment(r'$mlflow_exp_name')"
