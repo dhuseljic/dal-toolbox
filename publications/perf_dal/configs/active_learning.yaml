@@ -4,7 +4,7 @@ mlflow_uri: sqlite:///active_learning.db
 
 dataset_path: /home/datasets
 imagenet_path: /mnt/datasets/imagenet/ILSVRC2012/
-dataset_name: snacks
+dataset_name: cifar10
 val_split: 1
 cache_features: True
 feature_cache_dir: null
@@ -28,7 +28,7 @@ al:
   optimal:
     num_batches: 110
     strategies: [random,typiclust,dropquery,bait,typiclass,dropqueryclass,loss,margin,badge,coreset,alfamix]
-    strat_subset_size: 1000
+    strat_subset_size: 2500
     vary_strat_subset_size: True
     strat_ratio: equal
     num_mc_labels: 5
@@ -39,10 +39,10 @@ al:
     num_retraining_epochs: 50
     update_gamma: 20
   cdo:
-    tau: 15
+    tau: 20
   sas:
-    sa_steps: 100
-    greedy_steps: 20
+    sa_steps: 250
+    greedy_steps: 10
     linear_annealing_factor: 0.1
 
 model:
