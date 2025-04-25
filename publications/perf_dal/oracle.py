@@ -524,7 +524,7 @@ class SimulatedAnnealingOracle(Query):
         self.linear_annealing_factor = linear_annealing_factor
         self.device = device
 
-        self.num_retraining_epochs = 200
+        self.num_retraining_epochs = 50
         self.search_done = False
         self.i_acq = 0
 
