@@ -10,9 +10,9 @@
 source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 
 mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perf_dal_2.db'
-mlflow_exp_name='experiment_11_2'
+mlflow_exp_name='experiment_11_3'
 al_strategy='perf_dal_oracle'
-sel_strats=\[typiclust,dropquery,bait,alfamix,coreset,typiclass,loss,dropqueryclass\]
+sel_strats=\[dropquery,bait,alfamix,coreset,typiclass,loss,dropqueryclass\]
 var_sss=True
 n_bat=110
 
