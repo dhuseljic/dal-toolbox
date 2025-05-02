@@ -67,6 +67,11 @@ def main(args):
             )
             etime = time.time()
             al_datamodule.update_annotations(indices)
+
+            # For new ablation, increment number of batches of the oracle per cycle
+            if args.al.strategy == 'perf_dal_oracle' and args.al.optimal.incr_num_batches:
+                al_strategy.num_batches += args.al.optimal.incr_num_batches
+
         artifacts = {
             'query_indices': indices if i_acq != 0 else al_datamodule.labeled_indices,
             'model': model.state_dict(),
