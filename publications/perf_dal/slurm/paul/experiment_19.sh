@@ -6,20 +6,21 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64gb
 #SBATCH --gres=gpu:1
-#SBATCH --array=0-19%4
+#SBATCH --array=0-79%4
 source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 
 mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perf_dal_2.db'
-mlflow_exp_name='experiment_13'
+mlflow_exp_name='experiment_14'
 al_strategy='perf_dal_oracle'
-sel_strats=\[typiclust,dropquery,bait,dropqueryclass,coreset,typiclass,loss,badge,random\]
+sel_strats=\[typiclust,dropquery,bait,dropqueryclass,coreset,typiclass,loss,badge,random,marginsampling,alfamix\]
 var_sss=True
-n_bat=11
-incr_num_batches=11
 
 datasets=(cifar10 dtd)
 acq_sizes=(10 50)
 subset_sizes=(1000 Null)
+
+num_batches=(220 160 82 55)
+retraining_epochs=(25 37 75 100)
 
 random_seeds=(1 2 3 4 5 6 7 8 9 10)
 
@@ -28,7 +29,10 @@ dataset_name=${datasets[$index % 2]}
 acq_size=${acq_sizes[$index % 2]}
 subset_size=${subset_sizes[$index % 2]}
 
-random_seed=${random_seeds[$index / 2]}
+n_bat=${subset_sizes[$index / 2 % 4]}
+n_ret=${subset_sizes[$index / 2 % 4]}
+
+random_seed=${random_seeds[$index / 8]}
 
 if [ $index -eq 0 ]; then
     python -c "import mlflow; mlflow.set_tracking_uri(r'$mlflow_uri'); mlflow.set_experiment(r'$mlflow_exp_name')"
@@ -45,7 +49,7 @@ srun python al.py \
     al.optimal.strategies=$sel_strats \
     al.optimal.vary_strat_subset_size=$var_sss \
     al.optimal.num_batches=$n_bat \
-    al.optimal.incr_num_batches=$incr_num_batches \
+    al.optimal.num_retraining_epochs=$n_ret \
     mlflow_uri=$mlflow_uri \
     al.device=cuda \
     experiment_name=$mlflow_exp_name \
