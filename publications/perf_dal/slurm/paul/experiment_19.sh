@@ -29,8 +29,8 @@ dataset_name=${datasets[$index % 2]}
 acq_size=${acq_sizes[$index % 2]}
 subset_size=${subset_sizes[$index % 2]}
 
-n_bat=${subset_sizes[$index / 2 % 4]}
-n_ret=${subset_sizes[$index / 2 % 4]}
+n_bat=${num_batches[$index / 2 % 4]}
+n_ret=${retraining_epochs[$index / 2 % 4]}
 
 random_seed=${random_seeds[$index / 8]}
 
