@@ -10,7 +10,7 @@
 source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 
 mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perf_dal_new.db'
-mlflow_exp_name='abl_acq_size'
+mlflow_exp_name='abl_acq_size_new'
 al_strategy='perf_dal_oracle'
 sel_strats=\[random\]
 n_bat=50
@@ -20,12 +20,14 @@ num_acqs=(40 40 20 20 10 10 5 5)
 
 datasets=(cifar10 dtd)
 subset_sizes=(1000 Null)
+num_init=(10 50)
 
 random_seeds=(1 2 3 4 5 6 7 8 9 10)
 
 index=$SLURM_ARRAY_TASK_ID
 dataset_name=${datasets[$index % 2]}
 subset_size=${subset_sizes[$index % 2]}
+n_init=${num_init[$index % 2]}
 
 acq_size=${acq_sizes[$index % 8]}
 num_acq=${num_acqs[$index % 8]}
@@ -44,7 +46,7 @@ srun python al.py \
     al.strategy=$al_strategy \
     al.acq_size=$acq_size \
     al.num_acq=$num_acq \
-    al.num_init=10 \
+    al.num_init=$n_init \
     al.subset_size=$subset_size \
     al.optimal.strategies=$sel_strats \
     al.optimal.num_batches=$n_bat \
