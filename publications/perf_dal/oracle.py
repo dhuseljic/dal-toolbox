@@ -286,7 +286,55 @@ class PerfDALOracle(Query):
             running_loss += len(inputs)*self.loss_fn(logits, targets).item()
         loss = running_loss / num_samples
         return loss
+    
 
+
+class PerfDALOracle2(Query):
+    def __init__(self,
+                al_strategies=['random', 'typiclust', 'dropquery', 'bait', 'typiclass', 'dropqueryclass', 'loss', 'margin', 'badge', 'coreset', 'alfamix'],
+                num_batches=200,
+                strat_ratio='equal',
+                look_ahead='true_labels',
+                num_mc_labels=5,
+                perf_estimation='val_ds',
+                retraining='train',
+                num_retraining_epochs=10,
+                update_gamma=10,
+                loss='cross_entropy',
+                subset_size=None,
+                strat_subset_size=2500,
+                max_subset_size=5000,
+                vary_strat_subset_size=False,
+                device='cpu',
+                random_seed=None,
+                ):
+        super().__init__(random_seed=random_seed)
+        self.oracle_query = PerfDALOracle(
+            al_strategies=al_strategies,
+            num_batches=num_batches,
+            strat_ratio=strat_ratio,
+            look_ahead=look_ahead,
+            num_mc_labels=num_mc_labels,
+            perf_estimation=perf_estimation,
+            retraining=retraining,
+            num_retraining_epochs=num_retraining_epochs,
+            update_gamma=update_gamma,
+            loss=loss,
+            subset_size=subset_size,
+            strat_subset_size=strat_subset_size,
+            max_subset_size=max_subset_size,
+            vary_strat_subset_size=vary_strat_subset_size,
+            device=device,
+            random_seed=random_seed
+        )
+        self.random_query = strategies.RandomSampling()
+
+    @torch.no_grad()
+    def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
+        if len(al_datamodule.labeled_indices) // acq_size > 10:
+            return self.random_query.query(al_datamodule=al_datamodule, acq_size=acq_size)
+        else:
+            return self.oracle_query.query(al_datamodule=al_datamodule, model=model, acq_size=acq_size)
 
 class TypiClass(Query):
     def __init__(self, subset_size=None, random_seed=None, device='cpu'):

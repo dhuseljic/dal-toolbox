@@ -13,7 +13,7 @@ from dal_toolbox.active_learning import strategies
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything
 
-from oracle import CrossDomainOracle, PerfDALOracle, SimulatedAnnealingOracle
+from oracle import CrossDomainOracle, PerfDALOracle, PerfDALOracle2, SimulatedAnnealingOracle
 from utils import build_datasets, flatten_cfg, build_model
 
 mlflow.config.enable_async_logging()
@@ -138,6 +138,22 @@ def build_al_strategy(args):
         )
     elif args.al.strategy == 'perf_dal_oracle':
         al_strategy = PerfDALOracle(
+            al_strategies=args.al.optimal.strategies,
+            num_batches=args.al.optimal.num_batches,
+            strat_ratio=args.al.optimal.strat_ratio,
+            look_ahead=args.al.optimal.look_ahead,
+            num_mc_labels=args.al.optimal.num_mc_labels,
+            perf_estimation=args.al.optimal.perf_estimation,
+            loss=args.al.optimal.loss,
+            retraining=args.al.optimal.retraining,
+            num_retraining_epochs=args.al.optimal.num_retraining_epochs,
+            update_gamma=args.al.optimal.update_gamma,
+            strat_subset_size=args.al.optimal.strat_subset_size,
+            vary_strat_subset_size=args.al.optimal.vary_strat_subset_size,
+            device=device,
+        )
+    elif args.al.strategy == 'perf_dal_oracle_2':
+        al_strategy = PerfDALOracle2(
             al_strategies=args.al.optimal.strategies,
             num_batches=args.al.optimal.num_batches,
             strat_ratio=args.al.optimal.strat_ratio,
