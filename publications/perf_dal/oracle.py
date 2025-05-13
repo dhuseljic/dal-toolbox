@@ -221,7 +221,7 @@ class PerfDALOracle(Query):
         for strat_name, strat in zip(self.batch_types, self.strategies):
             num_batches = batches_counts[strat_name]
 
-            ss_min = min(acq_size*4, len(al_datamodule.unlabeled_indices) - 5) # TODO: This is just a temporary solution for DTD as the unlabeled pool is very small
+            ss_min = min(acq_size*4, len(al_datamodule.unlabeled_indices) - (num_batches+1)) # TODO: This is just a temporary solution for DTD as the unlabeled pool is very small
             ss_max = min(len(al_datamodule.unlabeled_indices), self.max_subset_size)
             subset_range = self.rng.choice(range(ss_min, ss_max), size=num_batches, replace=False)
 
