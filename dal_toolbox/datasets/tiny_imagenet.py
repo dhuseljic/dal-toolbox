@@ -53,7 +53,7 @@ class _TinyImageNet(Dataset):
 
         config.DOWNLOADED_DATASETS_PATH = root
         config.HF_DATASETS_CACHE = root
-        self.ds = load_dataset('Maysee/tiny-imagenet', split=split_mapping[self.split], streaming=True)
+        self.ds = load_dataset('Maysee/tiny-imagenet', split=split_mapping[self.split])
 
     def __len__(self):
         return len(self.ds)
