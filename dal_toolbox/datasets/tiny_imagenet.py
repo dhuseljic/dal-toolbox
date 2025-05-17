@@ -1,8 +1,10 @@
+import os
+
+from pathlib import Path
 from torch.utils.data import Dataset
 from .base import BaseData, BaseTransforms
 from .utils import PlainTransforms
 from datasets import load_dataset, config
-from pathlib import Path
 
 
 class TinyImageNet(BaseData):
@@ -53,7 +55,7 @@ class _TinyImageNet(Dataset):
         split_mapping = {'train': 'train', 'test': 'valid'}
 
         config.DOWNLOADED_DATASETS_PATH = root
-        cache_dir = Path.home() / ".cache" / "hf_datasets"
+        cache_dir = os.getenv("HF_DATASETS_CACHE", Path.home() / ".cache" / "hf_datasets")
         cache_dir.mkdir(parents=True, exist_ok=True)
         config.HF_DATASETS_CACHE = cache_dir
         self.ds = load_dataset(
