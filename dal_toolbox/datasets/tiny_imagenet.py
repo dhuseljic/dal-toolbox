@@ -55,9 +55,6 @@ class _TinyImageNet(Dataset):
         split_mapping = {'train': 'train', 'test': 'valid'}
 
         config.DOWNLOADED_DATASETS_PATH = root
-        cache_dir = os.getenv("HF_DATASETS_CACHE", Path.home() / ".cache" / "hf_datasets")
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        config.HF_DATASETS_CACHE = cache_dir
         self.ds = load_dataset(
             'Maysee/tiny-imagenet',
             split=split_mapping[self.split],
