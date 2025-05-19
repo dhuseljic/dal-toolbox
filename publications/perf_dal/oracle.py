@@ -32,6 +32,7 @@ class PerfDALOracle(Query):
                  vary_strat_subset_size=False,
                  device='cpu',
                  random_seed=None,
+                 one_batch_per_strat=False,
                  ):
         super().__init__(random_seed=random_seed)
         self.subset_size = subset_size
@@ -83,6 +84,9 @@ class PerfDALOracle(Query):
 
         # Some helper
         self.history = []
+
+        # Additional Ablations
+        self.one_batch_per_strat=one_batch_per_strat
 
     def build_al_strategies(self, al_strategies):
         strategies_list = []
@@ -216,6 +220,9 @@ class PerfDALOracle(Query):
     def select_strategy_batches(self, model, al_datamodule, acq_size, unlabeled_indices):
         batches = np.random.choice(self.batch_types, p=self.strat_ratio, size=self.num_batches)
         batches_counts = {t: np.sum(t == batches).item() for t in self.batch_types}
+        # TODO: This is for additional ablations, may remove later.
+        if self.one_batch_per_strat:
+            batches_counts = {t:1 for t in self.batch_types}
 
         indices = []
         for strat_name, strat in zip(self.batch_types, self.strategies):

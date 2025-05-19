@@ -151,6 +151,7 @@ def build_al_strategy(args):
             strat_subset_size=args.al.optimal.strat_subset_size,
             vary_strat_subset_size=args.al.optimal.vary_strat_subset_size,
             device=device,
+            one_batch_per_strat=args.al.optimal.one_batch_per_strat
         )
     elif args.al.strategy == 'perf_dal_oracle_2':
         al_strategy = PerfDALOracle2(

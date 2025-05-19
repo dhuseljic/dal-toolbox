@@ -39,6 +39,7 @@ al:
     retraining: train
     num_retraining_epochs: 50
     update_gamma: 20
+    one_batch_per_strat: False
   cdo:
     tau: 20
   sas:
