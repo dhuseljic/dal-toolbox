@@ -6,18 +6,19 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64gb
 #SBATCH --gres=gpu:1
-#SBATCH --array=0-19%4
+#SBATCH --array=0-159%4
 source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 
 mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perf_dal_2.db'
-mlflow_exp_name='experiment_23_0'
 al_strategy='perf_dal_oracle'
-sel_strats=\[random,margin,badge,alfamix,typiclust,dropquery,bait,coreset\]
 var_sss=True
 
-datasets=(cifar10 dtd)
-acq_sizes=(10 50)
-subset_sizes=(1000 Null)
+datasets=(cifar100 food101)
+acq_sizes=(100 100)
+subset_sizes=(1000 1000)
+
+selection_strats=(\[random,margin,badge,alfamix,typiclust,dropquery,bait,coreset\] \[margin,badge,alfamix,typiclust,dropquery,bait,coreset\] \[badge,alfamix,typiclust,dropquery,bait,coreset\] \[alfamix,typiclust,dropquery,bait,coreset\] \[alfamix,typiclust,dropquery,bait\] \[alfamix,dropquery,bait\] \[dropquery,bait\] \[bait\])
+exp_names=(experiment_23_0 experiment_23_1 experiment_23_2 experiment_23_3 experiment_23_4 experiment_23_5 experiment_23_6 experiment_23_7)
 
 random_seeds=(1 2 3 4 5 6 7 8 9 10)
 
@@ -26,7 +27,10 @@ dataset_name=${datasets[$index % 2]}
 acq_size=${acq_sizes[$index % 2]}
 subset_size=${subset_sizes[$index % 2]}
 
-random_seed=${random_seeds[$index / 2]}
+sel_strats=${selection_strats[$index / 2 % 8]}
+mlflow_exp_name=${exp_names[$index / 2 % 8]}
+
+random_seed=${random_seeds[$index / 16]}
 
 if [ $index -eq 0 ]; then
     python -c "import mlflow; mlflow.set_tracking_uri(r'$mlflow_uri'); mlflow.set_experiment(r'$mlflow_exp_name')"
