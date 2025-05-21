@@ -16,16 +16,17 @@ from dal_toolbox.active_learning.data import ActiveLearningDataModule
 
 class PerfDALOracle(Query):
     def __init__(self,
-                 al_strategies=['random', 'typiclust', 'dropquery', 'bait', 'typiclass', 'dropqueryclass', 'loss', 'margin', 'badge', 'coreset', 'alfamix'],
-                 num_batches=200,
+                 al_strategies=['random', 'margin', 'coreset', 'badge', 'bait', 'typiclust', 'alfamix',
+                                'dropquery', 'typiclass', 'dropqueryclass'],
+                 num_batches=100,
                  strat_ratio='equal',
                  look_ahead='true_labels',
                  num_mc_labels=5,
-                 perf_estimation='val_ds',
+                 perf_estimation='test_ds',
                  retraining='train',
-                 num_retraining_epochs=10,
+                 num_retraining_epochs=50,
                  update_gamma=10,
-                 loss='cross_entropy',
+                 loss='zero_one',
                  subset_size=None,
                  strat_subset_size=2500,
                  max_subset_size=5000,
@@ -68,7 +69,8 @@ class PerfDALOracle(Query):
         elif loss == 'expected_zero_one':
             self.loss_fn = lambda logits, _: torch.mean(1 - logits.softmax(-1).max(-1).values)
         elif loss == 'brier':
-            self.loss_fn = lambda logits, y: torch.mean(torch.sum((logits.softmax(-1) - torch.nn.functional.one_hot(y, num_classes=logits.shape[-1])) ** 2, dim=-1))
+            self.loss_fn = lambda logits, y: torch.mean(
+                torch.sum((logits.softmax(-1) - torch.nn.functional.one_hot(y, num_classes=logits.shape[-1])) ** 2, dim=-1))
         else:
             raise NotImplementedError()
 
@@ -86,7 +88,7 @@ class PerfDALOracle(Query):
         self.history = []
 
         # Additional Ablations
-        self.one_batch_per_strat=one_batch_per_strat
+        self.one_batch_per_strat = one_batch_per_strat
 
     def build_al_strategies(self, al_strategies):
         strategies_list = []
@@ -98,7 +100,6 @@ class PerfDALOracle(Query):
             elif strat_name == 'coreset':
                 strat = strategies.CoreSet(subset_size=self.strat_subset_size, device=self.device)
             elif strat_name == 'badge':
-                # strat = GTBadge(subset_size=self.strat_subset_size, device=self.device)
                 strat = strategies.Badge(subset_size=self.strat_subset_size, device=self.device)
             elif strat_name == 'typiclust':
                 strat = strategies.TypiClust(subset_size=self.strat_subset_size, device=self.device)
@@ -113,8 +114,6 @@ class PerfDALOracle(Query):
                 strat = TypiClass(subset_size=self.strat_subset_size, device=self.device)
             elif strat_name == 'dropqueryclass':
                 strat = DropQueryClass(subset_size=self.strat_subset_size, device=self.device)
-            elif strat_name == 'loss':
-                strat = LossSampling(subset_size=self.strat_subset_size, device=self.device)
             else:
                 raise NotImplementedError()
             strategies_list.append(strat)
@@ -136,7 +135,8 @@ class PerfDALOracle(Query):
 
         base_loss = self.evaluate_model(model, al_datamodule.test_dataloader())
 
-        indices_batches, batches_counts = self.select_strategy_batches(model, al_datamodule, acq_size, unlabeled_indices)
+        indices_batches, batches_counts = self.select_strategy_batches(
+            model, al_datamodule, acq_size, unlabeled_indices)
 
         loss_batches = []
         init_params = model.state_dict()
@@ -222,13 +222,14 @@ class PerfDALOracle(Query):
         batches_counts = {t: np.sum(t == batches).item() for t in self.batch_types}
         # TODO: This is for additional ablations, may remove later.
         if self.one_batch_per_strat:
-            batches_counts = {t:1 for t in self.batch_types}
+            batches_counts = {t: 1 for t in self.batch_types}
 
         indices = []
         for strat_name, strat in zip(self.batch_types, self.strategies):
             num_batches = batches_counts[strat_name]
 
-            ss_min = min(acq_size*4, len(al_datamodule.unlabeled_indices) - (num_batches+1)) # TODO: This is just a temporary solution for DTD as the unlabeled pool is very small
+            # TODO: This is just a temporary solution for DTD as the unlabeled pool is very small
+            ss_min = min(acq_size*4, len(al_datamodule.unlabeled_indices) - (num_batches+1))
             ss_max = min(len(al_datamodule.unlabeled_indices), self.max_subset_size)
             subset_range = self.rng.choice(range(ss_min, ss_max), size=num_batches, replace=False)
 
@@ -293,28 +294,28 @@ class PerfDALOracle(Query):
             running_loss += len(inputs)*self.loss_fn(logits, targets).item()
         loss = running_loss / num_samples
         return loss
-    
 
 
 class PerfDALOracle2(Query):
     def __init__(self,
-                al_strategies=['random', 'typiclust', 'dropquery', 'bait', 'typiclass', 'dropqueryclass', 'loss', 'margin', 'badge', 'coreset', 'alfamix'],
-                num_batches=200,
-                strat_ratio='equal',
-                look_ahead='true_labels',
-                num_mc_labels=5,
-                perf_estimation='val_ds',
-                retraining='train',
-                num_retraining_epochs=10,
-                update_gamma=10,
-                loss='cross_entropy',
-                subset_size=None,
-                strat_subset_size=2500,
-                max_subset_size=5000,
-                vary_strat_subset_size=False,
-                device='cpu',
-                random_seed=None,
-                ):
+                 al_strategies=['random', 'typiclust', 'dropquery', 'bait', 'typiclass',
+                                'dropqueryclass', 'loss', 'margin', 'badge', 'coreset', 'alfamix'],
+                 num_batches=200,
+                 strat_ratio='equal',
+                 look_ahead='true_labels',
+                 num_mc_labels=5,
+                 perf_estimation='val_ds',
+                 retraining='train',
+                 num_retraining_epochs=10,
+                 update_gamma=10,
+                 loss='cross_entropy',
+                 subset_size=None,
+                 strat_subset_size=2500,
+                 max_subset_size=5000,
+                 vary_strat_subset_size=False,
+                 device='cpu',
+                 random_seed=None,
+                 ):
         super().__init__(random_seed=random_seed)
         self.oracle_query = PerfDALOracle(
             al_strategies=al_strategies,
@@ -342,6 +343,7 @@ class PerfDALOracle2(Query):
             return self.random_query.query(al_datamodule=al_datamodule, acq_size=acq_size)
         else:
             return self.oracle_query.query(al_datamodule=al_datamodule, model=model, acq_size=acq_size)
+
 
 class TypiClass(Query):
     def __init__(self, subset_size=None, random_seed=None, device='cpu'):
@@ -412,40 +414,6 @@ class DropQueryClass(strategies.DropQuery):
         selected_candidates = candidates[selected].tolist()
         query_indices = [unlabeled_indices[i] for i in selected_candidates]
         return query_indices
-
-
-class LossSampling(Query):
-    def __init__(self, subset_size=None, random_seed=None, device='cpu'):
-        super().__init__(random_seed)
-        self.subset_size = subset_size
-        self.device = device
-
-    def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
-        unlabeled_loader, unlabeled_indices = al_datamodule.unlabeled_dataloader(self.subset_size)
-        labeled_loader, _ = al_datamodule.labeled_dataloader()
-
-        unlabeled_outputs = model.get_model_outputs(
-            unlabeled_loader, output_types=['features', 'logits', 'labels'], device=self.device)
-        unlabeled_features = unlabeled_outputs['features']
-        unlabeled_logits = unlabeled_outputs['logits']
-        unlabeled_labels = unlabeled_outputs['labels']
-
-        labeled_outputs = model.get_model_outputs(labeled_loader, output_types=['labels'], device=self.device)
-        labeled_labels = labeled_outputs['labels']
-
-        losses = torch.nn.functional.cross_entropy(unlabeled_logits, unlabeled_labels, reduction='none')
-        quartile = losses.quantile(0.75)
-        candidates = torch.where(losses > quartile)[0]
-        selected = select_samples_per_class(
-            candidate_features=unlabeled_features[candidates],
-            candidate_labels=unlabeled_labels[candidates],
-            unlabeled_labels=unlabeled_labels,
-            labeled_labels=labeled_labels,
-            acq_size=acq_size,
-        )
-        indices = candidates[selected]
-        # indices = self.rng.choice(indices, size=acq_size, replace=False)
-        return [unlabeled_indices[idx] for idx in indices]
 
 
 def select_samples_per_class(candidate_features, candidate_labels, unlabeled_labels, labeled_labels, acq_size):
@@ -618,9 +586,10 @@ class SimulatedAnnealingOracle(Query):
             new_quality = self.quality(model, al_datamodule, order=new_order)
             if new_quality > best_quality:
                 best_order, best_quality = new_order, new_quality
-        
+
         self.search_done = True
-        self.queried_batches = [best_order[i_acq*acq_size:(i_acq+1)*acq_size] for i_acq in range(self.num_acq)]
+        self.queried_batches = [best_order[i_acq*acq_size:(i_acq+1)*acq_size]
+                                for i_acq in range(self.num_acq)]
 
     def propose_new_order(self, order):
         order = order.copy()
