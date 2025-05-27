@@ -10,13 +10,13 @@
 source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 
 mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perfdal.db'
-mlflow_exp_name='abl_one_batch_per_strat'
+mlflow_exp_name='abl_repr_vs_unc'
 backbone=dinov2
 
 al_strategy=perf_dal_oracle
 n_bat=100
 var_sss=True
-sel_strats=\[alfamix,badge,bait,coreset,dropquery,dropqueryclass,margin,random,typiclass,typiclust\]
+sel_strats=\[bait,random,typiclust\]
 
 datasets=(cifar10 dtd)
 acq_sizes=(10 50)
@@ -45,7 +45,6 @@ srun python al.py \
     al.subset_size=$subset_size \
     al.optimal.strategies=$sel_strats \
     al.optimal.vary_strat_subset_size=$var_sss \
-    al.optimal.one_batch_per_strat=True \
     al.optimal.num_batches=$n_bat \
     mlflow_uri=$mlflow_uri \
     al.device=cuda \
