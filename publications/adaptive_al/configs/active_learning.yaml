@@ -1,0 +1,42 @@
+random_seed: 42
+experiment_name: al
+mlflow_uri: sqlite:///active_learning.db
+
+dataset:
+  name: cifar10
+  path: /home/datasets
+  val_split: 1
+  cache_features: True
+  feature_cache_dir: null
+  num_workers: 0
+  backbone: dinov2
+
+al:
+  strategy: random
+  subset_size: 2500
+  num_init: null
+  acq_size: 10
+  num_acq: 20
+  device: cpu
+
+model:
+  name: mlp
+  num_epochs: 200
+  train_batch_size: 64
+  predict_batch_size: 128
+  mean_field_factor: 0.4
+  mc_samples: 10_000
+
+optimizer: 
+  name: SGD
+  lr: 1e-2
+  weight_decay: 5e-4
+  momentum: 0.9
+  nesterov: True
+  lr_backbone: 1e-5
+  finetune_backbone: False
+  dir: ${output_dir}
+  job_logging:
+    handlers:
+      file:
+        mode: w

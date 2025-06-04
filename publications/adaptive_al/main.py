@@ -31,8 +31,8 @@ def main(args):
     seed_everything(42)
     print(OmegaConf.to_yaml(args))
 
-    train_ds, test_ds, num_classes = build_datasets(
-        args, val_split=args.use_val_split, cache_features=args.cache_features)
+    train_ds, test_ds, num_classes = build_datasets(args)
+    num_features = len(train_ds[0][0])
 
     seed_everything(args.random_seed)
     al_datamodule = ActiveLearningDataModule(
@@ -43,10 +43,10 @@ def main(args):
         train_batch_size=args.model.train_batch_size,
         predict_batch_size=args.model.predict_batch_size,
     )
-    al_datamodule.random_init(n_samples=args.al.num_init_samples)  # TODO: add default to strategy.
+    args.al.num_init = args.al.acq_size if args.al.num_init is None else args.al.num_init
     al_strategy = build_al_strategy(args)
+    al_datamodule.random_init(n_samples=args.al.num_init)  # TODO implement in strategy
 
-    num_features = 384
     model = build_model(args, num_features=num_features, num_classes=num_classes)
     lightning_trainer_config = dict(
         max_epochs=args.model.num_epochs,
@@ -54,10 +54,10 @@ def main(args):
         callbacks=[MetricLogger()],
     )
 
-    history = []
+    al_history = []
+    artifacts_history = []
     for i_acq in range(0, args.al.num_acq+1):
         if i_acq != 0:
-            print('Querying..')
             stime = time.time()
             indices = al_strategy.query(
                 model=model,
@@ -67,22 +67,29 @@ def main(args):
             etime = time.time()
             al_datamodule.update_annotations(indices)
 
+        artifacts = {
+            'query_indices': indices if i_acq != 0 else al_datamodule.labeled_indices,
+            'model': model.state_dict(),
+        }
+
         model.reset_states()
         trainer = Trainer(**lightning_trainer_config)
         trainer.fit(model, train_dataloaders=al_datamodule.train_dataloader())
-
         predictions = trainer.predict(model, dataloaders=al_datamodule.test_dataloader())
         test_stats = evaluate(predictions)
         test_stats['query_time'] = etime - stime if i_acq != 0 else 0
-        print(f'Cycle {i_acq}:', test_stats, flush=True)
-        history.append(test_stats)
 
-    mlflow.set_tracking_uri(uri="{}".format(args.mlflow_uri))
+        print(f'Cycle {i_acq}:', test_stats, flush=True)
+        al_history.append(test_stats)
+        artifacts_history.append(artifacts)
+
+    mlflow.set_tracking_uri(uri=args.mlflow_uri)
     experiment_id = mlflow.set_experiment(args.experiment_name).experiment_id
     mlflow.start_run(experiment_id=experiment_id)
     mlflow.log_params(flatten_cfg(args))
-    for i_acq, test_stats in enumerate(history):
+    for i_acq, test_stats in enumerate(al_history):
         mlflow.log_metrics(test_stats, step=i_acq)
+        mlflow.log_dict(artifacts_history[i_acq], f'artifacts_cycle{i_acq:02d}')
     mlflow.end_run()
 
 

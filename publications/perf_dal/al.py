@@ -55,9 +55,6 @@ def main(args):
     al_history = []
     artifacts_history = []
     for i_acq in range(0, args.al.num_acq+1):
-        # if i_acq == 11:
-        #     sum([d['query_time'] for d in al_history])
-        #     print(len(al_datamodule.labeled_indices))
         if i_acq != 0:
             stime = time.time()
             indices = al_strategy.query(

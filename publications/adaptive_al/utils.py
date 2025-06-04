@@ -1,81 +1,61 @@
 import torch
+import torch.nn as nn
+
+from dal_toolbox.models.laplace import LaplaceLinear, LaplaceModel
 from dal_toolbox import datasets as dal_datasets
 from dal_toolbox.datasets.utils import DinoTransforms, FeatureDataset
 
 
-def build_datasets(args, val_split=False, cache_features=True):
-    image_datasets = ['cifar10', 'stl10', 'snacks', 'dtd', 'cifar100', 'food101', 'flowers102',
-                      'caltech101', 'stanford_dogs', 'tiny_imagenet', 'imagenet']
-    text_datasets = ['agnews', 'dbpedia', 'banking77', 'clinc']
+image_datasets = ['cifar10', 'stl10', 'snacks', 'dtd', 'cifar100', 'food101', 'flowers102',
+                  'caltech101', 'stanford_dogs', 'tiny_imagenet', 'imagenet']
+text_datasets = ['agnews', 'dbpedia', 'banking77', 'clinc']
 
-    if args.dataset_name in image_datasets:
+
+def build_backbone(args):
+    if args.dataset.backbone == 'dinov2':
+        backbone = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
+    else:
+        raise NotImplementedError(f'Backbone {args.dataset.backbone} not implemented.')
+    return backbone
+
+
+def build_datasets(args):
+    backbone = build_backbone(args)
+
+    if args.dataset.name in image_datasets:
         data = build_image_data(args)
-        if cache_features:
-            model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
-
-            train_ds = FeatureDataset(model, data.train_dataset, cache=True, cache_dir=args.dataset_path)
-            if val_split:
-                test_ds = FeatureDataset(model, data.val_dataset, cache=True, cache_dir=args.dataset_path)
-            else:
-                test_ds = FeatureDataset(model, data.test_dataset, cache=True, cache_dir=args.dataset_path)
+        if args.dataset.cache_features:
+            train_ds = FeatureDataset(backbone, data.train_dataset, cache=True, cache_dir=args.dataset.path)
+            test_ds = FeatureDataset(backbone, data.test_dataset, cache=True, cache_dir=args.dataset.path)
         else:
             train_ds = data.train_dataset
-            if val_split:
-                test_ds = data.val_dataset
-            else:
-                test_ds = data.test_dataset
+            test_ds = data.test_dataset
         num_classes = data.num_classes
-
-    elif args.dataset_name in text_datasets:
-        from transformers import AutoModelForSequenceClassification, AutoTokenizer
-        data, num_classes = build_text_data(args)
-        tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased", use_fast=False)
-
-        data = data.map(
-            lambda batch: tokenizer(
-                batch["text"],
-                truncation=True,
-                padding="max_length",
-                max_length=512
-            ),
-            batched=True,
-            batch_size=1000)
-
-        data = data.remove_columns(
-            list(set(data['train'].column_names)-set(['input_ids', 'attention_mask', 'label'])))
-        data = data.with_format("torch")
-
-        model = BertSequenceClassifier(num_classes=num_classes)
-        train_ds = FeatureDataset(model, data["train"], cache=True,
-                                  cache_dir=args.dataset_path, task="text")
-        test_ds = FeatureDataset(model, data["test"], cache=True,
-                                 cache_dir=args.dataset_path, task="text")
-
     return train_ds, test_ds, num_classes
 
 
 def build_image_data(args):
     transforms = DinoTransforms(size=(256, 256))
-    if args.dataset_name == 'cifar10':
-        data = dal_datasets.CIFAR10(args.dataset_path, transforms=transforms)
-    elif args.dataset_name == 'stl10':
-        data = dal_datasets.STL10(args.dataset_path, transforms=transforms)
-    elif args.dataset_name == 'snacks':
-        data = dal_datasets.Snacks(args.dataset_path, transforms=transforms)
-    elif args.dataset_name == 'dtd':
-        data = dal_datasets.DTD(args.dataset_path, transforms=transforms)
-    elif args.dataset_name == 'cifar100':
-        data = dal_datasets.CIFAR100(args.dataset_path, transforms=transforms)
-    elif args.dataset_name == 'food101':
-        data = dal_datasets.Food101(args.dataset_path, transforms=transforms)
-    elif args.dataset_name == 'flowers102':
-        data = dal_datasets.Flowers102(args.dataset_path, transforms=transforms)
-    elif args.dataset_name == 'stanford_dogs':
-        data = dal_datasets.StanfordDogs(args.dataset_path, transforms=transforms)
-    elif args.dataset_name == 'tiny_imagenet':
-        data = dal_datasets.TinyImageNet(args.dataset_path, transforms=transforms)
-    elif args.dataset_name == 'imagenet':
-        data = dal_datasets.ImageNet(args.dataset_path, transforms=transforms)
+    if args.dataset.name == 'cifar10':
+        data = dal_datasets.CIFAR10(args.dataset.path, transforms=transforms)
+    elif args.dataset.name == 'stl10':
+        data = dal_datasets.STL10(args.dataset.path, transforms=transforms)
+    elif args.dataset.name == 'snacks':
+        data = dal_datasets.Snacks(args.dataset.path, transforms=transforms)
+    elif args.dataset.name == 'dtd':
+        data = dal_datasets.DTD(args.dataset.path, transforms=transforms)
+    elif args.dataset.name == 'cifar100':
+        data = dal_datasets.CIFAR100(args.dataset.path, transforms=transforms)
+    elif args.dataset.name == 'food101':
+        data = dal_datasets.Food101(args.dataset.path, transforms=transforms)
+    elif args.dataset.name == 'flowers102':
+        data = dal_datasets.Flowers102(args.dataset.path, transforms=transforms)
+    elif args.dataset.name == 'stanford_dogs':
+        data = dal_datasets.StanfordDogs(args.dataset.path, transforms=transforms)
+    elif args.dataset.name == 'tiny_imagenet':
+        data = dal_datasets.TinyImageNet(args.dataset.path, transforms=transforms)
+    elif args.dataset.name == 'imagenet':
+        data = dal_datasets.ImageNet(args.dataset.path, transforms=transforms)
     else:
         raise NotImplementedError()
     return data
@@ -104,15 +84,82 @@ def build_text_data(args):
 
 
 def build_model(args, num_features, num_classes):
+    laplace_kwargs = dict(mean_field_factor=args.model.mean_field_factor,
+                          mc_samples=args.model.mc_samples, bias=True)
     if args.model.name == 'linear':
-        pass
+        model = LinearModel(num_features, num_classes, **laplace_kwargs)
     elif args.model.name == 'mlp':
-        pass
+        model = MLP(num_features, num_classes, **laplace_kwargs)
     elif args.model.name == 'all':
-        pass
+        raise NotImplementedError(f"Training of {args.model.name} not implemented.")
     else:
         raise NotImplementedError(f"Training of {args.model.name} not implemented.")
+
+    params = [{'params': [p for n, p in model.named_parameters()]}]
+
+    if args.optimizer.name == 'SGD':
+        optimizer = torch.optim.SGD(params, lr=args.optimizer.lr, nesterov=args.optimizer.nesterov,
+                                    momentum=args.optimizer.momentum, weight_decay=args.optimizer.weight_decay)
+    else:
+        raise NotImplementedError(f"Optimizer {args.model.name} not implemented.")
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.model.num_epochs)
+
+    model = LaplaceModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
     return model
+
+
+class LinearModel(nn.Module):
+    def __init__(self, in_features, out_features, **laplace_kwargs):
+        super().__init__()
+        self.layer = LaplaceLinear(in_features, out_features, **laplace_kwargs)
+
+    def forward_features(self, x):
+        return x
+
+    def forward_head(self, x, mean_field=False):
+        if mean_field:
+            out = self.layer.forward_mean_field(x)
+        else:
+            out = self.layer(x)
+        return out
+
+    def forward_mean_field(self, x):
+        return self.layer.forward_mean_field(x)
+
+    def forward(self, x):
+        features = self.forward_features(x)
+        logits = self.forward_head(features)
+        return logits
+
+
+class MLP(nn.Module):
+    def __init__(self, in_features, out_features, num_hidden=512, **laplace_kwargs):
+        super().__init__()
+        self.layer1 = nn.Linear(in_features, num_hidden)
+        self.layer2 = LaplaceLinear(num_hidden, out_features, **laplace_kwargs)
+        self.act = nn.ReLU()
+
+    def forward_features(self, x):
+        out = self.layer1(x)
+        out = self.act(out)
+        return out
+
+    def forward_head(self, x, mean_field=False):
+        if mean_field:
+            out = self.layer2.forward_mean_field(x)
+        else:
+            out = self.layer2(x)
+        return out
+
+    def forward(self, x):
+        features = self.forward_features(x)
+        logits = self.forward_head(features)
+        return logits
+
+    def forward_mean_field(self, x):
+        features = self.forward_features(x)
+        mean_field_logits = self.forward_head(features, mean_field=True)
+        return mean_field_logits
 
 
 def flatten_cfg(cfg, parent_key='', sep='.'):
