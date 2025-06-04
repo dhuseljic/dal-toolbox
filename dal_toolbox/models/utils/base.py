@@ -5,9 +5,9 @@ import functools
 import torch
 import torch.nn as nn
 import torch.distributed as dist
-
 import lightning as L
 
+from collections import defaultdict
 from lightning.pytorch.utilities.rank_zero import rank_zero_warn
 
 
@@ -20,7 +20,7 @@ class BaseModule(L.LightningModule, abc.ABC):
             lr_scheduler: torch.optim.lr_scheduler.LRScheduler = None,
             train_metrics: dict = None,
             val_metrics: dict = None,
-            scheduler_interval = 'epoch'
+            scheduler_interval='epoch'
     ):
         super().__init__()
         self.model = model
@@ -48,7 +48,8 @@ class BaseModule(L.LightningModule, abc.ABC):
 
     def reset_states(self, reset_model_parameters=True):
         if reset_model_parameters:
-            self.model.cpu()  # TODO(dhuseljic): when not in cpu, batchnorm running mean is in inference mode..
+            # TODO(dhuseljic): when not in cpu, batchnorm running mean is in inference mode..
+            self.model.cpu()
             self.model.load_state_dict(self.init_model_state)
         self.optimizer.load_state_dict(self.init_optimizer_state)
         if self.lr_scheduler:
@@ -69,7 +70,7 @@ class BaseModule(L.LightningModule, abc.ABC):
             self.lr_scheduler = self.lr_scheduler(self.optimizer)
 
         return {
-            'optimizer': self.optimizer, 
+            'optimizer': self.optimizer,
             'lr_scheduler': {
                 'scheduler': self.lr_scheduler,
                 'interval': self.scheduler_interval
@@ -78,52 +79,39 @@ class BaseModule(L.LightningModule, abc.ABC):
 
     def log_train_metrics(self, logits, targets):
         if self.train_metrics is not None:
-            metrics = {metric_name: metric(logits, targets) for metric_name, metric in self.train_metrics.items()}
+            metrics = {metric_name: metric(logits, targets)
+                       for metric_name, metric in self.train_metrics.items()}
             self.log_dict(self.train_metrics, prog_bar=True)
 
     def log_val_metrics(self, logits, targets):
         if self.val_metrics is not None:
-            metrics = {metric_name: metric(logits, targets) for metric_name, metric in self.val_metrics.items()}
+            metrics = {metric_name: metric(logits, targets)
+                       for metric_name, metric in self.val_metrics.items()}
             self.log_dict(self.val_metrics, prog_bar=True)
 
     @torch.no_grad()
-    def get_logits(self, *args, **kwargs):
-        if not hasattr(self.model, 'get_logits'):
-            raise NotImplementedError('The `get_logits` method is not implemented.')
-        return self.model.get_logits(*args, **kwargs)
+    def get_model_outputs(self, dataloader, output_types: list, device: str, **kwargs):
+        self.eval()
+        self.to(device)
 
-    @torch.no_grad()
-    def get_representations(self, *args, **kwargs):
-        if not hasattr(self.model, 'get_representations'):
-            raise NotImplementedError('The `get_representations` method is not implemented.')
-        return self.model.get_representations(*args, **kwargs)
+        outputs = defaultdict(list)
+        for batch in dataloader:
+            inputs = batch[0].to(device)
+            labels = batch[1]
 
-    @torch.no_grad()
-    def get_representations_and_logits(self, *args, **kwargs):
-        if not hasattr(self.model, 'get_representations_and_logits'):
-            raise NotImplementedError('The `get_representations_and_logits` method is not implemented.')
-        return self.model.get_representations_and_logits(*args, **kwargs)
+            # TODO: Check what is required and only propagate necessary items
+            features = self.model.forward_features(inputs)
+            logits = self.model.forward_head(features)
 
-    @torch.no_grad()
-    def get_grad_representations(self, *args, **kwargs):
-        if not hasattr(self.model, 'get_grad_representations'):
-            raise NotImplementedError('The `get_grad_representations` method is not implemented.')
-        return self.model.get_grad_representations(*args, **kwargs)
-
-    @torch.no_grad()
-    def get_topk_grad_representations(self, *args, **kwargs):
-        if not hasattr(self.model, 'get_topk_grad_representations'):
-            raise NotImplementedError('The `get_topk_grad_representations` method is not implemented.')
-        return self.model.get_topk_grad_representations(*args, **kwargs)
-
-    @torch.no_grad()
-    def get_exp_grad_representations(self, *args, **kwargs):
-        if not hasattr(self.model, 'get_exp_grad_representations'):
-            raise NotImplementedError('The `get_exp_grad_representations` method is not implemented.')
-        return self.model.get_exp_grad_representations(*args, **kwargs)
-
-    @torch.no_grad()
-    def get_logits_from_representations(self, *args, **kwargs):
-        if not hasattr(self.model, 'get_logits_from_representations'):
-            raise NotImplementedError('The `get_logits_from_representations` method is not implemented.')
-        return self.model.get_logits_from_representations(*args, **kwargs)
+            for output_type in output_types:
+                if output_type == 'logits':
+                    outputs['logits'].append(logits.cpu())
+                elif output_type == 'features':
+                    outputs['features'].append(features.cpu())
+                elif output_type == 'labels':
+                    outputs['labels'].append(labels)
+                else:
+                    raise NotImplementedError()
+        outputs = {key: torch.cat(val) if isinstance(
+            val[0], torch.Tensor) else val for key, val in outputs.items()}
+        return outputs

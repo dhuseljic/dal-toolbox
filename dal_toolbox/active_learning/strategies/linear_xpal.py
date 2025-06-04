@@ -6,8 +6,7 @@ import time
 import lightning as L
 import numpy as np
 import torch
-from sklearn.utils import check_array
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, Subset
 from tqdm import tqdm
 
 from .query import Query
@@ -70,7 +69,7 @@ class LinearXPAL(Query):
         logging.getLogger("lightning.pytorch").setLevel(logging.ERROR)
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
         labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
-        labels = torch.unique(al_datamodule.train_dataset.dataset.labels).tolist()
+        labels = list(set(al_datamodule.train_dataset.dataset.targets)) #TODO: Discuss change from labels to targets
         num_samples = len(unlabeled_indices) + len(labeled_indices)
         f_L_predictions = trainer.predict(model, [unlabeled_dataloader, labeled_dataloader])
         f_L_unlabeled_predictions = torch.softmax(torch.cat([pred[0] for pred in f_L_predictions[0]]) + self.beta, dim=1)
@@ -86,7 +85,7 @@ class LinearXPAL(Query):
             gain = 0.0
 
             L_plus_indices = labeled_indices + [x]
-            L_plus_data = al_datamodule.train_dataset[L_plus_indices]
+            L_plus_data = Subset(dataset=al_datamodule.train_dataset, indices=L_plus_indices)
             for candidate_label in tqdm(labels, desc="Canidate Label", leave=False, colour="green"):
 
                 dataset = CustomDataset(L_plus_data, candidate_label)

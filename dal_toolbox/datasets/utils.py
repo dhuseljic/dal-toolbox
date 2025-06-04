@@ -4,12 +4,73 @@ import warnings
 
 import numpy as np
 import torch
+
 import torchvision
 from torch.utils.data import Dataset, DataLoader
+
+from transformers import AutoImageProcessor
 
 from dal_toolbox.datasets.base import BaseTransforms
 from dal_toolbox.datasets.base import BaseData
 from dal_toolbox.models.utils.base import BaseModule
+
+import torch
+
+
+class ViTMAETransforms():
+    def __init__(self):
+        self.image_processor = AutoImageProcessor.from_pretrained("facebook/vit-mae-base")
+
+        self.transform = torchvision.transforms.Compose([
+            # First create three channels if black and white
+            torchvision.transforms.Lambda(lambda x: x.convert('RGB') if x.mode != 'RGB' else x),
+            self.image_processor                  # then apply processor
+        ])
+
+    @property
+    def train_transform(self):
+        return self.transform
+
+    @property
+    def query_transform(self):
+        return self.transform
+
+    @property
+    def eval_transform(self):
+        return self.transform
+
+
+class SwinV2Transforms():
+    def __init__(self, backbone):
+        if backbone == 'swinv2':
+            self.image_processor = AutoImageProcessor.from_pretrained(
+                "microsoft/swinv2-base-patch4-window8-256")
+        elif backbone == 'swinv2-t':
+            self.image_processor = AutoImageProcessor.from_pretrained(
+                "microsoft/swinv2-tiny-patch4-window8-256")
+        elif backbone == 'swinv2-s':
+            self.image_processor = AutoImageProcessor.from_pretrained(
+                "microsoft/swinv2-small-patch4-window8-256")
+        else:
+            raise AssertionError("Wrong backbone!")
+
+        self.transform = torchvision.transforms.Compose([
+            # First create three channels if black and white
+            torchvision.transforms.Lambda(lambda x: x.convert('RGB') if x.mode != 'RGB' else x),
+            self.image_processor                  # then apply processor
+        ])
+
+    @property
+    def train_transform(self):
+        return self.transform
+
+    @property
+    def query_transform(self):
+        return self.transform
+
+    @property
+    def eval_transform(self):
+        return self.transform
 
 
 class DinoTransforms():

@@ -40,28 +40,37 @@ class BaitSampling(Query):
             subset_size=self.subset_size)
         labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
 
+        unlabeled_outputs = model.get_model_outputs(unlabeled_dataloader, output_types=[
+                                                    'features', 'logits'], device=self.device)
+        labeled_outputs = model.get_model_outputs(labeled_dataloader, output_types=[
+                                                  'features', 'logits'], device=self.device)
+
         if self.expectation_topk is None:
-            repr_unlabeled = model.get_exp_grad_representations(
-                unlabeled_dataloader,
+            repr_unlabeled = get_exp_grad_representations(
+                logits=unlabeled_outputs['logits'],
+                features=unlabeled_outputs['features'],
                 grad_likelihood=self.grad_likelihood,
                 device=self.device
             )
-            repr_labeled = model.get_exp_grad_representations(
-                labeled_dataloader,
+            repr_labeled = get_exp_grad_representations(
+                logits=labeled_outputs['logits'],
+                features=labeled_outputs['features'],
                 grad_likelihood=self.grad_likelihood,
                 device=self.device
             )
             repr_all = torch.cat((repr_unlabeled, repr_labeled), dim=0)
         else:
-            repr_unlabeled = model.get_topk_grad_representations(
-                unlabeled_dataloader,
+            repr_unlabeled = get_topk_grad_representations(
+                logits=unlabeled_outputs['logits'],
+                features=unlabeled_outputs['features'],
                 topk=self.expectation_topk,
                 grad_likelihood=self.grad_likelihood,
                 normalize_top_probas=self.normalize_top_probas,
                 device=self.device
             )
             repr_labeled = model.get_topk_grad_representations(
-                labeled_dataloader,
+                logits=labeled_outputs['logits'],
+                features=labeled_outputs['features'],
                 topk=self.expectation_topk,
                 grad_likelihood=self.grad_likelihood,
                 normalize_top_probas=self.normalize_top_probas,
@@ -103,7 +112,7 @@ class BaitSampling(Query):
                 fisher_all += torch.mean(term, dim=0)
             elif self.fisher_approximation == 'block_diag':
                 repr_batch = repr_batch.view(-1, 10, 10, 384)
-                term = torch.einsum('nkhd,mkhe->hde', repr_batch, repr_batch) 
+                term = torch.einsum('nkhd,mkhe->hde', repr_batch, repr_batch)
                 fisher_all += term / len(repr_batch)
             elif self.fisher_approximation == 'diag':
                 term = torch.mean(torch.sum(repr_batch**2, dim=1), dim=0)
@@ -120,7 +129,7 @@ class BaitSampling(Query):
                 fisher_labeled += torch.mean(term, dim=0)
             elif self.fisher_approximation == 'block_diag':
                 repr_batch = repr_batch.view(-1, 10, 10, 384)
-                term = torch.einsum('nkhd,mkhe->hde', repr_batch, repr_batch) 
+                term = torch.einsum('nkhd,mkhe->hde', repr_batch, repr_batch)
                 fisher_labeled += term / len(repr_batch)
             elif self.fisher_approximation == 'diag':
                 term = torch.mean(torch.sum(repr_batch**2, dim=1), dim=0)
@@ -161,10 +170,10 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
     if is_diag:
         currentInv = 1 / (lmb + fisher_labeled * num_labeled / (num_labeled + acq_size))
     elif is_block_diag:
-        currentInv = torch.inverse(lmb + fisher_labeled * num_labeled / (num_labeled + acq_size))
+        currentInv = inverse(lmb + fisher_labeled * num_labeled / (num_labeled + acq_size))
     else:
         inv_device = 'cpu' if fisher_labeled.size(0) > 10_000 else device
-        currentInv = torch.inverse(lmb * torch.eye(dim, device=inv_device) + fisher_labeled.to(inv_device) *
+        currentInv = inverse(lmb * torch.eye(dim, device=inv_device) + fisher_labeled.to(inv_device) *
                                    num_labeled / (num_labeled + acq_size))
     repr_unlabeled = repr_unlabeled * np.sqrt(acq_size / (num_labeled + acq_size))
 
@@ -179,12 +188,12 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
         xt_ = repr_unlabeled.to(device)
 
         if is_diag:
-            innerInv = torch.inverse(torch.eye(rank).to(device) + xt_ *
+            innerInv = inverse(torch.eye(rank).to(device) + xt_ *
                                      currentInv @ xt_.transpose(1, 2)).detach()
         elif is_block_diag:
             raise NotImplementedError()
         else:
-            innerInv = torch.inverse(torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2))
+            innerInv = inverse(torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2))
         innerInv[torch.where(torch.isinf(innerInv))] = torch.sign(
             innerInv[torch.where(torch.isinf(innerInv))]) * np.finfo('float32').max
         if is_diag:
@@ -210,14 +219,14 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
         torch.cuda.empty_cache()
         xt_ = repr_unlabeled[ind].unsqueeze(0).to(device)
         if is_diag:
-            innerInv = torch.inverse(torch.eye(rank).to(device) + xt_ * currentInv @ xt_.transpose(1, 2))
+            innerInv = inverse(torch.eye(rank).to(device) + xt_ * currentInv @ xt_.transpose(1, 2))
             currentInv = (currentInv - torch.diag(((xt_*currentInv).transpose(1, 2)
                           @ innerInv @ (xt_*currentInv))[0]))
         elif is_block_diag:
             raise NotImplementedError()
         else:
             # xt_.cpu() @ currentInv.cpu() @ xt_.transpose(1, 2).cpu()
-            innerInv = torch.inverse(torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2))
+            innerInv = inverse(torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2))
             currentInv = (currentInv - currentInv @ xt_.transpose(1, 2) @ innerInv @ xt_ @ currentInv)[0]
         del xt_
         del innerInv
@@ -233,13 +242,14 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
         # select index for removal
         xt_ = repr_unlabeled[indsAll].to(device)
         if is_diag:
-            innerInv = torch.inverse(-1 * torch.eye(rank).to(device) + xt_ * currentInv @ xt_.transpose(1, 2))
+            innerInv = inverse(-1 * torch.eye(rank).to(device) + xt_ * currentInv @ xt_.transpose(1, 2))
             traceEst = torch.diagonal(xt_ * currentInv * fisher_all * currentInv @
                                       xt_.transpose(1, 2) @ innerInv, dim1=-2, dim2=-1).sum(-1)
         elif is_block_diag:
             raise NotImplementedError()
         else:
-            innerInv = torch.inverse(-1 * torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2))
+            mat = -1 * torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2)
+            innerInv = inverse(mat)
             traceEst = torch.diagonal(xt_ @ currentInv @ fisher_all @ currentInv @
                                       xt_.transpose(1, 2) @ innerInv, dim1=-2, dim2=-1).sum(-1)
         delInd = torch.argmin(-1 * traceEst).item()
@@ -249,13 +259,13 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
         xt_ = repr_unlabeled[indsAll[delInd]].unsqueeze(0).to(device)
 
         if is_diag:
-            innerInv = torch.inverse(-1 * torch.eye(rank).to(device) + xt_ * currentInv @ xt_.transpose(1, 2))
+            innerInv = inverse(-1 * torch.eye(rank).to(device) + xt_ * currentInv @ xt_.transpose(1, 2))
             currentInv = (currentInv - torch.diag(((xt_*currentInv).transpose(1, 2)
                           @ innerInv @ (xt_*currentInv))[0]))
         elif is_block_diag:
             raise NotImplementedError()
         else:
-            innerInv = torch.inverse(-1 * torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2))
+            innerInv = inverse(-1 * torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2))
             currentInv = (currentInv - currentInv @ xt_.transpose(1, 2) @ innerInv @ xt_ @ currentInv)[0]
 
         del indsAll[delInd]
@@ -263,6 +273,14 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
     # print(indsAll)
     return indsAll
 
+def inverse(mat):
+    # mat_inv = torch.inverse(mat)
+
+    I = torch.eye(mat.size(-1), dtype=mat.dtype, device=mat.device).expand_as(mat)
+    mat_inv = torch.linalg.solve(mat, I)
+    # print(torch.all(mat_inv == mat_inv_b))
+
+    return mat_inv
 
 def select_topk(repr_unlabeled, acq_size, fisher_all, fisher_labeled, lmb, num_labeled):
     device = fisher_all.device
@@ -274,12 +292,73 @@ def select_topk(repr_unlabeled, acq_size, fisher_all, fisher_labeled, lmb, num_l
 
     fisher_labeled = fisher_labeled * num_labeled / (num_labeled + acq_size)
     M_0 = lmb * torch.eye(dim, device=device) + fisher_labeled
-    M_0_inv = torch.inverse(M_0)
+    M_0_inv = inverse(M_0)
 
     # repr_unlabeled = repr_unlabeled * np.sqrt(acq_size / (num_labeled + acq_size))
-    A = torch.inverse(torch.eye(rank, device=device) + repr_unlabeled @
+    A = inverse(torch.eye(rank, device=device) + repr_unlabeled @
                       M_0_inv @ repr_unlabeled.transpose(1, 2))
     tmp = repr_unlabeled @ M_0_inv @ fisher_all @ M_0_inv @ repr_unlabeled.transpose(1, 2) @ A
     scores = torch.diagonal(tmp, dim1=-2, dim2=-1).sum(-1)
     chosen = (scores.topk(acq_size).indices)
     return chosen
+
+
+def get_exp_grad_representations(logits, features, grad_likelihood='cross_entropy', device='cpu'):
+    probas = logits.softmax(-1).to(device)
+    features = features.to(device)
+    num_classes = logits.size(-1)
+
+    if grad_likelihood == 'cross_entropy':
+        factor = (torch.eye(num_classes, device=device)[:, None] - probas)
+        embedding_batch = torch.einsum("jnh,nd->njhd", factor, features).flatten(2)
+        embedding_batch = torch.sqrt(probas)[:, :, None] * embedding_batch
+    elif grad_likelihood == 'binary_cross_entropy':
+        max_probas = probas.max(dim=-1).values
+
+        factor = torch.eye(2, device=device)[0] - max_probas[:, None]
+        embedding_batch = torch.einsum("nk,nd->nkd", factor, features).flatten(2)
+        probas_ = torch.stack((max_probas, 1 - max_probas), dim=1)
+        embedding_batch = torch.sqrt(probas_)[:, :, None] * embedding_batch
+    else:
+        raise NotImplementedError()
+
+    return embedding_batch
+
+
+def get_topk_grad_representations(logits, features, topk, grad_likelihood='cross_entropy', normalize_top_probas=True, device='cpu'):
+    probas = logits.softmax(-1)
+    num_classes = logits.size(-1)
+    probas_topk, top_preds = probas.topk(k=topk)
+
+    if grad_likelihood == 'cross_entropy':
+        factor = (torch.eye(num_classes, device=device)[:, None] - probas)
+        batch_indices = torch.arange(len(top_preds)).unsqueeze(-1).expand(-1, top_preds.size(1))
+        factor = factor[top_preds, batch_indices]
+
+        embedding_batch = torch.einsum("njh,nd->njhd", factor, features).flatten(2)
+        if normalize_top_probas:
+            probas_topk /= probas_topk.sum(-1, keepdim=True)
+        embedding_batch = torch.sqrt(probas_topk)[:, :, None] * embedding_batch
+    elif grad_likelihood == 'binary_cross_entropy':
+        # We assume multiple independet binary cross entropy for highest probabilities
+        if topk > 2:
+            raise ValueError('When using the binary cross entropy, topk must be 1 or 2.')
+        max_probas = probas_topk[:, 0]
+        factor = torch.eye(topk, device=device)[0] - max_probas[:, None]
+        embedding_batch = torch.einsum("nk,nd->nkd", factor, features).flatten(2)
+
+        probas_topk = torch.stack((max_probas, 1 - max_probas), dim=1)[:, :topk]
+        if normalize_top_probas:
+            probas_topk /= probas_topk.sum(-1, keepdim=True)
+        embedding_batch = torch.sqrt(probas_topk)[:, :, None] * embedding_batch
+    elif grad_likelihood == 'cross_entropy_unbiased':
+        cat = torch.distributions.Categorical(probas)
+        factor = (torch.eye(num_classes, device=device)[:, None] - probas)
+        batch_indices = torch.arange(len(top_preds)).unsqueeze(-1).expand(-1, top_preds.size(1))
+        sampled_labels = cat.sample((topk,)).T
+        factor = factor[sampled_labels, batch_indices]
+
+        embedding_batch = torch.einsum("njh,nd->njhd", factor, features).flatten(2)
+    else:
+        raise NotImplementedError()
+    return embedding_batch

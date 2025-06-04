@@ -1,72 +1,17 @@
-import warnings
 from enum import Enum
 
+import numpy as np
 import torchvision
+from .corruptions import RandAugment
 
+from PIL import Image
 from .base import BaseData, BaseTransforms
 from .corruptions import GaussianNoise
-from .utils import RepeatTransformations, PlainTransforms
 
 
 class CIFAR10Transforms(Enum):
     mean: tuple = (0.4914, 0.4822, 0.4465)
     std: tuple = (0.247, 0.243, 0.262)
-
-
-class CIFAR10StandardTransformsWithoutNormalization(BaseTransforms):
-    def __init__(self):
-        super().__init__()
-
-    @property
-    def train_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.RandomCrop(32, padding=4),
-            torchvision.transforms.RandomHorizontalFlip(),
-            torchvision.transforms.ToTensor(),
-        ])
-        return transform
-
-    @property
-    def eval_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-        ])
-        return transform
-
-    @property
-    def query_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-        ])
-        return transform
-
-
-class CIFAR10SimCLRTransforms(BaseTransforms):
-    def __init__(self):
-        super().__init__()
-
-    @property
-    def train_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.RandomResizedCrop(size=32),
-            torchvision.transforms.RandomHorizontalFlip(p=0.5),
-            torchvision.transforms.ToTensor(),
-        ])
-        return transform
-
-    @property
-    def eval_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-        ])
-        return transform
-
-    @property
-    def query_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-        ])
-        return transform
 
 
 class CIFAR10StandardTransforms(BaseTransforms):
@@ -100,10 +45,75 @@ class CIFAR10StandardTransforms(BaseTransforms):
             torchvision.transforms.Normalize(self.mean, self.std)
         ])
         return transform
+    
+
+class MultiTransform: # TODO to utils
+    def __init__(self, *transforms) -> None:
+        self.transforms = transforms
+
+    def __call__(self, x):
+        return [transform(x) for transform in self.transforms]
+
+
+class CIFAR10PseudoLabelTransforms(CIFAR10StandardTransforms):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def train_transform(self):
+        transform_weak = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(32),
+            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std),
+        ])
+        return transform_weak
+
+
+class CIFAR10PIModelTransforms(CIFAR10StandardTransforms):
+    @property
+    def train_transform(self):
+        transform_weak1 = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(32),
+            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std),
+        ])
+        transform_weak2 = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(32),
+            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std),
+        ])
+        return MultiTransform(transform_weak1, transform_weak2)
+
+
+class CIFAR10FixMatchTransforms(CIFAR10StandardTransforms):
+    @property
+    def train_transform(self):
+        transform_weak = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(32),
+            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std),
+        ])
+
+        transform_strong = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(32),
+            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            torchvision.transforms.RandomHorizontalFlip(),
+            RandAugment(3, 5),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std)
+        ])
+        return MultiTransform(transform_weak, transform_strong)
 
 
 class CIFAR10(BaseData):
-
     def __init__(self,
                  dataset_path: str,
                  transforms: BaseTransforms = None,
@@ -140,21 +150,6 @@ class CIFAR10(BaseData):
         return torchvision.datasets.CIFAR10(self.dataset_path, train=False, transform=self.eval_transform)
 
 
-class CIFAR10Plain(CIFAR10):
-    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
-        super().__init__(dataset_path, PlainTransforms(), val_split, seed)
-
-
-class CIFAR10WithoutNormalization(CIFAR10):
-    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
-        super().__init__(dataset_path, CIFAR10StandardTransformsWithoutNormalization(), val_split, seed)
-
-
-class CIFAR10SimCLR(CIFAR10):
-    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
-        super().__init__(dataset_path, CIFAR10SimCLRTransforms(), val_split, seed)
-
-
 class CIFAR10CTransforms(CIFAR10StandardTransforms):
     def __init__(self, severity: float):
         super().__init__()
@@ -177,42 +172,6 @@ class CIFAR10C(CIFAR10):
                  val_split: float = 0.1,
                  seed: int = None) -> None:
         super().__init__(dataset_path, CIFAR10CTransforms(severity=severity), val_split, seed)
-
-
-class CIFAR10ContrastiveTransforms(CIFAR10StandardTransforms):
-    def __init__(self, color_distortion_strength: float):
-        super().__init__()
-        self._s = color_distortion_strength
-
-    @property
-    def train_transform(self):
-        color_jitter = torchvision.transforms.ColorJitter(0.8 * self._s, 0.8 * self._s, 0.8 * self._s, 0.2 * self._s)
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.RandomResizedCrop(size=32),
-            torchvision.transforms.RandomHorizontalFlip(p=0.5),
-            torchvision.transforms.RandomApply([color_jitter], p=0.8),
-            torchvision.transforms.RandomGrayscale(p=0.2),
-            # GaussianBlur not used in original paper, however, other papers assign it importance
-            torchvision.transforms.RandomApply([torchvision.transforms.GaussianBlur(kernel_size=3)], p=0.5),
-            torchvision.transforms.ToTensor(),
-            # transforms.Normalize(self.mean, self.std),  # TODO (dhuseljic) Discuss if this should be used
-        ])
-        return RepeatTransformations(transform)
-
-    @property
-    def eval_transform(self):
-        return self.train_transform
-
-
-class CIFAR10Contrastive(CIFAR10):
-    """
-    Contrastive version of CIFAR10.
-
-    This means that the transforms are repeated twice for each image, resulting in two views for each input image.
-    """
-
-    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None, cds=0.5) -> None:
-        super().__init__(dataset_path, CIFAR10ContrastiveTransforms(color_distortion_strength=cds), val_split, seed)
 
 
 class CIFAR100Transforms(Enum):
@@ -252,72 +211,6 @@ class CIFAR100StandardTransforms(BaseTransforms):
         ])
         return transform
 
-
-class CIFAR100ContrastiveTransforms(CIFAR100StandardTransforms):
-    def __init__(self, color_distortion_strength: float):
-        super().__init__()
-        self._s = color_distortion_strength
-
-    @property
-    def train_transform(self):
-        color_jitter = torchvision.transforms.ColorJitter(0.8 * self._s, 0.8 * self._s, 0.8 * self._s, 0.2 * self._s)
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.RandomResizedCrop(size=32),
-            torchvision.transforms.RandomHorizontalFlip(p=0.5),
-            torchvision.transforms.RandomApply([color_jitter], p=0.8),
-            torchvision.transforms.RandomGrayscale(p=0.2),
-            # GaussianBlur not used in original paper, however, other papers assign it importance
-            torchvision.transforms.RandomApply([torchvision.transforms.GaussianBlur(kernel_size=3)], p=0.5),
-            torchvision.transforms.ToTensor(),
-            # transforms.Normalize(self.mean, self.std),  # TODO (dhuseljic) Discuss if this should be used
-        ])
-        return RepeatTransformations(transform)
-
-    @property
-    def eval_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(self.mean, self.std)
-        ])
-        return transform
-
-    @property
-    def query_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(self.mean, self.std)
-        ])
-        return transform
-
-
-class CIFAR100SimCLRTransforms(BaseTransforms):
-    def __init__(self):
-        super().__init__()
-
-    @property
-    def train_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.RandomResizedCrop(size=32),
-            torchvision.transforms.RandomHorizontalFlip(p=0.5),
-            torchvision.transforms.ToTensor(),
-        ])
-        return transform
-
-    @property
-    def eval_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-        ])
-        return transform
-
-    @property
-    def query_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-        ])
-        return transform
-
-
 class CIFAR100(BaseData):
 
     def __init__(self,
@@ -355,74 +248,131 @@ class CIFAR100(BaseData):
     def test_dataset(self):
         return torchvision.datasets.CIFAR100(self.dataset_path, train=False, transform=self.eval_transform)
 
-class CIFAR100SimCLR(CIFAR100):
-    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
-        super().__init__(dataset_path, CIFAR100SimCLRTransforms(), val_split, seed)
 
-class CIFAR100Contrastive(CIFAR100):
-    """
-    Contrastive version of CIFAR100.
+class CIFAR10LT(BaseData):
+    def __init__(self,
+                 dataset_path: str,
+                 transforms: BaseTransforms = None,
+                 val_split: float = 0.1,
+                 imbalance_ratio: float = 0.01,
+                 seed: int = None) -> None:
+        self.transforms = CIFAR10StandardTransforms() if transforms is None else transforms
+        self.train_transform = self.transforms.train_transform
+        self.eval_transform = self.transforms.eval_transform
+        self.query_transform = self.transforms.query_transform
+        self.imbalance_ratio = imbalance_ratio
+        super().__init__(dataset_path, val_split, seed)
 
-    This means that the transforms are repeated twice for each image, resulting in two views for each input image.
-    """
+    @property
+    def num_classes(self):
+        return 10
 
-    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None, cds=1.0) -> None:
-        super().__init__(dataset_path, CIFAR10ContrastiveTransforms(color_distortion_strength=cds), val_split, seed)
+    def download_datasets(self):
+        _CIFAR10LT(self.dataset_path, self.imbalance_ratio, train=True, download=True)
+        _CIFAR10LT(self.dataset_path, self.imbalance_ratio, train=False, download=True)
 
+    @property
+    def full_train_dataset(self):
+        return _CIFAR10LT(self.dataset_path, self.imbalance_ratio, train=True, transform=self.train_transform)
 
-class CIFAR100Plain(CIFAR100):
-    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
-        super().__init__(dataset_path, PlainTransforms(), val_split, seed)
+    @property
+    def full_train_dataset_eval_transforms(self):
+        return _CIFAR10LT(self.dataset_path, self.imbalance_ratio, train=True, transform=self.eval_transform)
 
+    @property
+    def full_train_dataset_query_transforms(self):
+        return _CIFAR10LT(self.dataset_path, self.imbalance_ratio, train=True, transform=self.query_transform)
 
-def build_cifar10(split, ds_path, mean=(0.4914, 0.4822, 0.4465), std=(0.247, 0.243, 0.262), return_info=False):
-    warnings.warn('Deprecated method build_cifar10.')
-    train_transform = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(32),
-        torchvision.transforms.RandomCrop(32, padding=4),
-        torchvision.transforms.RandomHorizontalFlip(),
-        torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize(mean, std),
-    ])
-    eval_transform = torchvision.transforms.Compose([
-        torchvision.transforms.Resize(32),
-        torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize(mean, std)
-    ])
-    if split == 'train':
-        ds = torchvision.datasets.CIFAR10(ds_path, train=True, download=True, transform=train_transform)
-    elif split == 'query':
-        ds = torchvision.datasets.CIFAR10(ds_path, train=True, download=True, transform=eval_transform)
-    elif split == 'raw':
-        ds = torchvision.datasets.CIFAR10(ds_path, train=True, download=True)
-    elif split == 'test':
-        ds = torchvision.datasets.CIFAR10(ds_path, train=False, download=True, transform=eval_transform)
-
-    if return_info:
-        ds_info = {'n_classes': 10, 'mean': mean, 'std': std}
-        return ds, ds_info
-    return ds
+    @property
+    def test_dataset(self):
+        return _CIFAR10LT(self.dataset_path, self.imbalance_ratio, train=False, transform=self.eval_transform)
 
 
-def build_cifar100(split, ds_path, mean=(0.5071, 0.4865, 0.4409), std=(0.2673, 0.2564, 0.2762), return_info=False):
-    warnings.warn('Deprecated method build_cifar100.')
-    train_transform = torchvision.transforms.Compose([
-        torchvision.transforms.RandomCrop(32, padding=4),
-        torchvision.transforms.RandomHorizontalFlip(),
-        torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize(mean, std),
-    ])
-    eval_transform = torchvision.transforms.Compose([
-        torchvision.transforms.ToTensor(),
-        torchvision.transforms.Normalize(mean, std)
-    ])
-    if split == 'train':
-        ds = torchvision.datasets.CIFAR100(ds_path, train=True, download=True, transform=train_transform)
-    elif split == 'query':
-        ds = torchvision.datasets.CIFAR100(ds_path, train=True, download=True, transform=eval_transform)
-    elif split == 'test':
-        ds = torchvision.datasets.CIFAR100(ds_path, train=False, download=True, transform=eval_transform)
-    if return_info:
-        ds_info = {'n_classes': 100, 'mean': mean, 'std': std}
-        return ds, ds_info
-    return ds
+class _CIFAR10LT(torchvision.datasets.CIFAR10):
+    # Ref: https://github.com/KaihuaTang/Long-Tailed-Recognition.pytorch/blob/master/classification/data/ImbalanceCIFAR.py
+    cls_num = 10
+
+    def __init__(self, root, imbalance_ratio, imb_type='exp', train=True, transform=None, download=False):
+        super(_CIFAR10LT, self).__init__(root, train, transform=None, target_transform=None, download=download)
+        self.train = train
+        self.transform = transform
+        if self.train:
+            img_num_list = self.get_img_num_per_cls(10, imb_type, imbalance_ratio)
+            self.gen_imbalanced_data(img_num_list)
+        self.labels = self.targets
+
+    def _get_class_dict(self):
+        class_dict = dict()
+        for i, anno in enumerate(self.get_annotations()):
+            cat_id = anno["category_id"]
+            if not cat_id in class_dict:
+                class_dict[cat_id] = []
+            class_dict[cat_id].append(i)
+        return class_dict
+
+    def get_img_num_per_cls(self, cls_num, imb_type, imb_factor):
+        img_max = len(self.data) / cls_num
+        img_num_per_cls = []
+        if imb_type == 'exp':
+            for cls_idx in range(cls_num):
+                num = img_max * (imb_factor**(cls_idx / (cls_num - 1.0)))
+                img_num_per_cls.append(int(num))
+        elif imb_type == 'step':
+            for cls_idx in range(cls_num // 2):
+                img_num_per_cls.append(int(img_max))
+            for cls_idx in range(cls_num // 2):
+                img_num_per_cls.append(int(img_max * imb_factor))
+        else:
+            img_num_per_cls.extend([int(img_max)] * cls_num)
+        return img_num_per_cls
+
+    def gen_imbalanced_data(self, img_num_per_cls):
+        new_data = []
+        new_targets = []
+        targets_np = np.array(self.targets, dtype=np.int64)
+        classes = np.unique(targets_np)
+
+        self.num_per_cls_dict = dict()
+        for the_class, the_img_num in zip(classes, img_num_per_cls):
+            self.num_per_cls_dict[the_class] = the_img_num
+            idx = np.where(targets_np == the_class)[0]
+            np.random.shuffle(idx)
+            selec_idx = idx[:the_img_num]
+            new_data.append(self.data[selec_idx, ...])
+            new_targets.extend([the_class, ] * the_img_num)
+        new_data = np.vstack(new_data)
+        self.data = new_data
+        self.targets = new_targets
+
+    def __getitem__(self, index):
+        img, label = self.data[index], self.labels[index]
+
+        # doing this so that it is consistent with all other datasets
+        # to return a PIL Image
+        img = Image.fromarray(img)
+
+        if self.transform is not None:
+            img = self.transform(img)
+
+        if self.target_transform is not None:
+            label = self.target_transform(label)
+
+        return img, label
+
+    def __len__(self):
+        return len(self.labels)
+
+    def get_num_classes(self):
+        return self.cls_num
+
+    def get_annotations(self):
+        annos = []
+        for label in self.labels:
+            annos.append({'category_id': int(label)})
+        return annos
+
+    def get_cls_num_list(self):
+        cls_num_list = []
+        for i in range(self.cls_num):
+            cls_num_list.append(self.num_per_cls_dict[i])
+        return cls_num_list

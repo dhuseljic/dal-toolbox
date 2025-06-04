@@ -7,6 +7,7 @@ from . import imagenet_subsets
 from . import stl10
 
 from .stl10 import STL10
+from .dopanim import Dopanim
 from .snacks import Snacks
 from .dtd import DTD
 from .food import Food101
@@ -14,10 +15,9 @@ from .flowers import Flowers102
 from .country211 import Country211
 from .tiny_imagenet import TinyImageNet
 from .stanford_dogs import StanfordDogs
+from .mnist import MNIST
 
-from .cifar import CIFAR10, CIFAR100, CIFAR10C
-from .cifar import CIFAR10SimCLR, CIFAR10WithoutNormalization, CIFAR100SimCLR
-from .cifar import CIFAR10Contrastive, CIFAR10Plain, CIFAR100Contrastive, CIFAR100Plain
+from .cifar import CIFAR10, CIFAR100, CIFAR10C, CIFAR10LT
 from .svhn import SVHN, SVHNSimCLR
 from .svhn import SVHNContrastive, SVHNPlain
 from .imagenet import ImageNet, ImageNetContrastive, ImageNetPlain, ImageNetDINO

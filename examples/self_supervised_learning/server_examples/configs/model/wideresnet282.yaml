@@ -1,9 +1,11 @@
-name: wideresnet282_deterministic
-width: 2
+name: wideresnet282
 n_epochs: 200
-batch_size: 128
-dropout_rate: 0.0
+projection_dim: 128
+train_batch_size: 64
+test_batch_size: 256
+temperature: 0.9
 optimizer:
   lr: 0.1
-  weight_decay: 5e-4
-  momentum: .9
+  weight_decay: 0.0005
+  momentum: 0.9
+  nesterov: True

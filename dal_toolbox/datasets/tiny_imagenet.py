@@ -1,3 +1,6 @@
+import os
+
+from pathlib import Path
 from torch.utils.data import Dataset
 from .base import BaseData, BaseTransforms
 from .utils import PlainTransforms
@@ -52,8 +55,11 @@ class _TinyImageNet(Dataset):
         split_mapping = {'train': 'train', 'test': 'valid'}
 
         config.DOWNLOADED_DATASETS_PATH = root
-        config.HF_DATASETS_CACHE = root
-        self.ds = load_dataset('Maysee/tiny-imagenet', split=split_mapping[self.split])
+        self.ds = load_dataset(
+            'Maysee/tiny-imagenet',
+            split=split_mapping[self.split],
+            download_mode="reuse_dataset_if_exists"
+        )
 
     def __len__(self):
         return len(self.ds)
@@ -62,11 +68,9 @@ class _TinyImageNet(Dataset):
         data = self.ds[index]
         img = data['image']
         lbl = data['label']
-        
+
         if self.transform:
             img = self.transform(img)
         if self.target_transform:
             lbl = self.target_transform(lbl)
         return img, lbl
-        
-

@@ -25,9 +25,11 @@ class UncertaintySampling(Query, ABC):
         # forward_kwargs: dict = None, TODO
         **kwargs
     ):
+
         unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(
             subset_size=self.subset_size)
-        logits = model.get_logits(unlabeled_dataloader, device=self.device)
+        outputs = model.get_model_outputs(unlabeled_dataloader, output_types=['logits'], device=self.device)
+        logits = outputs['logits']
         scores = self.get_utilities(logits)
         _, indices = scores.topk(acq_size)
 

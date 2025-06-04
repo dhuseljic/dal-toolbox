@@ -95,12 +95,16 @@ class LaplaceLinear(nn.Module):
         self.precision_matrix.data = precision_matrix_new
         # If there is a change in the precision matrix, recompute the covariance
         self.recompute_covariance = True
+    
+    def compute_covariance(self):
+        # self.covariance_matrix  = torch.linalg.inv(self.precision_matrix.data)
+        u = torch.linalg.cholesky(self.precision_matrix.data)
+        self.covariance_matrix.data = torch.cholesky_inverse(u)
+        self.recompute_covariance = False
 
     def compute_predictive_covariance(self, inputs):
         if self.recompute_covariance:
-            # self.covariance_matrix  = torch.linalg.inv(self.precision_matrix.data)
-            u = torch.linalg.cholesky(self.precision_matrix.data)
-            self.covariance_matrix.data = torch.cholesky_inverse(u)
+            self.compute_covariance()
         covariance_matrix_feature = self.covariance_matrix.data
         out = torch.matmul(covariance_matrix_feature, inputs.T) * self.ridge_penalty
         covariance_matrix_gp = torch.matmul(inputs, out)

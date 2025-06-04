@@ -7,3 +7,6 @@ from .badge import *
 from .bait import *
 from .typiclust import *
 from .bemps import *
+from .dropquery import *
+from .alfamix import *
+from .falcun import *

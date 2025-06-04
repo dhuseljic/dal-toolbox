@@ -1,41 +1,60 @@
 import os
 import torch
 import torch.nn as nn
+import logging
 
 from torch.utils.data import DataLoader
 from datasets import load_dataset
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, Swinv2ForImageClassification, ViTForImageClassification
 from omegaconf import DictConfig
 
 from dal_toolbox.datasets import CIFAR10
-from dal_toolbox.datasets.utils import DinoTransforms, FeatureDataset
-from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, Snacks, DTD, Flowers102, TinyImageNet
-from dal_toolbox.datasets import ImageNet, StanfordDogs
+from dal_toolbox.datasets.utils import DinoTransforms, FeatureDataset, PlainTransforms, SwinV2Transforms, ViTMAETransforms
+from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, Snacks, DTD, Flowers102, TinyImageNet, MNIST
+from dal_toolbox.datasets import ImageNet, StanfordDogs, CIFAR10LT, Dopanim
 
 from dal_toolbox.models.laplace import LaplaceLinear, LaplaceModel
 
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
 
-def build_datasets(args, val_split=False, cache_features=True):
-    image_datasets = ['cifar10', 'stl10', 'snacks', 'dtd', 'cifar100', 'food101', 'flowers102',
-                      'caltech101', 'stanford_dogs', 'tiny_imagenet', 'imagenet']
+
+def build_datasets(args, cache_features=True):
+    image_datasets = ['cifar10', 'cifar10-lt', 'stl10', 'dopanim', 'snacks', 'dtd', 'cifar100', 'food101', 'flowers102',
+                      'caltech101', 'stanford_dogs', 'tiny_imagenet', 'imagenet', 'mnist']
     text_datasets = ['agnews', 'dbpedia', 'banking77', 'clinc']
 
     if args.dataset_name in image_datasets:
+        logging.info('Building Data!')
         data = build_image_data(args)
         if cache_features:
-            model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
-
-            train_ds = FeatureDataset(model, data.train_dataset, cache=True, cache_dir=args.dataset_path)
-            if val_split:
-                test_ds = FeatureDataset(model, data.val_dataset, cache=True, cache_dir=args.dataset_path)
+            logging.info('Building Backbone!')
+            if args.backbone == 'dinov2':
+                model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
+                logging.info('Selected DINOV2 as a backbone!')
+            elif args.backbone == 'swinv2':
+                model = Swinv2ForImageClassification.from_pretrained("microsoft/swinv2-base-patch4-window8-256")
+                model.classifier = nn.Identity()
+            elif args.backbone == 'swinv2-t':
+                model = Swinv2ForImageClassification.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256")
+                model.classifier = nn.Identity()
+            elif args.backbone == 'swinv2-s':
+                model = Swinv2ForImageClassification.from_pretrained("microsoft/swinv2-small-patch4-window8-256")
+                model.classifier = nn.Identity()
+            elif args.backbone == 'vit-mae':
+                model = ViTForImageClassification.from_pretrained("facebook/vit-mae-base")
+                model.classifier = nn.Identity()
             else:
-                test_ds = FeatureDataset(model, data.test_dataset, cache=True, cache_dir=args.dataset_path)
+                raise NotImplementedError(f'This backbone ({args.backbone}) is not available!')
+
+            train_ds = FeatureDataset(model, data.train_dataset, cache=True, cache_dir=args.dataset_path, backbone=args.backbone)
+            val_ds = FeatureDataset(model, data.val_dataset, cache=True, cache_dir=args.dataset_path, backbone=args.backbone)
+            test_ds = FeatureDataset(model, data.test_dataset, cache=True, cache_dir=args.dataset_path, backbone=args.backbone)
         else:
             train_ds = data.train_dataset
-            if val_split:
-                test_ds = data.val_dataset
-            else:
-                test_ds = data.test_dataset
+            val_ds = data.val_dataset
+            test_ds = data.test_dataset
+
         num_classes = data.num_classes
 
     elif args.dataset_name in text_datasets:
@@ -43,34 +62,42 @@ def build_datasets(args, val_split=False, cache_features=True):
         tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased", use_fast=False)
 
         data = data.map(
-            lambda batch: tokenizer(
-                batch["text"],
-                truncation=True,
-                padding="max_length",
-                max_length=512
-            ),
-            batched=True,
-            batch_size=1000)
+            lambda batch: tokenizer(batch["text"], truncation=True, padding="max_length", max_length=512),
+            batched=True, batch_size=1000
+        )
 
         data = data.remove_columns(
             list(set(data['train'].column_names)-set(['input_ids', 'attention_mask', 'label'])))
         data = data.with_format("torch")
 
         model = BertSequenceClassifier(num_classes=num_classes)
-        train_ds = FeatureDataset(model, data["train"], cache=True,
-                                  cache_dir=args.dataset_path, task="text")
-        test_ds = FeatureDataset(model, data["test"], cache=True,
-                                 cache_dir=args.dataset_path, task="text")
+        train_ds = FeatureDataset(model, data["train"], cache=True, cache_dir=args.dataset_path, task="text")
+        test_ds = FeatureDataset(model, data["test"], cache=True, cache_dir=args.dataset_path, task="text")
 
-    return train_ds, test_ds, num_classes
+    return train_ds, val_ds, test_ds, num_classes
 
 
-def build_image_data(args):
-    transforms = DinoTransforms(size=(256, 256))
+def build_image_data(args, plain_transforms=False):
+    if plain_transforms:
+        transforms = PlainTransforms(resize=(224, 224))
+    else:
+        if args.backbone == 'dinov2':
+            transforms = DinoTransforms(size=(256, 256))
+        elif 'swinv2' in args.backbone:
+            transforms = SwinV2Transforms(args.backbone)
+        elif args.backbone == 'vit-mae':
+            transforms = ViTMAETransforms()
+        else:
+            raise ValueError(f"{args.backbone}-backbone not implemented!")
+
     if args.dataset_name == 'cifar10':
         data = CIFAR10(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'cifar10-lt':
+        data = CIFAR10LT(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'stl10':
         data = STL10(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'dopanim':
+        data = Dopanim(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'snacks':
         data = Snacks(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'dtd':
@@ -84,9 +111,11 @@ def build_image_data(args):
     elif args.dataset_name == 'stanford_dogs':
         data = StanfordDogs(args.dataset_path, transforms=transforms)
     elif args.dataset_name == 'tiny_imagenet':
-        data = TinyImageNet(args.dataset_path, transforms=transforms)
+        data = TinyImageNet(args.imagenet_path, transforms=transforms)
     elif args.dataset_name == 'imagenet':
-        data = ImageNet(args.dataset_path, transforms=transforms)
+        data = ImageNet(args.imagenet_path, transforms=transforms)
+    elif args.dataset_name == 'mnist':
+        data = MNIST(args.dataset_path, transforms=transforms)
     else:
         raise NotImplementedError()
     return data
@@ -115,7 +144,8 @@ def build_text_data(args):
 
 class FeatureDataset:
 
-    def __init__(self, model, dataset, cache=False, cache_dir=None, batch_size=256, device='cuda', task=None):
+    def __init__(self, model, dataset, cache=False, cache_dir=None, batch_size=128, device='cuda', task=None, num_workers=16, backbone='dinov2'):
+        self.backbone = backbone
         if cache:
             if cache_dir is None:
                 home_dir = os.path.expanduser('~')
@@ -128,11 +158,11 @@ class FeatureDataset:
                 print('Loading cached features from', file_name)
                 features, labels = torch.load(file_name, map_location='cpu')
             else:
-                features, labels = self.get_features(model, dataset, batch_size, device, task)  # change
+                features, labels = self.get_features(model, dataset, batch_size, device, task, num_workers)
                 print('Saving features to cache file', file_name)
                 torch.save((features, labels), file_name)
         else:
-            features, labels = self.get_features(model, dataset, batch_size, device)
+            features, labels = self.get_features(model, dataset, batch_size, device, task, num_workers)
 
         self.features = features
         self.labels = labels
@@ -165,9 +195,9 @@ class FeatureDataset:
         return self.features[idx], self.labels[idx]
 
     @torch.no_grad()
-    def get_features(self, model, dataset, batch_size, device, task=None):
+    def get_features(self, model, dataset, batch_size, device, task=None, num_workers=8):
         print('Getting ssl features..')
-        dataloader = DataLoader(dataset, batch_size=batch_size)
+        dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers)
         features = []
         labels = []
         model.eval()
@@ -179,7 +209,12 @@ class FeatureDataset:
                 features.append(model(input_ids, attention_mask).to('cpu'))
                 labels.append(batch["label"])
             else:
-                features.append(model(batch[0].to(device)).to('cpu'))
+                if 'swinv2' in self.backbone or self.backbone == 'vit-mae':
+                    # Make sure the classifier layer is set to identity in order for logits == features
+                    out = model(batch[0]['pixel_values'][0].to(device)).logits
+                else:
+                    out = model(batch[0].to(device))
+                features.append(out.to('cpu'))
                 labels.append(batch[-1])
 
         features = torch.cat(features)
@@ -218,164 +253,60 @@ def flatten_cfg(cfg, parent_key='', sep='.'):
     return dict(items)
 
 
-class LaplaceNet(LaplaceLinear):
+class LaplaceNet(nn.Module):
     use_mean_field = True
 
-    @torch.no_grad()
-    def get_logits(self, dataloader, device):
-        self.to(device)
-        self.eval()
-        all_logits = []
-        for batch in dataloader:
-            inputs = batch[0]
-            # TODO
-            if LaplaceNet.use_mean_field:
-                logits = self.forward_mean_field(inputs.to(device))
-            else:
-                logits = self.forward_monte_carlo(inputs.to(device))
-            all_logits.append(logits)
-        logits = torch.cat(all_logits)
+    def __init__(self, in_features, out_features, **kwargs):
+        super().__init__()
+        self.layer = LaplaceLinear(in_features, out_features, **kwargs)
+
+    def forward_features(self, x):
+        return x
+
+    def forward_head(self, x, mean_field=False):
+        if mean_field:
+            out = self.layer.forward_mean_field(x)
+        else:
+            out = self.layer(x)
+        return out
+
+    def forward_mean_field(self, x):
+        return self.layer.forward_mean_field(x)
+
+    def forward(self, x):
+        features = self.forward_features(x)
+        logits = self.forward_head(features)
         return logits
 
-    @torch.no_grad()
-    def get_representations(self, dataloader, device):
-        self.to(device)
-        self.eval()
-        all_representations = []
-        for batch in dataloader:
-            inputs = batch[0]
-            all_representations.append(inputs)
-        representations = torch.cat(all_representations)
-        return representations
 
-    @torch.no_grad()
-    def get_logits_from_representations(self, representations, device):
-        self.to(device)
-        self.eval()
-        # TODO
-        logits = self.forward_mean_field(representations.to(device))
+class LaplaceMLP(nn.Module):
+    def __init__(self, in_features, out_features, num_hidden=128, bias=False):
+        super().__init__()
+        self.layer1 = nn.Linear(in_features, num_hidden, bias=bias)
+        self.layer2 = LaplaceNet(num_hidden, out_features, bias=bias)
+        self.act = nn.ReLU()
+
+    def forward_features(self, x):
+        out = self.layer1(x)
+        out = self.act(out)
+        return out
+
+    def forward_head(self, x, mean_field=False):
+        if mean_field:
+            out = self.layer2.forward_mean_field(x)
+        else:
+            out = self.layer2(x)
+        return out
+
+    def forward(self, x):
+        features = self.forward_features(x)
+        logits = self.forward_head(features)
         return logits
 
-    @torch.inference_mode()
-    def get_grad_representations(self, dataloader, device):
-        self.eval()
-        self.to(device)
-
-        embedding = []
-        for batch in dataloader:
-            inputs = batch[0].to(device)
-            logits = self(inputs)
-
-            features = inputs
-            probas = logits.softmax(-1)
-            max_indices = probas.argmax(-1)
-            num_classes = logits.size(-1)
-
-            factor = F.one_hot(max_indices, num_classes=num_classes) - probas
-            embedding_batch = (factor[:, :, None] * features[:, None, :]).flatten(-2)
-
-            embedding.append(embedding_batch.cpu())
-
-        # Concat all embeddings
-        embedding = torch.cat(embedding)
-        return embedding
-
-    @torch.no_grad()
-    def get_topk_grad_representations(self, dataloader, device, topk, grad_likelihood='cross_entropy', normalize_top_probas=True):
-        self.eval()
-        self.to(device)
-
-        embedding = []
-        for batch in dataloader:
-            inputs = batch[0].to(device)
-            logits = self(inputs)
-
-            features = inputs
-            probas = logits.softmax(-1)
-            num_classes = logits.size(-1)
-            probas_topk, top_preds = probas.topk(k=topk)
-
-            if grad_likelihood == 'cross_entropy':
-                factor = (torch.eye(num_classes, device=device)[:, None] - probas)
-                batch_indices = torch.arange(len(top_preds)).unsqueeze(-1).expand(-1, top_preds.size(1))
-                factor = factor[top_preds, batch_indices]
-
-                embedding_batch = torch.einsum("njh,nd->njhd", factor, features).flatten(2)
-                if normalize_top_probas:
-                    probas_topk /= probas_topk.sum(-1, keepdim=True)
-                embedding_batch = torch.sqrt(probas_topk)[:, :, None] * embedding_batch
-
-            elif grad_likelihood == 'binary_cross_entropy':
-                # We assume multiple independet binary cross entropy for highest probabilities
-                if topk > 2:
-                    raise ValueError('When using the binary cross entropy, topk must be 1 or 2.')
-                max_probas = probas_topk[:, 0]
-                factor = torch.eye(topk, device=device)[0] - max_probas[:, None]
-                embedding_batch = torch.einsum("nk,nd->nkd", factor, features).flatten(2)
-
-                probas_topk = torch.stack((max_probas, 1 - max_probas), dim=1)[:, :topk]
-                if normalize_top_probas:
-                    probas_topk /= probas_topk.sum(-1, keepdim=True)
-                embedding_batch = torch.sqrt(probas_topk)[:, :, None] * embedding_batch
-
-            elif grad_likelihood == 'cross_entropy_unbiased':
-
-                cat = torch.distributions.Categorical(probas)
-                factor = (torch.eye(num_classes, device=device)[:, None] - probas)
-                batch_indices = torch.arange(len(top_preds)).unsqueeze(-1).expand(-1, top_preds.size(1))
-                sampled_labels = cat.sample((topk,)).T
-                factor = factor[sampled_labels, batch_indices]
-
-                embedding_batch = torch.einsum("njh,nd->njhd", factor, features).flatten(2)
-            else:
-
-                raise NotImplementedError()
-
-            embedding.append(embedding_batch.cpu())
-        embedding = torch.cat(embedding)
-
-        return embedding
-
-    @torch.no_grad()
-    def get_exp_grad_representations(self, dataloader, device, grad_likelihood='cross_entropy'):
-        self.eval()
-        self.to(device)
-
-        embedding = []
-        for batch in dataloader:
-            inputs = batch[0].to(device)
-            logits = self(inputs)
-
-            features = inputs
-            probas = logits.softmax(-1)
-            num_classes = logits.size(-1)
-
-            if grad_likelihood == 'cross_entropy':
-                factor = (torch.eye(num_classes, device=device)[:, None] - probas)
-                embedding_batch = torch.einsum("jnh,nd->njhd", factor, features).flatten(2)
-                embedding_batch = torch.sqrt(probas)[:, :, None] * embedding_batch
-
-            elif grad_likelihood == 'binary_cross_entropy':
-                max_probas = probas.max(dim=-1).values
-
-                factor = torch.eye(2, device=device)[0] - max_probas[:, None]
-                embedding_batch = torch.einsum("nk,nd->nkd", factor, features).flatten(2)
-                probas_ = torch.stack((max_probas, 1 - max_probas), dim=1)
-                embedding_batch = torch.sqrt(probas_)[:, :, None] * embedding_batch
-            elif grad_likelihood == 'test':
-                c = 10
-                top_probas = probas.topk(c).values
-                top_probas = top_probas / top_probas.sum(-1, keepdim=True)
-                factor = (torch.eye(c, device=device)[:, None] - top_probas)
-                embedding_batch = torch.einsum("jnh,nd->njhd", factor, features).flatten(2)
-
-            else:
-                raise NotImplementedError()
-
-            embedding.append(embedding_batch.cpu())
-        embedding = torch.cat(embedding)
-
-        return embedding
+    def forward_mean_field(self, x):
+        features = self.forward_features(x)
+        mean_field_logits = self.forward_head(features, mean_field=True)
+        return mean_field_logits
 
 
 def build_model(args, **kwargs):
@@ -390,28 +321,10 @@ def build_model(args, **kwargs):
             num_classes,
             mean_field_factor=args.model.mean_field_factor,
             mc_samples=args.model.mc_samples,
-            cov_likelihood=args.likelihood,
             bias=True,
         )
-        if 'al' in args and args.al.strategy in ['bald', 'pseudo_bald', 'batch_bald']:
-            LaplaceNet.use_mean_field = False
-    elif args.model.name == 'dino_laplace':
-        ssl_model = build_dino_model(args)
-        last_layer = LaplaceNet(
-            num_features,
-            num_classes,
-            mean_field_factor=args.model.mean_field_factor,
-            mc_samples=args.model.mc_samples,
-            cov_likelihood=args.likelihood,
-            bias=True,
-        )
-        model = BackboneModel(ssl_model, last_layer)
-
-        if not args.optimizer.finetune_backbone:
-            for n, p in model.named_parameters():
-                if 'ssl_model' in n:
-                    p.requires_grad = False
-
+    elif args.model.name == 'laplace_mlp':
+        model = LaplaceMLP(num_features, num_classes, bias=True)
     else:
         raise NotImplementedError()
 
@@ -422,7 +335,7 @@ def build_model(args, **kwargs):
     ]
 
     if args.optimizer.name == 'SGD':
-        optimizer = torch.optim.SGD(params, lr=args.optimizer.lr,
+        optimizer = torch.optim.SGD(params, lr=args.optimizer.lr, nesterov=args.optimizer.nesterov,
                                     momentum=args.optimizer.momentum, weight_decay=args.optimizer.weight_decay)
     elif args.optimizer.name == 'Adam':
         optimizer = torch.optim.Adam(params, lr=args.optimizer.lr,
