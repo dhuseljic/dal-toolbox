@@ -5,9 +5,7 @@ mlflow_uri: sqlite:///active_learning.db
 dataset:
   name: cifar10
   path: /home/datasets
-  val_split: 1
   cache_features: True
-  feature_cache_dir: null
   num_workers: 0
   backbone: dinov2
 

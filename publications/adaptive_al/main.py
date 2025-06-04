@@ -12,14 +12,9 @@ from omegaconf import OmegaConf
 from dal_toolbox import metrics
 from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.active_learning import strategies
-from dal_toolbox.active_learning.strategies.query import Query
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything
 
-from torch.utils.data import DataLoader, Subset, ConcatDataset
-from scipy.optimize import linear_sum_assignment
-from sklearn.metrics import pairwise_distances
-from rich.progress import track
 
 from utils import build_datasets, flatten_cfg, build_model
 
