@@ -170,10 +170,10 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
     if is_diag:
         currentInv = 1 / (lmb + fisher_labeled * num_labeled / (num_labeled + acq_size))
     elif is_block_diag:
-        currentInv = torch.inverse(lmb + fisher_labeled * num_labeled / (num_labeled + acq_size))
+        currentInv = inverse(lmb + fisher_labeled * num_labeled / (num_labeled + acq_size))
     else:
         inv_device = 'cpu' if fisher_labeled.size(0) > 10_000 else device
-        currentInv = torch.inverse(lmb * torch.eye(dim, device=inv_device) + fisher_labeled.to(inv_device) *
+        currentInv = inverse(lmb * torch.eye(dim, device=inv_device) + fisher_labeled.to(inv_device) *
                                    num_labeled / (num_labeled + acq_size))
     repr_unlabeled = repr_unlabeled * np.sqrt(acq_size / (num_labeled + acq_size))
 
@@ -188,12 +188,12 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
         xt_ = repr_unlabeled.to(device)
 
         if is_diag:
-            innerInv = torch.inverse(torch.eye(rank).to(device) + xt_ *
+            innerInv = inverse(torch.eye(rank).to(device) + xt_ *
                                      currentInv @ xt_.transpose(1, 2)).detach()
         elif is_block_diag:
             raise NotImplementedError()
         else:
-            innerInv = torch.inverse(torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2))
+            innerInv = inverse(torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2))
         innerInv[torch.where(torch.isinf(innerInv))] = torch.sign(
             innerInv[torch.where(torch.isinf(innerInv))]) * np.finfo('float32').max
         if is_diag:
@@ -219,14 +219,14 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
         torch.cuda.empty_cache()
         xt_ = repr_unlabeled[ind].unsqueeze(0).to(device)
         if is_diag:
-            innerInv = torch.inverse(torch.eye(rank).to(device) + xt_ * currentInv @ xt_.transpose(1, 2))
+            innerInv = inverse(torch.eye(rank).to(device) + xt_ * currentInv @ xt_.transpose(1, 2))
             currentInv = (currentInv - torch.diag(((xt_*currentInv).transpose(1, 2)
                           @ innerInv @ (xt_*currentInv))[0]))
         elif is_block_diag:
             raise NotImplementedError()
         else:
             # xt_.cpu() @ currentInv.cpu() @ xt_.transpose(1, 2).cpu()
-            innerInv = torch.inverse(torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2))
+            innerInv = inverse(torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2))
             currentInv = (currentInv - currentInv @ xt_.transpose(1, 2) @ innerInv @ xt_ @ currentInv)[0]
         del xt_
         del innerInv
@@ -242,17 +242,14 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
         # select index for removal
         xt_ = repr_unlabeled[indsAll].to(device)
         if is_diag:
-            innerInv = torch.inverse(-1 * torch.eye(rank).to(device) + xt_ * currentInv @ xt_.transpose(1, 2))
+            innerInv = inverse(-1 * torch.eye(rank).to(device) + xt_ * currentInv @ xt_.transpose(1, 2))
             traceEst = torch.diagonal(xt_ * currentInv * fisher_all * currentInv @
                                       xt_.transpose(1, 2) @ innerInv, dim1=-2, dim2=-1).sum(-1)
         elif is_block_diag:
             raise NotImplementedError()
         else:
             mat = -1 * torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2)
-            try:
-                innerInv = torch.inverse(mat)
-            except RuntimeError:
-                innerInv = torch.linalg.pinv(mat) # sometimes mat is singular
+            innerInv = inverse(mat)
             traceEst = torch.diagonal(xt_ @ currentInv @ fisher_all @ currentInv @
                                       xt_.transpose(1, 2) @ innerInv, dim1=-2, dim2=-1).sum(-1)
         delInd = torch.argmin(-1 * traceEst).item()
@@ -262,13 +259,13 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
         xt_ = repr_unlabeled[indsAll[delInd]].unsqueeze(0).to(device)
 
         if is_diag:
-            innerInv = torch.inverse(-1 * torch.eye(rank).to(device) + xt_ * currentInv @ xt_.transpose(1, 2))
+            innerInv = inverse(-1 * torch.eye(rank).to(device) + xt_ * currentInv @ xt_.transpose(1, 2))
             currentInv = (currentInv - torch.diag(((xt_*currentInv).transpose(1, 2)
                           @ innerInv @ (xt_*currentInv))[0]))
         elif is_block_diag:
             raise NotImplementedError()
         else:
-            innerInv = torch.inverse(-1 * torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2))
+            innerInv = inverse(-1 * torch.eye(rank).to(device) + xt_ @ currentInv @ xt_.transpose(1, 2))
             currentInv = (currentInv - currentInv @ xt_.transpose(1, 2) @ innerInv @ xt_ @ currentInv)[0]
 
         del indsAll[delInd]
@@ -276,6 +273,14 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
     # print(indsAll)
     return indsAll
 
+def inverse(mat):
+    # mat_inv = torch.inverse(mat)
+
+    I = torch.eye(mat.size(-1), dtype=mat.dtype, device=mat.device).expand_as(mat)
+    mat_inv = torch.linalg.solve(mat, I)
+    # print(torch.all(mat_inv == mat_inv_b))
+
+    return mat_inv
 
 def select_topk(repr_unlabeled, acq_size, fisher_all, fisher_labeled, lmb, num_labeled):
     device = fisher_all.device
@@ -287,10 +292,10 @@ def select_topk(repr_unlabeled, acq_size, fisher_all, fisher_labeled, lmb, num_l
 
     fisher_labeled = fisher_labeled * num_labeled / (num_labeled + acq_size)
     M_0 = lmb * torch.eye(dim, device=device) + fisher_labeled
-    M_0_inv = torch.inverse(M_0)
+    M_0_inv = inverse(M_0)
 
     # repr_unlabeled = repr_unlabeled * np.sqrt(acq_size / (num_labeled + acq_size))
-    A = torch.inverse(torch.eye(rank, device=device) + repr_unlabeled @
+    A = inverse(torch.eye(rank, device=device) + repr_unlabeled @
                       M_0_inv @ repr_unlabeled.transpose(1, 2))
     tmp = repr_unlabeled @ M_0_inv @ fisher_all @ M_0_inv @ repr_unlabeled.transpose(1, 2) @ A
     scores = torch.diagonal(tmp, dim1=-2, dim2=-1).sum(-1)
