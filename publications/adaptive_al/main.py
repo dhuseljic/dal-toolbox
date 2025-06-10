@@ -75,6 +75,10 @@ def main(args):
         test_stats = evaluate(predictions)
         test_stats['query_time'] = etime - stime if i_acq != 0 else 0
 
+        if args.al.strategy == 'select_al':
+            queried = al_strategy.query_history[-1] if i_acq != 0 else {}
+            test_stats.update(queried)
+
         print(f'Cycle {i_acq}:', test_stats, flush=True)
         al_history.append(test_stats)
         artifacts_history.append(artifacts)
