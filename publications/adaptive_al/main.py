@@ -17,6 +17,7 @@ from dal_toolbox.utils import seed_everything
 
 
 from utils import build_datasets, flatten_cfg, build_model
+from strategies import ActiveLearningByLearning, AdaptiveAL, SelectAL
 
 logging.getLogger("lightning.pytorch").setLevel(logging.ERROR)
 
@@ -74,6 +75,7 @@ def main(args):
         test_stats = evaluate(predictions)
         test_stats['query_time'] = etime - stime if i_acq != 0 else 0
 
+        print(al_strategy.history)
         print(f'Cycle {i_acq}:', test_stats, flush=True)
         al_history.append(test_stats)
         artifacts_history.append(artifacts)
@@ -104,15 +106,24 @@ def evaluate(predictions):
 
 
 def build_al_strategy(args):
+    subset_size = args.al.subset_size
     device = args.al.device
     if args.al.strategy == 'random':
         al_strategy = strategies.RandomSampling()
     elif args.al.strategy == 'margin':
-        al_strategy = strategies.MarginSampling(subset_size=args.al.subset_size, device=device)
+        al_strategy = strategies.MarginSampling(subset_size=subset_size, device=device)
     elif args.al.strategy == 'typiclust':
-        al_strategy = strategies.TypiClust(subset_size=args.al.subset_size)
+        al_strategy = strategies.TypiClust(subset_size=subset_size, device=device)
     elif args.al.strategy == 'badge':
-        al_strategy = strategies.Badge(subset_size=args.al.subset_size)
+        al_strategy = strategies.Badge(subset_size=subset_size, device=device)
+    elif args.al.strategy == 'aal':
+        al_strategy = AdaptiveAL(subset_size=subset_size, device=device)
+    elif args.al.strategy == 'select_al':
+        al_strategy = SelectAL(subset_size=subset_size, device=device)
+    elif args.al.strategy == 'albl':
+        args.al.num_acq = args.al.num_acq * args.al.acq_size
+        args.al.acq_size = 1
+        al_strategy = ActiveLearningByLearning(budget=args.al.num_acq, subset_size=subset_size, device=device)
     else:
         raise NotImplementedError()
     return al_strategy

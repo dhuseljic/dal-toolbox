@@ -1,5 +1,8 @@
 import numpy as np
 from abc import ABC, abstractmethod
+
+from ..data import ActiveLearningDataModule
+from ...models.utils.base import BaseModule
 from ...utils import setup_rng
 
 
@@ -11,5 +14,5 @@ class Query(ABC):
         self.rng = setup_rng(random_seed)
 
     @abstractmethod
-    def query(self):
+    def query(self, *, model: BaseModule, al_datamodule: ActiveLearningDataModule, acq_size: int):
         pass
