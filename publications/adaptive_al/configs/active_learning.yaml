@@ -11,14 +11,14 @@ dataset:
 
 al:
   strategy: random
-  subset_size: 2500
+  subset_size: 1000
   num_init: null
   acq_size: 10
   num_acq: 20
   device: cpu
 
 model:
-  name: mlp
+  name: linear
   num_epochs: 200
   train_batch_size: 64
   predict_batch_size: 128

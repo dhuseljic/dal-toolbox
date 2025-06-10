@@ -154,7 +154,6 @@ class AdaptiveAL(Query):
         self.val_loader = None
 
         self.i_iter = 0
-        self.history = []
 
     @torch.no_grad()
     def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
