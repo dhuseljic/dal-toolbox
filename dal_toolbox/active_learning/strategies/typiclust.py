@@ -136,7 +136,7 @@ class InverseTypiClust(TypiClust):
 
         query_indices = []
         for i in range(acq_size):
-            if cluster_sizes.max() == 0:
+            if cluster_sizes.min() == np.inf:
                 indices_ = np.arange(len(unlabeled_features))
                 indices_ = np.setdiff1d(indices_, query_indices)
                 idx = self.rng.choice(indices_)
@@ -150,7 +150,7 @@ class InverseTypiClust(TypiClust):
                 idx = typicality.argmin()
                 idx = cluster_indices[idx]
                 query_indices.append(idx-len(labeled_features))
-                cluster_sizes[cluster_id] = 0
+                cluster_sizes[cluster_id] = np.inf
 
         actual_indices = [unlabeled_indices[idx] for idx in query_indices]
         return actual_indices
