@@ -17,7 +17,7 @@ from dal_toolbox.utils import seed_everything
 
 
 from utils import build_datasets, flatten_cfg, build_model
-from strategies import ActiveLearningByLearning, AdaptiveAL, SelectAL
+from strategies import ActiveLearningByLearning, AdaptiveAL, SelectAL, TCM
 
 logging.getLogger("lightning.pytorch").setLevel(logging.ERROR)
 
@@ -123,6 +123,8 @@ def build_al_strategy(args):
         al_strategy = AdaptiveAL(subset_size=subset_size, device=device)
     elif args.al.strategy == 'select_al':
         al_strategy = SelectAL(subset_size=subset_size, device=device)
+    elif args.al.strategy == 'tcm':
+        al_strategy = TCM(subset_size=subset_size, device=device)
     elif args.al.strategy == 'albl':
         args.al.num_acq = args.al.num_acq * args.al.acq_size
         args.al.acq_size = 1

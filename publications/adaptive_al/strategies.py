@@ -9,6 +9,24 @@ from rich.progress import track
 from sklearn.model_selection import KFold
 
 
+class TCM(Query):
+    def __init__(self, typi_steps=3, subset_size=None, random_seed=None, device='cpu'):
+        super().__init__(random_seed)
+        self.typi_steps = typi_steps
+
+        self.typiclust = strategies.TypiClust(subset_size=subset_size, device=device)
+        self.margin = strategies.MarginSampling(subset_size=subset_size, device=device)
+        self.iter = 0
+
+    def query(self, *, model, al_datamodule, acq_size):
+        if self.iter < self.typi_steps:
+            indices = self.typiclust.query(model=model, al_datamodule=al_datamodule, acq_size=acq_size)
+        else:
+            indices = self.margin.query(model=model, al_datamodule=al_datamodule, acq_size=acq_size)
+        self.iter += 1
+        return indices
+
+
 class SelectAL(Query):
     def __init__(self,
                  epsilon=.05,
