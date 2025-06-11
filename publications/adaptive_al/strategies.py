@@ -11,7 +11,7 @@ from sklearn.model_selection import KFold
 
 class SelectAL(Query):
     def __init__(self,
-                 epsilon=.5,
+                 epsilon=.05,
                  low_budget_strategy='typiclust',
                  high_budget_strategy='badge',
                  surrogate_low_strategy='typiclust',
