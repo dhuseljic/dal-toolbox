@@ -10,14 +10,14 @@
 source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 
 mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perfdal.db'
-mlflow_exp_name='abl_extreme_reduction_2'
+mlflow_exp_name='abl_tiny_1'
 backbone=dinov2
 
 al_strategy=perf_dal_oracle
-n_bat=20
-n_ret=10
+n_bat=50
+n_ret=25
 var_sss=True
-sel_strats=\[badge,bait,dropquery,dropqueryclass\]
+sel_strats=\[alfamix,badge,bait,coreset,dropquery,dropqueryclass,margin,random,typiclass,typiclust\]
 
 datasets=(cifar10 flowers102 dtd cifar100)
 acq_sizes=(20 50 100 200)
