@@ -18,7 +18,7 @@ var_sss=True
 sel_strats=\[alfamix,badge,bait,coreset,dropquery,dropqueryclass,margin,random,typiclass,typiclust\]
 
 datasets=(cifar10 stl10 flowers102)
-subset_sizes=(1000 1000 Null)
+subset_sizes=(1000 Null Null)
 acq_sizes=(10 10 25)
 
 random_seeds=(1 2 3 4 5 6 7 8 9 10)
