@@ -9,143 +9,6 @@ from rich.progress import track
 from sklearn.model_selection import KFold
 
 
-class TCM(Query):
-    def __init__(self, typi_steps=3, subset_size=None, random_seed=None, device='cpu'):
-        super().__init__(random_seed)
-        self.typi_steps = typi_steps
-
-        self.typiclust = strategies.TypiClust(subset_size=subset_size, device=device)
-        self.margin = strategies.MarginSampling(subset_size=subset_size, device=device)
-        self.iter = 0
-
-    def query(self, *, model, al_datamodule, acq_size):
-        if self.iter < self.typi_steps:
-            indices = self.typiclust.query(model=model, al_datamodule=al_datamodule, acq_size=acq_size)
-        else:
-            indices = self.margin.query(model=model, al_datamodule=al_datamodule, acq_size=acq_size)
-        self.iter += 1
-        return indices
-
-
-class SelectAL(Query):
-    def __init__(self,
-                 epsilon=.05,
-                 low_budget_strategy='typiclust',
-                 high_budget_strategy='badge',
-                 surrogate_low_strategy='typiclust',
-                 surrogate_high_strategy='inv_typiclust',
-                 num_random_reps=5,
-                 val_split=0.01,
-                 num_val_reps=20,
-                 train_epochs=200,
-                 subset_size=None,
-                 random_seed=None,
-                 device='cpu',
-                 ):
-        super().__init__(random_seed)
-        self.epsilon = epsilon
-        self.subset_size = subset_size
-        self.device = device
-        self.num_random_reps = num_random_reps
-        self.num_val_reps = num_val_reps
-        self.val_split = val_split
-        self.train_epochs = train_epochs
-        self.history = []
-
-        self.random_strategy = strategies.RandomSampling()
-        self.surrogate_low_strategy = build_al_strategies([surrogate_low_strategy], device=self.device)[0]
-        self.surrogate_high_strategy = build_al_strategies([surrogate_high_strategy], device=self.device)[0]
-        self.surrogate_strategies = [self.random_strategy,
-                                     self.surrogate_low_strategy, self.surrogate_high_strategy]
-
-        self.low_budget_strategy = build_al_strategies([low_budget_strategy], device=self.device)[0]
-        self.high_budget_strategy = build_al_strategies([high_budget_strategy], device=self.device)[0]
-        self.strategies = [self.random_strategy, self.low_budget_strategy, self.high_budget_strategy]
-        self.query_history = []
-
-    def query(self, *, model, al_datamodule, acq_size):
-        al_datamodule = copy.deepcopy(al_datamodule)
-        _, labeled_indices = al_datamodule.labeled_dataloader()
-        if self.epsilon >= len(labeled_indices):
-            raise ValueError(
-                f'Epsilon={self.epsilon} greater or equals the labeled pool size of {len(labeled_indices)}.')
-
-        # Determine the regime we are in
-        labeled_labels = torch.cat([batch[1] for batch in al_datamodule.custom_dataloader(labeled_indices)])
-        labels_unique, labels_counts = labeled_labels.unique(return_counts=True)
-        num_classes = len(labels_unique)
-
-        min_lbl_count = labels_counts.min().item()
-        eps = self.epsilon if not (0 < self.epsilon < 1) else int(self.epsilon*len(labeled_indices))
-        c = max(eps // num_classes, 1)
-        c = min(c, min_lbl_count)
-
-        surrogate_accs = []
-        for i_strat, strat in enumerate(self.surrogate_strategies):
-            num_reps = 1 if i_strat != 0 else self.num_random_reps
-
-            rep_accs = []
-            for _ in range(num_reps):
-                # Select from L via strat per class
-                remove_indices = []
-                for lbl in labels_unique:
-                    labeled_indices_cls = np.array(labeled_indices)[labeled_labels == lbl]
-                    aldm = copy.deepcopy(al_datamodule)
-                    aldm.unlabeled_indices = labeled_indices_cls
-                    aldm.labeled_indices = []
-                    remove_indices.extend(strat.query(model=model, al_datamodule=aldm, acq_size=c))
-
-                # Remove selection from L
-                new_indices = copy.copy(labeled_indices)
-                for idx in remove_indices:
-                    new_indices.remove(idx)
-
-                # Eval the performance via cross validation on new labeled data
-                accs = []
-                num_val_samples = max(1, int(len(new_indices)*self.val_split))
-                for _ in range(self.num_val_reps):
-                    val_indices = self.rng.choice(new_indices, size=num_val_samples, replace=False)
-                    train_indices = np.setdiff1d(new_indices, val_indices)
-                    model = self.train_model(model, aldm.custom_dataloader(train_indices, train=True))
-                    acc = self.evaluate_model(model, aldm.custom_dataloader(val_indices)).item()
-                    accs.append(acc)
-                rep_accs.append(np.mean(accs))
-            surrogate_accs.append(np.mean(rep_accs).item())
-        idx = self.rng.choice(np.flatnonzero(surrogate_accs == np.min(surrogate_accs)))
-
-        selected = {k: v.item() for k, v in zip(['random', 'low', 'high'], np.eye(3, dtype=int)[idx])}
-        self.query_history.append(selected)
-
-        strat = self.strategies[idx]
-        if self.subset_size is not None:
-            u_indices = self.rng.choice(al_datamodule.unlabeled_indices, size=self.subset_size, replace=False)
-            al_datamodule.unlabeled_indices = u_indices
-        query_indices = strat.query(model=model, al_datamodule=al_datamodule, acq_size=acq_size)
-        return query_indices
-
-    @torch.enable_grad()
-    def train_model(self, model, dataloader):
-        model.reset_states(reset_model_parameters=True)
-        trainer = Trainer(barebones=True, max_epochs=self.train_epochs)
-        trainer.fit(model, dataloader)
-        return model
-
-    @torch.no_grad()
-    def evaluate_model(self, model, dataloader):
-        model.eval()
-        model.to(self.device)
-        num_samples = 0
-        running_corrects = 0
-        for batch in dataloader:
-            inputs, targets = batch[0].to(self.device), batch[1].to(self.device)
-            pred = model(inputs).argmax(-1)
-
-            num_samples += len(inputs)
-            running_corrects += (pred == targets).float().sum()
-        acc = running_corrects / num_samples
-        return acc
-
-
 class AdaptiveAL(Query):
     def __init__(self,
                  al_strategies=['random', 'margin', 'badge', 'bait', 'typiclust', 'alfamix', 'dropquery'],
@@ -301,31 +164,141 @@ class AdaptiveAL(Query):
         return loss
 
 
-def build_al_strategies(al_strategies, device='cpu'):
-    strategies_list = []
-    for strat_name in al_strategies:
-        if strat_name == 'random':
-            strat = strategies.RandomSampling()
-        elif strat_name == 'margin':
-            strat = strategies.MarginSampling(device=device)
-        elif strat_name == 'coreset':
-            strat = strategies.CoreSet(device=device)
-        elif strat_name == 'badge':
-            strat = strategies.Badge(device=device)
-        elif strat_name == 'typiclust':
-            strat = strategies.TypiClust(device=device)
-        elif strat_name == 'inv_typiclust':
-            strat = strategies.InverseTypiClust(device=device)
-        elif strat_name == 'alfamix':
-            strat = strategies.AlfaMix(device=device)
-        elif strat_name == 'dropquery':
-            strat = strategies.DropQuery(device=device)
-        elif strat_name == 'bait':
-            strat = strategies.BaitSampling(grad_likelihood='binary_cross_entropy', device=device)
+class TCM(Query):
+    def __init__(self, typi_steps=3, subset_size=None, random_seed=None, device='cpu'):
+        super().__init__(random_seed)
+        self.typi_steps = typi_steps
+
+        self.typiclust = strategies.TypiClust(subset_size=subset_size, device=device)
+        self.margin = strategies.MarginSampling(subset_size=subset_size, device=device)
+        self.iter = 0
+
+    def query(self, *, model, al_datamodule, acq_size):
+        if self.iter < self.typi_steps:
+            indices = self.typiclust.query(model=model, al_datamodule=al_datamodule, acq_size=acq_size)
         else:
-            raise NotImplementedError()
-        strategies_list.append(strat)
-    return strategies_list
+            indices = self.margin.query(model=model, al_datamodule=al_datamodule, acq_size=acq_size)
+        self.iter += 1
+        return indices
+
+
+class SelectAL(Query):
+    def __init__(self,
+                 epsilon=.05,
+                 low_budget_strategy='typiclust',
+                 high_budget_strategy='badge',
+                 surrogate_low_strategy='typiclust',
+                 surrogate_high_strategy='inv_typiclust',
+                 num_random_reps=5,
+                 val_split=0.01,
+                 num_val_reps=20,
+                 train_epochs=200,
+                 subset_size=None,
+                 random_seed=None,
+                 device='cpu',
+                 ):
+        super().__init__(random_seed)
+        self.epsilon = epsilon
+        self.subset_size = subset_size
+        self.device = device
+        self.num_random_reps = num_random_reps
+        self.num_val_reps = num_val_reps
+        self.val_split = val_split
+        self.train_epochs = train_epochs
+        self.history = []
+
+        self.random_strategy = strategies.RandomSampling()
+        self.surrogate_low_strategy = build_al_strategies([surrogate_low_strategy], device=self.device)[0]
+        self.surrogate_high_strategy = build_al_strategies([surrogate_high_strategy], device=self.device)[0]
+        self.surrogate_strategies = [self.random_strategy,
+                                     self.surrogate_low_strategy, self.surrogate_high_strategy]
+
+        self.low_budget_strategy = build_al_strategies([low_budget_strategy], device=self.device)[0]
+        self.high_budget_strategy = build_al_strategies([high_budget_strategy], device=self.device)[0]
+        self.strategies = [self.random_strategy, self.low_budget_strategy, self.high_budget_strategy]
+        self.query_history = []
+
+    def query(self, *, model, al_datamodule, acq_size):
+        al_datamodule = copy.deepcopy(al_datamodule)
+        _, labeled_indices = al_datamodule.labeled_dataloader()
+        if self.epsilon >= len(labeled_indices):
+            raise ValueError(
+                f'Epsilon={self.epsilon} greater or equals the labeled pool size of {len(labeled_indices)}.')
+
+        # Determine the regime we are in
+        labeled_labels = torch.cat([batch[1] for batch in al_datamodule.custom_dataloader(labeled_indices)])
+        labels_unique, labels_counts = labeled_labels.unique(return_counts=True)
+        num_classes = len(labels_unique)
+
+        min_lbl_count = labels_counts.min().item()
+        eps = self.epsilon if not (0 < self.epsilon < 1) else int(self.epsilon*len(labeled_indices))
+        c = max(eps // num_classes, 1)
+        c = min(c, min_lbl_count)
+
+        surrogate_accs = []
+        for i_strat, strat in enumerate(self.surrogate_strategies):
+            num_reps = 1 if i_strat != 0 else self.num_random_reps
+
+            rep_accs = []
+            for _ in range(num_reps):
+                # Select from L via strat per class
+                remove_indices = []
+                for lbl in labels_unique:
+                    labeled_indices_cls = np.array(labeled_indices)[labeled_labels == lbl]
+                    aldm = copy.deepcopy(al_datamodule)
+                    aldm.unlabeled_indices = labeled_indices_cls
+                    aldm.labeled_indices = []
+                    remove_indices.extend(strat.query(model=model, al_datamodule=aldm, acq_size=c))
+
+                # Remove selection from L
+                new_indices = copy.copy(labeled_indices)
+                for idx in remove_indices:
+                    new_indices.remove(idx)
+
+                # Eval the performance via cross validation on new labeled data
+                accs = []
+                num_val_samples = max(1, int(len(new_indices)*self.val_split))
+                for _ in range(self.num_val_reps):
+                    val_indices = self.rng.choice(new_indices, size=num_val_samples, replace=False)
+                    train_indices = np.setdiff1d(new_indices, val_indices)
+                    model = self.train_model(model, aldm.custom_dataloader(train_indices, train=True))
+                    acc = self.evaluate_model(model, aldm.custom_dataloader(val_indices)).item()
+                    accs.append(acc)
+                rep_accs.append(np.mean(accs))
+            surrogate_accs.append(np.mean(rep_accs).item())
+        idx = self.rng.choice(np.flatnonzero(surrogate_accs == np.min(surrogate_accs)))
+
+        selected = {k: v.item() for k, v in zip(['random', 'low', 'high'], np.eye(3, dtype=int)[idx])}
+        self.query_history.append(selected)
+
+        strat = self.strategies[idx]
+        if self.subset_size is not None:
+            u_indices = self.rng.choice(al_datamodule.unlabeled_indices, size=self.subset_size, replace=False)
+            al_datamodule.unlabeled_indices = u_indices
+        query_indices = strat.query(model=model, al_datamodule=al_datamodule, acq_size=acq_size)
+        return query_indices
+
+    @torch.enable_grad()
+    def train_model(self, model, dataloader):
+        model.reset_states(reset_model_parameters=True)
+        trainer = Trainer(barebones=True, max_epochs=self.train_epochs)
+        trainer.fit(model, dataloader)
+        return model
+
+    @torch.no_grad()
+    def evaluate_model(self, model, dataloader):
+        model.eval()
+        model.to(self.device)
+        num_samples = 0
+        running_corrects = 0
+        for batch in dataloader:
+            inputs, targets = batch[0].to(self.device), batch[1].to(self.device)
+            pred = model(inputs).argmax(-1)
+
+            num_samples += len(inputs)
+            running_corrects += (pred == targets).float().sum()
+        acc = running_corrects / num_samples
+        return acc
 
 
 class ActiveLearningByLearning(Query):
@@ -408,3 +381,30 @@ class ActiveLearningByLearning(Query):
             iw_corrects += np.sum(self.importance_weights * (preds == targets).numpy())
         iw_accuracy = iw_corrects / (len(all_indices)*self.budget)
         return iw_accuracy
+
+
+def build_al_strategies(al_strategies, device='cpu'):
+    strategies_list = []
+    for strat_name in al_strategies:
+        if strat_name == 'random':
+            strat = strategies.RandomSampling()
+        elif strat_name == 'margin':
+            strat = strategies.MarginSampling(device=device)
+        elif strat_name == 'coreset':
+            strat = strategies.CoreSet(device=device)
+        elif strat_name == 'badge':
+            strat = strategies.Badge(device=device)
+        elif strat_name == 'typiclust':
+            strat = strategies.TypiClust(device=device)
+        elif strat_name == 'inv_typiclust':
+            strat = strategies.InverseTypiClust(device=device)
+        elif strat_name == 'alfamix':
+            strat = strategies.AlfaMix(device=device)
+        elif strat_name == 'dropquery':
+            strat = strategies.DropQuery(device=device)
+        elif strat_name == 'bait':
+            strat = strategies.BaitSampling(grad_likelihood='binary_cross_entropy', device=device)
+        else:
+            raise NotImplementedError()
+        strategies_list.append(strat)
+    return strategies_list
