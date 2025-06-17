@@ -2,8 +2,7 @@
 #SBATCH --job-name=adaptive_al
 #SBATCH --partition=main
 #SBATCH --output=/mnt/work/dhuseljic/logs/adaptive_al/%A_%a_%x.log
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
+#SBATCH --ntasks=1 #SBATCH --cpus-per-task=8
 #SBATCH --mem=16gb
 #SBATCH --gres=gpu:0
 #SBATCH --exclude=gpu-a100-[1-5],gpu-v100-[1-4]
@@ -12,13 +11,13 @@ date;hostname
 source /mnt/home/dhuseljic/envs/dal-toolbox/bin/activate
 
 mlflow_uri='sqlite:////mnt/work/dhuseljic/experiments/mlflow/adaptive_al/al.db'
-mlflow_exp_name='general_v1'
+mlflow_exp_name='baselines'
 random_seed=$SLURM_ARRAY_TASK_ID
 if [ "$random_seed" -eq 1 ]; then
 	python -c "import mlflow; mlflow.set_tracking_uri(r'$mlflow_uri'); mlflow.set_experiment(r'$mlflow_exp_name')"
 fi
 
-al_strategy=random
+al_strategy=tcm
 dataset_name=cifar10 acq_size=10 subset_size=1000
 # dataset_name=stl10 acq_size=10 subset_size=Null
 # dataset_name=dopanim acq_size=50 subset_size=1000
