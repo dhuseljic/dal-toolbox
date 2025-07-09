@@ -6,32 +6,30 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64gb
 #SBATCH --gres=gpu:1
-#SBATCH --array=0-39%4
+#SBATCH --array=0-242%4
 source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 
 mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perfdal.db'
-mlflow_exp_name='abl_tiny_new_1'
+mlflow_exp_name='dinov2_finetune_hps'
 backbone=dinov2
 
-al_strategy=perf_dal_oracle
-n_bat=50
-n_ret=25
-var_sss=True
-sel_strats=\[alfamix,badge,bait,coreset,dropquery,dropqueryclass,margin,random,typiclass,typiclust\]
-
-datasets=(cifar10 flowers102 dtd cifar100)
-acq_sizes=(10 25 50 100)
-subset_sizes=(1000 Null Null 1000)
-
-random_seeds=(1 2 3 4 5 6 7 8 9 10)
+lrs_backbone=(1e-2 1e-4 1e-6)
+wds_backbone=(1e-2 1e-4 1e-6)
+lrs=(1e-1 1e-2 1e-3)
+wds=(1e-3 1e-4 1e-5)
+random_seeds=(1 2 3)
 
 index=$SLURM_ARRAY_TASK_ID
+dataset_name=cifar10
+acq_size=10
+subset_size=1000
+al_strategy=random
 
-dataset_name=${datasets[$index % 4]}
-acq_size=${acq_sizes[$index % 4]}
-subset_size=${subset_sizes[$index % 4]}
-
-random_seed=${random_seeds[$index / 4]}
+lr=${lrs[$index % 3]}
+wd=${wds[$index / 3 % 3]}
+lr_back=${lrs_backbone[$index / 9 % 3]}
+wd_back=${wds_backbone[$index / 27 % 3]}
+random_seed=${random_seeds[$index / 81]}
 
 if [ $index -eq 0 ]; then
     python -c "import mlflow; mlflow.set_tracking_uri(r'$mlflow_uri'); mlflow.set_experiment(r'$mlflow_exp_name')"
@@ -45,12 +43,13 @@ srun python al.py \
     al.strategy=$al_strategy \
     al.acq_size=$acq_size \
     al.subset_size=$subset_size \
-    al.optimal.strategies=$sel_strats \
-    al.optimal.vary_strat_subset_size=$var_sss \
-    al.optimal.num_batches=$n_bat \
-    al.optimal.num_retraining_epochs=$n_ret \
     mlflow_uri=$mlflow_uri \
     al.device=cuda \
     experiment_name=$mlflow_exp_name \
     random_seed=$random_seed \
     backbone=$backbone \
+    finetune_backbone=True \
+    optimizer.lr=$lr \
+    optimizer.weight_decay=$wd \
+    optimizer.lr_backbone=$lr_back \
+    optimizer.weight_decay_backbone=$wd_back \

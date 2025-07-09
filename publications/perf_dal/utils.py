@@ -19,7 +19,7 @@ import torch.multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 
-def build_datasets(args, cache_features=True):
+def build_datasets(args, model=None, cache_features=True):
     image_datasets = ['cifar10', 'cifar10-lt', 'stl10', 'dopanim', 'snacks', 'dtd', 'cifar100', 'food101', 'flowers102',
                       'caltech101', 'stanford_dogs', 'tiny_imagenet', 'imagenet', 'mnist']
     text_datasets = ['agnews', 'dbpedia', 'banking77', 'clinc']
@@ -28,24 +28,19 @@ def build_datasets(args, cache_features=True):
         logging.info('Building Data!')
         data = build_image_data(args)
         if cache_features:
-            logging.info('Building Backbone!')
-            if args.backbone == 'dinov2':
-                model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
-                logging.info('Selected DINOV2 as a backbone!')
-            elif args.backbone == 'swinv2':
-                model = Swinv2ForImageClassification.from_pretrained("microsoft/swinv2-base-patch4-window8-256")
-                model.classifier = nn.Identity()
-            elif args.backbone == 'swinv2-t':
-                model = Swinv2ForImageClassification.from_pretrained("microsoft/swinv2-tiny-patch4-window8-256")
-                model.classifier = nn.Identity()
-            elif args.backbone == 'swinv2-s':
-                model = Swinv2ForImageClassification.from_pretrained("microsoft/swinv2-small-patch4-window8-256")
-                model.classifier = nn.Identity()
-            elif args.backbone == 'vit-mae':
-                model = ViTForImageClassification.from_pretrained("facebook/vit-mae-base")
-                model.classifier = nn.Identity()
+            if model == None:
+                logging.info('Building Backbone!')
+                if args.backbone == 'dinov2':
+                    model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
+                    logging.info('Selected DINOV2 as a backbone!')
+                elif args.backbone == 'swinv2':
+                    model = Swinv2ForImageClassification.from_pretrained("microsoft/swinv2-base-patch4-window8-256")
+                    model.classifier = nn.Identity()
+                else:
+                    raise NotImplementedError(f'This backbone ({args.backbone}) is not available!')
             else:
-                raise NotImplementedError(f'This backbone ({args.backbone}) is not available!')
+                # TODO: Handle cases that are different than dino, where we do not need to set a classifier to identity.
+                logging.info('Using a given Backbone!')
 
             train_ds = FeatureDataset(model, data.train_dataset, cache=True, cache_dir=args.dataset_path, backbone=args.backbone)
             val_ds = FeatureDataset(model, data.val_dataset, cache=True, cache_dir=args.dataset_path, backbone=args.backbone)
@@ -82,11 +77,9 @@ def build_image_data(args, plain_transforms=False):
         transforms = PlainTransforms(resize=(224, 224))
     else:
         if args.backbone == 'dinov2':
-            transforms = DinoTransforms(size=(256, 256))
+            transforms = DinoTransforms(size=(256, 256), finetune_backbone=args.finetune_backbone)
         elif 'swinv2' in args.backbone:
             transforms = SwinV2Transforms(args.backbone)
-        elif args.backbone == 'vit-mae':
-            transforms = ViTMAETransforms()
         else:
             raise ValueError(f"{args.backbone}-backbone not implemented!")
 
@@ -209,7 +202,7 @@ class FeatureDataset:
                 features.append(model(input_ids, attention_mask).to('cpu'))
                 labels.append(batch["label"])
             else:
-                if 'swinv2' in self.backbone or self.backbone == 'vit-mae':
+                if 'swinv2' in self.backbone:
                     # Make sure the classifier layer is set to identity in order for logits == features
                     out = model(batch[0]['pixel_values'][0].to(device)).logits
                 else:
@@ -256,26 +249,32 @@ def flatten_cfg(cfg, parent_key='', sep='.'):
 class LaplaceNet(nn.Module):
     use_mean_field = True
 
-    def __init__(self, in_features, out_features, **kwargs):
+    def __init__(self, in_features, out_features, backbone=None, **kwargs):
         super().__init__()
         self.layer = LaplaceLinear(in_features, out_features, **kwargs)
+        self.backbone = backbone
+        self.use_backbone = False if backbone == None else True
 
     def forward_features(self, x):
+        if self.backbone != None and self.use_backbone:
+            x = self.backbone(x)
         return x
 
-    def forward_head(self, x, mean_field=False):
+    def forward_head(self, x, mean_field=False, is_features=False):
         if mean_field:
-            out = self.layer.forward_mean_field(x)
+            out = self.layer.forward_mean_field(x, is_features=is_features)
         else:
             out = self.layer(x)
         return out
 
-    def forward_mean_field(self, x):
+    def forward_mean_field(self, x, is_features=False):
+        if self.backbone != None and not is_features and self.use_backbone:
+            x = self.backbone(x)
         return self.layer.forward_mean_field(x)
 
     def forward(self, x):
         features = self.forward_features(x)
-        logits = self.forward_head(features)
+        logits = self.forward_head(features, is_features=True)
         return logits
 
 
@@ -312,6 +311,17 @@ class LaplaceMLP(nn.Module):
 def build_model(args, **kwargs):
     num_features = kwargs['num_features']
     num_classes = kwargs['num_classes']
+    # If finetuning the backbone, it should be included in the model
+    backbone = None
+    if args.finetune_backbone:
+        if args.backbone == 'dinov2':
+            backbone = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
+            logging.info('Selected DINOV2 as a backbone!')
+        elif args.backbone == 'swinv2':
+            backbone = Swinv2ForImageClassification.from_pretrained("microsoft/swinv2-base-patch4-window8-256")
+            backbone.classifier = nn.Identity()
+        else:
+            raise NotImplementedError(f'This backbone ({args.backbone}) is not available!')
 
     # Laplace net because we want to be able to sample via Bayesian methods.
     # Not using the covariance is equivalent to deterministic model.
@@ -322,26 +332,24 @@ def build_model(args, **kwargs):
             mean_field_factor=args.model.mean_field_factor,
             mc_samples=args.model.mc_samples,
             bias=True,
+            backbone=backbone
         )
     elif args.model.name == 'laplace_mlp':
         model = LaplaceMLP(num_features, num_classes, bias=True)
     else:
         raise NotImplementedError()
 
-    params = [
-        {'params': [p for n, p in model.named_parameters() if 'ssl_model' not in n]},
-        {'params': [p for n, p in model.named_parameters() if 'ssl_model' in n],
-         'lr': args.optimizer.lr_backbone},
-    ]
+    # Define optimizer with different hyperparameters
+    params = [{'params': model.layer.parameters(), 'lr': args.optimizer.lr, 'weight_decay': args.optimizer.weight_decay}]
+    if args.finetune_backbone:
+        params.append({'params': backbone.parameters(), 'lr': args.optimizer.lr_backbone, 'weight_decay': args.optimizer.weight_decay_backbone})
 
     if args.optimizer.name == 'SGD':
-        optimizer = torch.optim.SGD(params, lr=args.optimizer.lr, nesterov=args.optimizer.nesterov,
-                                    momentum=args.optimizer.momentum, weight_decay=args.optimizer.weight_decay)
+        optimizer = torch.optim.SGD(params, nesterov=args.optimizer.nesterov, momentum=args.optimizer.momentum)
     elif args.optimizer.name == 'Adam':
-        optimizer = torch.optim.Adam(params, lr=args.optimizer.lr,
-                                     weight_decay=args.optimizer.weight_decay)
+        optimizer = torch.optim.Adam(params)
     elif args.optimizer.name == 'RAdam':
-        optimizer = torch.optim.RAdam(params, lr=args.optimizer.lr, weight_decay=args.optimizer.weight_decay)
+        optimizer = torch.optim.RAdam(params)
     else:
         raise NotImplementedError()
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.model.num_epochs)

@@ -228,6 +228,13 @@ class ActiveLearningDataModule(L.LightningDataModule):
             indices.append(cluster_indices[idx])
         self.update_annotations(indices)
 
+    def update_datasets(self, train_dataset, query_dataset=None, val_dataset=None, test_dataset=None):
+        self.train_dataset = train_dataset
+        self.val_dataset = val_dataset
+        self.test_dataset = test_dataset
+        self.query_dataset = QueryDataset(
+            query_dataset) if query_dataset else QueryDataset(dataset=train_dataset)
+
 
 class QueryDataset(Dataset):
     """A helper class which returns also the index along with the instances and targets."""
