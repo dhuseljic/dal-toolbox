@@ -66,6 +66,7 @@ class SwinV2Transforms():
 
 class DinoTransforms():
     def __init__(self, size=None, center_crop_size=224, finetune_backbone=False):
+        self.finetune_backbone = finetune_backbone
         if size:
             # https://github.com/facebookresearch/dino/blob/main/eval_linear.py#L65-L70
             dino_mean = (0.485, 0.456, 0.406)
@@ -77,24 +78,21 @@ class DinoTransforms():
                 torchvision.transforms.Lambda(lambda x: x.repeat(3, 1, 1) if x.size(0) != 3 else x),
                 torchvision.transforms.Normalize(dino_mean, dino_std),
             ])
-
-            # self.train_trans = torchvision.transforms.Compose([
-            #     torchvision.transforms.Resize(size, interpolation=3),
-            #     torchvision.transforms.RandomCrop(224),
-            #     torchvision.transforms.RandomHorizontalFlip(),
-            #     torchvision.transforms.ToTensor(),
-            #     torchvision.transforms.Lambda(lambda x: x.repeat(3, 1, 1) if x.size(0) != 3 else x),
-            #     torchvision.transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
-            # ])
-            # if not finetune_backbone or not use_train_transforms:
-            #     self.train_trans = self.transform
         else:
             self.transform = torchvision.transforms.Compose([torchvision.transforms.ToTensor()])
-            self.train_trans = self.transform
 
     @property
     def train_transform(self):
-        return self.train_trans
+        # if self.finetune_backbone:
+        #     return torchvision.transforms.Compose([
+        #         torchvision.transforms.Resize(size, interpolation=3),
+        #         torchvision.transforms.RandomCrop(224),
+        #         torchvision.transforms.RandomHorizontalFlip(),
+        #         torchvision.transforms.ToTensor(),
+        #         torchvision.transforms.Lambda(lambda x: x.repeat(3, 1, 1) if x.size(0) != 3 else x),
+        #         torchvision.transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+        #     ])
+        return self.transform
 
     @property
     def query_transform(self):
