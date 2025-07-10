@@ -27,7 +27,7 @@ def build_datasets(args, model=None, cache_features=True):
     if args.dataset_name in image_datasets:
         logging.info('Building Data!')
         data = build_image_data(args)
-        if cache_features or model == None:
+        if cache_features or model != None:
             if model == None:
                 logging.info('Building Backbone!')
                 if args.backbone == 'dinov2':
