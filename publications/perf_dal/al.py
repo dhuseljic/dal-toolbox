@@ -28,7 +28,7 @@ def main(args):
     # Keep same train_ds and test_ds while changing the size of the validation dataset
     val_ds, _ = torch.utils.data.random_split(val_ds, [args.val_split, 1 - args.val_split])
 
-    # If we additionally want to finetune the backbone, we need the raw datasets with respective augmentations
+    # If we additionally want to finetune the backbone, we need the OG datasets with respective transforms
     if args.finetune_backbone:
         train_ds_raw, _, test_ds_raw, _ = build_datasets(args, cache_features=False)
 
@@ -105,8 +105,9 @@ def main(args):
         artifacts_history.append(artifacts)
 
         # Update the FeatureDatasets in AL Datamodule for Querying with updated backbone features.
+        # Ensure that not each cycle saves the new features to prevent overcrowding the server with files.
         if args.finetune_backbone and (i_acq != args.al.num_acq) and args.al.strategy != 'random':
-            train_ds, val_ds, test_ds, num_classes = build_datasets(args, model=model.model.backbone, cache_features=args.cache_features)
+            train_ds, val_ds, test_ds, num_classes = build_datasets(args, model=model.model.backbone, cache_features=False)
             al_datamodule.update_datasets(
                 train_dataset=train_ds, 
                 query_dataset=train_ds,

@@ -5,11 +5,11 @@ import logging
 
 from torch.utils.data import DataLoader
 from datasets import load_dataset
-from transformers import AutoModelForSequenceClassification, AutoTokenizer, Swinv2ForImageClassification, ViTForImageClassification
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, Swinv2ForImageClassification
 from omegaconf import DictConfig
 
 from dal_toolbox.datasets import CIFAR10
-from dal_toolbox.datasets.utils import DinoTransforms, FeatureDataset, PlainTransforms, SwinV2Transforms, ViTMAETransforms
+from dal_toolbox.datasets.utils import DinoTransforms, FeatureDataset, PlainTransforms, SwinV2Transforms
 from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, Snacks, DTD, Flowers102, TinyImageNet, MNIST
 from dal_toolbox.datasets import ImageNet, StanfordDogs, CIFAR10LT, Dopanim
 
@@ -27,7 +27,7 @@ def build_datasets(args, model=None, cache_features=True):
     if args.dataset_name in image_datasets:
         logging.info('Building Data!')
         data = build_image_data(args)
-        if cache_features:
+        if cache_features or model == None:
             if model == None:
                 logging.info('Building Backbone!')
                 if args.backbone == 'dinov2':
@@ -42,9 +42,9 @@ def build_datasets(args, model=None, cache_features=True):
                 # TODO: Handle cases that are different than dino, where we do not need to set a classifier to identity.
                 logging.info('Using a given Backbone!')
 
-            train_ds = FeatureDataset(model, data.train_dataset, cache=True, cache_dir=args.dataset_path, backbone=args.backbone)
-            val_ds = FeatureDataset(model, data.val_dataset, cache=True, cache_dir=args.dataset_path, backbone=args.backbone)
-            test_ds = FeatureDataset(model, data.test_dataset, cache=True, cache_dir=args.dataset_path, backbone=args.backbone)
+            train_ds = FeatureDataset(model, data.train_dataset, cache=cache_features, cache_dir=args.dataset_path, backbone=args.backbone)
+            val_ds = FeatureDataset(model, data.val_dataset, cache=cache_features, cache_dir=args.dataset_path, backbone=args.backbone)
+            test_ds = FeatureDataset(model, data.test_dataset, cache=cache_features, cache_dir=args.dataset_path, backbone=args.backbone)
         else:
             train_ds = data.train_dataset
             val_ds = data.val_dataset
@@ -77,7 +77,7 @@ def build_image_data(args, plain_transforms=False):
         transforms = PlainTransforms(resize=(224, 224))
     else:
         if args.backbone == 'dinov2':
-            transforms = DinoTransforms(size=(256, 256), finetune_backbone=args.finetune_backbone)
+            transforms = DinoTransforms(size=(256, 256), apply_train_transforms=args.apply_train_transforms)
         elif 'swinv2' in args.backbone:
             transforms = SwinV2Transforms(args.backbone)
         else:

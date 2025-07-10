@@ -6,17 +6,16 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64gb
 #SBATCH --gres=gpu:1
-#SBATCH --array=0-242%4
+#SBATCH --array=0-95%4
 source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 
 mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perfdal.db'
-mlflow_exp_name='dinov2_finetune_hps'
+mlflow_exp_name='dinov2_finetune_hps_2'
 backbone=dinov2
 
-lrs_backbone=(1e-2 1e-4 1e-6)
-wds_backbone=(1e-2 1e-4 1e-6)
-lrs=(1e-1 1e-2 1e-3)
-wds=(1e-3 1e-4 1e-5)
+lrs_backbone=(1e-4 1e-5 1e-6 1e-7)
+wds_backbone=(1e-4 1e-5 1e-6 1e-7)
+apply_train_transform=(False True)
 random_seeds=(1 2 3)
 
 index=$SLURM_ARRAY_TASK_ID
@@ -24,12 +23,13 @@ dataset_name=cifar10
 acq_size=10
 subset_size=1000
 al_strategy=random
+lr=0.01
+wd=0.0005
 
-lr=${lrs[$index % 3]}
-wd=${wds[$index / 3 % 3]}
-lr_back=${lrs_backbone[$index / 9 % 3]}
-wd_back=${wds_backbone[$index / 27 % 3]}
-random_seed=${random_seeds[$index / 81]}
+lr_back=${lrs_backbone[$index / 4]}
+wd_back=${wds_backbone[$index / 4 % 4]}
+apply_tt=${apply_train_transform[$index / 16 % 2]}
+random_seed=${random_seeds[$index / 32]}
 
 if [ $index -eq 0 ]; then
     python -c "import mlflow; mlflow.set_tracking_uri(r'$mlflow_uri'); mlflow.set_experiment(r'$mlflow_exp_name')"

@@ -14,26 +14,7 @@ from dal_toolbox.models.utils.base import BaseModule
 
 import torch
 
-class ViTMAETransforms():
-    def __init__(self):
-        self.image_processor = AutoImageProcessor.from_pretrained("facebook/vit-mae-base")
-        
-        self.transform = torchvision.transforms.Compose([
-            torchvision.transforms.Lambda(lambda x: x.convert('RGB') if x.mode != 'RGB' else x),              # First create three channels if black and white
-            self.image_processor                  # then apply processor
-        ])
 
-    @property
-    def train_transform(self):
-        return self.transform
-
-    @property
-    def query_transform(self):
-        return self.transform
-
-    @property
-    def eval_transform(self):
-        return self.transform
 
 class SwinV2Transforms():
     def __init__(self, backbone):
@@ -65,8 +46,9 @@ class SwinV2Transforms():
 
 
 class DinoTransforms():
-    def __init__(self, size=None, center_crop_size=224, finetune_backbone=False):
-        self.finetune_backbone = finetune_backbone
+    def __init__(self, size=None, center_crop_size=224, apply_train_transforms=False):
+        self.apply_train_transforms = apply_train_transforms
+        self.size = size
         if size:
             # https://github.com/facebookresearch/dino/blob/main/eval_linear.py#L65-L70
             dino_mean = (0.485, 0.456, 0.406)
@@ -83,15 +65,15 @@ class DinoTransforms():
 
     @property
     def train_transform(self):
-        # if self.finetune_backbone:
-        #     return torchvision.transforms.Compose([
-        #         torchvision.transforms.Resize(size, interpolation=3),
-        #         torchvision.transforms.RandomCrop(224),
-        #         torchvision.transforms.RandomHorizontalFlip(),
-        #         torchvision.transforms.ToTensor(),
-        #         torchvision.transforms.Lambda(lambda x: x.repeat(3, 1, 1) if x.size(0) != 3 else x),
-        #         torchvision.transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
-        #     ])
+        if self.apply_train_transforms:
+            return torchvision.transforms.Compose([
+                torchvision.transforms.Resize(self.size, interpolation=3),
+                torchvision.transforms.RandomCrop(224),
+                torchvision.transforms.RandomHorizontalFlip(),
+                torchvision.transforms.ToTensor(),
+                torchvision.transforms.Lambda(lambda x: x.repeat(3, 1, 1) if x.size(0) != 3 else x),
+                torchvision.transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+            ])
         return self.transform
 
     @property
