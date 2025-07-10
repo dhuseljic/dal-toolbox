@@ -53,3 +53,4 @@ srun python al.py \
     optimizer.weight_decay=$wd \
     optimizer.lr_backbone=$lr_back \
     optimizer.weight_decay_backbone=$wd_back \
+    apply_train_transforms=$apply_tt \
