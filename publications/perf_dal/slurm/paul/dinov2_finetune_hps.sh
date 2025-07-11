@@ -10,7 +10,7 @@
 source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 
 mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perfdal.db'
-mlflow_exp_name='dinov2_finetune_hps_2'
+mlflow_exp_name='dinov2_finetune_hps_3'
 backbone=dinov2
 
 lrs_backbone=(1e-4 1e-5 1e-6 1e-7)
@@ -26,7 +26,7 @@ al_strategy=random
 lr=0.01
 wd=0.0005
 
-lr_back=${lrs_backbone[$index / 4]}
+lr_back=${lrs_backbone[$index % 4]}
 wd_back=${wds_backbone[$index / 4 % 4]}
 apply_tt=${apply_train_transform[$index / 16 % 2]}
 random_seed=${random_seeds[$index / 32]}
