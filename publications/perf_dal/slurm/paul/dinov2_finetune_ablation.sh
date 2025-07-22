@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64gb
 #SBATCH --gres=gpu:1
-#SBATCH --array=0-95%4
+#SBATCH --array=0-9%4
 source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 
 mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perfdal.db'
@@ -20,7 +20,7 @@ apply_tt=True
 datasets=(cifar10 dtd)
 acq_sizes=(10 50)
 subset_sizes=(1000 Null)
-random_seeds=(1 2 3)
+random_seeds=(1 2 3 4 5)
 
 index=$SLURM_ARRAY_TASK_ID
 dataset_name=${datasets[$index % 2]}
