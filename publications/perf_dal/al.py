@@ -28,6 +28,10 @@ def main(args):
     # Keep same train_ds and test_ds while changing the size of the validation dataset
     val_ds, _ = torch.utils.data.random_split(val_ds, [args.val_split, 1 - args.val_split])
 
+    # If we additionally want to finetune the backbone, we need the OG datasets with respective transforms
+    if args.finetune_backbone:
+        train_ds_raw, _, test_ds_raw, _ = build_datasets(args, cache_features=False)
+
     seed_everything(args.random_seed)
     al_datamodule = ActiveLearningDataModule(
         train_dataset=train_ds,
@@ -57,11 +61,14 @@ def main(args):
     for i_acq in range(0, args.al.num_acq+1):
         if i_acq != 0:
             stime = time.time()
+            # TODO: Setting use_backbone to false for querying is a hack to prevent the use of the backbone for querying, replace with arg later.
+            model.model.use_backbone = False
             indices = al_strategy.query(
                 model=model,
                 al_datamodule=al_datamodule,
                 acq_size=args.al.acq_size,
             )
+            model.model.use_backbone = (model.model.backbone != None)
             etime = time.time()
             al_datamodule.update_annotations(indices)
 
@@ -74,11 +81,17 @@ def main(args):
             'model': model.state_dict(),
         }
 
+        # Predetermine dataloaders based on wether we finetune the backbone or not.
+        if args.finetune_backbone:
+            trainloader, testloader = build_dataloaders(train_ds_raw, test_ds_raw, al_datamodule.labeled_indices, train_batch_size=args.model.train_batch_size)
+        else:
+            trainloader, testloader = al_datamodule.train_dataloader(), al_datamodule.test_dataloader()
+
         model.reset_states()
         trainer = Trainer(**lightning_trainer_config)
-        trainer.fit(model, train_dataloaders=al_datamodule.train_dataloader())
+        trainer.fit(model, train_dataloaders=trainloader)
 
-        predictions = trainer.predict(model, dataloaders=al_datamodule.test_dataloader())
+        predictions = trainer.predict(model, dataloaders=testloader)
         test_stats = evaluate(predictions)
         test_stats['query_time'] = etime - stime if i_acq != 0 else 0
         if args.al.strategy == 'perf_dal_oracle':
@@ -90,6 +103,17 @@ def main(args):
 
         al_history.append(test_stats)
         artifacts_history.append(artifacts)
+
+        # Update the FeatureDatasets in AL Datamodule for Querying with updated backbone features.
+        # Ensure that not each cycle saves the new features to prevent overcrowding the server with files.
+        if args.finetune_backbone and (i_acq != args.al.num_acq) and args.al.strategy != 'random':
+            train_ds, val_ds, test_ds, num_classes = build_datasets(args, model=model.model.backbone, cache_features=False)
+            al_datamodule.update_datasets(
+                train_dataset=train_ds, 
+                query_dataset=train_ds,
+                val_dataset=val_ds, 
+                test_dataset=test_ds
+            )
 
     mlflow.set_tracking_uri(uri=args.mlflow_uri)
     experiment_id = mlflow.set_experiment(args.experiment_name).experiment_id
@@ -186,6 +210,29 @@ def build_al_strategy(args):
     else:
         raise NotImplementedError()
     return al_strategy
+
+from torch.utils.data import Subset, RandomSampler, DataLoader
+def build_dataloaders(train_ds, test_ds, labeled_indices, train_batch_size, ):
+    if len(labeled_indices) == 0:
+            raise ValueError('No instances labeled yet. Initialize the labeled pool first.')
+
+    labeled_dataset = Subset(train_ds, indices=labeled_indices)
+    sampler = RandomSampler(labeled_dataset)
+    drop_last = (len(sampler) > train_batch_size)
+    train_loader = DataLoader(
+        labeled_dataset,
+        batch_size=train_batch_size,
+        sampler=sampler,
+        drop_last=drop_last
+    )
+
+    test_loader = DataLoader(
+        dataset=test_ds,
+        batch_size=128
+    )
+
+    return train_loader, test_loader
+
 
 
 if __name__ == '__main__':
