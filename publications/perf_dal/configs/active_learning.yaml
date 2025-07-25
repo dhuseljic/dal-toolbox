@@ -16,6 +16,8 @@ dino_model_name: 'dinov2_vits14' # 21 M params - 384 dimensions
 # dino_model_name: 'dinov2_vitl14' # 300 M params - 1024 dimensions
 # dino_model_name: 'dinov2_vitg14' # 1100 M params - 1536 dimensions
 backbone: dinov2
+finetune_backbone: False
+apply_train_transforms: False
 
 al:
   strategy: perf_dal_oracle
@@ -62,6 +64,7 @@ optimizer:
   momentum: 0.9
   nesterov: True
   lr_backbone: 1e-5
+  weight_decay_backbone: 1e-2
   finetune_backbone: False
 
 output_dir: ./output/
