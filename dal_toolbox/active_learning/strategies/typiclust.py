@@ -103,6 +103,58 @@ class TypiClust(Query):
         actual_indices = [unlabeled_indices[idx] for idx in query_indices]
         return actual_indices
 
+class InverseTypiClust(TypiClust):
+    @torch.no_grad()
+    def query(self,
+              *,
+              model: BaseModule,
+              al_datamodule: ActiveLearningDataModule,
+              acq_size: int,
+              **kwargs):
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(self.subset_size)
+        labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
+
+        num_clusters = min(len(labeled_indices) + acq_size, self.MAX_NUM_CLUSTERS)
+
+        unlabeled_outputs = model.get_model_outputs(unlabeled_dataloader, ['features'], device=self.device)
+        unlabeled_features = unlabeled_outputs['features']
+        if len(labeled_indices) > 0:
+            labeled_outputs = model.get_model_outputs(labeled_dataloader, ['features'], device=self.device)
+            labeled_features = labeled_outputs['features']
+        else:
+            labeled_features = torch.Tensor([])
+        features = torch.cat((labeled_features, unlabeled_features))
+
+        # See https://github.com/scikit-activeml/scikit-activeml/blob/master/skactiveml/pool/_typi_clust.py
+        clusters = kmeans(features, num_clusters=num_clusters)
+        cluster_sizes = np.zeros(num_clusters)
+        cluster_ids, cluster_id_sizes = np.unique(clusters, return_counts=True)
+        cluster_sizes[cluster_ids] = cluster_id_sizes
+        covered_clusters = np.unique(clusters[:len(labeled_indices)])
+        if len(covered_clusters) > 0:
+            cluster_sizes[covered_clusters] = 0
+
+        query_indices = []
+        for i in range(acq_size):
+            if cluster_sizes.min() == np.inf:
+                indices_ = np.arange(len(unlabeled_features))
+                indices_ = np.setdiff1d(indices_, query_indices)
+                idx = self.rng.choice(indices_)
+                query_indices.append(idx)
+            else:
+                cluster_id = cluster_sizes.argmin()
+                cluster_indices = (clusters == cluster_id).nonzero()[0]
+                cluster_features = features[cluster_indices]
+                typicality = calculate_typicality(cluster_features, min(self.K_NN, len(cluster_indices) // 2))
+
+                idx = typicality.argmin()
+                idx = cluster_indices[idx]
+                query_indices.append(idx-len(labeled_features))
+                cluster_sizes[cluster_id] = np.inf
+
+        actual_indices = [unlabeled_indices[idx] for idx in query_indices]
+        return actual_indices
+
 
 def _typicality(X, uncovered_samples_mapping, k, eps=1e-7):
     """
