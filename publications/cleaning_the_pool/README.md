@@ -1,5 +1,4 @@
 [![arXiv](https://img.shields.io/badge/arXiv-2511.22344-b31b1b.svg)](https://arxiv.org/abs/2511.22344)
-
 # Cleaning the Pool: Progressive Filtering of Unlabeled Pools in Deep Active Learning
 This directory contains the implementation and configuration files required to reproduce the experiments presented in the paper [Cleaning the Pool: Progressive Filtering of Unlabeled Pools in Deep Active Learning](https://www.arxiv.org/pdf/2511.22344).
 
