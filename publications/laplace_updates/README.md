@@ -1,3 +1,4 @@
+<a href="https://link.springer.com/chapter/10.1007/978-3-032-05981-9_2"><img alt="laplace updates @ ECML-PKDD 2025" src="https://img.shields.io/badge/Paper-laplace updates @ ECML-PKDD 2025-purple"></a>
 [![arXiv](https://img.shields.io/badge/arXiv-2210.06112-b31b1b.svg)](https://arxiv.org/abs/2210.06112)
 # Efficient Bayesian Updates for Deep Active Learning via Laplace Approximations
 Here, we provide the implementation and configuration files for reproducing the experiments from our paper [Efficient Bayesian Updates for Deep Active Learning via Laplace Approximations](https://arxiv.org/pdf/2210.06112).
