@@ -1,9 +1,21 @@
-# TODO: UPDATE
+# DAL-Toolbox: A PyTorch Toolbox for Deep Active Learning Research
+This toolbox is a modular framework designed to facilitate the implementation and evaluation of active learning (AL) workflows in PyTorch. 
 
-<img src="./icon.png" width="300"/>
+## Publications
+This toolbox includes implementations for the following publications:
 
-# DAL-Toolbox: A Toolbox for Deep Active Learning
-Welcome to DAL-Toolbox, a comprehensive repository designed for implementing various models and strategies in deep active learning (DAL). DAL has garnered significant attention for its potential to reduce the amount of labeled data required to train deep neural networks, the most prominent machine learning model of today. Our toolbox provides a versatile and user-friendly framework for researchers and practitioners to explore and advance the field of DAL. Next to classical supervised DAL, we provide tools regarding semi- and self-supervised learning due to their recent success in improving a model's performance as well as tools regarding improving uncertainty as it plays a central role in querying new data in DAL.
+| Paper Title | Venue | Year | Code |
+| :--- | :---: | :---: | :---: |
+| [ActiveGLAE: A Benchmark for Deep Active Learning with Transformers](https://arxiv.org/pdf/2306.10087) | ECML-PKDD | 2023 | [📂 `./publications/aglae`](./publications/aglae) |
+| [Role of Hyperparameters in Deep Active Learning](https://ceur-ws.org/Vol-3470/paper4.pdf) | IAL @ ECML-PKDD | 2023 | [📂 `./publications/hyperparameters_in_al`](./publications/hyperparameters_in_al) |
+| [Fast Fishing: Approximating Bait for Efficient and Scalable Deep Active Image Classification](https://arxiv.org/pdf/2404.08981) | ECML-PKDD | 2024 | [📂 `./publications/bait_approx`](./publications/bait_approx) |
+| [The Interplay of Uncertainty Modeling and Deep Active Learning: An Empirical Analysis in Image Classification](https://openreview.net/pdf?id=KLBD13bsVl) | TMLR | 2024 | [📂 `./publications/udal`](./publications/udal) |
+| [Efficient Bayesian Updates for Deep Active Learning via Laplace Approximations](https://openreview.net/pdf?id=pNSJdyXZju) | ECML-PKDD | 2025 | [📂 `./publications/laplace_updates`](./publications/laplace_updates) |
+| [TBD](tbd) | Under Review | 2025 | [📂 `./publications/perf_dal`](./publications/perf_dal) |
+| [Cleaning the Pool: Progressive Filtering of Unlabeled Pools in Deep Active Learning](https://www.arxiv.org/pdf/2511.22344) | Under Review | 2025 | [📂 `./publications/adaptive_al`](./publications/adaptive_al) |
+
+
+
 
 ## Setup
 Setting up the DAL-Toolbox is straight forward! After cloning the repository, use the following comments to get started:
