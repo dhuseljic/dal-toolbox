@@ -1,14 +1,10 @@
-from enum import Enum
-
 import torchvision
 
 from .base import BaseData, BaseTransforms
-from .utils import PlainTransforms
+from .transforms import PlainTransforms
 
-
-class Food101Transforms(Enum):
-    mean: tuple = (0.485, 0.456, 0.406)
-    std: tuple = (0.229, 0.224, 0.225)
+FOOD101_MEAN = (0.485, 0.456, 0.406)
+FOOD101_STD = (0.229, 0.224, 0.225)
 
 
 class Food101(BaseData):

@@ -3,8 +3,8 @@ import torch
 import numpy as np
 from .uncertainty import UncertaintySampling
 from ..data import ActiveLearningDataModule
-from ...models.utils.base import BaseModule
-from ...metrics import entropy_from_logits, entropy_from_probas, ensemble_log_softmax, ensemble_entropy_from_logits
+from ...models.base import BaseModule
+from ...metrics.utils import entropy_from_probas, ensemble_entropy_from_logits
 
 
 class BALDSampling(UncertaintySampling):
@@ -202,7 +202,8 @@ class _SampledJointEntropy:
 
         q_1_M_1 = self.sampled_joint_probs_M_K.mean(axis=1, keepdim=True)[None]
 
-        output_entropies_B = (torch.sum(-torch.log(probs_b_M_C+1e-9) * probs_b_M_C / q_1_M_1, axis=(1, 2)) / M)
+        output_entropies_B = (torch.sum(-torch.log(probs_b_M_C+1e-9) *
+                              probs_b_M_C / q_1_M_1, axis=(1, 2)) / M)
 
         return output_entropies_B
 

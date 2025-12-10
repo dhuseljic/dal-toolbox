@@ -4,8 +4,8 @@ from abc import ABC, abstractmethod
 
 from .query import Query
 from ..data import ActiveLearningDataModule
-from ...models.utils.base import BaseModule
-from ...metrics import entropy_from_logits, entropy_from_probas, ensemble_log_softmax, ensemble_entropy_from_logits
+from ...models.base import BaseModule
+from ...metrics.utils import (entropy_from_logits, ensemble_log_softmax, ensemble_entropy_from_logits)
 
 
 class UncertaintySampling(Query, ABC):

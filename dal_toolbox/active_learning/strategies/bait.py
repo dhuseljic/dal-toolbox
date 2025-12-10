@@ -5,7 +5,6 @@ from .query import Query
 from copy import copy as copy
 from copy import deepcopy as deepcopy
 from torch.utils.data import TensorDataset, DataLoader
-from rich.progress import track
 
 
 class BaitSampling(Query):
@@ -103,14 +102,20 @@ class BaitSampling(Query):
         else:
             raise NotImplementedError()
 
+        # logits_all = torch.cat((unlabeled_outputs['logits'], labeled_outputs['logits']))
+        # features_all = torch.cat((unlabeled_outputs['features'], labeled_outputs['features']))
+        # A, B = fisher_kfac_factors(logits_all, features_all)
+        # fisher_all = torch.kron(A, B)
+
         fisher_all = torch.zeros(fisher_dim).to(self.device)
         dl = DataLoader(TensorDataset(repr_all), batch_size=self.fisher_batch_size, shuffle=False)
-        for batch in track(dl, "Bait: Computing fisher..", disable=True):
+        for batch in dl:
             repr_batch = batch[0].to(self.device)
             if self.fisher_approximation == 'full':
                 term = torch.matmul(repr_batch.transpose(1, 2), repr_batch)
                 fisher_all += torch.mean(term, dim=0)
             elif self.fisher_approximation == 'block_diag':
+                raise NotImplementedError()
                 repr_batch = repr_batch.view(-1, 10, 10, 384)
                 term = torch.einsum('nkhd,mkhe->hde', repr_batch, repr_batch)
                 fisher_all += term / len(repr_batch)
@@ -120,9 +125,14 @@ class BaitSampling(Query):
             else:
                 raise NotImplementedError()
 
+        # logits_labeled = labeled_outputs['logits']
+        # features_labeled = labeled_outputs['features']
+        # A, B = fisher_kfac_factors(logits_labeled, features_labeled)
+        # fisher_labeled = torch.kron(A, B)
+
         fisher_labeled = torch.zeros(fisher_dim).to(self.device)
         dl = DataLoader(TensorDataset(repr_labeled), batch_size=self.fisher_batch_size, shuffle=False)
-        for batch in track(dl, "Bait: Computing fisher..", disable=True):
+        for batch in dl:
             repr_batch = batch[0].to(self.device)
             if self.fisher_approximation == 'full':
                 term = torch.matmul(repr_batch.transpose(1, 2), repr_batch)
@@ -183,7 +193,7 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
     # print('forward selection...', flush=True)
     over_sample = 2
     # for i in range(int(over_sample * acq_size)):
-    for i in track(range(int(over_sample * acq_size)), 'Bait: Oversampling', disable=True):
+    for i in range(int(over_sample * acq_size)):
         # check trace with low-rank updates (woodbury identity)
         xt_ = repr_unlabeled.to(device)
 
@@ -236,7 +246,7 @@ def select_forward_backward(repr_unlabeled, acq_size, fisher_all, fisher_labeled
 
     # backward pruning
     # print('backward pruning...', flush=True)
-    for i in track(range(len(indsAll) - acq_size), 'Bait: Backward pruning', disable=True):
+    for i in range(len(indsAll) - acq_size):
         # for i in range(len(indsAll) - acq_size):
 
         # select index for removal
@@ -362,3 +372,16 @@ def get_topk_grad_representations(logits, features, topk, grad_likelihood='cross
     else:
         raise NotImplementedError()
     return embedding_batch
+
+@torch.no_grad()
+def fisher_kfac_factors(logits, features, eps=1e-2):
+    probas = torch.softmax(logits, dim=-1)
+    probas_mean = probas.mean(dim=0)
+    probas_cov = (probas.T @ probas) / probas.size(0)
+    A = torch.diag(probas_mean) - probas_cov
+
+    B = (features.T @ features) / features.size(0)
+
+    A = A + eps * torch.eye(A.size(0), device=A.device)
+    B = B + eps * torch.eye(B.size(0), device=B.device)
+    return A, B

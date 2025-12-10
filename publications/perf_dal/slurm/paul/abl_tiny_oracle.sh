@@ -10,7 +10,7 @@
 source /mnt/stud/work/phahn/venvs/dal-toolbox/bin/activate
 
 mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/perfdal.db'
-mlflow_exp_name='abl_tiny_new_1'
+mlflow_exp_name='abl_tiny_1'
 backbone=dinov2
 
 al_strategy=perf_dal_oracle
@@ -20,7 +20,7 @@ var_sss=True
 sel_strats=\[alfamix,badge,bait,coreset,dropquery,dropqueryclass,margin,random,typiclass,typiclust\]
 
 datasets=(cifar10 flowers102 dtd cifar100)
-acq_sizes=(10 25 50 100)
+acq_sizes=(20 50 100 200)
 subset_sizes=(1000 Null Null 1000)
 
 random_seeds=(1 2 3 4 5 6 7 8 9 10)

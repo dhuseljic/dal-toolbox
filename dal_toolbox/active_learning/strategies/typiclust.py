@@ -8,7 +8,7 @@ from sklearn.neighbors import NearestNeighbors
 
 from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.active_learning.strategies import Query
-from dal_toolbox.models.utils.base import BaseModule
+from dal_toolbox.models.base import BaseModule
 
 
 def get_nn(features, num_neighbors):
@@ -30,9 +30,11 @@ def get_mean_nn_dist(features, num_neighbors, return_indices=False):
 
 
 def calculate_typicality(features, num_neighbors):
-    mean_distance = get_mean_nn_dist(features, num_neighbors)
-    # low distance to NN is high density
-    typicality = 1 / (mean_distance + 1e-5)
+    if len(features) > 1: 
+        mean_distance = get_mean_nn_dist(features, num_neighbors)
+        typicality = 1 / (mean_distance + 1e-5)
+    else: 
+        typicality = np.array([np.inf])
     return typicality
 
 
@@ -103,6 +105,7 @@ class TypiClust(Query):
         actual_indices = [unlabeled_indices[idx] for idx in query_indices]
         return actual_indices
 
+
 class InverseTypiClust(TypiClust):
     @torch.no_grad()
     def query(self,
@@ -154,40 +157,3 @@ class InverseTypiClust(TypiClust):
 
         actual_indices = [unlabeled_indices[idx] for idx in query_indices]
         return actual_indices
-
-
-def _typicality(X, uncovered_samples_mapping, k, eps=1e-7):
-    """
-    Calculation the typicality of samples `X` in uncovered clusters.
-
-    Parameters
-    ----------
-    X : array-like of shape (n_samples, n_features)
-        Training data set, usually complete, i.e., including the labeled and
-        unlabeled samples.
-    uncovered_samples_mapping : np.ndarray of shape (n_candidates,),
-    default=None
-       Index array that maps `candidates` to `X_for_cluster`.
-    k : int
-        k for computation of k nearst neighbors.
-    eps : float > 0, default=1e-7
-        Minimum distance sum to compute typicality.
-
-    Returns
-    -------
-    typicality : numpy.ndarray of shape (n_X)
-        The typicality of all uncovered samples in X
-    """
-    typicality = np.full(shape=X.shape[0], fill_value=-np.inf)
-    if len(uncovered_samples_mapping) == 1:
-        typicality[uncovered_samples_mapping] = 1
-        return typicality
-    k = np.min((len(uncovered_samples_mapping) - 1, k))
-    nn = NearestNeighbors(n_neighbors=k + 1).fit(X[uncovered_samples_mapping])
-    dist_matrix_sort_inc, _ = nn.kneighbors(
-        X[uncovered_samples_mapping], n_neighbors=k + 1, return_distance=True
-    )
-    knn = np.sum(dist_matrix_sort_inc, axis=1) + eps
-    typi = ((1 / k) * knn) ** (-1)
-    typicality[uncovered_samples_mapping] = typi
-    return typicality

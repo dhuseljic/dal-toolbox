@@ -5,21 +5,25 @@ import logging
 
 from torch.utils.data import DataLoader
 from datasets import load_dataset
-from transformers import AutoModelForSequenceClassification, AutoTokenizer, Swinv2ForImageClassification
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, Swinv2ForImageClassification, ViTForImageClassification
+from sentence_transformers import SentenceTransformer
 from omegaconf import DictConfig
 
+from transformers import AutoImageProcessor
 from dal_toolbox.datasets import CIFAR10
-from dal_toolbox.datasets.utils import DinoTransforms, FeatureDataset, PlainTransforms, SwinV2Transforms
+from dal_toolbox.datasets import FeatureDataset
+from dal_toolbox.datasets.transforms import PlainTransforms
+import torchvision.transforms as vision_transforms
 from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, Snacks, DTD, Flowers102, TinyImageNet, MNIST
 from dal_toolbox.datasets import ImageNet, StanfordDogs, CIFAR10LT, Dopanim
-
 from dal_toolbox.models.laplace import LaplaceLinear, LaplaceModel
 
 import torch.multiprocessing
+from rich.progress import track
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 
-def build_datasets(args, model=None, cache_features=True):
+def build_datasets(args, cache_features=True):
     image_datasets = ['cifar10', 'cifar10-lt', 'stl10', 'dopanim', 'snacks', 'dtd', 'cifar100', 'food101', 'flowers102',
                       'caltech101', 'stanford_dogs', 'tiny_imagenet', 'imagenet', 'mnist']
     text_datasets = ['agnews', 'dbpedia', 'banking77', 'clinc']
@@ -27,24 +31,35 @@ def build_datasets(args, model=None, cache_features=True):
     if args.dataset_name in image_datasets:
         logging.info('Building Data!')
         data = build_image_data(args)
-        if cache_features or model != None:
-            if model == None:
-                logging.info('Building Backbone!')
-                if args.backbone == 'dinov2':
-                    model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
-                    logging.info('Selected DINOV2 as a backbone!')
-                elif args.backbone == 'swinv2':
-                    model = Swinv2ForImageClassification.from_pretrained("microsoft/swinv2-base-patch4-window8-256")
-                    model.classifier = nn.Identity()
-                else:
-                    raise NotImplementedError(f'This backbone ({args.backbone}) is not available!')
+        if cache_features:
+            logging.info('Building Backbone!')
+            if args.backbone == 'dinov2':
+                model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
+                logging.info('Selected DINOV2 as a backbone!')
+            elif args.backbone == 'swinv2':
+                model = Swinv2ForImageClassification.from_pretrained(
+                    "microsoft/swinv2-base-patch4-window8-256")
+                model.classifier = nn.Identity()
+            elif args.backbone == 'swinv2-t':
+                model = Swinv2ForImageClassification.from_pretrained(
+                    "microsoft/swinv2-tiny-patch4-window8-256")
+                model.classifier = nn.Identity()
+            elif args.backbone == 'swinv2-s':
+                model = Swinv2ForImageClassification.from_pretrained(
+                    "microsoft/swinv2-small-patch4-window8-256")
+                model.classifier = nn.Identity()
+            elif args.backbone == 'vit-mae':
+                model = ViTForImageClassification.from_pretrained("facebook/vit-mae-base")
+                model.classifier = nn.Identity()
             else:
-                # TODO: Handle cases that are different than dino, where we do not need to set a classifier to identity.
-                logging.info('Using a given Backbone!')
+                raise NotImplementedError(f'This backbone ({args.backbone}) is not available!')
 
-            train_ds = FeatureDataset(model, data.train_dataset, cache=cache_features, cache_dir=args.dataset_path, backbone=args.backbone)
-            val_ds = FeatureDataset(model, data.val_dataset, cache=cache_features, cache_dir=args.dataset_path, backbone=args.backbone)
-            test_ds = FeatureDataset(model, data.test_dataset, cache=cache_features, cache_dir=args.dataset_path, backbone=args.backbone)
+            train_ds = FeatureDataset(model, data.train_dataset, cache=True,
+                                      cache_dir=args.dataset_path, backbone=args.backbone)
+            val_ds = FeatureDataset(model, data.val_dataset, cache=True,
+                                    cache_dir=args.dataset_path, backbone=args.backbone)
+            test_ds = FeatureDataset(model, data.test_dataset, cache=True,
+                                     cache_dir=args.dataset_path, backbone=args.backbone)
         else:
             train_ds = data.train_dataset
             val_ds = data.val_dataset
@@ -54,19 +69,19 @@ def build_datasets(args, model=None, cache_features=True):
 
     elif args.dataset_name in text_datasets:
         data, num_classes = build_text_data(args)
-        tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased", use_fast=False)
+        # tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased", use_fast=False)
+        # data = data.map(
+        #     lambda batch: tokenizer(batch["text"], truncation=True, padding="max_length", max_length=512),
+        #     batched=True, batch_size=1000
+        # )
+        
+        # data = data.remove_columns(
+        #     list(set(data['train'].column_names)-set(['input_ids', 'attention_mask', 'label'])))
+        # data = data.with_format("torch")
 
-        data = data.map(
-            lambda batch: tokenizer(batch["text"], truncation=True, padding="max_length", max_length=512),
-            batched=True, batch_size=1000
-        )
-
-        data = data.remove_columns(
-            list(set(data['train'].column_names)-set(['input_ids', 'attention_mask', 'label'])))
-        data = data.with_format("torch")
-
-        model = BertSequenceClassifier(num_classes=num_classes)
+        model = MiniLM()
         train_ds = FeatureDataset(model, data["train"], cache=True, cache_dir=args.dataset_path, task="text")
+        val_ds = FeatureDataset(model, data["test"], cache=True, cache_dir=args.dataset_path, task="text")
         test_ds = FeatureDataset(model, data["test"], cache=True, cache_dir=args.dataset_path, task="text")
 
     return train_ds, val_ds, test_ds, num_classes
@@ -77,9 +92,11 @@ def build_image_data(args, plain_transforms=False):
         transforms = PlainTransforms(resize=(224, 224))
     else:
         if args.backbone == 'dinov2':
-            transforms = DinoTransforms(size=(256, 256), apply_train_transforms=args.apply_train_transforms)
+            transforms = DinoTransforms(size=(256, 256))
         elif 'swinv2' in args.backbone:
             transforms = SwinV2Transforms(args.backbone)
+        elif args.backbone == 'vit-mae':
+            transforms = ViTMAETransforms()
         else:
             raise ValueError(f"{args.backbone}-backbone not implemented!")
 
@@ -117,10 +134,12 @@ def build_image_data(args, plain_transforms=False):
 def build_text_data(args):
     if args.dataset_name == "agnews":
         data = load_dataset("ag_news")
+        data = data["train"].train_test_split(train_size=50_000, test_size=10_000, stratify_by_column="label")
         num_classes = 4
     elif args.dataset_name == "dbpedia":
         data = load_dataset("dbpedia_14")
         data = data.rename_column("content", "text")
+        data = data['train'].train_test_split(train_size=50_000, test_size=10_000, stratify_by_column="label")
         num_classes = 14
     elif args.dataset_name == "banking77":
         data = load_dataset("banking77")
@@ -177,8 +196,10 @@ class FeatureDataset:
             try:
                 sample = dataset[idx][0]
             except:
-                sample = dataset["input_ids"][0]
+                sample = dataset[idx]['text']
             hasher.update(str(sample).encode())
+            # output = dino_model(sample)
+            # hasher.update(str(output).encode())
         return hasher.hexdigest()
 
     def __len__(self) -> int:
@@ -189,20 +210,20 @@ class FeatureDataset:
 
     @torch.no_grad()
     def get_features(self, model, dataset, batch_size, device, task=None, num_workers=8):
-        print('Getting ssl features..')
         dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers)
         features = []
         labels = []
         model.eval()
         model.to(device)
-        for batch in dataloader:  # change
+        for batch in track(dataloader, 'Getting ssl features..'):  # change
             if task == "text":
-                input_ids = batch["input_ids"].to(device)
-                attention_mask = batch["attention_mask"].to(device)
-                features.append(model(input_ids, attention_mask).to('cpu'))
+                # input_ids = batch["input_ids"].to(device)
+                # attention_mask = batch["attention_mask"].to(device)
+                # features.append(model(input_ids, attention_mask).to('cpu'))
+                features.append(model(batch['text']).cpu())
                 labels.append(batch["label"])
             else:
-                if 'swinv2' in self.backbone:
+                if 'swinv2' in self.backbone or self.backbone == 'vit-mae':
                     # Make sure the classifier layer is set to identity in order for logits == features
                     out = model(batch[0]['pixel_values'][0].to(device)).logits
                 else:
@@ -249,32 +270,23 @@ def flatten_cfg(cfg, parent_key='', sep='.'):
 class LaplaceNet(nn.Module):
     use_mean_field = True
 
-    def __init__(self, in_features, out_features, backbone=None, **kwargs):
+    def __init__(self, in_features, out_features, **kwargs):
         super().__init__()
         self.layer = LaplaceLinear(in_features, out_features, **kwargs)
-        self.backbone = backbone
-        self.use_backbone = False if backbone == None else True
 
     def forward_features(self, x):
-        if self.backbone != None and self.use_backbone:
-            x = self.backbone(x)
         return x
 
-    def forward_head(self, x, mean_field=False, is_features=False):
+    def forward_head(self, x, mean_field=False):
         if mean_field:
-            out = self.layer.forward_mean_field(x, is_features=is_features)
+            out = self.layer.forward_mean_field(x)
         else:
             out = self.layer(x)
         return out
 
-    def forward_mean_field(self, x, is_features=False):
-        if self.backbone != None and not is_features and self.use_backbone:
-            x = self.backbone(x)
-        return self.layer.forward_mean_field(x)
-
-    def forward(self, x):
+    def forward(self, x, mean_field=False):
         features = self.forward_features(x)
-        logits = self.forward_head(features, is_features=True)
+        logits = self.forward_head(features, mean_field=mean_field)
         return logits
 
 
@@ -311,17 +323,6 @@ class LaplaceMLP(nn.Module):
 def build_model(args, **kwargs):
     num_features = kwargs['num_features']
     num_classes = kwargs['num_classes']
-    # If finetuning the backbone, it should be included in the model
-    backbone = None
-    if args.finetune_backbone:
-        if args.backbone == 'dinov2':
-            backbone = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
-            logging.info('Selected DINOV2 as a backbone!')
-        elif args.backbone == 'swinv2':
-            backbone = Swinv2ForImageClassification.from_pretrained("microsoft/swinv2-base-patch4-window8-256")
-            backbone.classifier = nn.Identity()
-        else:
-            raise NotImplementedError(f'This backbone ({args.backbone}) is not available!')
 
     # Laplace net because we want to be able to sample via Bayesian methods.
     # Not using the covariance is equivalent to deterministic model.
@@ -332,27 +333,112 @@ def build_model(args, **kwargs):
             mean_field_factor=args.model.mean_field_factor,
             mc_samples=args.model.mc_samples,
             bias=True,
-            backbone=backbone
         )
     elif args.model.name == 'laplace_mlp':
         model = LaplaceMLP(num_features, num_classes, bias=True)
     else:
         raise NotImplementedError()
 
-    # Define optimizer with different hyperparameters
-    params = [{'params': model.layer.parameters(), 'lr': args.optimizer.lr, 'weight_decay': args.optimizer.weight_decay}]
-    if args.finetune_backbone:
-        params.append({'params': backbone.parameters(), 'lr': args.optimizer.lr_backbone, 'weight_decay': args.optimizer.weight_decay_backbone})
+    params = [
+        {'params': [p for n, p in model.named_parameters() if 'ssl_model' not in n]},
+        {'params': [p for n, p in model.named_parameters() if 'ssl_model' in n],
+         'lr': args.optimizer.lr_backbone},
+    ]
 
     if args.optimizer.name == 'SGD':
-        optimizer = torch.optim.SGD(params, nesterov=args.optimizer.nesterov, momentum=args.optimizer.momentum)
-    elif args.optimizer.name == 'Adam':
-        optimizer = torch.optim.Adam(params)
+        optimizer = torch.optim.SGD(params, lr=args.optimizer.lr, nesterov=args.optimizer.nesterov,
+                                    momentum=args.optimizer.momentum, weight_decay=args.optimizer.weight_decay)
+    elif args.optimizer.name == 'AdamW':
+        optimizer = torch.optim.AdamW(params, lr=args.optimizer.lr,
+                                     weight_decay=args.optimizer.weight_decay)
     elif args.optimizer.name == 'RAdam':
-        optimizer = torch.optim.RAdam(params)
+        optimizer = torch.optim.RAdam(params, lr=args.optimizer.lr, weight_decay=args.optimizer.weight_decay)
     else:
         raise NotImplementedError()
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.model.num_epochs)
 
     model = LaplaceModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
     return model
+
+
+class DinoTransforms():
+    def __init__(self, size=None, center_crop_size=224):
+        if size:
+            # https://github.com/facebookresearch/dino/blob/main/eval_linear.py#L65-L70
+            dino_mean = (0.485, 0.456, 0.406)
+            dino_std = (0.229, 0.224, 0.225)
+            self.transform = vision_transforms.Compose([
+                vision_transforms.Resize(size, interpolation=3),
+                vision_transforms.CenterCrop(center_crop_size),
+                vision_transforms.ToTensor(),
+                vision_transforms.Lambda(lambda x: x.repeat(3, 1, 1) if x.size(0) != 3 else x),
+                vision_transforms.Normalize(dino_mean, dino_std),
+            ])
+
+        else:
+            self.transform = vision_transforms.Compose([vision_transforms.ToTensor()])
+
+    @property
+    def train_transform(self):
+        return self.transform
+
+    @property
+    def query_transform(self):
+        return self.transform
+
+    @property
+    def eval_transform(self):
+        return self.transform
+
+
+class ViTMAETransforms():
+    def __init__(self):
+        self.image_processor = AutoImageProcessor.from_pretrained("facebook/vit-mae-base")
+
+        self.transform = vision_transforms.Compose([
+            # First create three channels if black and white
+            vision_transforms.transforms.Lambda(lambda x: x.convert('RGB') if x.mode != 'RGB' else x),
+            self.image_processor                  # then apply processor
+        ])
+
+
+class SwinV2Transforms():
+    def __init__(self, backbone):
+        if backbone == 'swinv2':
+            self.image_processor = AutoImageProcessor.from_pretrained(
+                "microsoft/swinv2-base-patch4-window8-256")
+        elif backbone == 'swinv2-t':
+            self.image_processor = AutoImageProcessor.from_pretrained(
+                "microsoft/swinv2-tiny-patch4-window8-256")
+        elif backbone == 'swinv2-s':
+            self.image_processor = AutoImageProcessor.from_pretrained(
+                "microsoft/swinv2-small-patch4-window8-256")
+        else:
+            raise AssertionError("Wrong backbone!")
+
+        self.transform = vision_transforms.Compose([
+            # First create three channels if black and white
+            vision_transforms.Lambda(lambda x: x.convert('RGB') if x.mode != 'RGB' else x),
+            self.image_processor                  # then apply processor
+        ])
+
+    @property
+    def train_transform(self):
+        return self.transform
+
+    @property
+    def query_transform(self):
+        return self.transform
+
+    @property
+    def eval_transform(self):
+        return self.transform
+
+class MiniLM(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.model = SentenceTransformer("all-MiniLM-L6-v2")
+
+    def forward(self, x):
+        features = self.model.encode(x, normalize_embeddings=False, convert_to_tensor=True)
+        return features

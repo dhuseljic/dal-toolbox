@@ -1,73 +1,17 @@
 import os
-import warnings
-import torch
-import torchvision
-from enum import Enum
-from torchvision.transforms import autoaugment
-from torchvision.transforms.functional import InterpolationMode
 from torchvision import datasets
 from .base import BaseData, BaseTransforms
-from .utils import RepeatTransformations, PlainTransforms
+from .transforms import CustomTransforms, TransformPresetTrain, TransformPresetEval
+
+IMAGENET_MEAN = (0.485, 0.456, 0.406)
+IMAGENET_STD = (0.229, 0.224, 0.225)
 
 
-class ImageNetTransforms(Enum):
-    mean: tuple = (0.485, 0.456, 0.406)
-    std: tuple = (0.229, 0.224, 0.225)
-
-
-class ImageNetStandardTransforms(BaseTransforms):
-    def __init__(self) -> None:
-        super().__init__()
-        self.mean = ImageNetTransforms.mean.value
-        self.std = ImageNetTransforms.std.value
-
-    @property
-    def train_transform(self):
-        transform = ClassificationPresetTrain(crop_size=224, mean=self.mean, std=self.std)
-        return transform
-
-    @property
-    def eval_transform(self):
-        transform = ClassificationPresetEval(crop_size=224, mean=self.mean, std=self.std)
-        return transform
-
-    @property
-    def query_transform(self):
-        transform = ClassificationPresetEval(crop_size=224, mean=self.mean, std=self.std)
-        return transform
-
-
-class ImageNetDINOTransforms(BaseTransforms):
+class ImageNetStandardTransforms(CustomTransforms):
     def __init__(self):
-        super().__init__()
-
-    @property
-    def train_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.RandomResizedCrop(size=(224, 224), scale=(0.32, 1.0), interpolation=torchvision.transforms.InterpolationMode.BICUBIC),
-            torchvision.transforms.RandomHorizontalFlip(p=0.5),
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(mean=ImageNetTransforms.mean.value, std=ImageNetTransforms.std.value)
-        ])
-        return transform
-
-    @property
-    def eval_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.Resize(size=(224, 224)),
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(mean=ImageNetTransforms.mean.value, std=ImageNetTransforms.std.value)
-        ])
-        return transform
-
-    @property
-    def query_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.Resize(size=(224, 224)),
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(mean=ImageNetTransforms.mean.value, std=ImageNetTransforms.std.value)
-        ])
-        return transform
+        train_transform = TransformPresetTrain(crop_size=224, mean=IMAGENET_MEAN, std=IMAGENET_STD)
+        eval_transform = TransformPresetEval(crop_size=224, mean=IMAGENET_MEAN, std=IMAGENET_STD)
+        super().__init__(train_transform=train_transform, eval_transform=eval_transform)
 
 
 class ImageNet(BaseData):
@@ -119,129 +63,3 @@ class ImageNet(BaseData):
     @property
     def test_dataset(self):
         return datasets.ImageNet(self.dataset_path, split='val', transform=self.eval_transform)
-
-
-class ImageNetDINO(ImageNet):
-    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
-        super().__init__(dataset_path, ImageNetDINOTransforms(), val_split, seed)
-
-
-class ImageNetContrastiveTransforms(ImageNetStandardTransforms):
-    def __init__(self, color_distortion_strength: float):
-        super().__init__()
-        self._s = color_distortion_strength
-
-    @property
-    def train_transform(self):
-        color_jitter = torchvision.transforms.ColorJitter(0.8 * self._s, 0.8 * self._s, 0.8 * self._s, 0.2 * self._s)
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.RandomResizedCrop(size=224),
-            torchvision.transforms.RandomHorizontalFlip(p=0.5),
-            torchvision.transforms.RandomApply([color_jitter], p=0.8),
-            torchvision.transforms.RandomGrayscale(p=0.2),
-            torchvision.transforms.RandomApply([torchvision.transforms.GaussianBlur(kernel_size=23)], p=0.5),
-            torchvision.transforms.ToTensor(),
-        ])
-        return RepeatTransformations(transform)
-
-    @property
-    def eval_transform(self):
-        return self.train_transform
-
-
-class ImageNetPlain(ImageNet):
-    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
-        super().__init__(dataset_path, PlainTransforms(resize=(224, 224)), val_split, seed)
-
-
-class ImageNetContrastive(ImageNet):
-    """
-    Contrastive version of ImageNet.
-
-    This means that the transforms are repeated twice for each image, resulting in two views for each input image.
-    """
-
-    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None, cds=1.0) -> None:
-        super().__init__(dataset_path, ImageNetContrastiveTransforms(color_distortion_strength=cds), val_split, seed)
-
-
-# Transforms from: https://github.com/pytorch/vision/blob/main/references/classification/presets.py
-class ClassificationPresetTrain:
-    def __init__(
-            self,
-            *,
-            crop_size,
-            mean=(0.485, 0.456, 0.406),
-            std=(0.229, 0.224, 0.225),
-            interpolation=InterpolationMode.BILINEAR,
-            hflip_prob=0.5,
-            auto_augment_policy=None,
-            ra_magnitude=9,
-            augmix_severity=3,
-            random_erase_prob=0.0,
-    ):
-        trans = [torchvision.transforms.RandomResizedCrop(crop_size, interpolation=interpolation)]
-        if hflip_prob > 0:
-            trans.append(torchvision.transforms.RandomHorizontalFlip(hflip_prob))
-        if auto_augment_policy is not None:
-            if auto_augment_policy == "ra":
-                trans.append(autoaugment.RandAugment(interpolation=interpolation, magnitude=ra_magnitude))
-            elif auto_augment_policy == "ta_wide":
-                trans.append(autoaugment.TrivialAugmentWide(interpolation=interpolation))
-            elif auto_augment_policy == "augmix":
-                trans.append(autoaugment.AugMix(interpolation=interpolation, severity=augmix_severity))
-            else:
-                aa_policy = autoaugment.AutoAugmentPolicy(auto_augment_policy)
-                trans.append(autoaugment.AutoAugment(policy=aa_policy, interpolation=interpolation))
-        trans.extend(
-            [
-                torchvision.transforms.PILToTensor(),
-                torchvision.transforms.ConvertImageDtype(torch.float),
-                torchvision.transforms.Normalize(mean=mean, std=std),
-            ]
-        )
-        if random_erase_prob > 0:
-            trans.append(torchvision.transforms.RandomErasing(p=random_erase_prob))
-
-        self.transforms = torchvision.transforms.Compose(trans)
-
-    def __call__(self, img):
-        return self.transforms(img)
-
-
-class ClassificationPresetEval:
-    def __init__(
-            self,
-            *,
-            crop_size,
-            resize_size=256,
-            mean=(0.485, 0.456, 0.406),
-            std=(0.229, 0.224, 0.225),
-            interpolation=InterpolationMode.BILINEAR,
-    ):
-        self.transforms = torchvision.transforms.Compose([
-            torchvision.transforms.Resize(resize_size, interpolation=interpolation),
-            torchvision.transforms.CenterCrop(crop_size),
-            torchvision.transforms.PILToTensor(),
-            torchvision.transforms.ConvertImageDtype(torch.float),
-            torchvision.transforms.Normalize(mean=mean, std=std),
-        ])
-
-    def __call__(self, img):
-        return self.transforms(img)
-
-
-def build_imagenet(split, ds_path, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225), return_info=False):
-    warnings.warn('Deprecated method build_imagenet.')
-    train_transform = ClassificationPresetTrain(crop_size=32, mean=mean, std=std)
-    eval_transform = ClassificationPresetEval(crop_size=32, mean=mean, std=std)
-    if split == 'train':
-        ds = datasets.ImageNet(root=ds_path, split=split, transform=train_transform)
-    elif split == 'query':
-        ds = datasets.ImageNet(root=ds_path, split=split, transform=eval_transform)
-    elif split == 'val':
-        ds = datasets.ImageNet(root=ds_path, split=split, transform=eval_transform)
-    if return_info:
-        ds_info = {'n_classes': 1000, 'mean': mean, 'std': std}
-        return ds, ds_info
-    return ds

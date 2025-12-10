@@ -12,6 +12,7 @@ from sklearn.linear_model import LogisticRegression
 from dal_toolbox.active_learning.strategies.query import Query
 from dal_toolbox.active_learning import strategies
 from dal_toolbox.active_learning.data import ActiveLearningDataModule
+from dal_toolbox.models.utils.callbacks import MetricLogger
 
 
 class PerfDALOracle(Query):
@@ -127,14 +128,23 @@ class PerfDALOracle(Query):
                                                     'logits', 'features', 'labels'], device=self.device)
         unlabeled_logits = unlabeled_outputs['logits']
         unlabeled_labels = unlabeled_outputs['labels']
-
         labeled_dataloader, labeled_indices = al_datamodule.labeled_dataloader()
         labeled_outputs = model.get_model_outputs(labeled_dataloader, output_types=[
                                                   'features', 'labels'], device=self.device)
         labeled_labels = labeled_outputs['labels']
 
-        base_loss = self.evaluate_model(model, al_datamodule.test_dataloader())
+        if self.look_ahead == 'gt_model':
+            if not hasattr(self, 'gt_model'):
+                self.gt_model = deepcopy(model)
+                indices = labeled_indices + unlabeled_indices
+                train_loader = al_datamodule.custom_dataloader(indices, train=True)
+                model.reset_states(reset_model_parameters=True)
+                cb = [MetricLogger()]
+                Trainer(barebones=True, max_epochs=100, callbacks=cb).fit(self.gt_model, train_loader)
+            gt_outputs = self.gt_model.get_model_outputs(
+                unlabeled_dataloader, output_types=['logits'], device=self.device)
 
+        base_loss = self.evaluate_model(model, al_datamodule.test_dataloader())
         indices_batches, batches_counts = self.select_strategy_batches(
             model, al_datamodule, acq_size, unlabeled_indices)
 
@@ -143,6 +153,10 @@ class PerfDALOracle(Query):
         for indices in track(indices_batches):
             if self.look_ahead == 'true_labels':  # Use true labels of batch for model training
                 labels = unlabeled_labels[indices]
+                labels = labels.unsqueeze(0)
+            elif self.look_ahead == 'gt_model':  # Use true labels of batch for model training
+                gt_logits = gt_outputs['logits']
+                labels = gt_logits[indices].argmax(-1)
                 labels = labels.unsqueeze(0)
             elif self.look_ahead == 'pseudo_labels':  # Use pseudo labels of model
                 logits = unlabeled_logits[indices]
@@ -187,6 +201,11 @@ class PerfDALOracle(Query):
 
                 if self.perf_erstimation == 'val_ds':
                     loss = self.evaluate_model(model, al_datamodule.val_dataloader())
+                elif self.perf_erstimation == 'gt_model':
+                    out = model.get_model_outputs(unlabeled_dataloader, output_types=[
+                                                  'logits'], device=self.device)
+                    gt_model_labels = gt_outputs['logits'].argmax(-1)
+                    loss = self.loss_fn(out['logits'], gt_model_labels)
                 elif self.perf_erstimation == 'test_ds':
                     loss = self.evaluate_model(model, al_datamodule.test_dataloader())
                 elif self.perf_erstimation == 'unlabeled_ds':
@@ -225,7 +244,7 @@ class PerfDALOracle(Query):
             batches_counts = {t: 1 for t in self.batch_types}
 
         indices = []
-        for strat_name, strat in zip(self.batch_types, self.strategies):
+        for strat_name, strat in track(list(zip(self.batch_types, self.strategies)), "Selecting batches.."):
             num_batches = batches_counts[strat_name]
 
             # TODO: This is just a temporary solution for DTD as the unlabeled pool is very small

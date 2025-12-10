@@ -10,7 +10,7 @@ from torch import Tensor
 from abc import ABC, abstractmethod
 from .query import Query
 from ..data import ActiveLearningDataModule
-from ...models.utils.base import BaseModule
+from ...models.base import BaseModule
 
 
 def random_generator_for_est_pool(x_dim, size):
@@ -43,7 +43,7 @@ def closest_center_dist(rr, centers):
 
 ## kmeans
 def kmeans(rr, k):
-    kmeans = KMeans(n_clusters=k).fit(rr)
+    kmeans = KMeans(n_clusters=k, n_init='auto').fit(rr)
     centers = kmeans.cluster_centers_
     # find the nearest point to centers
     centroids = cdist(centers, rr).argmin(axis=1)

@@ -98,25 +98,19 @@ class ActiveLearningDataModule(L.LightningDataModule):
 
     def unlabeled_dataloader(self, subset_size=None):
         """Returns a dataloader for the unlabeled pool where instances are not augmentated."""
-        unlabeled_indices = self.unlabeled_indices
-        if subset_size is not None:
-            unlabeled_indices = self.rng.choice(unlabeled_indices, size=min(len(unlabeled_indices), subset_size), replace=False)
-            unlabeled_indices = unlabeled_indices.tolist()
+        unlabeled_indices = self._subsample_indices(self.unlabeled_indices, subset_size)
         loader = DataLoader(self.query_dataset, batch_size=self.predict_batch_size,
                             sampler=unlabeled_indices, collate_fn=self.collator)
         return loader, unlabeled_indices
 
     def labeled_dataloader(self, subset_size=None):
         """Returns a dataloader for the labeled pool where instances are not augmentated."""
-        labeled_indices = self.labeled_indices
-        if subset_size is not None:
-            labeled_indices = self.rng.choice(labeled_indices, size=min(len(labeled_indices), subset_size), replace=False)
-            labeled_indices = labeled_indices.tolist()
+        labeled_indices = self._subsample_indices(self.labeled_indices, subset_size)
         loader = DataLoader(self.query_dataset, batch_size=self.predict_batch_size,
                             sampler=labeled_indices, collate_fn=self.collator)
         return loader, labeled_indices
 
-    def custom_dataloader(self, indices: list, train: bool = False, custom_labels=None):
+    def custom_dataloader(self, indices: list, train: bool = False, custom_labels=None, custom_batch_size=None):
         if train:
             custom_dataset = Subset(self.train_dataset, indices=indices)
             sampler = RandomSampler(custom_dataset)
@@ -130,6 +124,8 @@ class ActiveLearningDataModule(L.LightningDataModule):
 
         if custom_labels is not None:
             custom_dataset = RelabeledDataset(custom_dataset, custom_labels)
+        if custom_batch_size is not None:
+            batch_size = custom_batch_size
 
         loader = DataLoader(
             custom_dataset,
@@ -196,6 +192,21 @@ class ActiveLearningDataModule(L.LightningDataModule):
             indices = self.rng.choice(self.unlabeled_indices, size=n_samples, replace=False)
             indices = indices.tolist()
         self.update_annotations(indices)
+
+    def _subsample_indices(self, indices, subset_size):
+        if subset_size is None:
+            return indices
+        
+        if isinstance(subset_size, float):
+            if not 0 < subset_size <= 1:
+                raise ValueError(f"subset_size as float must be in (0, 1], got {subset_size}")
+            actual_size = int(len(indices) * subset_size)
+        else:
+            actual_size = subset_size
+        
+        actual_size = min(len(indices), actual_size)
+        subsampled_indices = self.rng.choice(indices, size=actual_size, replace=False)
+        return subsampled_indices.tolist()
 
     def diverse_dense_init(self, n_samples: int, model: nn.Module = None, num_neighbors=20):
         if len(self.labeled_indices) != 0:

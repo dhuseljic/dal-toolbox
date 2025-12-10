@@ -5,8 +5,6 @@ import random
 import PIL, PIL.ImageOps, PIL.ImageEnhance, PIL.ImageDraw
 import numpy as np
 import torch
-import torch.nn.functional as F
-from PIL import Image
 
 class GaussianNoise(torch.nn.Module):
     def __init__(self, severity):

@@ -54,11 +54,9 @@ class LaplaceLinear(nn.Module):
         return logits
 
     def reset_precision_matrix(self):
-        device = self.precision_matrix.device
-        self.precision_matrix.data = copy.deepcopy(self.init_precision_matrix)
-        self.precision_matrix.to(device)
+        self.precision_matrix.copy_(self.init_precision_matrix)
+        self.covariance_matrix.fill_(float('nan'))
         self.recompute_covariance = True
-        self.covariance_matrix.data = torch.full(self.precision_matrix.shape, float('nan'))
 
     def synchronize_precision_matrix(self):
         if not is_dist_avail_and_initialized():
@@ -66,10 +64,10 @@ class LaplaceLinear(nn.Module):
         # Sum all precision_matrices
         dist.all_reduce(self.precision_matrix, op=dist.ReduceOp.SUM)
         # The init precision matrix is summed world_size times. However, it
-        # should be only one time. Thus we need to subtract the
-        # init_precision_matrix (1 - world_size)-times
-        init_precision_matrix = self.init_precision_matrix.to(self.precision_matrix)
-        self.precision_matrix = self.precision_matrix - (dist.get_world_size()-1)*init_precision_matrix
+        # should be only one time. Thus we need to subtract the init_precision_matrix (1 - world_size)-times
+        # init_precision_matrix = self.init_precision_matrix.to(self.precision_matrix)
+        # self.precision_matrix = self.precision_matrix - (dist.get_world_size()-1)*init_precision_matrix
+        self.precision_matrix.sub_((dist.get_world_size()-1) * self.init_precision_matrix)
 
     @torch.no_grad()
     def update_precision_matrix(self, inputs, logits):
@@ -83,19 +81,18 @@ class LaplaceLinear(nn.Module):
         else:
             raise NotImplementedError('Covariance likelihood not implemented.')
 
-        self.precision_matrix = self.precision_matrix.to(inputs)
+        # self.precision_matrix = self.precision_matrix.to(inputs)
         precision_matrix_minibatch = torch.matmul(multiplier*inputs.T, inputs)
         if self.cov_momentum > 0:
-            batch_size = len(inputs)
-            precision_matrix_minibatch = precision_matrix_minibatch / batch_size
-            precision_matrix_new = (self.cov_momentum * self.precision_matrix.data +
-                                    (1-self.cov_momentum) * precision_matrix_minibatch)
+            precision_matrix_minibatch = precision_matrix_minibatch / len(inputs)
+            # precision_matrix_new = (self.cov_momentum * self.precision_matrix.data + (1-self.cov_momentum) * precision_matrix_minibatch)
+            self.precision_matrix.mul_(self.cov_momentum).add_((1-self.cov_momentum) * precision_matrix_minibatch)
         else:
-            precision_matrix_new = self.precision_matrix.data + precision_matrix_minibatch
-        self.precision_matrix.data = precision_matrix_new
+            self.precision_matrix.add_(precision_matrix_minibatch)
+        # self.precision_matrix.data = precision_matrix_new
         # If there is a change in the precision matrix, recompute the covariance
         self.recompute_covariance = True
-    
+
     def compute_covariance(self):
         # self.covariance_matrix  = torch.linalg.inv(self.precision_matrix.data)
         u = torch.linalg.cholesky(self.precision_matrix.data)
@@ -123,7 +120,6 @@ class LaplaceLinear(nn.Module):
         if self.training:
             raise ValueError("Call eval mode before!")
         logits, cov = self.forward(x, return_cov=True)
-
 
         gp_mean = logits
         gp_var = cov.diag()

@@ -6,9 +6,8 @@ from PIL import Image
 
 from dal_toolbox.datasets import ImageNet
 from dal_toolbox.datasets.base import BaseTransforms
-from dal_toolbox.datasets.imagenet import ImageNetContrastiveTransforms, ImageNetDINOTransforms
-from dal_toolbox.datasets.utils import PlainTransforms
 
+# TODO: How to apply transforms? 
 
 class ImageNetSubSetWrapper(ImageNet):
     def __init__(self, dataset_path: str, transforms: BaseTransforms, val_split: float, seed: int,
@@ -16,8 +15,10 @@ class ImageNetSubSetWrapper(ImageNet):
         self.subset_file = subset_file
         self.dataset_path = dataset_path
 
-        self.trainset = ImageNetLoader(subset_file=subset_file, root=dataset_path, split='train', preload=preload)
-        self.testset = ImageNetLoader(subset_file=subset_file, root=dataset_path, split='val', preload=preload)
+        self.trainset = ImageNetLoader(subset_file=subset_file, root=dataset_path,
+                                       split='train', preload=preload)
+        self.testset = ImageNetLoader(subset_file=subset_file, root=dataset_path,
+                                      split='val', preload=preload)
         super().__init__(dataset_path, transforms, val_split, seed)
 
     @property
@@ -49,28 +50,6 @@ class ImageNet50(ImageNetSubSetWrapper):
         return 50
 
 
-class ImageNet50Contrastive(ImageNet50):
-    """
-    Contrastive version of ImageNet50.
-
-    This means that the transforms are repeated twice for each image, resulting in two views for each input image.
-    """
-
-    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None, preload=False, cds=1.0) -> None:
-        super().__init__(dataset_path, ImageNetContrastiveTransforms(color_distortion_strength=cds), val_split, seed,
-                         preload=preload)
-
-
-class ImageNet50DINO(ImageNet50):
-    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
-        super().__init__(dataset_path, ImageNetDINOTransforms(), val_split, seed)
-
-
-class ImageNet50Plain(ImageNet50):
-    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None, preload=False) -> None:
-        super().__init__(dataset_path, PlainTransforms(resize=(224, 224)), val_split, seed, preload=preload)
-
-
 class ImageNet100(ImageNetSubSetWrapper):
     def __init__(self, dataset_path: str, transforms: BaseTransforms = None, val_split: float = 0.1,
                  seed: int = None, preload=False) -> None:
@@ -79,28 +58,6 @@ class ImageNet100(ImageNetSubSetWrapper):
     @property
     def num_classes(self):
         return 100
-
-
-class ImageNet100DINO(ImageNet100):
-    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
-        super().__init__(dataset_path, ImageNetDINOTransforms(), val_split, seed)
-
-
-class ImageNet100Plain(ImageNet100):
-    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None, preload=False) -> None:
-        super().__init__(dataset_path, PlainTransforms(resize=(224, 224)), val_split, seed, preload=preload)
-
-
-class ImageNet100Contrastive(ImageNet100):
-    """
-    Contrastive version of ImageNet100.
-
-    This means that the transforms are repeated twice for each image, resulting in two views for each input image.
-    """
-
-    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None, preload=False, cds=1.0) -> None:
-        super().__init__(dataset_path, ImageNetContrastiveTransforms(color_distortion_strength=cds), val_split, seed,
-                         preload=preload)
 
 
 class ImageNet200(ImageNetSubSetWrapper):
@@ -113,30 +70,8 @@ class ImageNet200(ImageNetSubSetWrapper):
         return 200
 
 
-class ImageNet200DINO(ImageNet200):
-    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None) -> None:
-        super().__init__(dataset_path, ImageNetDINOTransforms(), val_split, seed)
-
-
-class ImageNet200Contrastive(ImageNet200):
-    """
-    Contrastive version of ImageNet200.
-
-    This means that the transforms are repeated twice for each image, resulting in two views for each input image.
-    """
-
-    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None, preload=False, cds=1.0) -> None:
-        super().__init__(dataset_path, ImageNetContrastiveTransforms(color_distortion_strength=cds), val_split, seed,
-                         preload=preload)
-
-
-class ImageNet200Plain(ImageNet200):
-    def __init__(self, dataset_path: str, val_split: float = 0.1, seed: int = None, preload=False) -> None:
-        super().__init__(dataset_path, PlainTransforms(resize=(224, 224)), val_split, seed, preload=preload)
-
-
+# From https://github.com/avihu111/TypiClust/blob/main/scan/data/imagenet.py
 class ImageNetLoader:
-    # From https://github.com/avihu111/TypiClust/blob/main/scan/data/imagenet.py
     def __init__(self, subset_file, root, split='train', preload=False):
         self.root = os.path.join(root, split)
         self.split = split

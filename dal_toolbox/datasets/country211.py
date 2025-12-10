@@ -1,15 +1,10 @@
-from enum import Enum
-
 import torchvision
 
 from .base import BaseData, BaseTransforms
-from .utils import PlainTransforms
+from .transforms import PlainTransforms
 
-
-class Country211Transforms(Enum):
-    # TODO
-    mean: tuple = (0.485, 0.456, 0.406)
-    std: tuple = (0.229, 0.224, 0.225)
+COUNTRY211_MEAN = (0.485, 0.456, 0.406)
+COUNTRY211_STD = (0.229, 0.224, 0.225)
 
 
 class Country211(BaseData):

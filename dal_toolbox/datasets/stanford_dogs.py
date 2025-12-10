@@ -1,16 +1,12 @@
 import numpy as np
-from enum import Enum
 
 from .base import BaseData, BaseTransforms
-from .utils import PlainTransforms
+from .transforms import PlainTransforms
 from datasets import load_dataset, config
 from torch.utils.data import Dataset
 
-
-class StanfordDogsTransforms(Enum):
-    # TODO
-    mean: tuple = (0.485, 0.456, 0.406)
-    std: tuple = (0.229, 0.224, 0.225)
+STANFORD_DOGS_MEAN = (0.485, 0.456, 0.406)
+STANFORD_DOGS_STD = (0.229, 0.224, 0.225)
 
 
 class StanfordDogs(BaseData):
@@ -50,6 +46,7 @@ class StanfordDogs(BaseData):
     def test_dataset(self):
         return _StanfordDogs(self.dataset_path, split="test", transform=self.eval_transform)
 
+
 class _StanfordDogs(Dataset):
     def __init__(self, root, split, transform=None, target_transform=None):
         super().__init__()
@@ -67,7 +64,6 @@ class _StanfordDogs(Dataset):
 
         self.target_dict = {k: i for i, k in enumerate(np.unique(self.ds['target']))}
 
-
     def __len__(self):
         return len(self.ds)
 
@@ -76,10 +72,9 @@ class _StanfordDogs(Dataset):
         img = data['image']
         target_name = data['target']
         lbl = self.target_dict[target_name]
-        
+
         if self.transform:
             img = self.transform(img)
         if self.target_transform:
             lbl = self.target_transform(lbl)
         return img, lbl
-        
