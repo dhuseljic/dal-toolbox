@@ -1,4 +1,5 @@
 [![arXiv](https://img.shields.io/badge/arXiv-2511.22344-b31b1b.svg)](https://arxiv.org/abs/2511.22344)
+<a href="https://hydra.cc/"><img alt="Config: Hydra" src="https://img.shields.io/badge/Config-Hydra-89b8cd"></a>
 # Cleaning the Pool: Progressive Filtering of Unlabeled Pools in Deep Active Learning
 Here, we provide the implementation and configuration files for reproducing the experiments from our paper [Cleaning the Pool: Progressive Filtering of Unlabeled Pools in Deep Active Learning](https://www.arxiv.org/pdf/2511.22344).
 
