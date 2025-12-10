@@ -2,7 +2,7 @@
 This toolbox is a modular framework designed to facilitate the implementation and evaluation of active learning (AL) workflows in PyTorch.  It includes implementations for the following publications:
 
 | Paper Title | Venue | Year | Code |
-| :--- | :---: | :---: | :---: |
+| :--- | :--- | :--- | :--- |
 | [ActiveGLAE: A Benchmark for Deep Active Learning with Transformers](https://arxiv.org/pdf/2306.10087) | ECML-PKDD | 2023 | [`./publications/active_glae`](./publications/active_glae/) |
 | [Role of Hyperparameters in Deep Active Learning](https://ceur-ws.org/Vol-3470/paper4.pdf) | IAL @ ECML-PKDD | 2023 | [`./publications/hyperparameters`](./publications/hyperparameters) |
 | [Fast Fishing: Approximating Bait for Efficient and Scalable Deep Active Image Classification](https://arxiv.org/pdf/2404.08981) | ECML-PKDD | 2024 | [`./publications/fast_fishing`](./publications/fast_fishing) |
