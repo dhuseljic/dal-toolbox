@@ -66,7 +66,7 @@ for cycle in range(4):
 
 ### More Complex Examples
 
-Check out [tbd](https://www.google.com/search?q=tbd) and the [📂`./publications`](./publications) directory for more sophisticated implementations.
+Check out [tbd](https://www.google.com/search?q=tbd) and the [`./publications`](./publications) directory for more sophisticated implementations.
 
 ## Citation
 If you find the DAL-Toolbox useful for your research, you can cite us using:
