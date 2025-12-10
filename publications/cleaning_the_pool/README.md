@@ -4,7 +4,7 @@ Here, we provide the implementation and configuration files for reproducing the 
 
 ![Graphical Abstract](/publications/cleaning_the_pool/ga.png)
 
-## 1. Setup & Requirements
+## 1. Setup
 Ensure `dal-toolbox` is installed. Additionally, install the dependencies required for these experiments:
 ```bash
 pip install -r requirements.txt
@@ -26,13 +26,6 @@ python main.py al.strategy=refine dataset=cifar10
 ```
 ### Slurm Cluster Execution
 For large-scale reproducibility, use the scripts provided in the `slurm/` directory.
-  * **Standard AL Loop:** `sbatch slurm/al.sh`
-  * **Ablation Studies:**
-      * `slurm/ablation_alpha.sh` (Hyperparameter alpha)
-      * `slurm/ablation_batches.sh` (Batch size)
-      * `slurm/ablation_depth.sh` (Model depth)
-  * **Baselines:** `sbatch slurm/baselines.sh`
-```
 
 ## Citation
 TBD
