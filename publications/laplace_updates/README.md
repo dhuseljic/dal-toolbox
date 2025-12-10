@@ -1,4 +1,4 @@
-<a href="https://link.springer.com/chapter/10.1007/978-3-032-05981-9_2"><img alt="laplace updates @ ECML-PKDD 2025" src="https://img.shields.io/badge/Paper-laplace updates @ ECML-PKDD 2025-purple"></a>
+<a href="https://link.springer.com/chapter/10.1007/978-3-032-05981-9_2"><img alt="laplace updates @ ECML--PKDD 2025" src="https://img.shields.io/badge/Paper-laplace updates @ ECML--PKDD 2025-purple"></a>
 [![arXiv](https://img.shields.io/badge/arXiv-2210.06112-b31b1b.svg)](https://arxiv.org/abs/2210.06112)
 <a href="https://hydra.cc/"><img alt="Config: Hydra" src="https://img.shields.io/badge/Config-Hydra-89b8cd"></a>
 
