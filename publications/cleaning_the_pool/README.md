@@ -1,33 +1,29 @@
 [![arXiv](https://img.shields.io/badge/arXiv-2511.22344-b31b1b.svg)](https://arxiv.org/abs/2511.22344)
 # Cleaning the Pool: Progressive Filtering of Unlabeled Pools in Deep Active Learning
-This directory contains the implementation and configuration files required to reproduce the experiments presented in the paper [Cleaning the Pool: Progressive Filtering of Unlabeled Pools in Deep Active Learning](https://www.arxiv.org/pdf/2511.22344).
+Here, we provide the implementation and configuration files for reproducing the experiments from our paper [Cleaning the Pool: Progressive Filtering of Unlabeled Pools in Deep Active Learning](https://www.arxiv.org/pdf/2511.22344).
+
+![Graphical Abstract](/publications/cleaning_the_pool/ga.png)
 
 ## 1. Setup & Requirements
-Ensure the core `dal-toolbox` is installed. Additionally, install the specific dependencies required for these experiments:
+Ensure `dal-toolbox` is installed. Additionally, install the dependencies required for these experiments:
 ```bash
 pip install -r requirements.txt
 ````
-
 ## 2\. Project Structure
-  * **`main.py`**: The primary entry point for executing Active Learning (AL) cycles and model training.
-  * **`configs/`**: YAML configuration files.
-      * `active_learning.yaml`: General AL parameters.
-      * `dataset/`: Dataset-specific configurations (e.g., `cifar10.yaml`, `imagenet.yaml`).
+  * **`main.py`**: The main script for running AL experiments.
+  * **`configs/`**: YAML configuration files used by hydra.
   * **`slurm/`**: Shell scripts for submitting jobs to a Slurm cluster (includes ablations, grid searches, and baselines).
-  * **`strategies.py`**: Implementation of experiment-specific query strategies.
-  * **`utils.py`**: Helper functions for data loading and logging.
-  * **`*.ipynb`**: Jupyter notebooks (`evaluate.ipynb`, `tsne.ipynb`) for analyzing results and generating plots.
+  * **`strategies.py`**: Implementation of ensemble AL methods.
+  * **`utils.py`**: Helper functions.
+  * **`*.ipynb`**: Jupyter notebooks for analyzing results and generating plots.
 
 ## 3\. Running Experiments
 
 ### Local Execution
-
-To run a single experiment locally, execute `main.py`. Ensure you specify the necessary configuration arguments (depending on your argument parser, e.g., Hydra or argparse):
+To run a single experiment locally, execute `main.py`. Ensure you specify the necessary configuration arguments:
 ```bash
-# Example usage
-python main.py --config configs/active_learning.yaml --dataset configs/dataset/cifar10.yaml
+python main.py al.strategy=refine dataset=cifar10
 ```
-
 ### Slurm Cluster Execution
 For large-scale reproducibility, use the scripts provided in the `slurm/` directory.
   * **Standard AL Loop:** `sbatch slurm/al.sh`
