@@ -1,0 +1,444 @@
+import os
+import torch
+import torch.nn as nn
+import logging
+
+from torch.utils.data import DataLoader
+from datasets import load_dataset
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, Swinv2ForImageClassification, ViTForImageClassification
+from sentence_transformers import SentenceTransformer
+from omegaconf import DictConfig
+
+from transformers import AutoImageProcessor
+from dal_toolbox.datasets import CIFAR10
+from dal_toolbox.datasets import FeatureDataset
+from dal_toolbox.datasets.transforms import PlainTransforms
+import torchvision.transforms as vision_transforms
+from dal_toolbox.datasets import CIFAR10, CIFAR100, Food101, STL10, Snacks, DTD, Flowers102, TinyImageNet, MNIST
+from dal_toolbox.datasets import ImageNet, StanfordDogs, CIFAR10LT, Dopanim
+from dal_toolbox.models.laplace import LaplaceLinear, LaplaceModel
+
+import torch.multiprocessing
+from rich.progress import track
+torch.multiprocessing.set_sharing_strategy('file_system')
+
+
+def build_datasets(args, cache_features=True):
+    image_datasets = ['cifar10', 'cifar10-lt', 'stl10', 'dopanim', 'snacks', 'dtd', 'cifar100', 'food101', 'flowers102',
+                      'caltech101', 'stanford_dogs', 'tiny_imagenet', 'imagenet', 'mnist']
+    text_datasets = ['agnews', 'dbpedia', 'banking77', 'clinc']
+
+    if args.dataset_name in image_datasets:
+        logging.info('Building Data!')
+        data = build_image_data(args)
+        if cache_features:
+            logging.info('Building Backbone!')
+            if args.backbone == 'dinov2':
+                model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
+                logging.info('Selected DINOV2 as a backbone!')
+            elif args.backbone == 'swinv2':
+                model = Swinv2ForImageClassification.from_pretrained(
+                    "microsoft/swinv2-base-patch4-window8-256")
+                model.classifier = nn.Identity()
+            elif args.backbone == 'swinv2-t':
+                model = Swinv2ForImageClassification.from_pretrained(
+                    "microsoft/swinv2-tiny-patch4-window8-256")
+                model.classifier = nn.Identity()
+            elif args.backbone == 'swinv2-s':
+                model = Swinv2ForImageClassification.from_pretrained(
+                    "microsoft/swinv2-small-patch4-window8-256")
+                model.classifier = nn.Identity()
+            elif args.backbone == 'vit-mae':
+                model = ViTForImageClassification.from_pretrained("facebook/vit-mae-base")
+                model.classifier = nn.Identity()
+            else:
+                raise NotImplementedError(f'This backbone ({args.backbone}) is not available!')
+
+            train_ds = FeatureDataset(model, data.train_dataset, cache=True,
+                                      cache_dir=args.dataset_path, backbone=args.backbone)
+            val_ds = FeatureDataset(model, data.val_dataset, cache=True,
+                                    cache_dir=args.dataset_path, backbone=args.backbone)
+            test_ds = FeatureDataset(model, data.test_dataset, cache=True,
+                                     cache_dir=args.dataset_path, backbone=args.backbone)
+        else:
+            train_ds = data.train_dataset
+            val_ds = data.val_dataset
+            test_ds = data.test_dataset
+
+        num_classes = data.num_classes
+
+    elif args.dataset_name in text_datasets:
+        data, num_classes = build_text_data(args)
+        # tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased", use_fast=False)
+        # data = data.map(
+        #     lambda batch: tokenizer(batch["text"], truncation=True, padding="max_length", max_length=512),
+        #     batched=True, batch_size=1000
+        # )
+        
+        # data = data.remove_columns(
+        #     list(set(data['train'].column_names)-set(['input_ids', 'attention_mask', 'label'])))
+        # data = data.with_format("torch")
+
+        model = MiniLM()
+        train_ds = FeatureDataset(model, data["train"], cache=True, cache_dir=args.dataset_path, task="text")
+        val_ds = FeatureDataset(model, data["test"], cache=True, cache_dir=args.dataset_path, task="text")
+        test_ds = FeatureDataset(model, data["test"], cache=True, cache_dir=args.dataset_path, task="text")
+
+    return train_ds, val_ds, test_ds, num_classes
+
+
+def build_image_data(args, plain_transforms=False):
+    if plain_transforms:
+        transforms = PlainTransforms(resize=(224, 224))
+    else:
+        if args.backbone == 'dinov2':
+            transforms = DinoTransforms(size=(256, 256))
+        elif 'swinv2' in args.backbone:
+            transforms = SwinV2Transforms(args.backbone)
+        elif args.backbone == 'vit-mae':
+            transforms = ViTMAETransforms()
+        else:
+            raise ValueError(f"{args.backbone}-backbone not implemented!")
+
+    if args.dataset_name == 'cifar10':
+        data = CIFAR10(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'cifar10-lt':
+        data = CIFAR10LT(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'stl10':
+        data = STL10(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'dopanim':
+        data = Dopanim(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'snacks':
+        data = Snacks(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'dtd':
+        data = DTD(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'cifar100':
+        data = CIFAR100(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'food101':
+        data = Food101(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'flowers102':
+        data = Flowers102(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'stanford_dogs':
+        data = StanfordDogs(args.dataset_path, transforms=transforms)
+    elif args.dataset_name == 'tiny_imagenet':
+        data = TinyImageNet(args.imagenet_path, transforms=transforms)
+    elif args.dataset_name == 'imagenet':
+        data = ImageNet(args.imagenet_path, transforms=transforms)
+    elif args.dataset_name == 'mnist':
+        data = MNIST(args.dataset_path, transforms=transforms)
+    else:
+        raise NotImplementedError()
+    return data
+
+
+def build_text_data(args):
+    if args.dataset_name == "agnews":
+        data = load_dataset("ag_news")
+        data = data["train"].train_test_split(train_size=50_000, test_size=10_000, stratify_by_column="label")
+        num_classes = 4
+    elif args.dataset_name == "dbpedia":
+        data = load_dataset("dbpedia_14")
+        data = data.rename_column("content", "text")
+        data = data['train'].train_test_split(train_size=50_000, test_size=10_000, stratify_by_column="label")
+        num_classes = 14
+    elif args.dataset_name == "banking77":
+        data = load_dataset("banking77")
+        num_classes = 77
+        # data = data.rename_column("coarse_label", "label")
+    elif args.dataset_name == "clinc":
+        data = load_dataset("clinc_oos", "plus")
+        data = data.rename_column("intent", "label")
+        num_classes = 151
+    else:
+        raise NotImplementedError()
+    return data, num_classes
+
+
+class FeatureDataset:
+
+    def __init__(self, model, dataset, cache=False, cache_dir=None, batch_size=128, device='cuda', task=None, num_workers=16, backbone='dinov2'):
+        self.backbone = backbone
+        if cache:
+            if cache_dir is None:
+                home_dir = os.path.expanduser('~')
+                cache_dir = os.path.join(home_dir, '.cache', 'feature_datasets')
+            os.makedirs(cache_dir, exist_ok=True)
+            hash = self.create_hash_from_dataset_and_model(dataset, model)
+
+            file_name = os.path.join(cache_dir, hash + '.pth')
+            if os.path.exists(file_name):
+                print('Loading cached features from', file_name)
+                features, labels = torch.load(file_name, map_location='cpu')
+            else:
+                features, labels = self.get_features(model, dataset, batch_size, device, task, num_workers)
+                print('Saving features to cache file', file_name)
+                torch.save((features, labels), file_name)
+        else:
+            features, labels = self.get_features(model, dataset, batch_size, device, task, num_workers)
+
+        self.features = features
+        self.labels = labels
+
+    def create_hash_from_dataset_and_model(self, dataset, dino_model, num_hash_samples=50):
+        import hashlib
+        hasher = hashlib.md5()
+
+        num_samples = len(dataset)
+        hasher.update(str(num_samples).encode())
+
+        num_parameters = sum([p.numel() for p in dino_model.parameters()])
+        hasher.update(str(dino_model).encode())
+        hasher.update(str(num_parameters).encode())
+
+        indices_to_hash = range(0, num_samples, num_samples//num_hash_samples)
+        for idx in indices_to_hash:
+            # change for text
+            try:
+                sample = dataset[idx][0]
+            except:
+                sample = dataset[idx]['text']
+            hasher.update(str(sample).encode())
+            # output = dino_model(sample)
+            # hasher.update(str(output).encode())
+        return hasher.hexdigest()
+
+    def __len__(self) -> int:
+        return len(self.features)
+
+    def __getitem__(self, idx: int):
+        return self.features[idx], self.labels[idx]
+
+    @torch.no_grad()
+    def get_features(self, model, dataset, batch_size, device, task=None, num_workers=8):
+        dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers)
+        features = []
+        labels = []
+        model.eval()
+        model.to(device)
+        for batch in track(dataloader, 'Getting ssl features..'):  # change
+            if task == "text":
+                # input_ids = batch["input_ids"].to(device)
+                # attention_mask = batch["attention_mask"].to(device)
+                # features.append(model(input_ids, attention_mask).to('cpu'))
+                features.append(model(batch['text']).cpu())
+                labels.append(batch["label"])
+            else:
+                if 'swinv2' in self.backbone or self.backbone == 'vit-mae':
+                    # Make sure the classifier layer is set to identity in order for logits == features
+                    out = model(batch[0]['pixel_values'][0].to(device)).logits
+                else:
+                    out = model(batch[0].to(device))
+                features.append(out.to('cpu'))
+                labels.append(batch[-1])
+
+        features = torch.cat(features)
+        labels = torch.cat(labels)
+        return features, labels
+
+
+class BertSequenceClassifier(nn.Module):
+    def __init__(self, num_classes):
+        super(BertSequenceClassifier, self).__init__()
+
+        self.num_classes = num_classes
+        self.bert = AutoModelForSequenceClassification.from_pretrained(
+            "bert-base-uncased",
+            num_labels=self.num_classes)
+
+    def forward(self, input_ids, attention_mask):
+        outputs = self.bert(input_ids, attention_mask, labels=None, output_hidden_states=True)
+        logits = outputs['logits']
+
+        # huggingface takes pooler output for classification (not accessible here anymore, would need bert model)
+        last_hidden_state = outputs['hidden_states'][-1]  # (batch, sequence, dim)
+        # (batch, dim)     #not in bert, taken from distilbert and roberta
+        cls_state = last_hidden_state[:, 0, :]
+        return cls_state
+
+
+def flatten_cfg(cfg, parent_key='', sep='.'):
+    items = []
+    for k, v in cfg.items():
+        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+        if isinstance(v, (dict, DictConfig)):
+            items.extend(flatten_cfg(v, new_key, sep=sep).items())
+        else:
+            items.append((new_key, v))
+    return dict(items)
+
+
+class LaplaceNet(nn.Module):
+    use_mean_field = True
+
+    def __init__(self, in_features, out_features, **kwargs):
+        super().__init__()
+        self.layer = LaplaceLinear(in_features, out_features, **kwargs)
+
+    def forward_features(self, x):
+        return x
+
+    def forward_head(self, x, mean_field=False):
+        if mean_field:
+            out = self.layer.forward_mean_field(x)
+        else:
+            out = self.layer(x)
+        return out
+
+    def forward(self, x, mean_field=False):
+        features = self.forward_features(x)
+        logits = self.forward_head(features, mean_field=mean_field)
+        return logits
+
+
+class LaplaceMLP(nn.Module):
+    def __init__(self, in_features, out_features, num_hidden=128, bias=False):
+        super().__init__()
+        self.layer1 = nn.Linear(in_features, num_hidden, bias=bias)
+        self.layer2 = LaplaceNet(num_hidden, out_features, bias=bias)
+        self.act = nn.ReLU()
+
+    def forward_features(self, x):
+        out = self.layer1(x)
+        out = self.act(out)
+        return out
+
+    def forward_head(self, x, mean_field=False):
+        if mean_field:
+            out = self.layer2.forward_mean_field(x)
+        else:
+            out = self.layer2(x)
+        return out
+
+    def forward(self, x):
+        features = self.forward_features(x)
+        logits = self.forward_head(features)
+        return logits
+
+    def forward_mean_field(self, x):
+        features = self.forward_features(x)
+        mean_field_logits = self.forward_head(features, mean_field=True)
+        return mean_field_logits
+
+
+def build_model(args, **kwargs):
+    num_features = kwargs['num_features']
+    num_classes = kwargs['num_classes']
+
+    # Laplace net because we want to be able to sample via Bayesian methods.
+    # Not using the covariance is equivalent to deterministic model.
+    if args.model.name == 'laplace':
+        model = LaplaceNet(
+            num_features,
+            num_classes,
+            mean_field_factor=args.model.mean_field_factor,
+            mc_samples=args.model.mc_samples,
+            bias=True,
+        )
+    elif args.model.name == 'laplace_mlp':
+        model = LaplaceMLP(num_features, num_classes, bias=True)
+    else:
+        raise NotImplementedError()
+
+    params = [
+        {'params': [p for n, p in model.named_parameters() if 'ssl_model' not in n]},
+        {'params': [p for n, p in model.named_parameters() if 'ssl_model' in n],
+         'lr': args.optimizer.lr_backbone},
+    ]
+
+    if args.optimizer.name == 'SGD':
+        optimizer = torch.optim.SGD(params, lr=args.optimizer.lr, nesterov=args.optimizer.nesterov,
+                                    momentum=args.optimizer.momentum, weight_decay=args.optimizer.weight_decay)
+    elif args.optimizer.name == 'AdamW':
+        optimizer = torch.optim.AdamW(params, lr=args.optimizer.lr,
+                                     weight_decay=args.optimizer.weight_decay)
+    elif args.optimizer.name == 'RAdam':
+        optimizer = torch.optim.RAdam(params, lr=args.optimizer.lr, weight_decay=args.optimizer.weight_decay)
+    else:
+        raise NotImplementedError()
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.model.num_epochs)
+
+    model = LaplaceModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
+    return model
+
+
+class DinoTransforms():
+    def __init__(self, size=None, center_crop_size=224):
+        if size:
+            # https://github.com/facebookresearch/dino/blob/main/eval_linear.py#L65-L70
+            dino_mean = (0.485, 0.456, 0.406)
+            dino_std = (0.229, 0.224, 0.225)
+            self.transform = vision_transforms.Compose([
+                vision_transforms.Resize(size, interpolation=3),
+                vision_transforms.CenterCrop(center_crop_size),
+                vision_transforms.ToTensor(),
+                vision_transforms.Lambda(lambda x: x.repeat(3, 1, 1) if x.size(0) != 3 else x),
+                vision_transforms.Normalize(dino_mean, dino_std),
+            ])
+
+        else:
+            self.transform = vision_transforms.Compose([vision_transforms.ToTensor()])
+
+    @property
+    def train_transform(self):
+        return self.transform
+
+    @property
+    def query_transform(self):
+        return self.transform
+
+    @property
+    def eval_transform(self):
+        return self.transform
+
+
+class ViTMAETransforms():
+    def __init__(self):
+        self.image_processor = AutoImageProcessor.from_pretrained("facebook/vit-mae-base")
+
+        self.transform = vision_transforms.Compose([
+            # First create three channels if black and white
+            vision_transforms.transforms.Lambda(lambda x: x.convert('RGB') if x.mode != 'RGB' else x),
+            self.image_processor                  # then apply processor
+        ])
+
+
+class SwinV2Transforms():
+    def __init__(self, backbone):
+        if backbone == 'swinv2':
+            self.image_processor = AutoImageProcessor.from_pretrained(
+                "microsoft/swinv2-base-patch4-window8-256")
+        elif backbone == 'swinv2-t':
+            self.image_processor = AutoImageProcessor.from_pretrained(
+                "microsoft/swinv2-tiny-patch4-window8-256")
+        elif backbone == 'swinv2-s':
+            self.image_processor = AutoImageProcessor.from_pretrained(
+                "microsoft/swinv2-small-patch4-window8-256")
+        else:
+            raise AssertionError("Wrong backbone!")
+
+        self.transform = vision_transforms.Compose([
+            # First create three channels if black and white
+            vision_transforms.Lambda(lambda x: x.convert('RGB') if x.mode != 'RGB' else x),
+            self.image_processor                  # then apply processor
+        ])
+
+    @property
+    def train_transform(self):
+        return self.transform
+
+    @property
+    def query_transform(self):
+        return self.transform
+
+    @property
+    def eval_transform(self):
+        return self.transform
+
+class MiniLM(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.model = SentenceTransformer("all-MiniLM-L6-v2")
+
+    def forward(self, x):
+        features = self.model.encode(x, normalize_embeddings=False, convert_to_tensor=True)
+        return features

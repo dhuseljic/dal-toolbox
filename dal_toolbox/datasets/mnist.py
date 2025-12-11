@@ -3,48 +3,21 @@ from enum import Enum
 import torchvision
 from torchvision import transforms
 from .base import BaseData, BaseTransforms
+from .transforms import CustomTransforms
+
+MNIST_MEAN = (0.1307,)
+MNIST_STD = (0.3081,)
 
 
-class MNISTTransforms(Enum):
-    mean: tuple = (0.1307,)
-    std: tuple = (0.3081,)
-
-
-class MNISTStandardTransforms(BaseTransforms):
+class MNISTStandardTransforms(CustomTransforms):
     def __init__(self):
-        super().__init__()
-        self.mean = MNISTTransforms.mean.value
-        self.std = MNISTTransforms.std.value
-
-    @property
-    def train_transform(self):
         transform = transforms.Compose([
             transforms.Resize(size=(32, 32)),
             transforms.Grayscale(num_output_channels=3),
             transforms.ToTensor(),
-            transforms.Normalize(self.mean*3, self.std*3),
+            transforms.Normalize(MNIST_MEAN*3, MNIST_STD*3),
         ])
-        return transform
-
-    @property
-    def eval_transform(self):
-        transform = transforms.Compose([
-            transforms.Resize(size=(32, 32)),
-            transforms.Grayscale(num_output_channels=3),
-            transforms.ToTensor(),
-            transforms.Normalize(self.mean*3, self.std*3),
-        ])
-        return transform
-
-    @property
-    def query_transform(self):
-        transform = transforms.Compose([
-            transforms.Resize(size=(32, 32)),
-            transforms.Grayscale(num_output_channels=3),
-            transforms.ToTensor(),
-            transforms.Normalize(self.mean*3, self.std*3),
-        ])
-        return transform
+        super().__init__(train_transform=transform, eval_transform=transform)
 
 
 class MNIST(BaseData):
@@ -82,23 +55,3 @@ class MNIST(BaseData):
     @property
     def test_dataset(self):
         return torchvision.datasets.MNIST(self.dataset_path, train=False, transform=self.eval_transform)
-
-
-# TODO(Discuss): Is this outdated?
-def build_mnist(split, ds_path, mean=(0.1307,), std=(0.3081,), return_info=False):
-    transform = transforms.Compose([
-        transforms.Resize(size=(32, 32)),
-        transforms.Grayscale(num_output_channels=3),
-        transforms.ToTensor(),
-        transforms.Normalize(mean*3, std*3),
-    ])
-    if split == 'train':
-        ds = torchvision.datasets.MNIST(ds_path, train=True, download=True, transform=transform)
-    elif split == 'query':
-        ds = torchvision.datasets.MNIST(ds_path, train=True, download=True, transform=transform)
-    else:
-        ds = torchvision.datasets.MNIST(ds_path, train=False, download=True, transform=transform)
-    if return_info:
-        ds_info = {'n_classes': 10, 'mean': mean, 'std': std}
-        return ds, ds_info
-    return ds

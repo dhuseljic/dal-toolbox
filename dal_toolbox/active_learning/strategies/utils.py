@@ -6,7 +6,7 @@ import random
 
 def cluster_features(features, acq_size, weights=None):
     # Fit kmeans on the input features
-    kmeans = KMeans(n_clusters=acq_size)
+    kmeans = KMeans(n_clusters=acq_size, n_init='auto')
     kmeans.fit(X=features, sample_weight=weights)
 
     # Calculate the square_distances to the closest clusters

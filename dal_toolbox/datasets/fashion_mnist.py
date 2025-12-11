@@ -1,6 +1,8 @@
 import torchvision
 from torchvision import transforms
 
+# TODO
+
 def build_fashionmnist(split, ds_path, mean=(0.5,), std=(0.5,), return_info=False):
     transform = transforms.Compose([
         transforms.Resize(size=(32, 32)),

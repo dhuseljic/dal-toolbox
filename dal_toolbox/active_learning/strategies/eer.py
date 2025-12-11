@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader, Subset
 
 from .query import Query
 from ..data import ActiveLearningDataModule
-from ...models.utils.base import BaseModule
+from ...models.base import BaseModule
 
 
 class MELL(Query, ABC):

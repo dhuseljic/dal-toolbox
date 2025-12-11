@@ -1,5 +1,3 @@
-from enum import Enum
-
 import numpy as np
 import torchvision
 from .corruptions import RandAugment
@@ -7,110 +5,17 @@ from .corruptions import RandAugment
 from PIL import Image
 from .base import BaseData, BaseTransforms
 from .corruptions import GaussianNoise
+from .transforms import StandardTransforms, MultiTransform
+
+CIFAR10_MEAN = (0.4914, 0.4822, 0.4465)
+CIFAR10_STD = (0.247, 0.243, 0.262)
+CIFAR100_MEAN = (0.5071, 0.4865, 0.4409)
+CIFAR100_STD = (0.2673, 0.2564, 0.2762)
 
 
-class CIFAR10Transforms(Enum):
-    mean: tuple = (0.4914, 0.4822, 0.4465)
-    std: tuple = (0.247, 0.243, 0.262)
-
-
-class CIFAR10StandardTransforms(BaseTransforms):
+class CIFAR10StandardTransforms(StandardTransforms):
     def __init__(self):
-        super().__init__()
-        self.mean = CIFAR10Transforms.mean.value
-        self.std = CIFAR10Transforms.std.value
-
-    @property
-    def train_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.RandomCrop(32, padding=4),
-            torchvision.transforms.RandomHorizontalFlip(),
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(self.mean, self.std)
-        ])
-        return transform
-
-    @property
-    def eval_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(self.mean, self.std)
-        ])
-        return transform
-
-    @property
-    def query_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(self.mean, self.std)
-        ])
-        return transform
-    
-
-class MultiTransform: # TODO to utils
-    def __init__(self, *transforms) -> None:
-        self.transforms = transforms
-
-    def __call__(self, x):
-        return [transform(x) for transform in self.transforms]
-
-
-class CIFAR10PseudoLabelTransforms(CIFAR10StandardTransforms):
-    def __init__(self):
-        super().__init__()
-
-    @property
-    def train_transform(self):
-        transform_weak = torchvision.transforms.Compose([
-            torchvision.transforms.Resize(32),
-            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
-            torchvision.transforms.RandomHorizontalFlip(),
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(self.mean, self.std),
-        ])
-        return transform_weak
-
-
-class CIFAR10PIModelTransforms(CIFAR10StandardTransforms):
-    @property
-    def train_transform(self):
-        transform_weak1 = torchvision.transforms.Compose([
-            torchvision.transforms.Resize(32),
-            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
-            torchvision.transforms.RandomHorizontalFlip(),
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(self.mean, self.std),
-        ])
-        transform_weak2 = torchvision.transforms.Compose([
-            torchvision.transforms.Resize(32),
-            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
-            torchvision.transforms.RandomHorizontalFlip(),
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(self.mean, self.std),
-        ])
-        return MultiTransform(transform_weak1, transform_weak2)
-
-
-class CIFAR10FixMatchTransforms(CIFAR10StandardTransforms):
-    @property
-    def train_transform(self):
-        transform_weak = torchvision.transforms.Compose([
-            torchvision.transforms.Resize(32),
-            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
-            torchvision.transforms.RandomHorizontalFlip(),
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(self.mean, self.std),
-        ])
-
-        transform_strong = torchvision.transforms.Compose([
-            torchvision.transforms.Resize(32),
-            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
-            torchvision.transforms.RandomHorizontalFlip(),
-            RandAugment(3, 5),
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(self.mean, self.std)
-        ])
-        return MultiTransform(transform_weak, transform_strong)
+        super().__init__(resize=32, mean=CIFAR10_MEAN, std=CIFAR10_STD)
 
 
 class CIFAR10(BaseData):
@@ -174,45 +79,12 @@ class CIFAR10C(CIFAR10):
         super().__init__(dataset_path, CIFAR10CTransforms(severity=severity), val_split, seed)
 
 
-class CIFAR100Transforms(Enum):
-    mean: tuple = (0.5071, 0.4865, 0.4409)
-    std: tuple = (0.2673, 0.2564, 0.2762)
-
-
-class CIFAR100StandardTransforms(BaseTransforms):
+class CIFAR100StandardTransforms(StandardTransforms):
     def __init__(self):
-        super().__init__()
-        self.mean = CIFAR100Transforms.mean.value
-        self.std = CIFAR100Transforms.std.value
+        super().__init__(resize=32, mean=CIFAR100_MEAN, std=CIFAR100_STD)
 
-    @property
-    def train_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.RandomCrop(32, padding=4),
-            torchvision.transforms.RandomHorizontalFlip(),
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(self.mean, self.std)
-        ])
-        return transform
-
-    @property
-    def eval_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(self.mean, self.std)
-        ])
-        return transform
-
-    @property
-    def query_transform(self):
-        transform = torchvision.transforms.Compose([
-            torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize(self.mean, self.std)
-        ])
-        return transform
 
 class CIFAR100(BaseData):
-
     def __init__(self,
                  dataset_path: str,
                  transforms: BaseTransforms = None,
@@ -376,3 +248,61 @@ class _CIFAR10LT(torchvision.datasets.CIFAR10):
         for i in range(self.cls_num):
             cls_num_list.append(self.num_per_cls_dict[i])
         return cls_num_list
+
+
+class CIFAR10PseudoLabelTransforms(CIFAR10StandardTransforms):
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def train_transform(self):
+        transform_weak = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(32),
+            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std),
+        ])
+        return transform_weak
+
+
+class CIFAR10PIModelTransforms(CIFAR10StandardTransforms):
+    @property
+    def train_transform(self):
+        transform_weak1 = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(32),
+            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std),
+        ])
+        transform_weak2 = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(32),
+            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std),
+        ])
+        return MultiTransform(transform_weak1, transform_weak2)
+
+
+class CIFAR10FixMatchTransforms(CIFAR10StandardTransforms):
+    @property
+    def train_transform(self):
+        transform_weak = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(32),
+            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            torchvision.transforms.RandomHorizontalFlip(),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std),
+        ])
+
+        transform_strong = torchvision.transforms.Compose([
+            torchvision.transforms.Resize(32),
+            torchvision.transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            torchvision.transforms.RandomHorizontalFlip(),
+            RandAugment(3, 5),
+            torchvision.transforms.ToTensor(),
+            torchvision.transforms.Normalize(self.mean, self.std)
+        ])
+        return MultiTransform(transform_weak, transform_strong)

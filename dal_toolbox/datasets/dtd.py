@@ -1,15 +1,10 @@
-from enum import Enum
-
 import torchvision
 
 from .base import BaseData, BaseTransforms
-from .utils import PlainTransforms
+from .transforms import PlainTransforms
 
-
-class DTDTransforms(Enum):
-    # TODO
-    mean: tuple = (0.485, 0.456, 0.406)
-    std: tuple = (0.229, 0.224, 0.225)
+DTD_MEAN = (0.485, 0.456, 0.406)
+DTD_STD = (0.229, 0.224, 0.225)
 
 
 class DTD(BaseData):

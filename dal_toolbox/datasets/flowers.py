@@ -1,15 +1,10 @@
-from enum import Enum
-
 import torchvision
 
 from .base import BaseData, BaseTransforms
-from .utils import PlainTransforms
+from .transforms import PlainTransforms
 
-
-class Flowers102Transforms(Enum):
-    # TODO
-    mean: tuple = (0.485, 0.456, 0.406)
-    std: tuple = (0.229, 0.224, 0.225)
+FLOWERS102_MEAN = (0.485, 0.456, 0.406)
+FLOWERS102_STD = (0.229, 0.224, 0.225)
 
 
 class Flowers102(BaseData):

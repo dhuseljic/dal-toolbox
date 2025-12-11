@@ -1,0 +1,68 @@
+<a href="https://ceur-ws.org/Vol-3470/paper4.pdf"><img alt="DAL hyperparameters @ IAL 2023" src="https://img.shields.io/badge/Paper-DAL hyperparameters @ IAL 2023-purple"></a>
+<a href="https://hydra.cc/"><img alt="Config: Hydra" src="https://img.shields.io/badge/Config-Hydra-89b8cd"></a>
+# Study on Hyperparameters in Deep Active Learning
+This is the official implementation for the paper *Role of Hyperparameters in Deep Active Learning*.
+
+## Setup
+To run the provided python scripts you need to set up and use the following environment.
+```
+conda create -n dal-toolbox python=3.9
+conda activate dal-toolbox
+pip install .
+pip install -U "ray[tune]"
+pip install hydra-core optuna
+```
+Make sure you are in the root directory of this repository to correctly install the dal-toolbox package.
+
+## Reproducibility
+All experiments conducted in the paper are located under the `./slurm` directory.
+
+## Results
+Here, we report results for the CIFAR-10 and CIFAR-100 datasets.
+
+### CIFAR-10
+
+|    2K     | HP 1     |          | HP 2     |         | HP 3     |          | HP 4     |          |
+|-----------|----------|----------|----------|---------|----------|----------|----------|----------|
+|           | **AL**   | **BO**   | **AL**   | **BO**  | **AL**   | **BO**   | **AL**   | **BO**   |
+| Random  |75.11 ± 01.03 | 76.96 ± 00.43 | 70.76 ± 00.64 | 77.72 ± 00.17 | 68.04 ± 04.19 | 77.14 ± 00.59 | 71.68 ± 00.97 | 77.33 ± 00.22 | 
+| Entropy |75.45 ± 00.33 | 77.63 ± 00.34 | 72.25 ± 00.83 | 77.78 ± 00.76 | 35.39 ± 07.59 | 77.12 ± 00.24 | 33.49 ± 18.12 | 76.61 ± 01.17 | 
+| Core-Sets |76.62 ± 00.55 | 77.42 ± 00.09 | 71.02 ± 00.94 | 76.47 ± 00.83 | 46.45 ± 10.50 | 77.11 ± 02.07 | 67.81 ± 05.19 | 76.98 ± 00.88 | 
+| Badge   |76.56 ± 01.45 | 78.56 ± 00.44 | 72.39 ± 01.38 | 78.91 ± 00.48 | 61.85 ± 04.43 | 77.61 ± 00.61 | 69.40 ± 01.65 | 78.27 ± 01.37 | 
+
+|    4K     | HP 1     |          | HP 2     |         | HP 3     |          | HP 4     |          |
+|-----------|----------|----------|----------|---------|----------|----------|----------|----------|
+|           | **AL**   | **BO**   | **AL**   | **BO**  | **AL**   | **BO**   | **AL**   | **BO**   |
+| Random  |83.57 ± 00.35 | 83.41 ± 00.52 | 79.83 ± 00.27 | 83.47 ± 00.28 | 75.44 ± 00.74 | 83.68 ± 00.25 | 77.06 ± 00.56 | 83.64 ± 00.28 | 
+| Entropy |85.68 ± 00.39 | 84.07 ± 00.88 | 81.49 ± 00.51 | 84.57 ± 00.86 | 40.92 ± 12.48 | 84.02 ± 00.61 | 51.67 ± 25.27 | 84.05 ± 00.92 | 
+| Core-Sets |85.60 ± 00.56 | 84.98 ± 00.37 | 81.32 ± 00.66 | 84.46 ± 00.90 | 48.28 ± 06.77 | 83.42 ± 00.77 | 71.38 ± 01.26 | 84.30 ± 00.18 | 
+| Badge   |85.36 ± 00.47 | 85.12 ± 00.72 | 82.09 ± 00.35 | 84.58 ± 00.29 | 55.92 ± 09.91 | 84.02 ± 00.23 | 66.07 ± 09.73 | 85.50 ± 00.29 | 
+
+
+### CIFAR-100
+
+|    2K     | HP 1     |          | HP 2     |         | HP 3     |          | HP 4     |          |
+|-----------|----------|----------|----------|---------|----------|----------|----------|----------|
+|           | **AL**   | **BO**   | **AL**   | **BO**  | **AL**   | **BO**   | **AL**   | **BO**   |
+| Random  |30.64 ± 00.36 | 33.88 ± 02.19 | 25.61 ± 00.39 | 34.85 ± 00.96 | 03.71 ± 00.20 | 35.56 ± 00.88 | 21.61 ± 00.26 | 34.91 ± 00.10 | 
+| Entropy |23.45 ± 00.43 | 28.67 ± 00.98 | 19.73 ± 00.58 | 25.59 ± 02.95 | 02.75 ± 00.47 | 31.62 ± 01.02 | 14.38 ± 01.43 | 27.85 ± 00.73 | 
+| Core-Sets |30.66 ± 00.10 | 34.62 ± 01.19 | 24.91 ± 01.01 | 32.37 ± 03.41 | 11.05 ± 00.09 | 31.43 ± 01.14 | 22.28 ± 02.22 | 35.06 ± 00.70 | 
+| Badge   |30.34 ± 00.56 | 33.24 ± 01.65 | 25.38 ± 00.38 | 32.23 ± 01.64 | 06.14 ± 00.20 | 33.74 ± 01.02 | 21.80 ± 01.13 | 33.12 ± 01.47 |
+
+|    4K     | HP 1     |          | HP 2     |         | HP 3     |          | HP 4     |          |
+|-----------|----------|----------|----------|---------|----------|----------|----------|----------|
+|           | **AL**   | **BO**   | **AL**   | **BO**  | **AL**   | **BO**   | **AL**   | **BO**   |
+| Random  |38.36 ± 01.13 | 48.67 ± 01.06 | 38.01 ± 00.92 | 48.78 ± 00.71 | 03.23 ± 00.73 | 49.01 ± 00.56 | 28.10 ± 01.81 | 48.45 ± 00.50 | 
+| Entropy |22.56 ± 01.69 | 41.65 ± 08.07 | 33.03 ± 00.93 | 45.53 ± 00.74 | 01.38 ± 00.54 | 48.59 ± 01.32 | 08.85 ± 03.15 | 45.49 ± 02.18 | 
+| Core-Sets |38.72 ± 00.21 | 47.23 ± 01.54 | 39.26 ± 00.54 | 49.43 ± 00.24 | 09.73 ± 02.06 | 39.75 ± 00.58 | 30.48 ± 02.43 | 48.41 ± 01.13 | 
+| Badge   |39.72 ± 01.27 | 49.32 ± 00.58 | 39.21 ± 00.07 | 50.07 ± 01.01 | 06.62 ± 00.82 | 46.54 ± 00.83 | 25.52 ± 00.74 | 49.00 ± 00.30 | 
+
+## Citation
+```
+@inproceedings{huseljic2023role,
+  title={Role of Hyperparameters in Deep Active Learning.},
+  author={Huseljic, Denis and Herde, Marek and Hahn, Paul and Sick, Bernhard},
+  booktitle={IAL @ ECML-PKDD},
+  year={2023}
+}
+```

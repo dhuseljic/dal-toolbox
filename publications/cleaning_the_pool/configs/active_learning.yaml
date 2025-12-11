@@ -1,0 +1,55 @@
+defaults:
+  - dataset: cifar10
+
+random_seed: 1
+experiment_name: al
+mlflow_uri: sqlite:///active_learning.db
+num_workers: 0
+
+al:
+  strategy: refine
+  device: cpu
+  refine:
+    strategies: ['random', 'margin', 'badge', 'bait', 'typiclust', 'alfamix', 'dropquery', 'max_herding', 'unc_herding']
+    progressive_depth: 5
+    num_batches: 100
+    alpha: 0.4
+    filter_acq_size: null
+    init_subset_size: 5000
+    max_pool_size: 10000
+    select_strategy: unc_herding
+  aal:
+    loss: zero_one
+    eval_gt: True
+    num_mc_labels: 10
+    num_retraining_epochs: 50
+    look_ahead: mc_labels
+    perf_estimation: unlabeled_pool
+
+model:
+  name: linear
+  num_epochs: 200
+  train_batch_size: 64
+  predict_batch_size: 128
+  mean_field_factor: 0.4
+  mc_samples: 10_000
+  backbone: dinov2
+
+optimizer: 
+  name: SGD
+  lr: 1e-2
+  weight_decay: 5e-4
+  momentum: 0.9
+  nesterov: True
+  lr_backbone: 1e-5
+  finetune_backbone: False
+
+
+output_dir: ./output/
+hydra:
+  run:
+    dir: ${output_dir}
+  job_logging:
+    handlers:
+      file:
+        mode: w

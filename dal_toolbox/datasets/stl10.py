@@ -3,12 +3,10 @@ from enum import Enum
 import torchvision
 
 from .base import BaseData, BaseTransforms
-from .utils import PlainTransforms
+from .transforms import PlainTransforms
 
-
-class STL10Transforms(Enum):
-    mean: tuple = (0.4914, 0.4822, 0.4465)
-    std: tuple = (0.2471, 0.2435, 0.2616)
+STL10_MEAN = (0.4914, 0.4822, 0.4465)
+STL10_STD = (0.2471, 0.2435, 0.2616)
 
 
 class STL10(BaseData):

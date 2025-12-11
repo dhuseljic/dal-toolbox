@@ -1,11 +1,7 @@
-import os
-
-from pathlib import Path
 from torch.utils.data import Dataset
 from .base import BaseData, BaseTransforms
-from .utils import PlainTransforms
-from datasets import load_dataset, config
-
+from .transforms import PlainTransforms
+from datasets import load_dataset
 
 class TinyImageNet(BaseData):
 
@@ -54,11 +50,11 @@ class _TinyImageNet(Dataset):
         self.target_transform = target_transform
         split_mapping = {'train': 'train', 'test': 'valid'}
 
-        config.DOWNLOADED_DATASETS_PATH = root
         self.ds = load_dataset(
             'Maysee/tiny-imagenet',
             split=split_mapping[self.split],
-            download_mode="reuse_dataset_if_exists"
+            download_mode="reuse_dataset_if_exists",
+            cache_dir=root
         )
 
     def __len__(self):

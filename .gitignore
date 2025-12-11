@@ -24,6 +24,6 @@ server_results/
 *.pth
 *.ipynb_checkpoints
 .dev
-tmp.png
+*.png
 
 !baselines/active_learning/notebooks/learning_curves/**

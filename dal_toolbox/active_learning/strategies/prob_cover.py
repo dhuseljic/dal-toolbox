@@ -8,7 +8,7 @@ from sklearn.cluster import KMeans
 
 from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.active_learning.strategies import Query
-from dal_toolbox.models.utils.base import BaseModule
+from dal_toolbox.models.base import BaseModule
 
 
 def calculate_purity(data, labels, delta) -> float:
@@ -42,7 +42,7 @@ def calculate_purity(data, labels, delta) -> float:
 
 
 def estimate_delta(data, num_classes, alpha=0.95):
-    kmeans = KMeans(n_clusters=num_classes).fit(data)  # TODO (ynagel) Maybe consider MiniBatchKMeans
+    kmeans = KMeans(n_clusters=num_classes, n_init='auto').fit(data)  # TODO (ynagel) Maybe consider MiniBatchKMeans
     labels = kmeans.labels_
 
     # TODO (ynagel) These values have to be computed and explained somehow

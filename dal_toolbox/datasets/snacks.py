@@ -1,20 +1,10 @@
-import os
-
-from pathlib import Path
-import numpy as np
-from enum import Enum
-
 from .base import BaseData, BaseTransforms
-from .utils import PlainTransforms
+from .transforms import PlainTransforms
 from datasets import load_dataset, config
 from torch.utils.data import Dataset
 
-
-class SnacksTransforms(Enum):
-    # TODO
-    mean: tuple = (0.485, 0.456, 0.406)
-    std: tuple = (0.229, 0.224, 0.225)
-
+SNACKS_MEAN = (0.485, 0.456, 0.406)
+SNACKS_STD = (0.229, 0.224, 0.225)
 
 class Snacks(BaseData):
 

@@ -7,13 +7,11 @@ from PIL import Image
 from torch.utils.data import Dataset
 from torchvision.datasets.utils import download_and_extract_archive
 from sklearn.preprocessing import LabelEncoder
-from enum import Enum
 
 from .base import BaseData, BaseTransforms
 
-class DopanimTransforms(Enum):
-    mean: tuple = (0.485, 0.456, 0.406)
-    std: tuple = (0.229, 0.224, 0.225)
+DOPANIM_MEAN = (0.485, 0.456, 0.406)
+DOPANIM_STD = (0.229, 0.224, 0.225)
 
 
 class Dopanim(BaseData):
@@ -106,6 +104,7 @@ class _Dopanim(Dataset):
         ],
         dtype=object,
     )
+
     def __init__(
         self,
         root: str,

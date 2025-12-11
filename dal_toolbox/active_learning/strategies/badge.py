@@ -2,7 +2,6 @@ import numpy as np
 import torch.nn.functional as F
 
 from .query import Query
-# from rich.progress import track
 from sklearn.metrics import pairwise_distances
 
 
@@ -31,8 +30,32 @@ class Badge(Query):
 
         return [unlabeled_indices[idx] for idx in chosen]
 
-
 def kmeans_plusplus(X, n_clusters, rng):
+    num_samples = X.shape[0]
+    indices = []
+
+    grad_norm = np.linalg.norm(X, ord=2, axis=1)
+    first_center_idx = np.argmax(grad_norm)
+    indices.append(first_center_idx)
+
+    closest_dist_sq = np.sum((X - X[first_center_idx])**2, axis=1)
+    for _ in range(1, n_clusters):
+        dist_sum = np.sum(closest_dist_sq)
+
+        if dist_sum == 0:
+            remaining_indices = [i for i in range(num_samples) if i not in indices]
+            next_center_idx = rng.choice(remaining_indices)
+        else:
+            probabilities = closest_dist_sq / dist_sum
+            next_center_idx = rng.choice(num_samples, p=probabilities)
+
+        indices.append(next_center_idx)
+
+        dist_to_new_center_sq = np.sum((X - X[next_center_idx])**2, axis=1)
+        closest_dist_sq = np.minimum(closest_dist_sq, dist_to_new_center_sq)
+    return indices
+
+def kmeans_plusplus_fast(X, n_clusters, rng):
     # Start with highest grad norm since it is the "most uncertain"
     grad_norm = np.linalg.norm(X, ord=2, axis=1)
     idx = np.argmax(grad_norm)
@@ -52,7 +75,13 @@ def kmeans_plusplus(X, n_clusters, rng):
         min_dist = np.min(dist_mat, axis=0)
         min_dist_squared = min_dist**2
         if np.all(min_dist_squared == 0):
-            raise ValueError('All distances to the centers are zero!')
+            # raise ValueError('All distances to the centers are zero!')
+            # All unique points already selected, sample randomly from remaining
+            remaining = [i for i in range(len(X)) if i not in indices]
+            idx = rng.choice(remaining)
+            indices.append(idx)
+            centers.append(X[idx])
+            continue
         # sample idx with probability proportional to the squared distance
         p = min_dist_squared / np.sum(min_dist_squared)
         if np.any(p[indices] != 0):
