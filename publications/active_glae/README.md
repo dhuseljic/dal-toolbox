@@ -6,4 +6,11 @@
 Here, we provide the implementation and configuration files for reproducing the experiments from our paper [ActiveGLAE: A Benchmark for Deep Active Learning with Transformers](https://arxiv.org/abs/2306.10087).
 
 ## Citation
-TBD
+```
+@inproceedings{rauch2023activeglae,
+  title={Activeglae: A benchmark for deep active learning with transformers},
+  author={Rauch, Lukas and A{\ss}enmacher, Matthias and Huseljic, Denis and Wirth, Moritz and Bischl, Bernd and Sick, Bernhard},
+  booktitle={ECML-PKDD},
+  year={2023},
+}
+```
