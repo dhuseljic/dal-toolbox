@@ -56,3 +56,13 @@ Here, we report results for the CIFAR-10 and CIFAR-100 datasets.
 | Entropy |22.56 ± 01.69 | 41.65 ± 08.07 | 33.03 ± 00.93 | 45.53 ± 00.74 | 01.38 ± 00.54 | 48.59 ± 01.32 | 08.85 ± 03.15 | 45.49 ± 02.18 | 
 | Core-Sets |38.72 ± 00.21 | 47.23 ± 01.54 | 39.26 ± 00.54 | 49.43 ± 00.24 | 09.73 ± 02.06 | 39.75 ± 00.58 | 30.48 ± 02.43 | 48.41 ± 01.13 | 
 | Badge   |39.72 ± 01.27 | 49.32 ± 00.58 | 39.21 ± 00.07 | 50.07 ± 01.01 | 06.62 ± 00.82 | 46.54 ± 00.83 | 25.52 ± 00.74 | 49.00 ± 00.30 | 
+
+## Citation
+```
+@inproceedings{huseljic2023role,
+  title={Role of Hyperparameters in Deep Active Learning.},
+  author={Huseljic, Denis and Herde, Marek and Hahn, Paul and Sick, Bernhard},
+  booktitle={IAL @ ECML-PKDD},
+  year={2023}
+}
+```
