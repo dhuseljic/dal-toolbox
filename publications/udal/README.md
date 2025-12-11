@@ -28,4 +28,11 @@ python main.py al.strategy=refine dataset=cifar10
 For large-scale reproducibility, use the scripts provided in the `slurm/` directory.
 
 ## Citation
-TBD
+```
+@article{huseljic2024interplay,
+  title={The interplay of uncertainty modeling and deep active learning: An empirical analysis in image classification},
+  author={Huseljic, Denis and Herde, Marek and Nagel, Yannick and Rauch, Lukas and Strimaitis, Paulius and Sick, Bernhard},
+  journal={TMLR},
+  year={2024}
+}
+```
