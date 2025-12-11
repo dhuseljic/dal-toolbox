@@ -29,4 +29,11 @@ python main.py al.strategy=refine dataset=cifar10
 For large-scale reproducibility, use the scripts provided in the `slurm/` directory.
 
 ## Citation
-TBD
+```
+@inproceedings{huseljic2025efficient,
+  title={Efficient Bayesian Updates for Deep Active Learning via Laplace Approximations},
+  author={Huseljic, Denis and Herde, Marek and Rauch, Lukas and Hahn, Paul and Huang, Zhixin and Kottke, Daniel and Vogt, Stephan and Sick, Bernhard},
+  booktitle={ECML-PKDD},
+  year={2025},
+}
+```
