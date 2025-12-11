@@ -1,3 +1,5 @@
+<a href="https://ceur-ws.org/Vol-3470/paper4.pdf"><img alt="DAL hyperparameters @ IAL 2023" src="https://img.shields.io/badge/Paper-DAL hyperparameters @ IAL 2023-purple"></a>
+<a href="https://hydra.cc/"><img alt="Config: Hydra" src="https://img.shields.io/badge/Config-Hydra-89b8cd"></a>
 # Study on Hyperparameters in Deep Active Learning
 This is the official implementation for the paper *Role of Hyperparameters in Deep Active Learning*.
 
@@ -17,11 +19,6 @@ All experiments conducted in the paper are located under the `./slurm` directory
 
 ## Results
 Here, we report results for the CIFAR-10 and CIFAR-100 datasets.
-
-
-
-
-
 
 ### CIFAR-10
 
