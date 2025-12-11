@@ -69,7 +69,7 @@ for cycle in range(4):
 Check out [tbd](https://www.google.com/search?q=tbd) and the [`./publications`](./publications) directory for more sophisticated implementations.
 
 ## Citation
-If you find the DAL-Toolbox useful for your research, you can cite us using:
+If you find this toolbox useful for your research, please consider citing us.
 ```
 @article{huseljic2025cleaning,
   title={Cleaning the Pool: Progressive Filtering of Unlabeled Pools in Deep Active Learning},
