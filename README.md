@@ -71,9 +71,10 @@ Check out [tbd](https://www.google.com/search?q=tbd) and the [`./publications`](
 ## Citation
 If you find the DAL-Toolbox useful for your research, you can cite us using:
 ```
-@article{huseljicinterplay,
-  title={The Interplay of Uncertainty Modeling and Deep Active Learning: An Empirical Analysis in Image Classification},
-  author={Huseljic, Denis and Herde, Marek and Nagel, Yannick and Rauch, Lukas and Strimaitis, Paulius and Sick, Bernhard},
-  journal={Transactions on Machine Learning Research}
+@article{huseljic2025cleaning,
+  title={Cleaning the Pool: Progressive Filtering of Unlabeled Pools in Deep Active Learning},
+  author={Huseljic, Denis and Herde, Marek and Rauch, Lukas and Hahn, Paul and Sick, Bernhard},
+  journal={arXiv preprint arXiv:2511.22344},
+  year={2025}
 }
 ```
