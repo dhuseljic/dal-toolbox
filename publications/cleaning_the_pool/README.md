@@ -29,4 +29,11 @@ python main.py al.strategy=refine dataset=cifar10
 For large-scale reproducibility, use the scripts provided in the `slurm/` directory.
 
 ## Citation
-TBD
+```
+@article{huseljic2025cleaning,
+  title={Cleaning the Pool: Progressive Filtering of Unlabeled Pools in Deep Active Learning},
+  author={Huseljic, Denis and Herde, Marek and Rauch, Lukas and Hahn, Paul and Sick, Bernhard},
+  journal={arXiv preprint arXiv:2511.22344},
+  year={2025}
+}
+```
