@@ -25,4 +25,11 @@ python active_learning.py
 ```
 
 ## Citation
-TBD
+```
+@inproceedings{huseljic2024fast,
+  title={Fast fishing: Approximating bait for efficient and scalable deep active image classification},
+  author={Huseljic, Denis and Hahn, Paul and Herde, Marek and Rauch, Lukas and Sick, Bernhard},
+  booktitle={ECML-PKDD},
+  year={2024},
+}
+```
