@@ -1,0 +1,7 @@
+name: esc
+path: /home/datasets
+cache_features: True
+num_acq: 20
+acq_size: 20
+subset_size: 500
+num_init: null

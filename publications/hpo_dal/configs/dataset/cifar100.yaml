@@ -1,0 +1,7 @@
+name: cifar100
+path: /home/datasets
+cache_features: True
+num_acq: 20
+acq_size: 100
+subset_size: 2500
+num_init: null
