@@ -45,9 +45,9 @@ class LaplaceModel(BaseModule):
         inputs, targets = batch
 
         if self.predict_type == 'mean_field':
-            logits = self.model(inputs, mean_field=True)
+            logits = self.model.forward_mean_field(inputs)
         elif self.predict_type == 'monte_carlo':
-            logits = self.model(inputs, monte_carlo=True)
+            logits = self.model.forward_monte_carlo(inputs)
         elif self.predict_type == 'deterministic':
             logits = self.model(inputs)
         else:
@@ -62,9 +62,9 @@ class LaplaceModel(BaseModule):
         inputs, targets = batch
 
         if self.predict_type == 'mean_field':
-            logits = self.model(inputs, mean_field=True)
+            logits = self.model.forward_mean_field(inputs)
         elif self.predict_type == 'monte_carlo':
-            logits = self.model(inputs, monte_carlo=True)
+            logits = self.model.forward_monte_carlo(inputs)
         elif self.predict_type == 'deterministic':
             logits = self.model(inputs)
         else:

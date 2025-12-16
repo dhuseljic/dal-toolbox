@@ -12,4 +12,5 @@ from .tiny_imagenet import TinyImageNet
 from .stanford_dogs import StanfordDogs
 from .imagenet import ImageNet
 from .imagenet_subsets.imagenet_subset import ImageNet50, ImageNet100, ImageNet200
+from .transforms import CustomTransforms
 from .utils import FeatureDataset
