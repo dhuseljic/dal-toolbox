@@ -21,6 +21,8 @@ class UncertaintyHerding(Query):
         self.compute_ece = ExpectedCalibrationError()
         self.kernel = kernel
         self.history = defaultdict(list)
+        self.cycle = None
+        
 
     @torch.no_grad()
     def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
@@ -34,27 +36,37 @@ class UncertaintyHerding(Query):
         u_features = u_outputs['features']
         l_features = l_outputs.get('features', torch.empty(0, device=self.device))
 
+        # Compute temperature
+        if self.cycle != None and len(self.history["temperature"]) == self.cycle:
+            temperature = self.history["temperature"][-1]
+        else:
+            temperature = self._compute_temperature(model, al_datamodule)
+            self.history['temperature'].append(temperature.item())
+        
         # Calibrate the model via temperature scaling
-        temperature = self._compute_temperature(model, al_datamodule)
         u_logits = u_logits / temperature
         uncertainty_scores = self._compute_uncertainty_scores(u_logits)
         uncertainty_scores = uncertainty_scores.reshape(-1, 1).numpy()
-        self.history['temperature'].append(temperature.item())
-
+        
         # Compute kernel matrices
         all_features = torch.cat((u_features, l_features), dim=0)
         all_features = self._normalize_features(all_features)
         u_features = all_features[:len(u_features)].cpu().numpy()
         l_features = all_features[len(u_features):].cpu().numpy()
 
-        l_dist = pairwise_distances(l_features, l_features)
-        np.fill_diagonal(l_dist, np.inf)
-        min_dist = l_dist.min()
+        # Compute min dist
+        if self.cycle != None and len(self.history["min_dist"]) == self.cycle:
+            min_dist = self.history["min_dist"][-1]
+        else:
+            l_dist = pairwise_distances(l_features, l_features)
+            np.fill_diagonal(l_dist, np.inf)
+            min_dist = l_dist.min()
+            self.history['min_dist'].append(min_dist.item())
+
         # https://github.com/BorealisAI/uherding/blob/main/deep-al/pycls/al/uherding.py#L90
         gamma = 1.0 / (min_dist**2) if min_dist > 0 else 1.0
         def kernel_func(x, y): return pairwise_kernels(x, y, metric=self.kernel, gamma=gamma)
-        self.history['min_dist'].append(min_dist.item())
-
+        
         if len(l_features) != 0:
             K_ = kernel_func(u_features, l_features)
             max_kernels = K_.max(axis=1, keepdims=True)

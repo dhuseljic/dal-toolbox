@@ -101,6 +101,10 @@ class Refine(Query):
         al_datamodule = copy.deepcopy(al_datamodule)
         model = copy.deepcopy(model)
 
+        # Increase computational efficiency
+        if 'unc_herding' in self.strategies:
+            self.strategies['unc_herding'].cycle = self.iter
+
         # def get_alpha(cycle_t, total_cycles, alpha_min=0.2, alpha_max=0.8):
         #     # Linear: return alpha_min + (alpha_max - alpha_min) * (cycle_t / total_cycles)
         #     return alpha_min + (alpha_max - alpha_min) * (1 - np.exp(-3 * cycle_t / total_cycles))
