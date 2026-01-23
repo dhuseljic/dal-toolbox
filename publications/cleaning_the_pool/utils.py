@@ -161,6 +161,11 @@ class LinearModel(nn.Module):
         else:
             out = self.layer(x)
         return out
+    
+    def forward_mean_field(self, x):
+        features = self.forward_features(x)
+        logits = self.forward_head(features, mean_field=True)
+        return logits
 
     def forward(self, x, mean_field=False):
         features = self.forward_features(x)
