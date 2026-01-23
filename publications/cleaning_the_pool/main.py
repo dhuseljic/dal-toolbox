@@ -177,9 +177,9 @@ def build_al_strategy(args, num_classes=None, num_features=None):
         al_strategy = SelectAL(subset_size=subset_size, device=device)
     elif args.al.strategy == 'tcm':
         al_strategy = TCM(subset_size=subset_size, device=device)
-    elif args.al.strategy == 'tailor2':
+    elif args.al.strategy == 'tailor':
         al_strategy = TAILOR(subset_size=subset_size, device=device)
-    elif args.al.strategy == 'autoal3':
+    elif args.al.strategy == 'autoal':
         al_strategy = AutoAL(args=args, num_classes=num_classes, subset_size=subset_size, feature_dim=num_features, device=device)
     else:
         raise NotImplementedError()
