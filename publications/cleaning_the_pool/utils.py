@@ -14,7 +14,7 @@ from datasets import load_dataset, config
 
 from dal_toolbox.models.laplace import LaplaceLinear, LaplaceModel
 from dal_toolbox import datasets as dal_datasets
-from dal_toolbox.datasets.utils import FeatureDataset, LongTailedDatasetWrapper
+from dal_toolbox.datasets.utils import FeatureDataset, LongTailedWrapper
 from dal_toolbox.datasets.transforms import CustomTransforms
 
 
@@ -76,7 +76,7 @@ def build_image_data(args):
         data = dal_datasets.Snacks(args.dataset.path, transforms=transforms)
         all_targets = np.array(data.train_dataset.dataset.ds['label'])
         data.train_dataset.targets = all_targets[data.train_dataset.indices] 
-        data.train_dataset = LongTailedDatasetWrapper(
+        data.train_dataset = LongTailedWrapper(
             data.train_dataset, imbalance_ratio=args.dataset.imbalance_ratio)
     elif args.dataset.name == 'dtd':
         data = dal_datasets.DTD(args.dataset.path, transforms=transforms)
@@ -87,7 +87,7 @@ def build_image_data(args):
         all_targets = np.array(data.train_dataset.dataset.targets)
         targets = all_targets[data.train_dataset.indices]
         data.train_dataset.targets = targets
-        data.train_dataset = LongTailedDatasetWrapper(
+        data.train_dataset = LongTailedWrapper(
             data.train_dataset, imbalance_ratio=args.dataset.imbalance_ratio)
     elif args.dataset.name == 'food101':
         data = dal_datasets.Food101(args.dataset.path, transforms=transforms)
@@ -102,7 +102,7 @@ def build_image_data(args):
         all_targets = np.array(data.train_dataset.dataset.ds['label'])
         targets = all_targets[data.train_dataset.indices]
         data.train_dataset.targets = targets
-        data.train_dataset = LongTailedDatasetWrapper(
+        data.train_dataset = LongTailedWrapper(
             data.train_dataset, imbalance_ratio=args.dataset.imbalance_ratio)
     elif args.dataset.name == 'imagenet':
         data = dal_datasets.ImageNet(args.dataset.path, transforms=transforms)

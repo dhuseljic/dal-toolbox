@@ -81,8 +81,12 @@ class FeatureDataset(Dataset):
         for idx in indices_to_hash:
             sample = dataset[idx][0]
             hasher.update(sample.numpy().tobytes())
-        feature = model(sample.unsqueeze(0))
-        hasher.update(feature.numpy().tobytes())
+
+        # feature = model(sample.unsqueeze(0))
+        # hasher.update(feature.numpy().tobytes())
+        # Numerical instability ruins hash sometimes, so hash model parameters instead
+        for p in model.parameters():
+            hasher.update(p.detach().cpu().numpy().tobytes())
         return hasher.hexdigest()
 
     @torch.no_grad()
@@ -119,7 +123,7 @@ def sample_balanced_subset(targets, num_samples):
     return [int(i) for i in val_pool]
 
 
-class LongTailedDatasetWrapper(Dataset):
+class LongTailedWrapper(Dataset):
     """A wrapper that makes any dataset long-tailed by subsampling it."""
 
     def __init__(self, dataset, imbalance_ratio, imb_type='exp', seed=42):
