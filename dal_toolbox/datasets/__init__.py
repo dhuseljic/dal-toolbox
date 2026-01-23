@@ -1,6 +1,6 @@
 from .mnist import MNIST
 from .svhn import SVHN
-from .cifar import CIFAR10, CIFAR100, CIFAR10C, CIFAR10LT
+from .cifar import CIFAR10, CIFAR100, CIFAR10C
 from .stl10 import STL10
 from .dopanim import Dopanim
 from .snacks import Snacks

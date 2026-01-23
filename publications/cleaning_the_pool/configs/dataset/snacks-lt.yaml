@@ -1,0 +1,8 @@
+name: snacks-lt
+path: /home/datasets
+cache_features: True
+num_acq: 20
+acq_size: 10
+subset_size: 1000
+num_init: null
+imbalance_ratio: 10

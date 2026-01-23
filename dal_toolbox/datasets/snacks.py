@@ -54,7 +54,7 @@ class _Snacks(Dataset):
         split_mapping = {'train': 'train', 'test': 'test'}
 
         config.DOWNLOADED_DATASETS_PATH = root
-        self.ds = load_dataset("Matthijs/snacks", split=split_mapping[self.split], trust_remote_code=True)
+        self.ds = load_dataset("Matthijs/snacks", split=split_mapping[self.split])
         # self.ds_dict = self.ds.train_test_split(test_size=0.1, seed=42)
         # self.ds = self.ds_dict[self.split]
         # self.target_dict = {k: i for i, k in enumerate(np.unique(self.ds['target']))}

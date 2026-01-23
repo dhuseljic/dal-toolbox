@@ -2,6 +2,8 @@ import os
 import torch
 import torch.nn as nn
 
+import numpy as np
+
 from transformers import AutoProcessor, CLIPVisionModel
 from transformers import AutoImageProcessor, AutoModel
 
@@ -12,12 +14,13 @@ from datasets import load_dataset, config
 
 from dal_toolbox.models.laplace import LaplaceLinear, LaplaceModel
 from dal_toolbox import datasets as dal_datasets
-from dal_toolbox.datasets.utils import FeatureDataset
+from dal_toolbox.datasets.utils import FeatureDataset, LongTailedDatasetWrapper
 from dal_toolbox.datasets.transforms import CustomTransforms
 
 
 image_datasets = ['cifar10', 'stl10', 'snacks', 'dopanim', 'dtd', 'cifar100', 'food101', 'flowers102',
-                  'caltech101', 'stanford_dogs', 'tiny_imagenet', 'imagenet', 'esc']
+                  'caltech101', 'stanford_dogs', 'tiny_imagenet', 'imagenet', 'esc',
+                  'snacks-lt', 'cifar100-lt', 'tiny_imagenet-lt']
 text_datasets = ['agnews', 'dbpedia', 'banking77', 'clinc']
 
 
@@ -69,10 +72,23 @@ def build_image_data(args):
         data = dal_datasets.Dopanim(args.dataset.path, transforms=transforms)
     elif args.dataset.name == 'snacks':
         data = dal_datasets.Snacks(args.dataset.path, transforms=transforms)
+    elif args.dataset.name == 'snacks-lt':
+        data = dal_datasets.Snacks(args.dataset.path, transforms=transforms)
+        all_targets = np.array(data.train_dataset.dataset.ds['label'])
+        data.train_dataset.targets = all_targets[data.train_dataset.indices] 
+        data.train_dataset = LongTailedDatasetWrapper(
+            data.train_dataset, imbalance_ratio=args.dataset.imbalance_ratio)
     elif args.dataset.name == 'dtd':
         data = dal_datasets.DTD(args.dataset.path, transforms=transforms)
     elif args.dataset.name == 'cifar100':
         data = dal_datasets.CIFAR100(args.dataset.path, transforms=transforms)
+    elif args.dataset.name == 'cifar100-lt':
+        data = dal_datasets.CIFAR100(args.dataset.path, transforms=transforms)
+        all_targets = np.array(data.train_dataset.dataset.targets)
+        targets = all_targets[data.train_dataset.indices]
+        data.train_dataset.targets = targets
+        data.train_dataset = LongTailedDatasetWrapper(
+            data.train_dataset, imbalance_ratio=args.dataset.imbalance_ratio)
     elif args.dataset.name == 'food101':
         data = dal_datasets.Food101(args.dataset.path, transforms=transforms)
     elif args.dataset.name == 'flowers102':
@@ -81,6 +97,13 @@ def build_image_data(args):
         data = dal_datasets.StanfordDogs(args.dataset.path, transforms=transforms)
     elif args.dataset.name == 'tiny_imagenet':
         data = dal_datasets.TinyImageNet(args.dataset.path, transforms=transforms)
+    elif args.dataset.name == 'tiny_imagenet-lt':
+        data = dal_datasets.TinyImageNet(args.dataset.path, transforms=transforms)
+        all_targets = np.array(data.train_dataset.dataset.ds['label'])
+        targets = all_targets[data.train_dataset.indices]
+        data.train_dataset.targets = targets
+        data.train_dataset = LongTailedDatasetWrapper(
+            data.train_dataset, imbalance_ratio=args.dataset.imbalance_ratio)
     elif args.dataset.name == 'imagenet':
         data = dal_datasets.ImageNet(args.dataset.path, transforms=transforms)
     elif args.dataset.name == 'esc':
@@ -88,7 +111,7 @@ def build_image_data(args):
         train_ds = ESC(args.dataset.path, split='train', transform=transform)
         test_ds = ESC(args.dataset.path, split='test', transform=transform)
         data = transform
-        data.train_dataset = train_ds 
+        data.train_dataset = train_ds
         data.test_dataset = test_ds
         data.num_classes = 50
     else:
@@ -161,7 +184,7 @@ class LinearModel(nn.Module):
         else:
             out = self.layer(x)
         return out
-    
+
     def forward_mean_field(self, x):
         features = self.forward_features(x)
         logits = self.forward_head(features, mean_field=True)
@@ -294,8 +317,8 @@ class EAT(nn.Module):
         self.model = AutoModel.from_pretrained(model_id, trust_remote_code=True).eval()
 
     def forward(self, x):
-        features = self.model.extract_features(x) #normalization etc. is done in the model
-        cls_token = features[:,0]
+        features = self.model.extract_features(x)  # normalization etc. is done in the model
+        cls_token = features[:, 0]
         return cls_token
 
 

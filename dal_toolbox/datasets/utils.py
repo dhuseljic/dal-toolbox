@@ -117,3 +117,85 @@ def sample_balanced_subset(targets, num_samples):
         np.random.shuffle(idx)
         val_pool.extend(idx[:num_samples_per_class[c]])
     return [int(i) for i in val_pool]
+
+
+class LongTailedDatasetWrapper(Dataset):
+    """A wrapper that makes any dataset long-tailed by subsampling it."""
+
+    def __init__(self, dataset, imbalance_ratio, imb_type='exp', seed=42):
+        self.dataset = dataset
+        self.imbalance_ratio = imbalance_ratio
+        self.imb_type = imb_type
+        self.seed = seed
+
+        # 1. Attempt to extract targets/labels from the underlying dataset
+        # Most standard datasets (CIFAR, MNIST, ImageFolder) use .targets
+        if hasattr(dataset, 'targets'):
+            self.targets = np.array(dataset.targets)
+        elif hasattr(dataset, 'labels'):
+            self.targets = np.array(dataset.labels)
+        else:
+            raise AttributeError("Dataset must have .targets or .labels attribute to determine classes.")
+
+        self.classes = np.unique(self.targets)
+        self.num_classes = len(self.classes)
+
+        # 2. Calculate how many images we need per class
+        self.img_num_list = self._get_img_num_per_cls(
+            len(self.dataset), self.num_classes, imb_type, imbalance_ratio)
+
+        # 3. Generate the list of valid indices (the "Long Tail" mask)
+        self.indices = self._gen_imbalanced_indices()
+
+        # 4. Map the new (reduced) targets for easy access
+        self.imbalanced_targets = torch.from_numpy(self.targets[self.indices])
+
+    def _get_img_num_per_cls(self, total_data_len, cls_num, imb_type, imb_factor):
+        """Calculates the number of samples needed for each class (0 to N-1)."""
+        # We assume the original dataset is balanced or roughly balanced for this calculation
+        img_max = total_data_len / cls_num
+        img_num_per_cls = []
+
+        if imb_type == 'exp':
+            for cls_idx in range(cls_num):
+                # imb_factor = max / min
+                num = img_max * (1.0 / imb_factor) ** (cls_idx / (cls_num - 1.0))
+                img_num_per_cls.append(int(num))
+        elif imb_type == 'step':
+            for cls_idx in range(cls_num // 2):
+                img_num_per_cls.append(int(img_max))
+            for cls_idx in range(cls_num // 2):
+                img_num_per_cls.append(int(img_max * (1.0 / imb_factor)))
+        else:
+            img_num_per_cls.extend([int(img_max)] * cls_num)
+
+        return img_num_per_cls
+
+    def _gen_imbalanced_indices(self):
+        """Selects indices from the original dataset to match the desired distribution. """
+        np.random.seed(self.seed)
+        all_indices = []
+
+        # Map class ID to how many samples we want
+        # Note: We assume classes are sorted 0..N for the decay (0=Head, N=Tail)
+        for i, the_class in enumerate(self.classes):
+            target_num = self.img_num_list[i]
+
+            # Find all original indices for this class
+            # We use np.where on the original full targets
+            indices_for_class = np.where(self.targets == the_class)[0]
+
+            # Shuffle and pick top N
+            np.random.shuffle(indices_for_class)
+            selected_indices = indices_for_class[:target_num]
+            all_indices.extend(selected_indices)
+
+        return all_indices
+
+    def __getitem__(self, index):
+        # Map the requested index to the actual index in the original dataset
+        real_index = self.indices[index]
+        return self.dataset[real_index]
+
+    def __len__(self):
+        return len(self.indices)
