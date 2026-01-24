@@ -156,7 +156,7 @@ def build_al_strategy(args, num_classes=None, num_features=None):
             subset_size=subset_size, grad_likelihood='binary_cross_entropy', device=device)
     elif args.al.strategy == 'refine':
         al_strategy = Refine(
-            al_strategies=args.al.refine.strategies, 
+            al_strategies=args.al.refine.strategies,
             progressive_depth=args.al.refine.progressive_depth,
             num_batches=args.al.refine.num_batches,
             alpha=args.al.refine.alpha,
@@ -180,7 +180,8 @@ def build_al_strategy(args, num_classes=None, num_features=None):
     elif args.al.strategy == 'tailor':
         al_strategy = TAILOR(subset_size=subset_size, device=device)
     elif args.al.strategy == 'autoal':
-        al_strategy = AutoAL(args=args, num_classes=num_classes, subset_size=subset_size, feature_dim=num_features, device=device)
+        al_strategy = AutoAL(args=args, num_classes=num_classes, subset_size=subset_size,
+                             feature_dim=num_features, device=device)
     else:
         raise NotImplementedError()
     return al_strategy

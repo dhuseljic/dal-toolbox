@@ -20,7 +20,7 @@ from dal_toolbox.datasets.transforms import CustomTransforms
 
 image_datasets = ['cifar10', 'stl10', 'snacks', 'dopanim', 'dtd', 'cifar100', 'food101', 'flowers102',
                   'caltech101', 'stanford_dogs', 'tiny_imagenet', 'imagenet', 'esc',
-                  'snacks-lt', 'cifar100-lt', 'tiny_imagenet-lt', 'med-mnist']
+                  'snacks-lt', 'cifar100-lt', 'tiny_imagenet-lt', 'derma-mnist', 'blood-mnist']
 text_datasets = ['agnews', 'dbpedia', 'banking77', 'clinc']
 
 
@@ -114,17 +114,31 @@ def build_image_data(args):
         data.train_dataset = train_ds
         data.test_dataset = test_ds
         data.num_classes = 50
-    elif args.dataset.name == 'med-mnist':
-        from medmnist import ChestMNIST
+    elif args.dataset.name == 'derma-mnist':
+        from medmnist import DermaMNIST
         from types import SimpleNamespace
-        train_ds = ChestMNIST(root=args.dataset.path, split="train", download=True, size=224, transform=transforms.train_transform)
-        val_ds = ChestMNIST(root=args.dataset.path, split="val", download=True, size=224, transform=transforms.eval_transform)
+        def target_transform(x): return int(x.item())
+        train_ds = DermaMNIST(root=args.dataset.path, split="train", download=True, size=224,
+                              transform=transforms.train_transform, target_transform=target_transform)
+        test_ds = DermaMNIST(root=args.dataset.path, split="test", download=True, size=224,
+                             transform=transforms.eval_transform, target_transform=target_transform)
 
         data = SimpleNamespace()
         data.train_dataset = train_ds
-        data.test_dataset = val_ds
-        train_ds[0]
-        data.num_classes = 14
+        data.test_dataset = test_ds
+        data.num_classes = 7
+    elif args.dataset.name == 'blood-mnist':
+        from medmnist import BloodMNIST
+        from types import SimpleNamespace
+        def target_transform(x): return int(x.item())
+        train_ds = BloodMNIST(root=args.dataset.path, split="train", download=True,
+                              size=224, transform=transforms.train_transform, target_transform=target_transform)
+        test_ds = BloodMNIST(root=args.dataset.path, split="test", download=True,
+                            size=224, transform=transforms.eval_transform, target_transform=target_transform)
+        data = SimpleNamespace()
+        data.train_dataset = train_ds
+        data.test_dataset = test_ds
+        data.num_classes = 8
 
     else:
         raise NotImplementedError()

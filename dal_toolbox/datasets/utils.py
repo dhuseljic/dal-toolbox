@@ -29,6 +29,7 @@ class FeatureDataset(Dataset):
             if cache_dir is None:
                 home_dir = os.path.expanduser('~')
                 cache_dir = os.path.join(home_dir, '.cache', 'feature_datasets')
+            cache_dir = os.path.join(cache_dir, 'feature_datasets')
             os.makedirs(cache_dir, exist_ok=True)
 
             hash = self._create_hash(dataset, model)
@@ -118,7 +119,7 @@ def sample_balanced_subset(targets, num_samples):
     val_pool = []
     for c in range(num_classes):
         idx = np.array([i for i in range(len(targets)) if targets[i] == c])
-        np.random.shuffle(idx)
+        np.random.shuffle(idx)derma
         val_pool.extend(idx[:num_samples_per_class[c]])
     return [int(i) for i in val_pool]
 
