@@ -764,7 +764,8 @@ class SelectAL(Query):
 
         strat = self.strategies[idx]
         if self.subset_size is not None:
-            u_indices = self.rng.choice(al_datamodule.unlabeled_indices, size=self.subset_size, replace=False)
+            actual_size = min(self.subset_size, len(al_datamodule.unlabeled_indices))
+            u_indices = self.rng.choice(al_datamodule.unlabeled_indices, size=actual_size, replace=False)
             al_datamodule.unlabeled_indices = u_indices
         query_indices = strat.query(model=model, al_datamodule=al_datamodule, acq_size=acq_size)
         return query_indices

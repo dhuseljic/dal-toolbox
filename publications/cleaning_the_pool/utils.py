@@ -20,7 +20,7 @@ from dal_toolbox.datasets.transforms import CustomTransforms
 
 image_datasets = ['cifar10', 'stl10', 'snacks', 'dopanim', 'dtd', 'cifar100', 'food101', 'flowers102',
                   'caltech101', 'stanford_dogs', 'tiny_imagenet', 'imagenet', 'esc',
-                  'snacks-lt', 'cifar100-lt', 'tiny_imagenet-lt']
+                  'snacks-lt', 'cifar100-lt', 'tiny_imagenet-lt', 'med-mnist']
 text_datasets = ['agnews', 'dbpedia', 'banking77', 'clinc']
 
 
@@ -75,7 +75,7 @@ def build_image_data(args):
     elif args.dataset.name == 'snacks-lt':
         data = dal_datasets.Snacks(args.dataset.path, transforms=transforms)
         all_targets = np.array(data.train_dataset.dataset.ds['label'])
-        data.train_dataset.targets = all_targets[data.train_dataset.indices] 
+        data.train_dataset.targets = all_targets[data.train_dataset.indices]
         data.train_dataset = LongTailedWrapper(
             data.train_dataset, imbalance_ratio=args.dataset.imbalance_ratio)
     elif args.dataset.name == 'dtd':
@@ -114,6 +114,18 @@ def build_image_data(args):
         data.train_dataset = train_ds
         data.test_dataset = test_ds
         data.num_classes = 50
+    elif args.dataset.name == 'med-mnist':
+        from medmnist import ChestMNIST
+        from types import SimpleNamespace
+        train_ds = ChestMNIST(root=args.dataset.path, split="train", download=True, size=224, transform=transforms.train_transform)
+        val_ds = ChestMNIST(root=args.dataset.path, split="val", download=True, size=224, transform=transforms.eval_transform)
+
+        data = SimpleNamespace()
+        data.train_dataset = train_ds
+        data.test_dataset = val_ds
+        train_ds[0]
+        data.num_classes = 14
+
     else:
         raise NotImplementedError()
     return data
