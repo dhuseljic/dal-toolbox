@@ -30,6 +30,8 @@ def main(args):
     print(OmegaConf.to_yaml(args))
 
     train_ds, test_ds, num_classes = build_datasets(args)
+    # torch.unique(train_ds.labels, return_counts=True)  # for debugging
+    # torch.unique(test_ds.labels, return_counts=True)  # for debugging
     num_features = len(train_ds[0][0])
 
     seed_everything(args.random_seed)
@@ -100,11 +102,13 @@ def main(args):
 
 
 def evaluate(predictions):
+    from sklearn.metrics import balanced_accuracy_score
     test_logits = torch.cat([pred[0] for pred in predictions])
     test_labels = torch.cat([pred[1] for pred in predictions])
 
     test_stats = {
         'accuracy': metrics.Accuracy()(test_logits, test_labels).item(),
+        'balanced_accuracy': balanced_accuracy_score(test_labels,test_logits.argmax()),
         'NLL': metrics.CrossEntropy()(test_logits, test_labels).item(),
         'BS': metrics.BrierScore()(test_logits, test_labels).item(),
         'ECE': metrics.ExpectedCalibrationError()(test_logits, test_labels).item(),
