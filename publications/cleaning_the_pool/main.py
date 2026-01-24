@@ -108,7 +108,7 @@ def evaluate(predictions):
 
     test_stats = {
         'accuracy': metrics.Accuracy()(test_logits, test_labels).item(),
-        'balanced_accuracy': balanced_accuracy_score(test_labels,test_logits.argmax()),
+        'balanced_accuracy': balanced_accuracy_score(test_labels, test_logits.argmax(dim=-1)),
         'NLL': metrics.CrossEntropy()(test_logits, test_labels).item(),
         'BS': metrics.BrierScore()(test_logits, test_labels).item(),
         'ECE': metrics.ExpectedCalibrationError()(test_logits, test_labels).item(),
