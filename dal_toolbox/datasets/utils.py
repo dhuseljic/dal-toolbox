@@ -119,7 +119,7 @@ def sample_balanced_subset(targets, num_samples):
     val_pool = []
     for c in range(num_classes):
         idx = np.array([i for i in range(len(targets)) if targets[i] == c])
-        np.random.shuffle(idx)derma
+        np.random.shuffle(idx)
         val_pool.extend(idx[:num_samples_per_class[c]])
     return [int(i) for i in val_pool]
 
