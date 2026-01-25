@@ -27,7 +27,11 @@ class DropQuery(Query):
             for feature in feature_loader:
                 feature = feature.to(self.device)
                 feature_drop = self.dropout(feature)
-                pred = model.model.forward_head(feature_drop).softmax(-1).argmax(-1).cpu()
+
+                clf = model.model.get_classifier()
+                pred = clf(feature_drop).softmax(-1).argmax(-1).cpu()
+                # TODO
+                # pred = model.model.forward_head(feature_drop).softmax(-1).argmax(-1).cpu()
                 predictions.append(pred)
             predictions = torch.cat(predictions)
             labels.append(predictions)

@@ -35,7 +35,10 @@ class AlfaMix(Query):
             alpha = eps * (diff_norm * z_grad) / (grad_norm * z_diff)
             z_lerp = alpha * z_s + (1 - alpha) * z_u
 
-            probs = model.model.forward_head(z_lerp).softmax(dim=1)
+            # TODO
+            layer = model.model.get_classifier()
+            probs = layer(z_lerp).softmax(dim=1)
+            # probs = model.model.forward_head(z_lerp).softmax(dim=1)
             y_pred = torch.argmax(probs, dim=1)
             mismatch_idx = torch.nonzero(y_pred != y_star).flatten()
             candidates[mismatch_idx] = True
@@ -56,7 +59,10 @@ class AlfaMix(Query):
                                                     'features', 'logits'], device=self.device)
         with torch.enable_grad():
             z_u = unlabeled_outputs['features'].requires_grad_().to(self.device)
-            logits = model.model.forward_head(z_u)
+            # TODO
+            layer = model.model.get_classifier()
+            logits = layer(z_u)
+            # logits = model.model.forward_head(z_u)
             y_star = logits.softmax(-1).argmax(-1)
             loss = F.cross_entropy(logits, y_star, reduction="sum")
             grads = torch.autograd.grad(loss, z_u)[0]

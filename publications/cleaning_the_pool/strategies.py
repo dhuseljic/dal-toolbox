@@ -63,8 +63,8 @@ class Refine(Query):
         self.init_subset_size = init_subset_size
         self.max_pool_size = max_pool_size
         self.filter_acq_size = filter_acq_size
-        self.strategies = build_al_strategies(al_strategies)
-        self.select_strategy = build_al_strategies([select_strategy])[select_strategy]
+        self.strategies = build_al_strategies(al_strategies, device=self.device)
+        self.select_strategy = build_al_strategies([select_strategy], device=self.device)[select_strategy]
 
         self.strat_ratio = strat_ratio
         if self.strat_ratio == 'equal':
@@ -223,6 +223,7 @@ class Refine(Query):
 
             indices_strat = []
             for i_batch in range(num_batches):
+                print(strat_name, f'Batch {i_batch+1}/{num_batches}')
                 aldm = copy.deepcopy(al_datamodule)
 
                 sample_size = min(subset_size, len(u_indices))
