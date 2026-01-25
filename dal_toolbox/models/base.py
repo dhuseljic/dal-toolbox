@@ -111,7 +111,13 @@ class BaseModule(L.LightningModule, abc.ABC):
 
             for output_type in output_types:
                 if output_type == 'features':
-                    outputs['features'].append(features.cpu())
+                    if features.dim() == 4: # CNN Style
+                        pooled_features = self.model.forward_head(features, pre_logits=True)
+                    elif features.dim() == 3:  # ViT Style
+                        pooled_features = self.model.forward_head(features, pre_logits=True)
+                    else:
+                        pooled_features = features
+                    outputs['features'].append(pooled_features.cpu())
                 elif output_type == 'logits':
                     outputs['logits'].append(logits.cpu())
                 elif output_type == 'labels':
