@@ -5,6 +5,8 @@ random_seed: 1
 experiment_name: al
 mlflow_uri: sqlite:///active_learning.db
 num_workers: 0
+noisy_features: false
+noisy_features_std: 0.1
 
 al:
   strategy: refine

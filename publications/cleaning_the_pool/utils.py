@@ -4,6 +4,7 @@ import torch.nn as nn
 
 import numpy as np
 
+from torch.utils.data import Dataset
 from transformers import AutoProcessor, CLIPVisionModel
 from transformers import AutoImageProcessor, AutoModel
 
@@ -51,6 +52,9 @@ def build_datasets(args):
             train_ds = data.train_dataset
             test_ds = data.test_dataset
         num_classes = data.num_classes
+
+        if args.noisy_features:
+            train_ds = NoisyDataset(train_ds, noise_std=args.noisy_features_std)
     return train_ds, test_ds, num_classes
 
 
@@ -438,3 +442,19 @@ class EATTransform():
         # mel = mel.unsqueeze(0)  # shape: [1, 1, T, F]
 
         return mel
+
+
+
+class NoisyDataset(Dataset):
+    def __init__(self, dataset, noise_std=0.1):
+        self.dataset = dataset
+        self.noise_std = noise_std
+    
+    def __len__(self):
+        return len(self.dataset)
+    
+    def __getitem__(self, idx):
+        x, y = self.dataset[idx]
+        x = nn.functional.normalize(x, p=2, dim=-1)
+        x_noisy = x + torch.randn_like(x) * self.noise_std
+        return x_noisy, y

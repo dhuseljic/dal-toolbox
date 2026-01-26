@@ -223,7 +223,7 @@ class Refine(Query):
 
             indices_strat = []
             for i_batch in range(num_batches):
-                print(strat_name, f'Batch {i_batch+1}/{num_batches}')
+                # print(strat_name, f'Batch {i_batch+1}/{num_batches}')
                 aldm = copy.deepcopy(al_datamodule)
 
                 sample_size = min(subset_size, len(u_indices))
