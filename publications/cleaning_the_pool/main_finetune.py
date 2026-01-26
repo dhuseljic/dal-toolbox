@@ -48,21 +48,29 @@ def main(args):
         predict_batch_size=args.model.predict_batch_size,
     )
     args.dataset.num_init = args.dataset.acq_size if args.dataset.num_init is None else args.dataset.num_init
-    args.dataset.num_init *= 10
-    args.dataset.acq_size *= 10
     al_datamodule.random_init(n_samples=args.dataset.num_init)  # TODO implement in strategy
 
     # Setup model
-    model = timm.create_model('resnet18.a1_in1k', pretrained=True)
-    model.fc = LaplaceLinear(512, 10, bias=True)
-    optimizer = torch.optim.SGD([
-        {'params': model.layer4.parameters(), 'lr': 0.01},
-        {'params': model.layer3.parameters(), 'lr': 0.005},
-        {'params': model.layer2.parameters(), 'lr': 0.002},
-        {'params': model.layer1.parameters(), 'lr': 0.001},
-        {'params': model.conv1.parameters(), 'lr': 0.0005},
-        {'params': model.fc.parameters(), 'lr': 0.01},
-    ], momentum=0.9, weight_decay=5e-4)
+    model = DinoModelFull(data.num_classes)
+    optimizer = torch.optim.AdamW([
+        {'params': model.backbone.patch_embed.parameters(), 'lr': 1e-15, 'weight_decay': 0},
+        {'params': model.backbone.cls_token, 'lr': 1e-15, 'weight_decay': 0},
+        {'params': model.backbone.pos_embed, 'lr': 1e-15, 'weight_decay': 0},
+        {'params': model.backbone.blocks[0].parameters(), 'lr': 1e-14, 'weight_decay': 0},
+        {'params': model.backbone.blocks[1].parameters(), 'lr': 1e-13, 'weight_decay': 0},
+        {'params': model.backbone.blocks[2].parameters(), 'lr': 1e-12, 'weight_decay': 0},
+        {'params': model.backbone.blocks[3].parameters(), 'lr': 1e-11, 'weight_decay': 0},
+        {'params': model.backbone.blocks[4].parameters(), 'lr': 1e-10, 'weight_decay': 0},
+        {'params': model.backbone.blocks[5].parameters(), 'lr': 1e-9, 'weight_decay': 0},
+        {'params': model.backbone.blocks[6].parameters(), 'lr': 1e-8, 'weight_decay': 0},
+        {'params': model.backbone.blocks[7].parameters(), 'lr': 1e-7, 'weight_decay': 0},
+        {'params': model.backbone.blocks[8].parameters(), 'lr': 1e-6, 'weight_decay': 0},
+        {'params': model.backbone.blocks[9].parameters(), 'lr': 1e-5, 'weight_decay': 0},
+        {'params': model.backbone.blocks[10].parameters(), 'lr': 1e-4, 'weight_decay': 0},
+        {'params': model.backbone.blocks[11].parameters(), 'lr': 1e-3, 'weight_decay': 0},
+        {'params': model.backbone.norm.parameters(), 'lr': 1e-2, 'weight_decay': 0},
+        {'params': model.head.parameters(), 'lr': 1e-2, 'weight_decay': 0.0001},
+    ], lr=0, weight_decay=0)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
     model = LaplaceModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
     model.predict_type = 'deterministic'
@@ -208,6 +216,26 @@ def build_al_strategy(args, num_classes=None, num_features=None):
     else:
         raise NotImplementedError()
     return al_strategy
+
+
+class DinoModelFull(nn.Module):
+    def __init__(self, n_classes):
+        super().__init__()
+        # self.backbone = DINOv3()
+        self.backbone = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14_reg')
+        self.feature_dim = 384
+        self.head = LaplaceLinear(self.feature_dim, n_classes)
+
+    def forward_features(self, x):
+        return self.backbone(x)
+
+    def forward_head(self, x):
+        return self.head(x)
+
+    def forward(self, x):
+        features = self.forward_features(x)
+        logits = self.forward_head(features)
+        return logits
 
 
 if __name__ == '__main__':

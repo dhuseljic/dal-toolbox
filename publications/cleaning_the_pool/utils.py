@@ -138,7 +138,7 @@ def build_image_data(args):
         train_ds = BloodMNIST(root=args.dataset.path, split="train", download=True,
                               size=224, transform=transforms.train_transform, target_transform=target_transform)
         test_ds = BloodMNIST(root=args.dataset.path, split="test", download=True,
-                            size=224, transform=transforms.eval_transform, target_transform=target_transform)
+                             size=224, transform=transforms.eval_transform, target_transform=target_transform)
         data = SimpleNamespace()
         data.train_dataset = train_ds
         data.test_dataset = test_ds
@@ -444,15 +444,14 @@ class EATTransform():
         return mel
 
 
-
 class NoisyDataset(Dataset):
     def __init__(self, dataset, noise_std=0.1):
         self.dataset = dataset
         self.noise_std = noise_std
-    
+
     def __len__(self):
         return len(self.dataset)
-    
+
     def __getitem__(self, idx):
         x, y = self.dataset[idx]
         x = nn.functional.normalize(x, p=2, dim=-1)
