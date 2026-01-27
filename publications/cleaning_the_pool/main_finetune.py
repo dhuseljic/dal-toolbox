@@ -17,9 +17,10 @@ from dal_toolbox.active_learning import strategies
 from dal_toolbox.active_learning import oracles
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything
+from torch.utils.data import Subset
 
 
-from utils import build_image_data, flatten_cfg, build_model
+from utils import build_image_data, flatten_cfg, build_model, LinearModel
 from strategies import Refine, SelectAL, TCM, TAILOR, AutoAL
 from dal_toolbox.models.laplace import LaplaceLinear, LaplaceModel
 
@@ -37,6 +38,8 @@ def main(args):
     data = build_image_data(args)
     train_ds = data.train_dataset
     test_ds = data.test_dataset
+    test_ds = Subset(test_ds, indices=list(range(0, 1000)))
+    
 
     seed_everything(args.random_seed)
     al_datamodule = ActiveLearningDataModule(
@@ -52,24 +55,24 @@ def main(args):
 
     # Setup model
     model = DinoModelFull(data.num_classes)
-    optimizer = torch.optim.AdamW([
-        {'params': model.backbone.patch_embed.parameters(), 'lr': 1e-15, 'weight_decay': 0},
-        {'params': model.backbone.cls_token, 'lr': 1e-15, 'weight_decay': 0},
-        {'params': model.backbone.pos_embed, 'lr': 1e-15, 'weight_decay': 0},
-        {'params': model.backbone.blocks[0].parameters(), 'lr': 1e-14, 'weight_decay': 0},
-        {'params': model.backbone.blocks[1].parameters(), 'lr': 1e-13, 'weight_decay': 0},
-        {'params': model.backbone.blocks[2].parameters(), 'lr': 1e-12, 'weight_decay': 0},
-        {'params': model.backbone.blocks[3].parameters(), 'lr': 1e-11, 'weight_decay': 0},
-        {'params': model.backbone.blocks[4].parameters(), 'lr': 1e-10, 'weight_decay': 0},
-        {'params': model.backbone.blocks[5].parameters(), 'lr': 1e-9, 'weight_decay': 0},
-        {'params': model.backbone.blocks[6].parameters(), 'lr': 1e-8, 'weight_decay': 0},
-        {'params': model.backbone.blocks[7].parameters(), 'lr': 1e-7, 'weight_decay': 0},
-        {'params': model.backbone.blocks[8].parameters(), 'lr': 1e-6, 'weight_decay': 0},
-        {'params': model.backbone.blocks[9].parameters(), 'lr': 1e-5, 'weight_decay': 0},
-        {'params': model.backbone.blocks[10].parameters(), 'lr': 1e-4, 'weight_decay': 0},
-        {'params': model.backbone.blocks[11].parameters(), 'lr': 1e-3, 'weight_decay': 0},
-        {'params': model.backbone.norm.parameters(), 'lr': 1e-2, 'weight_decay': 0},
-        {'params': model.head.parameters(), 'lr': 1e-2, 'weight_decay': 0.0001},
+    optimizer = torch.optim.SGD([
+        # {'params': model.backbone.patch_embed.parameters(), 'lr': 1e-15, 'weight_decay': 0},
+        # {'params': model.backbone.cls_token, 'lr': 1e-15, 'weight_decay': 0},
+        # {'params': model.backbone.pos_embed, 'lr': 1e-15, 'weight_decay': 0},
+        # {'params': model.backbone.blocks[0].parameters(), 'lr': 1e-14, 'weight_decay': 0},
+        # {'params': model.backbone.blocks[1].parameters(), 'lr': 1e-13, 'weight_decay': 0},
+        # {'params': model.backbone.blocks[2].parameters(), 'lr': 1e-12, 'weight_decay': 0},
+        # {'params': model.backbone.blocks[3].parameters(), 'lr': 1e-11, 'weight_decay': 0},
+        # {'params': model.backbone.blocks[4].parameters(), 'lr': 1e-10, 'weight_decay': 0},
+        # {'params': model.backbone.blocks[5].parameters(), 'lr': 1e-9, 'weight_decay': 0},
+        # {'params': model.backbone.blocks[6].parameters(), 'lr': 1e-8, 'weight_decay': 0},
+        # {'params': model.backbone.blocks[7].parameters(), 'lr': 1e-7, 'weight_decay': 0},
+        # {'params': model.backbone.blocks[8].parameters(), 'lr': 1e-6, 'weight_decay': 0},
+        # {'params': model.backbone.blocks[9].parameters(),  'lr': 1e-5, 'momentum': 0.9},
+        {'params': model.backbone.blocks[10].parameters(), 'lr': 5e-6, 'momentum': 0.9},
+        {'params': model.backbone.blocks[11].parameters(), 'lr': 1e-5, 'momentum': 0.9},
+        {'params': model.backbone.norm.parameters(),       'lr': 1e-5, 'momentum': 0.9},
+        {'params': model.head.parameters(),                'lr': 1e-2, 'momentum': 0.9, 'weight_decay': 5e-4},
     ], lr=0, weight_decay=0)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.model.num_epochs)
     model = LaplaceModel(model, optimizer=optimizer, lr_scheduler=lr_scheduler)
@@ -86,10 +89,24 @@ def main(args):
     artifacts_history = []
     for i_acq in range(0, args.dataset.num_acq+1):
         if i_acq != 0:
+
+            # Extract features
+            import copy 
+            from dal_toolbox.datasets.utils import FeatureDataset
+            extractor = copy.deepcopy(model.model.backbone)
+            query_ds = FeatureDataset(extractor, al_datamodule.query_dataset, device='cuda')
+            aldm = copy.deepcopy(al_datamodule)
+            aldm.train_dataset = train_ds
+            aldm.query_dataset = query_ds
+
+            query_model = copy.deepcopy(model.model.head)
+            query_model = build_model(args, num_features=384, num_classes=data.num_classes)
+            query_model.model.layer.layer.load_state_dict(model.model.head.layer.state_dict(), strict=False)
+            
             stime = time.time()
             indices = al_strategy.query(
-                model=model,
-                al_datamodule=al_datamodule,
+                model=query_model,
+                al_datamodule=aldm,
                 acq_size=args.dataset.acq_size,
             )
             etime = time.time()
@@ -224,7 +241,7 @@ class DinoModelFull(nn.Module):
         # self.backbone = DINOv3()
         self.backbone = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14_reg')
         self.feature_dim = 384
-        self.head = LaplaceLinear(self.feature_dim, n_classes)
+        self.head = LaplaceLinear(self.feature_dim, n_classes, bias=True)
 
     def forward_features(self, x):
         return self.backbone(x)

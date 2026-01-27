@@ -28,7 +28,7 @@ al:
 
 model:
   name: linear
-  num_epochs: 50
+  num_epochs: 100
   train_batch_size: 64
   predict_batch_size: 128
   mean_field_factor: 0.4

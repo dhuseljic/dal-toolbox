@@ -49,7 +49,7 @@ class FeatureDataset(Dataset):
                 print('Saving features to cache file', file_name)
                 torch.save((features, labels), file_name)
         else:
-            features, labels = self._extract_features(model, dataset, batch_size, device)
+            features, labels = self._extract_features(model, dataset, batch_size, num_workers, device)
 
         self.features = features
         self.labels = labels
@@ -92,7 +92,7 @@ class FeatureDataset(Dataset):
         model.eval()
         model.to(device)
 
-        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
         features = []
         labels = []
         for batch in self.pbar(dataloader, desc='Extracting features'):
