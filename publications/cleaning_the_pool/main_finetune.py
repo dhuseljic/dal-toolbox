@@ -80,7 +80,7 @@ def main(args):
         barebones=True,
         callbacks=[MetricLogger()],
     )
-    al_strategy = build_al_strategy(args, num_classes=10, num_features=512)
+    al_strategy = build_al_strategy(args, num_classes=data.num_classes, num_features=384)
 
     al_history = []
     artifacts_history = []

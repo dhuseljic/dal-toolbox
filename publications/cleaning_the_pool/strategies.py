@@ -744,7 +744,7 @@ class SelectAL(Query):
                 # Remove selection from L
                 new_indices = copy.copy(labeled_indices)
                 for idx in remove_indices:
-                    if len(new_indices) > 2: # NOTE: This prevents issues for performance eval below
+                    if len(new_indices) > 2:  # NOTE: This prevents issues for performance eval below
                         new_indices.remove(idx)
 
                 # Eval the performance via cross validation on new labeled data
@@ -883,7 +883,7 @@ class TAILOR(Query):
             subset_size=None,
             random_seed=None,
             al_strategies=['random', 'margin', 'badge', 'bait', 'typiclust',
-                            'alfamix', 'dropquery', 'max_herding', 'unc_herding'],
+                           'alfamix', 'dropquery', 'max_herding', 'unc_herding'],
             device='cpu'):
         super().__init__(random_seed)
         self.subset_size = subset_size
@@ -949,7 +949,7 @@ class TAILOR(Query):
 class AutoAL(Query):
     def __init__(self,
                  args,
-                 al_strategies=['random', 'margin', 'badge', 'bait', 'typiclust',
+                 al_strategies=['random', 'margin', 'typiclust',
                                 'alfamix', 'dropquery', 'max_herding', 'unc_herding'],
                  subset_size=None,
                  device='cpu',
@@ -957,7 +957,7 @@ class AutoAL(Query):
                  feature_dim=384,
                  num_classes=10,
                  ratio=0.02,
-                 num_bilevel_epochs=50, #NOTE: Reduced from 400 as we dont fit full ResNet18
+                 num_bilevel_epochs=50,  # NOTE: Reduced from 400 as we dont fit full ResNet18
                  ):
         super().__init__(random_seed=random_seed)
         self.subset_size = subset_size
@@ -982,8 +982,8 @@ class AutoAL(Query):
         self.strategies = build_al_strategies(al_strategies, device=self.device, subset_size=subset_size)
         self.args = args
 
-
     # Removed the torch.no_grad context as stuff needs to be learned in here
+
     def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
         al_datamodule = copy.deepcopy(al_datamodule)
         _, labeled_indices = al_datamodule.labeled_dataloader()
@@ -992,34 +992,40 @@ class AutoAL(Query):
         # Note: Custom Val Loader because we need DropLast to avoid small batches
         train_indices = random.sample(labeled_indices, k=len(labeled_indices)//2)
         val_indices = [i for i in labeled_indices if i not in train_indices]
-        train_loader = DataLoader(dataset=Subset(al_datamodule.query_dataset, indices=train_indices), 
-                                batch_size=al_datamodule.train_batch_size, 
-                                drop_last=(len(train_indices)>al_datamodule.train_batch_size),
-                                shuffle=True)
-        
+        train_loader = DataLoader(dataset=Subset(al_datamodule.query_dataset, indices=train_indices),
+                                  batch_size=al_datamodule.train_batch_size,
+                                  drop_last=(len(train_indices) > al_datamodule.train_batch_size),
+                                  shuffle=True)
         # First, fit the fitnet on half of the labeled pool to have a solid foundation
         val_loader = al_datamodule.custom_dataloader(indices=val_indices, train=True)
+
+        # We work on the last layers features not the whole model
+        train_outputs = model.get_model_outputs(train_loader, ['features', 'labels'], device=self.device)
+        val_outputs = model.get_model_outputs(val_loader, ['features', 'labels'], device=self.device)
+
+        val_feature_loader = DataLoader(TensorDataset(
+            val_outputs['features'], val_outputs['labels']), batch_size=al_datamodule.train_batch_size)
         trainer = Trainer(max_epochs=self.args.model.num_epochs, barebones=True)
-        trainer.fit(self.fit_net, val_loader)
+        trainer.fit(self.fit_net, val_feature_loader)
 
         # Next, perform Bilevel optimization to fit both SearchNet and FitNet
-        self.bilevel_optimization(model, train_loader, al_datamodule)
+        train_feature_loader = DataLoader(TensorDataset(
+            train_outputs['features'], train_outputs['labels'], train_indices), batch_size=al_datamodule.train_batch_size)
+        self.bilevel_optimization(model, train_feature_loader, al_datamodule)
 
-        #'accuracy': 0.928        eben sogar 0.931 bei 50 epochen    
-
-        # Begin actual selection of samples to annotate by calculating scores for the 
         # unlabeled samples and take the topk
-        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
+        u_dataloader, u_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
+        u_outputs = model.get_model_outputs(u_dataloader, ['features'], device=self.device)
+        u_feature_loader = DataLoader(TensorDataset(
+            u_outputs['features'], u_outputs['features']), batch_size=al_datamodule.predict_batch_size)
+
         with torch.no_grad():
-            _, _, _, new_score, _ = self.compute_scores(model=model,
-                                                              dataloader=unlabeled_dataloader,
-                                                              dataloader_inidces=unlabeled_indices,
-                                                              al_datamodule=al_datamodule)
+            _, _, _, new_score, _ = self.compute_scores(
+                model=model, dataloader=u_feature_loader, dataloader_inidces=u_indices, al_datamodule=al_datamodule)
         new_score = torch.from_numpy(np.abs(new_score))
         _, local_indices = new_score.topk(k=acq_size)
-        global_indices = [unlabeled_indices[idx] for idx in local_indices]
+        global_indices = [u_indices[idx] for idx in local_indices]
         return global_indices
-    
 
     def get_outputs(self, dataloader, net_type):
         outputs = defaultdict(list)
@@ -1046,14 +1052,13 @@ class AutoAL(Query):
             val[0], torch.Tensor) else val for key, val in outputs.items()}
         return outputs
 
-
     def get_score_matrix(self, model, al_datamodule, dataloader_indices):
         # ACQ Size needs to be adjusted depening on dataloader size
         if len(al_datamodule.unlabeled_indices) > (self.quota + self.num_init):
             num_q = self.acq_size
         else:
             if math.ceil(len(al_datamodule.unlabeled_indices) * self.ratio) == 1:
-                num_q = 2            
+                num_q = 2
             else:
                 num_q = math.ceil(len(al_datamodule.unlabeled_indices) * self.ratio)
 
@@ -1062,12 +1067,12 @@ class AutoAL(Query):
         for i, strat in enumerate(self.strategies):
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", category=ConvergenceWarning)
-                queried_indices = self.strategies[strat].query(model=model, al_datamodule=al_datamodule, acq_size=num_q)
+                queried_indices = self.strategies[strat].query(
+                    model=model, al_datamodule=al_datamodule, acq_size=num_q)
             for idx in dataloader_indices:
                 if idx in queried_indices:
                     binary_matrix[dataloader_indices.index(idx)][i] = 1
         return binary_matrix
-    
 
     def compute_scores(self, model, dataloader, dataloader_inidces, al_datamodule):
         # Get logits and score matrix for unlabeled samples
@@ -1080,9 +1085,10 @@ class AutoAL(Query):
         score_matrix = self.get_score_matrix(model, aldm_copy, dataloader_inidces)
 
         # Calculate various scores (see explanation above)
-        weighted_score_matrix = torch.from_numpy(score_matrix).requires_grad_() * logits_search # (N_Samples, N_Strategies) 
-        average_scores = weighted_score_matrix.sum(dim=1).softmax(dim=0) # (N_Samples)
-        detached_scores = average_scores.cpu().detach().numpy() # (N_Samples)
+        weighted_score_matrix = torch.from_numpy(
+            score_matrix).requires_grad_() * logits_search  # (N_Samples, N_Strategies)
+        average_scores = weighted_score_matrix.sum(dim=1).softmax(dim=0)  # (N_Samples)
+        detached_scores = average_scores.cpu().detach().numpy()  # (N_Samples)
 
         # Probably the "Sigmoid Relaxation they talked about"
         gmm = GaussianMixture(n_components=min(5, detached_scores.shape[0]))
@@ -1093,35 +1099,36 @@ class AutoAL(Query):
 
         # Retrieve predictions for fitnet
         output_fit = self.get_outputs(dataloader, net_type="fit_net")
-        logits_fit, labels_fit = output_fit['logits'], output_fit['labels'] 
+        logits_fit, labels_fit = output_fit['logits'], output_fit['labels']
 
         return relaxed_scores, logits_fit, labels_fit, detached_scores, features_search
-    
 
     def bilevel_optimization(self, model, dataloader, al_datamodule):
         # Initialize optimizer and lr-scheduler for Bilevel optimization
         self.search_net.train()
         optimizer_search = torch.optim.Adam(params=self.search_net.parameters(), weight_decay=5e-4)
-        scheduler_search = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer_search, T_max=self.num_bilevel_epochs//2)
+        scheduler_search = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer=optimizer_search, T_max=self.num_bilevel_epochs//2)
 
         self.fit_net.train()
         optimizer_fit = torch.optim.Adam(params=self.fit_net.parameters(), weight_decay=5e-4)
-        scheduler_fit = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer_fit, T_max=self.num_bilevel_epochs//2)
+        scheduler_fit = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer=optimizer_fit, T_max=self.num_bilevel_epochs//2)
 
-        for i_optim_step in range(self.num_bilevel_epochs):
-            input_search, target_search, new_dataloader_indices = next(dataloader.__iter__())
+        for i_optim_step in track(range(self.num_bilevel_epochs), 'Bilevel Optimization of AutoAL..'):
+            input_search, target_search, new_dataloader_indices = next(iter(dataloader))
             subset = TensorDataset(input_search, target_search)
             one_batch_dataloader = DataLoader(subset, batch_size=input_search.size(0), shuffle=True)
             score, logits_fit, labels_fit, _, _ = self.compute_scores(model=model,
-                                                                    dataloader=one_batch_dataloader,
-                                                                    dataloader_inidces=new_dataloader_indices.tolist(),
-                                                                    al_datamodule=al_datamodule
-                                                                    )
+                                                                      dataloader=one_batch_dataloader,
+                                                                      dataloader_inidces=new_dataloader_indices.tolist(),
+                                                                      al_datamodule=al_datamodule
+                                                                      )
             loss_fit = F.cross_entropy(logits_fit, labels_fit, reduction='none')
             # 1: Optimize search net
             if i_optim_step % 2 == 1:
                 optimizer_search.zero_grad()
-                loss_fit = loss_fit.detach() # Only search net should be updated
+                loss_fit = loss_fit.detach()  # Only search net should be updated
 
                 # Final Loss is then a scalar product of predicted loss (score) and actual loss
                 total_loss = -(loss_fit * score).mean()
@@ -1132,14 +1139,13 @@ class AutoAL(Query):
             # 2: Optimize FitNet
             else:
                 optimizer_fit.zero_grad()
-                score = score.detach() # Only fitnet should be updated
+                score = score.detach()  # Only fitnet should be updated
 
                 # Final Loss is, again, a scalar product of predicted loss (score) and actual loss
                 total_loss = (loss_fit * score).mean()
                 total_loss.backward()
                 optimizer_fit.step()
                 scheduler_fit.step()
-
 
 
 def build_al_strategies(al_strategies, device='cpu', subset_size=None):
@@ -1177,32 +1183,6 @@ def sobol_mc_labels(logits, num_mc_labels):
         labels.append(label_indices)
     labels = np.stack(labels, axis=1)
     return torch.from_numpy(labels).long()
-
-
-class EMACallback(Callback):
-    def __init__(self, decay=0.999, start_step=100):
-        self.decay = decay
-        self.ema_model = None
-        self.start_step = start_step
-
-    def on_fit_start(self, trainer, pl_module):
-        self.ema_model = AveragedModel(pl_module, avg_fn=get_ema_avg_fn(self.decay))
-
-    def on_train_batch_end(self, trainer, pl_module, *args):
-        if trainer.global_step > self.start_step:
-            self.ema_model.update_parameters(pl_module)
-
-    def on_fit_end(self, trainer, pl_module):
-        # overwrite the training model with EMA weights
-        pl_module.model.load_state_dict(self.ema_model.module.model.state_dict())
-
-
-def get_ema_avg_fn(decay=0.999):
-    """Get the function applying exponential moving average (EMA) across a single param."""
-    @torch.no_grad()
-    def ema_update(ema_param, current_param, num_averaged):
-        return decay * ema_param + (1 - decay) * current_param
-    return ema_update
 
 
 @torch.no_grad()
