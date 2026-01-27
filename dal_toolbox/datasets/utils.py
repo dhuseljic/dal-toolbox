@@ -83,11 +83,8 @@ class FeatureDataset(Dataset):
             sample = dataset[idx][0]
             hasher.update(sample.numpy().tobytes())
 
-        # feature = model(sample.unsqueeze(0))
-        # hasher.update(feature.numpy().tobytes())
-        # Numerical instability ruins hash sometimes, so hash model parameters instead
-        for p in model.parameters():
-            hasher.update(p.detach().cpu().numpy().tobytes())
+        for _, param in model.state_dict().items():
+            hasher.update(param.cpu().numpy().tobytes())
         return hasher.hexdigest()
 
     @torch.no_grad()
