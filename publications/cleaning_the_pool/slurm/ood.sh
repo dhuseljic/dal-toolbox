@@ -17,16 +17,15 @@ ulimit -n 8192
 mlflow_uri='sqlite:////mnt/work/dhuseljic/experiments/mlflow/adaptive_al/refine_ood.db'
 mlflow_exp_name='v3'
 
-backbones=(dinov2 clip dinov3)
 datasets=('blood-mnist' 'derma-mnist')
-strategies=(random select_al tcm tailor autoal refine)
+strategies=(random select_al tcm tailor autoal refine uncertainty_herding)
 random_seeds=({1..10})
 
 idx=$SLURM_ARRAY_TASK_ID
 
-backbone=${backbones[0]}
+backbone=dinov2
 dataset=${datasets[1]}
-al_strategy=${strategies[5]}
+al_strategy=${strategies[6]}
 
 random_seed=${random_seeds[$idx]}
 
