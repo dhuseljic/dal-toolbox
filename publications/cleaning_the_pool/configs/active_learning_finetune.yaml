@@ -7,15 +7,15 @@ mlflow_uri: sqlite:///active_learning_finetune.db
 num_workers: 0
 
 al:
-  strategy: random
+  strategy: tailor
   device: cuda
   refine:
     strategies: ['random', 'margin', 'typiclust', 'alfamix', 'dropquery', 'max_herding', 'unc_herding']
     progressive_depth: 3
-    num_batches: 50
+    num_batches: 100
     alpha: 0.4
     filter_acq_size: null
-    init_subset_size: 1000
+    init_subset_size: 2500
     max_pool_size: 10000
     select_strategy: unc_herding
   aal:

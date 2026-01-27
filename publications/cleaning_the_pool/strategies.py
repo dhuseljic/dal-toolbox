@@ -935,6 +935,8 @@ class TAILOR(Query):
             # Update stats in new_stats. Note that these new labels are not used during querying but only
             # afterwards to update self.stats, which is used for strategy selection.
             label = al_datamodule.train_dataset[queried_idx][1]
+            if isinstance(label, int):
+                label = torch.tensor(label)
             label = torch.nn.functional.one_hot(label, num_classes=self.num_classes).numpy()
             new_stats[0, strat_idx] += label
             new_stats[1, strat_idx] += 1 - label
