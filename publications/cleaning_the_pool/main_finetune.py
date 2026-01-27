@@ -4,6 +4,7 @@ import mlflow
 import logging
 import warnings
 
+import copy
 import torch
 import torch.nn as nn
 
@@ -15,6 +16,7 @@ from dal_toolbox import metrics
 from dal_toolbox.active_learning import ActiveLearningDataModule
 from dal_toolbox.active_learning import strategies
 from dal_toolbox.active_learning import oracles
+from dal_toolbox.datasets.utils import FeatureDataset
 from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything
 from torch.utils.data import Subset
@@ -39,7 +41,6 @@ def main(args):
     train_ds = data.train_dataset
     test_ds = data.test_dataset
     test_ds = Subset(test_ds, indices=list(range(0, 1000)))
-    
 
     seed_everything(args.random_seed)
     al_datamodule = ActiveLearningDataModule(
@@ -91,18 +92,15 @@ def main(args):
         if i_acq != 0:
 
             # Extract features
-            import copy 
-            from dal_toolbox.datasets.utils import FeatureDataset
             extractor = copy.deepcopy(model.model.backbone)
             query_ds = FeatureDataset(extractor, al_datamodule.query_dataset, device='cuda')
-            aldm = copy.deepcopy(al_datamodule)
-            aldm.train_dataset = train_ds
-            aldm.query_dataset = query_ds
-
-            query_model = copy.deepcopy(model.model.head)
+            aldm = ActiveLearningDataModule(train_dataset=query_ds, test_dataset=query_ds,
+                                            train_batch_size=args.model.train_batch_size,
+                                            predict_batch_size=args.model.predict_batch_size)
+            aldm.update_annotations(al_datamodule.labeled_indices)
             query_model = build_model(args, num_features=384, num_classes=data.num_classes)
             query_model.model.layer.layer.load_state_dict(model.model.head.layer.state_dict(), strict=False)
-            
+
             stime = time.time()
             indices = al_strategy.query(
                 model=query_model,
