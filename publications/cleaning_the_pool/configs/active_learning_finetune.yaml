@@ -1,5 +1,5 @@
 defaults:
-  - dataset: cifar10
+  - dataset: dopanim
 
 random_seed: 1
 experiment_name: al
@@ -7,7 +7,7 @@ mlflow_uri: sqlite:///active_learning_finetune.db
 num_workers: 0
 
 al:
-  strategy: tailor
+  strategy: random
   device: cuda
   refine:
     strategies: ['random', 'margin', 'typiclust', 'alfamix', 'dropquery', 'max_herding', 'unc_herding']
@@ -28,7 +28,7 @@ al:
 
 model:
   name: linear
-  num_epochs: 100
+  num_epochs: 50
   train_batch_size: 64
   predict_batch_size: 128
   mean_field_factor: 0.4
