@@ -8,7 +8,6 @@ import copy
 import torch
 import torch.nn as nn
 
-import timm
 from lightning import Trainer
 from omegaconf import OmegaConf
 
@@ -22,7 +21,7 @@ from dal_toolbox.utils import seed_everything
 from torch.utils.data import Subset
 
 
-from utils import build_image_data, flatten_cfg, build_model, LinearModel
+from utils import build_image_data, flatten_cfg, build_model
 from strategies import Refine, SelectAL, TCM, TAILOR, AutoAL
 from dal_toolbox.models.laplace import LaplaceLinear, LaplaceModel
 
@@ -40,6 +39,8 @@ def main(args):
     data = build_image_data(args)
     train_ds = data.train_dataset
     test_ds = data.test_dataset
+    # import numpy as np
+    # np.unique(train_ds.labels.flatten(), return_counts=True)
     test_ds = Subset(test_ds, indices=list(range(0, 1000)))
 
     seed_everything(args.random_seed)
