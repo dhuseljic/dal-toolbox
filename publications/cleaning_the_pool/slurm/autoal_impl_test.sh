@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=adaptive_al
 #SBATCH --partition=main
-#SBATCH --output=/mnt/stud/work/phahn/repositories/dal_toolbox_new/logs/adaptive_al/%A_%a_%x.log
+#SBATCH --output=/mnt/stud/work/phahn/repositories/dal-toolbox/logs/adaptive_al/%A_%a_%x.log
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64gb
@@ -14,8 +14,8 @@ source /mnt/stud/work/phahn/venvs/dal-toolbox-py3104/bin/activate
 export HUGGING_FACE_HUB_TOKEN=$(cat /mnt/stud/work/phahn/.huggingface_token)
 ulimit -n 8192
 
-mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal_toolbox_new/test.db'
-mlflow_exp_name='autoal'
+mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/test.db'
+mlflow_exp_name='autoal_test'
 
 strategies=(random autoal uncertainty_herding)
 datasets=(cifar10 dopanim cifar100)
@@ -31,12 +31,11 @@ backbone=dinov3
 if [ "$random_seed" -eq 1 ]; then
         python -c "import mlflow; mlflow.set_tracking_uri(r'$mlflow_uri'); mlflow.set_experiment(r'$mlflow_exp_name')"
 fi
-cd /mnt/stud/work/phahn/repositories/dal_toolbox_new/dal-toolbox2.0/publications/adaptive_al/
+cd /mnt/stud/work/phahn/repositories/dal-toolbox/dal-toolbox/publications/adaptive_al/
 srun python main.py \
         dataset=$dataset \
         model.backbone=$backbone \
         al.strategy=$al_strategy \
-        al.device=cuda \
         mlflow_uri=$mlflow_uri \
         experiment_name=$mlflow_exp_name \
         random_seed=$random_seed \
