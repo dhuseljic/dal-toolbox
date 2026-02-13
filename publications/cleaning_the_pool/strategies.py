@@ -1002,7 +1002,7 @@ class TAILOR(Query):
 					if rd==1 and inter_round==0:
                     ############## NOTE: Wenn erster Cycle und erste Runde, dann Fit Net und Loss Module initialisieren ###########################
 						strategy.train_2_1(dataset,net,args_input,args_task,NUM_QUERY,labeled_idxs,new_dataloader)
-                    ################ NOTE: Perform updates on SearchNet basierend auf einem Batch in train queue für 200 steps. ################
+                    ################ NOTE: Perform updates on FitNet basierend auf einem Batch in train queue für 200 steps. ################
 					strategy.train_1(first_dataloader,step)
                     ################ NOTE: Perform updates on all Nets fpr 400 steps basierend auf einem validation batch. ################
 					strategy.train_2(dataset,net,args_input,args_task,NUM_QUERY,labeled_idxs,new_dataloader)
@@ -1050,7 +1050,11 @@ class TAILOR(Query):
 """
 
 
-class AutoAL(Query):
+class AutoALOriginal(Query):
+    """
+    This is the original AutoAL implementation.
+    """
+
     def __init__(
             self,
             fit_net,
@@ -1064,6 +1068,8 @@ class AutoAL(Query):
             ratio=0.02,
             num_bilevel_steps=100,  # NOTE: Reduced from 400 as we dont fit full ResNet18
             num_fit_net_steps=50, # NOTE: Reduced from 200 as we dont fit a full ResNet18
+            num_fit_net_epochs=50,
+            optim_step_thresh=25,
             num_acq=20,
             num_init=10,
             acq_size=10,
@@ -1079,6 +1085,8 @@ class AutoAL(Query):
         self.ratio = ratio
         self.num_bilevel_steps = num_bilevel_steps
         self.num_fit_net_steps = num_fit_net_steps
+        self.num_fit_net_epochs = num_fit_net_epochs
+        self.optim_step_thresh = optim_step_thresh
 
         # Define SearchNet, LossNet and FitNet
         self.search_net = search_net
@@ -1103,16 +1111,15 @@ class AutoAL(Query):
         val_indices = [i for i in labeled_indices if i not in train_indices]
         train_loader = DataLoader(
             dataset=Subset(al_datamodule.query_dataset, indices=train_indices),
-            batch_size=al_datamodule.train_batch_size, shuffle=True,
-            drop_last=(len(train_indices) > al_datamodule.train_batch_size)
+            batch_size=acq_size, shuffle=True,
+            drop_last=(len(train_indices) > acq_size)
         )
-        val_loader = al_datamodule.custom_dataloader(indices=val_indices, train=True)
+        val_loader = al_datamodule.custom_dataloader(indices=val_indices, train=True, custom_batch_size=acq_size)
 
         # Optimize Search- and FitNet
         for _ in range(3 if self.is_first_iteration else 1):
             val_iterator=iter(val_loader)
             for input, target, _ in train_loader:
-                print("################### DEBUG: One Iteration ###############################")
                 input_search, target_search = next(val_iterator)
 
                 search_dset = TensorDataset(input_search, target_search, torch.arange(0, input_search.size(0), step=1))
@@ -1291,7 +1298,7 @@ class AutoAL(Query):
             loss_fit = F.cross_entropy(logits_fit, labels_fit, reduction='none')
             # 1: Optimize search net
             if i_optim_step % 3 == 0:
-                if i_optim_step > 50:
+                if i_optim_step > self.optim_step_thresh:
                     optimizer_search.zero_grad()
                     loss_fit = loss_fit.detach()  # Only search net should be updated
 
@@ -1310,7 +1317,7 @@ class AutoAL(Query):
 
             # 2: Optimize LossNet
             elif i_optim_step % 3 == 1:
-                if i_optim_step > 50:
+                if i_optim_step > self.optim_step_thresh:
                     # Loss module requires an even batch size, so if features_fit is not of the right dimension, drop the last sample
                     if features_fit.shape[0] % 2 != 0:
                         features_fit, logits_fit, labels_fit = features_fit[:-1], logits_fit[:-1], labels_fit[:-1]
@@ -1339,6 +1346,55 @@ class AutoAL(Query):
 
 
 
+class AutoAL(AutoALOriginal):
+    """
+    This is an efficient adaptation of AutoAL due to their excessive need for compute and inefficient implementation.
+    In this version, we simply fit FitNet first and then perform bilevel optimization with varying batches. In contrast,
+    in the original implementation, AutoAL fits FitNet and performs bilevel optimization over the same batch for each
+    pair of batches (train_batch, val_batch) available, missing the opportunity to improve convergence speed by
+    shuffeling the batches per update step and not just all 400 steps. In addition, each batch is only seen once, so
+    by the time the Strategy finished learning, it hasnt seen the first batch in a long time, which may result in some 
+    form of forgetting. Finally, we put the batch_size for both train and val loader to our general train batch size
+    instead of the acq_size for efficiency and since some datasets for foundation models would have a really small batch size.
+    """
+    def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
+        al_datamodule = copy.deepcopy(al_datamodule)
+        _, labeled_indices = al_datamodule.labeled_dataloader()
+
+        # Split available labeled samples into training and validation data
+        # Note: Custom Val Loader because we need DropLast to avoid small batches
+        train_indices = random.sample(labeled_indices, k=len(labeled_indices)//2)
+        val_indices = [i for i in labeled_indices if i not in train_indices]
+        train_loader = DataLoader(dataset=Subset(al_datamodule.query_dataset, indices=train_indices), 
+                                batch_size=al_datamodule.train_batch_size, 
+                                drop_last=(len(train_indices)>al_datamodule.train_batch_size),
+                                shuffle=True)
+        
+        # First, fit the fitnet on half of the labeled pool to have a solid foundation
+        val_loader = al_datamodule.custom_dataloader(indices=val_indices, train=True)
+        trainer = Trainer(max_epochs=self.num_fit_net_epochs, barebones=True)
+        trainer.fit(self.fit_net, val_loader)
+
+        # Next, perform Bilevel optimization to fit both SearchNet and FitNet
+        self.bilevel_optimization(model, train_loader, al_datamodule)
+
+        # Begin actual selection of samples to annotate by calculating scores for the 
+        # unlabeled samples and take the topk
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
+        with torch.no_grad():
+            _, _, _, new_score, _, _ = self.compute_scores(model=model,
+                                                              dataloader=unlabeled_dataloader,
+                                                              dataloader_inidces=unlabeled_indices,
+                                                              al_datamodule=al_datamodule)
+        new_score = torch.from_numpy(np.abs(new_score))
+        _, local_indices = new_score.topk(k=acq_size)
+        global_indices = [unlabeled_indices[idx] for idx in local_indices]
+        return global_indices
+
+
+
+
+
 
 #[256, 512, 1024, 2048]  #medmnist1:[14,7,4,2],[64, 128, 256, 512]
 class LossNet(nn.Module):
@@ -1362,7 +1418,6 @@ class LossNet(nn.Module):
         self.linear = nn.Linear(4 * interm_dim, 1)
     
     def forward(self, features):
-        #print(features[0].shape)
         out1 = self.GAP1(features[0])
         out1 = out1.view(out1.size(0), -1)
         out1 = F.relu(self.FC1(out1))

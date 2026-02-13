@@ -16,7 +16,7 @@ from dal_toolbox.models.utils.callbacks import MetricLogger
 from dal_toolbox.utils import seed_everything
 
 from utils import build_datasets, flatten_cfg, build_model
-from strategies import Refine, SelectAL, TCM, TAILOR, AutoAL
+from strategies import Refine, SelectAL, TCM, TAILOR, AutoAL, AutoALOriginal
 
 mlflow.config.enable_async_logging()
 logging.getLogger("lightning.pytorch").setLevel(logging.ERROR)
@@ -189,6 +189,19 @@ def build_al_strategy(args, num_classes=None, num_features=None):
         search_net = build_model(args=args, num_features=num_features, num_classes=num_strats)
         fit_net = build_model(args=args, num_features=num_features, num_classes=num_classes)
         al_strategy = AutoAL(
+            search_net=search_net, 
+            fit_net=fit_net, 
+            al_strategies=autoal_strategies,
+            subset_size=subset_size, 
+            device=device,
+            num_features=num_features
+        )
+    elif args.al.strategy == 'autoal_og':
+        autoal_strategies = ['random', 'margin', 'typiclust', 'alfamix', 'dropquery', 'max_herding', 'unc_herding']
+        num_strats = len(autoal_strategies)
+        search_net = build_model(args=args, num_features=num_features, num_classes=num_strats)
+        fit_net = build_model(args=args, num_features=num_features, num_classes=num_classes)
+        al_strategy = AutoALOriginal(
             search_net=search_net, 
             fit_net=fit_net, 
             al_strategies=autoal_strategies,

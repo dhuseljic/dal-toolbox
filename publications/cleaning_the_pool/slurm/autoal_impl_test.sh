@@ -31,9 +31,10 @@ backbone=dinov3
 if [ "$random_seed" -eq 1 ]; then
         python -c "import mlflow; mlflow.set_tracking_uri(r'$mlflow_uri'); mlflow.set_experiment(r'$mlflow_exp_name')"
 fi
-cd /mnt/stud/work/phahn/repositories/dal-toolbox/dal-toolbox/publications/adaptive_al/
+cd /mnt/stud/work/phahn/repositories/dal-toolbox/dal-toolbox/publications/cleaning_the_pool/
 srun python main.py \
         dataset=$dataset \
+        dataset.path=/mnt/stud/work/phahn/datasets/
         model.backbone=$backbone \
         al.strategy=$al_strategy \
         mlflow_uri=$mlflow_uri \

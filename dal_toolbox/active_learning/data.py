@@ -114,8 +114,8 @@ class ActiveLearningDataModule(L.LightningDataModule):
         if train:
             custom_dataset = Subset(self.train_dataset, indices=indices)
             sampler = RandomSampler(custom_dataset)
-            batch_size = self.train_batch_size
-            drop_last = (len(indices) > self.train_batch_size)
+            batch_size = self.train_batch_size if custom_batch_size is None else custom_batch_size
+            drop_last = (len(indices) > batch_size)
         else:
             custom_dataset = Subset(self.query_dataset, indices=indices)
             sampler = None
