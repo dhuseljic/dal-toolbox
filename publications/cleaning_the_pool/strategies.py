@@ -1052,7 +1052,7 @@ class TAILOR(Query):
 
 class AutoALOriginal(Query):
     """
-    This is the original AutoAL implementation.
+    This is the original AutoAL implementation. For the original code, we refer to https://github.com/haizailache999/AutoAL/tree/main.
     """
 
     def __init__(
@@ -1066,8 +1066,8 @@ class AutoALOriginal(Query):
             device='cpu',
             random_seed=None,
             ratio=0.02,
-            num_bilevel_steps=100,  # NOTE: Reduced from 400 as we dont fit full ResNet18
-            num_fit_net_steps=50, # NOTE: Reduced from 200 as we dont fit a full ResNet18
+            num_bilevel_steps=200,  # NOTE: Reduced from 400 as we dont fit full ResNet18
+            num_fit_net_steps=100, # NOTE: Reduced from 200 as we dont fit a full ResNet18
             num_fit_net_epochs=50,
             optim_step_thresh=25,
             num_acq=20,
@@ -1438,6 +1438,9 @@ class LossNet(nn.Module):
         return out
     
 class TinyLossNet(nn.Module):
+    """
+    Variation of original LossNet for training just a linear classifier on a foundation model.
+    """
     def __init__(self, feature_size=14, interm_dim=128):
         super(TinyLossNet, self).__init__()
         self.FC = nn.Linear(feature_size, interm_dim)

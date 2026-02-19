@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64gb
 #SBATCH --gres=gpu:0
-#SBATCH --array=0-89
+#SBATCH --array=0-119
 #SBATCH --exclude=gpu-a100-[1-5],gpu-v100-[1-4],gpu-l40s-1
 
 date;hostname
@@ -15,16 +15,16 @@ export HUGGING_FACE_HUB_TOKEN=$(cat /mnt/stud/work/phahn/.huggingface_token)
 ulimit -n 8192
 
 mlflow_uri='sqlite:////mnt/stud/work/phahn/repositories/dal-toolbox/test.db'
-mlflow_exp_name='autoal_test'
+mlflow_exp_name='autoal_test_2'
 
-strategies=(random autoal uncertainty_herding)
-datasets=(cifar10 dopanim cifar100)
+strategies=(random autoal autoal_og uncertainty_herding)
+datasets=(cifar10 dopanim snacks)
 random_seeds=(1 2 3 4 5 6 7 8 9 10)
 
 idx=$SLURM_ARRAY_TASK_ID
-al_strategy=${strategies[$idx % 3]}
-dataset=${datasets[$idx / 3 % 3]}
-random_seed=${random_seeds[$idx / 9]}
+al_strategy=${strategies[$idx % 4]}
+dataset=${datasets[$idx / 4 % 3]}
+random_seed=${random_seeds[$idx / 12]}
 
 backbone=dinov3
 
@@ -34,7 +34,7 @@ fi
 cd /mnt/stud/work/phahn/repositories/dal-toolbox/dal-toolbox/publications/cleaning_the_pool/
 srun python main.py \
         dataset=$dataset \
-        dataset.path=/mnt/stud/work/phahn/datasets/
+        dataset.path=/mnt/stud/work/phahn/datasets/ \
         model.backbone=$backbone \
         al.strategy=$al_strategy \
         mlflow_uri=$mlflow_uri \
