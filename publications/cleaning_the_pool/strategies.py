@@ -1,30 +1,33 @@
 import copy
-import torch
-import torch.nn.functional as F
 import numpy as np
 from collections import defaultdict
+from rich.progress import track
+import math
+import random
+import warnings
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import TensorDataset, DataLoader, Subset
+
 from lightning import Trainer
 from lightning.pytorch import Callback
-from scipy.stats import spearmanr
+
+from sklearn.model_selection import KFold
+from sklearn.metrics.pairwise import rbf_kernel, pairwise_distances
+from sklearn.semi_supervised import LabelSpreading
+from sklearn.preprocessing import StandardScaler
+from sklearn.mixture import GaussianMixture
+from sklearn.exceptions import ConvergenceWarning
+from scipy.stats import spearmanr, rankdata, qmc
+
 from dal_toolbox.active_learning import strategies
 from dal_toolbox.active_learning.strategies import Query
 from dal_toolbox.active_learning.data import ActiveLearningDataModule
-from sklearn.model_selection import KFold
-from sklearn.metrics.pairwise import rbf_kernel, pairwise_distances
 from dal_toolbox.metrics.calibration import ExpectedCalibrationError
 from dal_toolbox.active_learning.strategies.bait import get_exp_grad_representations
-from scipy.stats import rankdata, qmc
-from rich.progress import track
-from torch.optim.swa_utils import AveragedModel
-from sklearn.semi_supervised import LabelSpreading
-from sklearn.preprocessing import StandardScaler
-import math
-import random
-from torch.utils.data import TensorDataset, DataLoader, Subset
-import warnings
-from utils import build_model
-from sklearn.mixture import GaussianMixture
-from sklearn.exceptions import ConvergenceWarning
+
 
 
 class Refine(Query):
@@ -944,74 +947,192 @@ class TAILOR(Query):
         # As if labels are only revealed now.
         self.stats = self.stats * .9 + new_stats
         return queried_indices
+    
+
+"""
+################ NOTE: First Step is training the general query model on all labeled data which happens in strategy.train() ################
+    if args_input.ALstrategy == 'WAAL':
+			strategy.train(model_name = args_input.ALstrategy)
+		else:
+			strategy.train()
+		preds = strategy.predict(dataset.get_test_data())
+		acc[0] = dataset.cal_test_acc(preds)
+		print('Round 0\ntesting accuracy {}'.format(acc[0]))
+		print('\n')
+		
+################ NOTE: Here the querying process begins ################
+		for rd in range(1, NUM_ROUND+1):
+        
+################ NOTE: Get labeled data and split it in half ################
+			print('Round {}'.format(rd))
+			labeled_idxs,labeled_data=dataset.get_labeled_data()
+			num_train=len(labeled_data)
+			split = int(np.floor(0.5 * num_train))
+
+			indices = np.random.permutation(len(labeled_data))
+			train_queue = torch.utils.data.DataLoader(
+				labeled_data, batch_size=NUM_QUERY,
+				sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
+				pin_memory=True, num_workers=2)
+
+			valid_queue = torch.utils.data.DataLoader(
+				labeled_data, batch_size=NUM_QUERY,
+				sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
+				pin_memory=True, num_workers=2)
+
+################ NOTE: In the first cycle, we repeat the optimization three times instead of just once ################
+			if rd==1:
+				inter_round_total=3
+			else:
+				inter_round_total=1
+			for inter_round in range(inter_round_total):
+				data_iterator=iter(valid_queue)
+				valid_new_input=torch.empty(0,labeled_data[0][0].shape[0],labeled_data[0][0].shape[1],labeled_data[0][0].shape[2])
+				valid_new_target=torch.empty(0)
+				for step, (input, target,idxs) in enumerate(tqdm(train_queue,file=sys.stdout)):
+					input = Variable(input, requires_grad=False).cuda()
+					target = Variable(target, requires_grad=False).cuda()
+					input_search, target_search,idxs1 = next(data_iterator)
+					valid_new_input=torch.cat((valid_new_input, input_search), 0)
+					valid_new_target=torch.cat((valid_new_target, target_search), 0)
+					subset= TensorDataset(input_search,target_search,torch.arange(0, input_search.size(0), step=1))
+					new_dataloader = DataLoader(subset, batch_size=input_search.size(0), shuffle=True)
+					first_subset=TensorDataset(input,target,torch.arange(0, input.size(0), step=1))
+					first_dataloader = DataLoader(first_subset, batch_size=input.size(0), shuffle=True)
+					if rd==1 and inter_round==0:
+                    ############## NOTE: Wenn erster Cycle und erste Runde, dann Fit Net und Loss Module initialisieren ###########################
+						strategy.train_2_1(dataset,net,args_input,args_task,NUM_QUERY,labeled_idxs,new_dataloader)
+                    ################ NOTE: Perform updates on FitNet basierend auf einem Batch in train queue für 200 steps. ################
+					strategy.train_1(first_dataloader,step)
+                    ################ NOTE: Perform updates on all Nets fpr 400 steps basierend auf einem validation batch. ################
+					strategy.train_2(dataset,net,args_input,args_task,NUM_QUERY,labeled_idxs,new_dataloader)
+
+			valid_newset= TensorDataset(valid_new_input,valid_new_target,torch.arange(0, valid_new_input.size(0), step=1))
+			valid_newqueue = DataLoader(valid_newset, batch_size=valid_new_input.size(0), shuffle=False)
+			preds = strategy.predict1(valid_newqueue)
+			acc1[inter_round]=(valid_new_target==preds).sum().item()/len(preds)
+			print('validation1 accuracy {}'.format(acc1[inter_round]))
+			print('\n')
+			unlabeled_idxs,unlabeled_data=dataset.get_unlabeled_data()
+			untrain_loader = torch.utils.data.DataLoader(
+				unlabeled_data, batch_size=NUM_QUERY,
+				pin_memory=True, num_workers=0,shuffle=False)
+			q_idxs=strategy.predict2(untrain_loader,unlabeled_idxs,NUM_QUERY,args_input.batch)
+			q_idx_list=[]
+			q_true_idx=[]
+			for q_number in range(0,50000):          #config
+				if dataset.labeled_idxs[q_number] == False:
+					q_idx_list.append(q_number)
+			for q_number in q_idxs:
+				q_true_idx.append(q_idx_list[q_number])
+			strategy.update(q_true_idx)
+			strategy.train()
+			preds = strategy.predict(dataset.get_test_data())
+			acc[rd] = dataset.cal_test_acc(preds)
+			print('testing accuracy {}'.format(acc[rd]))
+			print('\n')
+			unlabeled_idxs,unlabeled_data=dataset.get_unlabeled_data()
+			
+
+		# print results
+		print('SEED {}'.format(SEED))
+		print(type(strategy).__name__)
+		print(acc)
+		all_acc.append(acc)
+		all_acc1.append(acc1)
+		
+		#save model
+		timestamp = re.sub('\.[0-9]*','_',str(datetime.datetime.now())).replace(" ", "_").replace("-", "").replace(":","")
+		model_path = './modelpara/'+timestamp + DATA_NAME+ '_'  + STRATEGY_NAME + '_' + str(NUM_QUERY) + '_' + str(NUM_INIT_LB) +  '_' + str(args_input.quota)  +'.params'
+		end = datetime.datetime.now()
+		acq_time.append(round(float((end-start).seconds),3))
+		torch.save(strategy.get_model().state_dict(), model_path)
+"""
 
 
-class AutoAL(Query):
-    def __init__(self,
-                 args,
-                 al_strategies=['random', 'margin', 'typiclust',
-                                'alfamix', 'dropquery', 'max_herding', 'unc_herding'],
-                 subset_size=None,
-                 device='cpu',
-                 random_seed=None,
-                 feature_dim=384,
-                 num_classes=10,
-                 ratio=0.02,
-                 num_bilevel_epochs=50,  # NOTE: Reduced from 400 as we dont fit full ResNet18
-                 ):
+class AutoALOriginal(Query):
+    """
+    This is the original AutoAL implementation. For the original code, we refer to https://github.com/haizailache999/AutoAL/tree/main.
+    """
+
+    def __init__(
+            self,
+            fit_net,
+            search_net,
+            al_strategies=['random', 'margin', 'typiclust',
+                        'alfamix', 'dropquery', 'max_herding', 'unc_herding'],
+            finetune=False,
+            subset_size=None,
+            device='cpu',
+            random_seed=None,
+            ratio=0.02,
+            num_bilevel_steps=200,  # NOTE: Reduced from 400 as we dont fit full ResNet18
+            num_fit_net_steps=100, # NOTE: Reduced from 200 as we dont fit a full ResNet18
+            num_fit_net_epochs=50,
+            optim_step_thresh=25,
+            num_acq=20,
+            num_init=10,
+            acq_size=10,
+            num_features=768,
+        ):
         super().__init__(random_seed=random_seed)
         self.subset_size = subset_size
         self.device = device
-        self.num_classes = num_classes
-        self.embed_dim = feature_dim
-        self.num_strats = len(al_strategies)
-        self.num_bilevel_epochs = num_bilevel_epochs
+
+        # Additional HPs for autoal
+        self.quota = num_init + num_acq * acq_size
+        self.acq_size = acq_size
         self.ratio = ratio
+        self.num_bilevel_steps = num_bilevel_steps
+        self.num_fit_net_steps = num_fit_net_steps
+        self.num_fit_net_epochs = num_fit_net_epochs
+        self.optim_step_thresh = optim_step_thresh
 
-        # Additional HPs that can be calculated based on AL args
-        self.num_acq = args.dataset.num_acq
-        self.num_init = args.dataset.num_init
-        self.acq_size = args.dataset.acq_size
-        self.quota = self.num_init + self.num_acq * self.acq_size
+        # Define SearchNet, LossNet and FitNet
+        self.search_net = search_net
+        self.fit_net = fit_net
+        self.loss_net = TinyLossNet(feature_size=num_features)
+        self.finetune = finetune
 
-        # Define SearchNet and FitNet as two laplace models
-        self.search_net = build_model(args=args, num_features=self.embed_dim, num_classes=self.num_strats)
-        self.fit_net = build_model(args=args, num_features=self.embed_dim, num_classes=self.num_classes)
+        # Define
+        self.is_first_iteration = True
 
         # Build Query Strategies required for AutoAL
         self.strategies = build_al_strategies(al_strategies, device=self.device, subset_size=subset_size)
-        self.args = args
+
 
     # Removed the torch.no_grad context as stuff needs to be learned in here
-
     def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
         al_datamodule = copy.deepcopy(al_datamodule)
         _, labeled_indices = al_datamodule.labeled_dataloader()
 
-        # Split available labeled samples into training and validation data
-        # Note: Custom Val Loader because we need DropLast to avoid small batches
+        # Split available labeled samples into training and validation data and create respective DataLoaders
         train_indices = random.sample(labeled_indices, k=len(labeled_indices)//2)
         val_indices = [i for i in labeled_indices if i not in train_indices]
-        train_loader = DataLoader(dataset=Subset(al_datamodule.query_dataset, indices=train_indices),
-                                  batch_size=al_datamodule.train_batch_size,
-                                  drop_last=(len(train_indices) > al_datamodule.train_batch_size),
-                                  shuffle=True)
-        # First, fit the fitnet on half of the labeled pool to have a solid foundation
-        val_loader = al_datamodule.custom_dataloader(indices=val_indices, train=True)
+        train_loader = DataLoader(
+            dataset=Subset(al_datamodule.query_dataset, indices=train_indices),
+            batch_size=acq_size, shuffle=True,
+            drop_last=(len(train_indices) > acq_size)
+        )
+        val_loader = al_datamodule.custom_dataloader(indices=val_indices, train=True, custom_batch_size=acq_size)
 
-        # We work on the last layers features not the whole model
-        train_outputs = model.get_model_outputs(train_loader, ['features', 'labels'], device=self.device)
-        val_outputs = model.get_model_outputs(val_loader, ['features', 'labels'], device=self.device)
+        # Optimize Search- and FitNet
+        for _ in range(3 if self.is_first_iteration else 1):
+            val_iterator=iter(val_loader)
+            for input, target, _ in train_loader:
+                input_search, target_search = next(val_iterator)
 
-        val_feature_loader = DataLoader(TensorDataset(
-            val_outputs['features'], val_outputs['labels']), batch_size=al_datamodule.train_batch_size)
-        trainer = Trainer(max_epochs=self.args.model.num_epochs, barebones=True)
-        trainer.fit(self.fit_net, val_feature_loader)
+                search_dset = TensorDataset(input_search, target_search, torch.arange(0, input_search.size(0), step=1))
+                search_loader = DataLoader(search_dset, batch_size=input_search.size(0), shuffle=True)
 
-        # Next, perform Bilevel optimization to fit both SearchNet and FitNet
-        train_feature_loader = DataLoader(TensorDataset(
-            train_outputs['features'], train_outputs['labels'], train_indices), batch_size=al_datamodule.train_batch_size)
-        self.bilevel_optimization(model, train_feature_loader, al_datamodule)
+                fit_dset = TensorDataset(input, target, torch.arange(0, input.size(0), step=1))
+                fit_loader = DataLoader(fit_dset, batch_size=input.size(0), shuffle=True)
+
+                self.train_fit_net(fit_loader)
+                self.bilevel_optimization(model, search_loader, al_datamodule)
+
+        # Ensure first iteration is set to false to reduce compute in later cycles
+        self.is_first_iteration = False
 
         # unlabeled samples and take the topk
         u_dataloader, u_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
@@ -1020,12 +1141,33 @@ class AutoAL(Query):
             u_outputs['features'], u_outputs['features']), batch_size=al_datamodule.predict_batch_size)
 
         with torch.no_grad():
-            _, _, _, new_score, _ = self.compute_scores(
-                model=model, dataloader=u_feature_loader, dataloader_inidces=u_indices, al_datamodule=al_datamodule)
+            _, _, _, new_score, _, _ = self.compute_scores(
+                model=model, dataloader=u_feature_loader, dataloader_inidces=u_indices, al_datamodule=al_datamodule
+            )
+            
         new_score = torch.from_numpy(np.abs(new_score))
-        _, local_indices = new_score.topk(k=acq_size)
+        non_zero_elements = new_score[new_score != 0]
+        non_zero_indices = torch.where(new_score != 0)[0]
+        _, topk_non_zero_indices = non_zero_elements.topk(k=acq_size)
+        local_indices = [non_zero_indices[i] for i in topk_non_zero_indices]
         global_indices = [u_indices[idx] for idx in local_indices]
+
         return global_indices
+    
+
+    def train_fit_net(self, loader):
+        optimizer = torch.optim.Adam(self.fit_net.parameters(), weight_decay=5e-4)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=self.num_fit_net_steps)
+        self.fit_net.train()
+        for _ in range(self.num_fit_net_steps):
+            optimizer.zero_grad()
+            output_fit = self.get_outputs(loader, net_type="fit_net")
+            logits_fit, labels_fit, _ = output_fit['logits'], output_fit['labels'], output_fit['features']
+            loss = F.cross_entropy(logits_fit, labels_fit)
+            loss.backward()
+            optimizer.step()
+            scheduler.step()
+    
 
     def get_outputs(self, dataloader, net_type):
         outputs = defaultdict(list)
@@ -1037,6 +1179,7 @@ class AutoAL(Query):
                 self.fit_net.to(self.device)
                 features = self.fit_net.model.forward_features(inputs)
                 logits = self.fit_net.model.forward_head(features)
+                outputs['features'].append(features.cpu())
                 outputs['logits'].append(logits.cpu())
                 outputs['labels'].append(labels)
             elif net_type == 'search_net':
@@ -1054,7 +1197,7 @@ class AutoAL(Query):
 
     def get_score_matrix(self, model, al_datamodule, dataloader_indices):
         # ACQ Size needs to be adjusted depening on dataloader size
-        if len(al_datamodule.unlabeled_indices) > (self.quota + self.num_init):
+        if len(al_datamodule.unlabeled_indices) > (self.quota):
             num_q = self.acq_size
         else:
             if math.ceil(len(al_datamodule.unlabeled_indices) * self.ratio) == 1:
@@ -1099,44 +1242,97 @@ class AutoAL(Query):
 
         # Retrieve predictions for fitnet
         output_fit = self.get_outputs(dataloader, net_type="fit_net")
-        logits_fit, labels_fit = output_fit['logits'], output_fit['labels']
+        logits_fit, labels_fit, features_fit = output_fit['logits'], output_fit['labels'], output_fit['features']
 
-        return relaxed_scores, logits_fit, labels_fit, detached_scores, features_search
+        return relaxed_scores, logits_fit, labels_fit, detached_scores, features_search, features_fit
+    
+    def LossPredLoss(self, input, target, margin=1.0, reduction='mean'):
+        assert len(input) % 2 == 0, 'the batch size is not even.'
+        assert input.shape == input.flip(0).shape
+        input = (input - input.flip(0))[:len(input)] # [l_1 - l_2B, l_2 - l_2B-1, ... , l_B - l_B+1], where batch_size = 2B
+        target = (target - target.flip(0))[:len(target)]
+        target = target.detach()
+
+        one = 2 * torch.sign(torch.clamp(target, min=0)) - 1 
+        if reduction == 'mean':
+            loss = torch.sum(torch.clamp(margin - one * input, min=0))
+            loss = loss / input.size(0) # Note that the size of input is already halved
+        elif reduction == 'none':
+            loss = torch.clamp(margin - one * input, min=0)
+        else:
+            NotImplementedError()
+        
+        return loss
 
     def bilevel_optimization(self, model, dataloader, al_datamodule):
         # Initialize optimizer and lr-scheduler for Bilevel optimization
+        # This includes a loss net which refines feature representations based on loss prediction
+        # For finetuning pretrained backbones with a linear classifier, loss_net serves no purpose and should be excluded
         self.search_net.train()
         optimizer_search = torch.optim.Adam(params=self.search_net.parameters(), weight_decay=5e-4)
         scheduler_search = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer=optimizer_search, T_max=self.num_bilevel_epochs//2)
+            optimizer=optimizer_search, T_max=self.num_bilevel_steps//3)
 
         self.fit_net.train()
         optimizer_fit = torch.optim.Adam(params=self.fit_net.parameters(), weight_decay=5e-4)
         scheduler_fit = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer=optimizer_fit, T_max=self.num_bilevel_epochs//2)
+            optimizer=optimizer_fit, T_max=self.num_bilevel_steps//3)
+        
+        self.loss_net.train()
+        optimizer_loss = torch.optim.Adam(params=self.loss_net.parameters(), weight_decay=5e-4)
+        scheduler_loss = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer=optimizer_loss, T_max=self.num_bilevel_steps//3)
+        
+        length = len(dataloader.dataset)
 
-        for i_optim_step in track(range(self.num_bilevel_epochs), 'Bilevel Optimization of AutoAL..'):
+        for i_optim_step in track(range(self.num_bilevel_steps), 'Bilevel Optimization of AutoAL..'):
             input_search, target_search, new_dataloader_indices = next(iter(dataloader))
             subset = TensorDataset(input_search, target_search)
             one_batch_dataloader = DataLoader(subset, batch_size=input_search.size(0), shuffle=True)
-            score, logits_fit, labels_fit, _, _ = self.compute_scores(model=model,
-                                                                      dataloader=one_batch_dataloader,
-                                                                      dataloader_inidces=new_dataloader_indices.tolist(),
-                                                                      al_datamodule=al_datamodule
-                                                                      )
+            score, logits_fit, labels_fit, _, _, features_fit = self.compute_scores(
+                model=model,
+                dataloader=one_batch_dataloader,
+                dataloader_inidces=new_dataloader_indices.tolist(),
+                al_datamodule=al_datamodule
+            )
             loss_fit = F.cross_entropy(logits_fit, labels_fit, reduction='none')
             # 1: Optimize search net
-            if i_optim_step % 2 == 1:
-                optimizer_search.zero_grad()
-                loss_fit = loss_fit.detach()  # Only search net should be updated
+            if i_optim_step % 3 == 0:
+                if i_optim_step > self.optim_step_thresh:
+                    optimizer_search.zero_grad()
+                    loss_fit = loss_fit.detach()  # Only search net should be updated
 
-                # Final Loss is then a scalar product of predicted loss (score) and actual loss
-                total_loss = -(loss_fit * score).mean()
-                total_loss.backward()
-                optimizer_search.step()
-                scheduler_search.step()
+                    # Small Loss subtraction?
+                    n = torch.sum(score > 0.5).item()
+                    if n>int(length * self.ratio):
+                        add_loss=(1/(1+math.exp(0.5*(int(length * self.ratio)-n)))-0.5)*2
+                    else:
+                        add_loss=(1/(1+math.exp(0.5*(n-int(length * self.ratio))))-0.5)*2
 
-            # 2: Optimize FitNet
+                    # Final Loss is then a scalar product of predicted loss (score) and actual loss
+                    total_loss = (loss_fit * score).mean() - 2*add_loss # Removed "-" from the first loss
+                    total_loss.backward()
+                    optimizer_search.step()
+                    scheduler_search.step()
+
+            # 2: Optimize LossNet
+            elif i_optim_step % 3 == 1:
+                if i_optim_step > self.optim_step_thresh:
+                    # Loss module requires an even batch size, so if features_fit is not of the right dimension, drop the last sample
+                    if features_fit.shape[0] % 2 != 0:
+                        features_fit, logits_fit, labels_fit = features_fit[:-1], logits_fit[:-1], labels_fit[:-1]
+                    pred_loss = self.loss_net(features_fit) # Output feature ist eigentlich eine liste an feature representationen von den letzten 4 Layern eines ResNets...
+                    pred_loss = pred_loss.view(pred_loss.size(0))
+
+                    loss = F.cross_entropy(logits_fit, labels_fit, reduction='none')
+                    loss = loss.detach()
+                    m_module_loss = torch.clamp(self.LossPredLoss(pred_loss, loss, margin=1),min=0,max=10)
+                    optimizer_loss.zero_grad()
+                    m_module_loss.backward()
+                    optimizer_loss.step()
+                    scheduler_loss.step()
+
+            # 3: Optimize FitNet
             else:
                 optimizer_fit.zero_grad()
                 score = score.detach()  # Only fitnet should be updated
@@ -1146,6 +1342,114 @@ class AutoAL(Query):
                 total_loss.backward()
                 optimizer_fit.step()
                 scheduler_fit.step()
+
+
+
+
+class AutoAL(AutoALOriginal):
+    """
+    This is an efficient adaptation of AutoAL due to their excessive need for compute and inefficient implementation.
+    In this version, we simply fit FitNet first and then perform bilevel optimization with varying batches. In contrast,
+    in the original implementation, AutoAL fits FitNet and performs bilevel optimization over the same batch for each
+    pair of batches (train_batch, val_batch) available, missing the opportunity to improve convergence speed by
+    shuffeling the batches per update step and not just all 400 steps. In addition, each batch is only seen once, so
+    by the time the Strategy finished learning, it hasnt seen the first batch in a long time, which may result in some 
+    form of forgetting. Finally, we put the batch_size for both train and val loader to our general train batch size
+    instead of the acq_size for efficiency and since some datasets for foundation models would have a really small batch size.
+    """
+    def query(self, *, model, al_datamodule: ActiveLearningDataModule, acq_size):
+        al_datamodule = copy.deepcopy(al_datamodule)
+        _, labeled_indices = al_datamodule.labeled_dataloader()
+
+        # Split available labeled samples into training and validation data
+        # Note: Custom Val Loader because we need DropLast to avoid small batches
+        train_indices = random.sample(labeled_indices, k=len(labeled_indices)//2)
+        val_indices = [i for i in labeled_indices if i not in train_indices]
+        train_loader = DataLoader(dataset=Subset(al_datamodule.query_dataset, indices=train_indices), 
+                                batch_size=al_datamodule.train_batch_size, 
+                                drop_last=(len(train_indices)>al_datamodule.train_batch_size),
+                                shuffle=True)
+        
+        # First, fit the fitnet on half of the labeled pool to have a solid foundation
+        val_loader = al_datamodule.custom_dataloader(indices=val_indices, train=True)
+        trainer = Trainer(max_epochs=self.num_fit_net_epochs, barebones=True)
+        trainer.fit(self.fit_net, val_loader)
+
+        # Next, perform Bilevel optimization to fit both SearchNet and FitNet
+        self.bilevel_optimization(model, train_loader, al_datamodule)
+
+        # Begin actual selection of samples to annotate by calculating scores for the 
+        # unlabeled samples and take the topk
+        unlabeled_dataloader, unlabeled_indices = al_datamodule.unlabeled_dataloader(subset_size=self.subset_size)
+        with torch.no_grad():
+            _, _, _, new_score, _, _ = self.compute_scores(model=model,
+                                                              dataloader=unlabeled_dataloader,
+                                                              dataloader_inidces=unlabeled_indices,
+                                                              al_datamodule=al_datamodule)
+        new_score = torch.from_numpy(np.abs(new_score))
+        _, local_indices = new_score.topk(k=acq_size)
+        global_indices = [unlabeled_indices[idx] for idx in local_indices]
+        return global_indices
+
+
+
+
+
+
+#[256, 512, 1024, 2048]  #medmnist1:[14,7,4,2],[64, 128, 256, 512]
+class LossNet(nn.Module):
+    '''Loss Prediction Module in PyTorch.
+    Reference:
+    [Yoo et al. 2019] Learning Loss for Active Learning (https://arxiv.org/abs/1905.03677)
+    '''
+    def __init__(self, feature_sizes=[14,7,4,2], num_channels=[64, 128, 256, 512], interm_dim=128):
+        super(LossNet, self).__init__()
+        
+        self.GAP1 = nn.AvgPool2d(feature_sizes[0])
+        self.GAP2 = nn.AvgPool2d(feature_sizes[1])
+        self.GAP3 = nn.AvgPool2d(feature_sizes[2])
+        self.GAP4 = nn.AvgPool2d(feature_sizes[3])
+
+        self.FC1 = nn.Linear(num_channels[0], interm_dim)
+        self.FC2 = nn.Linear(num_channels[1], interm_dim)
+        self.FC3 = nn.Linear(num_channels[2], interm_dim)
+        self.FC4 = nn.Linear(num_channels[3], interm_dim)
+
+        self.linear = nn.Linear(4 * interm_dim, 1)
+    
+    def forward(self, features):
+        out1 = self.GAP1(features[0])
+        out1 = out1.view(out1.size(0), -1)
+        out1 = F.relu(self.FC1(out1))
+
+        out2 = self.GAP2(features[1])
+        out2 = out2.view(out2.size(0), -1)
+        out2 = F.relu(self.FC2(out2))
+
+        out3 = self.GAP3(features[2])
+        out3 = out3.view(out3.size(0), -1)
+        out3 = F.relu(self.FC3(out3))
+
+        out4 = self.GAP4(features[3])
+        out4 = out4.view(out4.size(0), -1)
+        out4 = F.relu(self.FC4(out4))
+
+        out = self.linear(torch.cat((out1, out2, out3, out4), 1))
+        return out
+    
+class TinyLossNet(nn.Module):
+    """
+    Variation of original LossNet for training just a linear classifier on a foundation model.
+    """
+    def __init__(self, feature_size=14, interm_dim=128):
+        super(TinyLossNet, self).__init__()
+        self.FC = nn.Linear(feature_size, interm_dim)
+        self.linear = nn.Linear(interm_dim, 1)
+    
+    def forward(self, features):
+        out = F.relu(self.FC(features))
+        out = self.linear(out)
+        return out
 
 
 def build_al_strategies(al_strategies, device='cpu', subset_size=None):
