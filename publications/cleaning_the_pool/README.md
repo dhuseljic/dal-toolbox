@@ -30,10 +30,11 @@ For large-scale reproducibility, use the scripts provided in the `slurm/` direct
 
 ## Citation
 ```
-@article{huseljic2025cleaning,
-  title={Cleaning the Pool: Progressive Filtering of Unlabeled Pools in Deep Active Learning},
-  author={Huseljic, Denis and Herde, Marek and Rauch, Lukas and Hahn, Paul and Sick, Bernhard},
-  journal={arXiv preprint arXiv:2511.22344},
-  year={2025}
+@inproceedings{huseljic2026refine,
+	title = {Cleaning the {Pool}: {Progressive} {Filtering} of {Unlabeled} {Pools} in {Deep} {Active} {Learning}},
+	shorttitle = {Cleaning the {Pool}},
+	author = {Huseljic, Denis and Herde, Marek and Rauch, Lukas and Hahn, Paul and Sick, Bernhard},
+	booktitle = {CVPR},
+	year = {2026},
 }
 ```
