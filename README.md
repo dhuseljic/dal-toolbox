@@ -9,7 +9,7 @@ This toolbox is a modular framework designed to facilitate the implementation an
 | [The Interplay of Uncertainty Modeling and Deep Active Learning](https://openreview.net/pdf?id=KLBD13bsVl) | TMLR 2024 | [`./publications/udal`](./publications/udal) |
 | [Efficient Bayesian Updates for Deep Active Learning via Laplace Approximations](https://arxiv.org/pdf/2210.06112) | ECML-PKDD 2025 | [`./publications/laplace_updates`](./publications/laplace_updates) |
 | [TBD](tbd) | Under Review 2025 | [`./publications/boss_oracle`](./publications/boss_oracle) |
-| [Cleaning the Pool: Progressive Filtering of Unlabeled Pools in Deep Active Learning](https://www.arxiv.org/pdf/2511.22344) | Under Review 2025 | [`./publications/cleaning_the_pool`](./publications/cleaning_the_pool) |
+| [Cleaning the Pool: Progressive Filtering of Unlabeled Pools in Deep Active Learning](https://www.arxiv.org/pdf/2511.22344) | CVPR 2026 | [`./publications/cleaning_the_pool`](./publications/cleaning_the_pool) |
 
 ## Getting Started
 ### Installation 
@@ -71,10 +71,11 @@ Check out [tbd](https://www.google.com/search?q=tbd) and the [`./publications`](
 ## Citation
 If you find this toolbox useful for your research, please consider citing us.
 ```
-@article{huseljic2025cleaning,
-  title={Cleaning the Pool: Progressive Filtering of Unlabeled Pools in Deep Active Learning},
-  author={Huseljic, Denis and Herde, Marek and Rauch, Lukas and Hahn, Paul and Sick, Bernhard},
-  journal={arXiv preprint arXiv:2511.22344},
-  year={2025}
+@inproceedings{huseljic2026refine,
+	title = {Cleaning the {Pool}: {Progressive} {Filtering} of {Unlabeled} {Pools} in {Deep} {Active} {Learning}},
+	shorttitle = {Cleaning the {Pool}},
+	author = {Huseljic, Denis and Herde, Marek and Rauch, Lukas and Hahn, Paul and Sick, Bernhard},
+	booktitle = {CVPR},
+	year = {2026},
 }
 ```
