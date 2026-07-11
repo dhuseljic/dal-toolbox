@@ -8,18 +8,18 @@ Here, we provide the implementation and configuration files for reproducing the 
 ## 1. Setup
 Ensure `dal-toolbox` is installed. Additionally, install the dependencies required for these experiments:
 ```bash
-pip install -r requirements.txt
-````
-## 2\. Project Structure
+pip install hydra-core mlflow
+```
+## 2. Project Structure
   * **`active_learning.py`**: The main script for running AL experiments.
-  * **`active_learning.yaml`**: YAML configuration files used by hydra.
-  * **`evaluate_active_learning.ipynb`**: Jupyter notebooks for analyzing results and generating plots.
+  * **`active_learning.yaml`**: YAML configuration file used by hydra.
+  * **`evaluate_active_learning.ipynb`**: Jupyter notebook for analyzing results and generating plots.
   * **`utils.py`**: Helper functions.
 
-## 3\. Running Experiments
+## 3. Running Experiments
 
 ### Local Execution
-To run a single experiment locally, execute `main.py`. Ensure you specify the necessary configuration arguments:
+To run a single experiment locally, execute `active_learning.py`. Ensure you specify the necessary configuration arguments:
 ```bash
 python active_learning.py
 ```

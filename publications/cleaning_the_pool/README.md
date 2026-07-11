@@ -9,16 +9,17 @@ Here, we provide the implementation and configuration files for reproducing the 
 Ensure `dal-toolbox` is installed. Additionally, install the dependencies required for these experiments:
 ```bash
 pip install -r requirements.txt
-````
-## 2\. Project Structure
+```
+## 2. Project Structure
   * **`main.py`**: The main script for running AL experiments.
+  * **`main_finetune.py`**: Variant of the main script that fine-tunes the backbone.
   * **`configs/`**: YAML configuration files used by hydra.
   * **`slurm/`**: Shell scripts for submitting jobs to a Slurm cluster (includes ablations, grid searches, and baselines).
   * **`strategies.py`**: Implementation of ensemble AL methods.
   * **`utils.py`**: Helper functions.
   * **`*.ipynb`**: Jupyter notebooks for analyzing results and generating plots.
 
-## 3\. Running Experiments
+## 3. Running Experiments
 
 ### Local Execution
 To run a single experiment locally, execute `main.py`. Ensure you specify the necessary configuration arguments:

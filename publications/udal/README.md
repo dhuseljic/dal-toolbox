@@ -8,21 +8,23 @@ Here, we provide the implementation and configuration files for reproducing the 
 Ensure `dal-toolbox` is installed. Additionally, install the dependencies required for these experiments:
 ```bash
 pip install -r requirements.txt
-````
-## 2\. Project Structure
-  * **`main.py`**: The main script for running AL experiments.
+```
+## 2. Project Structure
+  * **`active_learning.py`**: The main script for running AL experiments.
+  * **`hparam_search.py`**: Script for hyperparameter searches.
+  * **`evaluate.py`**: Script for evaluating trained models.
+  * **`synthetic.py`**: Script for experiments on synthetic data.
   * **`configs/`**: YAML configuration files used by hydra.
   * **`slurm/`**: Shell scripts for submitting jobs to a Slurm cluster (includes ablations, grid searches, and baselines).
-  * **`strategies.py`**: Implementation of ensemble AL methods.
-  * **`utils.py`**: Helper functions.
-  * **`*.ipynb`**: Jupyter notebooks for analyzing results and generating plots.
+  * **`initial_pools/`**: Predefined initial pools for reproducibility.
+  * **`notebooks/`**: Jupyter notebooks for analyzing results and generating plots.
 
-## 3\. Running Experiments
+## 3. Running Experiments
 
 ### Local Execution
-To run a single experiment locally, execute `main.py`. Ensure you specify the necessary configuration arguments:
+To run a single experiment locally, execute `active_learning.py`. Ensure you specify the necessary configuration arguments:
 ```bash
-python main.py al.strategy=refine dataset=cifar10
+python active_learning.py al_strategy=margin dataset=CIFAR10
 ```
 ### Slurm Cluster Execution
 For large-scale reproducibility, use the scripts provided in the `slurm/` directory.

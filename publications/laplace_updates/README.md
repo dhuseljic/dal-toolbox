@@ -8,22 +8,22 @@ Here, we provide the implementation and configuration files for reproducing the 
 ## 1. Setup
 Ensure `dal-toolbox` is installed. Additionally, install the dependencies required for these experiments:
 ```bash
-pip install -r requirements.txt
-````
-## 2\. Project Structure
-  * **`main.py`**: The main script for running AL experiments.
+pip install hydra-core mlflow rich
+```
+## 2. Project Structure
+  * **`active_learning.py`**: The main script for running AL experiments.
+  * **`updating.py`**: Script for the Bayesian updating experiments.
   * **`configs/`**: YAML configuration files used by hydra.
   * **`slurm/`**: Shell scripts for submitting jobs to a Slurm cluster (includes ablations, grid searches, and baselines).
-  * **`strategies.py`**: Implementation of ensemble AL methods.
+  * **`notebooks/`**: Jupyter notebooks for analyzing results and generating plots.
   * **`utils.py`**: Helper functions.
-  * **`*.ipynb`**: Jupyter notebooks for analyzing results and generating plots.
 
-## 3\. Running Experiments
+## 3. Running Experiments
 
 ### Local Execution
-To run a single experiment locally, execute `main.py`. Ensure you specify the necessary configuration arguments:
+To run a single experiment locally, execute `active_learning.py`. Ensure you specify the necessary configuration arguments:
 ```bash
-python main.py al.strategy=refine dataset=cifar10
+python active_learning.py al.strategy=random dataset_name=cifar10
 ```
 ### Slurm Cluster Execution
 For large-scale reproducibility, use the scripts provided in the `slurm/` directory.

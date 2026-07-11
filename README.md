@@ -1,5 +1,5 @@
 # DAL-Toolbox: A PyTorch Toolbox for Deep Active Learning Research
-This toolbox is a modular framework designed to facilitate the implementation and evaluation of active learning (AL) workflows in PyTorch.  It includes implementations for the following publications:
+This toolbox is a modular framework designed to facilitate the implementation and evaluation of active learning (AL) workflows in PyTorch. It includes implementations for the following publications:
 
 | Paper Title | Venue | Code |
 | :--- | :--- |  :--- |
@@ -16,6 +16,7 @@ This toolbox is a modular framework designed to facilitate the implementation an
 Setting up the **DAL-Toolbox** is straightforward. Clone the repository and execute the following commands:
 ```bash
 conda create -n dal-toolbox python=3.12
+conda activate dal-toolbox
 pip install -e .
 ```
 Afterward, install additional packages as required for your task. The implementations in the publication directory typically require additional dependencies, which are aggregated into different `requirements.txt` files.
@@ -62,11 +63,11 @@ for cycle in range(4):
     trainer.fit(model, al_datamodule)
 ```
 
-**Note:** While this example uses PyTorch Lightning for convenience, it is not strictly required for most strategies. You can easily replace the L.Trainer with a standard PyTorch training function.
+**Note:** While this example uses PyTorch Lightning for convenience, it is not strictly required for most strategies. You can easily replace the `L.Trainer` with a standard PyTorch training function.
 
 ### More Complex Examples
 
-Check out [tbd](https://www.google.com/search?q=tbd) and the [`./publications`](./publications) directory for more sophisticated implementations.
+Check out the [`./examples`](./examples/) directory for a minimal, ready-to-run setup and the [`./publications`](./publications/) directory for more sophisticated implementations.
 
 ## Citation
 If you find this toolbox useful for your research, please consider citing us.
